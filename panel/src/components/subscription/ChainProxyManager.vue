@@ -31,8 +31,6 @@
       <LinkIcon class="text-base-content/30 h-10 w-10" />
       <p class="text-base-content/60 text-sm">
         {{ $t('chainProxyEmptyHint') }}
-        <MarketLink />
-        {{ $t('chainProxyEmptyHintSuffix') }}
       </p>
       <button
         type="button"
@@ -361,7 +359,6 @@
 </template>
 
 <script setup lang="ts">
-import MarketLink from '@/components/common/MarketLink.vue'
 import { fetchNodeGroups, fetchProfile, saveProfile, testChainLatency } from '@/api/openbox'
 import type { OpenboxChainLatencyResult, OpenboxChainProxy } from '@/api/openbox'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
