@@ -79,8 +79,8 @@
         <img
           v-if="qrDataUrl"
           :src="qrDataUrl"
-          :style="{ width: `${qrWidth}px` }"
-          class="max-w-full self-center rounded-lg bg-white p-1 [image-rendering:pixelated]"
+          :style="{ width: `${qrWidth}px`, height: `${qrWidth}px` }"
+          class="shrink-0 self-center rounded-lg bg-white p-1 [image-rendering:pixelated]"
           alt="QR"
         />
         <p class="text-base-content/60 text-center text-xs">{{ $t('shareCodeAppHint') }}</p>
