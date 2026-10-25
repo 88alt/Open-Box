@@ -847,6 +847,7 @@ const en = {
     'Measures latency periodically and switches to the fastest; only when faster by the tolerance, to avoid flapping.',
   groupMembersLabel: 'Members',
   groupFilterAllSubscriptions: 'All subscriptions',
+  groupSubscriptionMissing: 'Deleted subscription',
   groupFilterAllGroups: 'All groups',
   groupFilterAllNodes: 'All nodes',
   groupMoveRight: 'Add checked',
@@ -871,9 +872,9 @@ const en = {
   groupKeywordsLabel: 'Keywords',
   groupKeywordsPlaceholder: 'Comma-separated, e.g. Hong Kong,hk',
   groupKeywordsHint:
-    'Separate keywords with commas (,). OR matches any keyword. Empty = all nodes; new subscriptions follow this rule. Chain proxies are excluded.',
+    'Separate keywords with commas (,). OR matches any keyword. Empty = all nodes in the subscription scope; new nodes follow this rule. Chain proxies are excluded.',
   groupKeywordsAllHint:
-    'Separate keywords with commas (,). AND matches every keyword. Empty = all nodes; new subscriptions follow this rule. Chain proxies are excluded.',
+    'Separate keywords with commas (,). AND matches every keyword. Empty = all nodes in the subscription scope; new nodes follow this rule. Chain proxies are excluded.',
   groupKeywordsMode: 'Keyword matching mode',
   groupDynamicMatched: '{count} node(s) match right now',
   groupDynamicNoMatch: 'No node matches these keywords right now',
@@ -1179,9 +1180,21 @@ const en = {
   routingCustomNoDelete:
     'The pre-route rule is built in and cannot be deleted; disable it if you do not need it.',
   routingCustomEditTitle: 'Edit pre-route rule',
-  routingCustomOutboundRequired: 'Every rule needs an exit.',
+  routingCustomOutboundRequired:
+    'Choose an exit for each tab that contains rules.',
   routingCustomRulesHint:
-    'One rule per line with its own exit (a single node is fine). Highest priority, ahead of every site set; first match from the top wins. IP rules only handle IPs and domain rules only handle domains: IP range / GeoIP lines apply only to connections made straight to an IP, so add a domain line to route a site by name.',
+    'Add a tab, then add or import rules and choose its exit. Drag tabs to set priority from left to right; rules within each tab match in order. IP / geoip rules only match connections made directly to an IP; use domain rules for domain-based access.',
+  routingCustomOutboundTabs: 'Group by exit',
+  routingCustomAddTab: 'Add tab',
+  routingCustomNoTab: 'Add a tab first, then add rules and choose its exit.',
+  routingCustomDeleteTabTitle: 'Delete tab',
+  routingCustomDeleteTabLabel: 'Delete tab “{name}”',
+  routingCustomDeleteTabConfirm:
+    'Delete tab “{name}” and all its rules? This takes effect after saving.',
+  routingCustomUnassigned: 'No exit selected',
+  routingCustomExitLabel: 'Exit',
+  routingCustomExitGroupHint:
+    'All rules in this tab use this exit. The tab name follows the selected exit.',
   routingCustomNoRule: 'No rules yet (inactive)',
   routingFallbackBadge: 'Built-in',
   routingFallbackHint:
@@ -1378,13 +1391,14 @@ const en = {
   dnsRewriteKindDomain: 'Another domain',
   dnsRewriteKindIp: 'Fixed IPs',
   dnsRewriteDomainHint:
-    'The target is resolved live through the current DNS policy; the answer carries the CNAME and the target addresses.',
+    'Resolved through the current DNS policy. With *. on both sides, the entire subdomain prefix is preserved, e.g. a.b.googleapis.cn → a.b.googleapis.com. A plain target sends all matches to that one domain.',
   dnsRewriteIpHint:
     'One per line, IPv4 and IPv6 may be mixed; A returns IPv4 only, AAAA returns IPv6 only (empty while IPv6 is off).',
   dnsRewriteSavedRestart: 'DNS rewrites saved.',
   dnsRewriteSavedLive: 'DNS rewrites saved and active; cached answers update once they expire.',
   dnsRewriteBadSource: 'Invalid queried domain: use an exact domain or *.example.com.',
-  dnsRewriteBadDomain: 'Invalid target domain, and it must differ from the queried domain.',
+  dnsRewriteBadDomain:
+    'Invalid or unchanged target domain. A *. target requires the queried domain to start with *. too.',
   dnsRewriteBadAddress: 'Enter at least one valid IPv4 / IPv6 address.',
   dnsRewriteDuplicate: 'A rewrite for “{source}” already exists.',
   dnsRewriteDeleteTitle: 'Delete DNS rewrite',
@@ -2110,6 +2124,7 @@ const en = {
   chainProxyTab: 'Chain proxy',
   chainProxyAdd: 'Add chain proxy',
   chainProxyEmptyHint: 'No chain proxies yet.',
+  chainProxyEmptyHintSuffix: '',
   chainUpstreamLayer: 'Upstream',
   chainUpstreamLayerTip: 'Upstream layer: the target node dials out through this route',
   chainTargetTip: 'Target node (chain proxy)',
