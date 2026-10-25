@@ -135,6 +135,7 @@
       v-model="dialogOpen"
       :server="editing"
       :used-ports="usedPorts"
+      :outbound-options="outboundOptions"
       @saved="onSaved"
     />
   </div>
@@ -142,10 +143,12 @@
 
 <script setup lang="ts">
 import {
+  fetchNodeGroups,
   fetchProfile,
   saveProfile,
   type OpenboxServer,
   type OpenboxServerProtocol,
+  type OpenboxUserGroup,
 } from '@/api/openbox'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import ServerEditDialog from '@/components/share/ServerEditDialog.vue'
@@ -173,6 +176,29 @@ const servers = ref<OpenboxServer[]>([])
 const loading = ref(true)
 const dialogOpen = ref(false)
 const editing = ref<OpenboxServer | null>(null)
+
+// 出口候选:内置直连 / 拒绝(用它们当前的名字)、启用的节点组、单个节点(带订阅名)。
+// 每次打开弹窗都重新取一遍,订阅或节点组刚改过也能选到最新的
+const groups = ref<OpenboxUserGroup[]>([])
+const availableNodes = ref<Array<{ name: string; subscription: string }>>([])
+const outboundOptions = computed(() => ({
+  builtin: groups.value.filter((g) => g.kind && g.enabled !== false).map((g) => g.name),
+  groups: groups.value.filter((g) => !g.kind && g.enabled !== false).map((g) => g.name),
+  nodes: availableNodes.value,
+}))
+const loadOutboundOptions = async () => {
+  try {
+    const g = await fetchNodeGroups()
+    groups.value = g.groups || []
+    availableNodes.value = g.availableNodes || []
+  } catch (error) {
+    showNotification({
+      content: 'routingLoadFailed',
+      params: { message: error instanceof Error ? error.message : String(error) },
+      type: 'alert-error',
+    })
+  }
+}
 
 const PROTOCOL_LABEL: Record<OpenboxServerProtocol, string> = {
   shadowsocks: 'Shadowsocks',
@@ -218,10 +244,12 @@ const persist = async (next: OpenboxServer[]) => {
 }
 
 const openCreate = () => {
+  void loadOutboundOptions()
   editing.value = null
   dialogOpen.value = true
 }
 const openEdit = (s: OpenboxServer) => {
+  void loadOutboundOptions()
   editing.value = s
   dialogOpen.value = true
 }

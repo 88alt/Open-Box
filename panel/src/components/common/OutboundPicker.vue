@@ -72,6 +72,14 @@
           </button>
         </div>
         <ul class="min-h-0 flex-1 overflow-y-auto text-sm">
+          <li v-if="showEmpty">
+            <div
+              class="hover:bg-base-200 flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left"
+              :class="{ 'bg-base-200': !modelValue }"
+              :data-active="!modelValue"
+              @click="choose('')"
+            >{{ emptyLabel }}</div>
+          </li>
           <template v-if="tab === 'nodes'">
             <template v-if="visibleBuiltin.length">
               <li class="text-base-content/50 px-2 pt-2 pb-1 text-xs font-medium">{{ $t('groupBuiltinBadge') }}</li>
@@ -168,7 +176,7 @@
             </li>
           </template>
           <li
-            v-if="(tab === 'nodes' && !nodeSections.length && !visibleBuiltin.length) || (tab === 'groups' && !visibleGroups.length)"
+            v-if="!showEmpty && ((tab === 'nodes' && !nodeSections.length && !visibleBuiltin.length) || (tab === 'groups' && !visibleGroups.length))"
             class="text-base-content/50 px-2 py-3 text-center text-xs"
           >
             {{ $t('outboundPickerNoMatch') }}
@@ -200,6 +208,8 @@ export interface OutboundPickerOptions {
 const props = defineProps<{
   options: OutboundPickerOptions
   placeholder?: string
+  // 传了就在列表最前面多一行「不选」(选中后值为空),比如共享网络里的「不指定」
+  emptyLabel?: string
 }>()
 const modelValue = defineModel<string>({ required: true })
 
@@ -304,4 +314,6 @@ const choose = (name: string) => {
   modelValue.value = name
   close()
 }
+// 「不选」那一行是否显示:搜索框里有关键词时,只在它自己匹配时才留着
+const showEmpty = computed(() => !!props.emptyLabel && match(props.emptyLabel))
 </script>

@@ -191,6 +191,8 @@ export interface OpenboxServer {
   port: number
   // 客户端连接用的域名 / IP,只用来生成节点分享链接;默认取当前打开面板的主机名
   address?: string
+  // 指定出口:从这个共享入口进来的连接都走它(节点 / 节点组 / 直连等);不填就按现有分流规则
+  outbound?: string
   password?: string
   method?: string
   uuid?: string
