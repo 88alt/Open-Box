@@ -296,6 +296,10 @@
         >
           {{ editorError }}
         </p>
+      </div>
+
+      <!-- 取消 / 保存放底栏:内容区下面一条分割线(两端缩进到和内容边界对齐),和标题栏下面那条上下呼应 -->
+      <template #footer>
         <div class="flex justify-end gap-2">
           <button
             type="button"
@@ -318,7 +322,7 @@
             {{ $t('subscriptionSave') }}
           </button>
         </div>
-      </div>
+      </template>
     </DialogWrapper>
   </div>
 </template>
