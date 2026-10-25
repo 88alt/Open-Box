@@ -1,92 +1,102 @@
 <template>
-  <!-- 导入规则:输入规则集网址 → 预览解析出的域名 / IP 明细 → 追加到当前地区组 -->
+  <!-- 导入规则:输入规则集网址 → 预览解析出的域名 / IP 明细 → 追加到当前规则列表。
+       提示 + 输入框放工具栏、取消 / 导入放底栏,中间只滚明细列表(与 v0.1.359 一致) -->
   <DialogWrapper
     v-model="isOpen"
     :title="$t('routingPolicyRuleImportTitle')"
     box-class="w-full max-w-2xl"
+    content-class="flex flex-col overflow-hidden!"
   >
-    <div class="flex flex-col gap-3">
-      <p class="text-base-content/60 text-xs">{{ $t(hintKey, { max }) }}</p>
-      <div class="flex items-center gap-2">
-        <input
-          v-model="url"
-          type="url"
-          class="input input-sm min-w-0 flex-1 font-mono text-xs"
-          :placeholder="$t('routingPolicyRuleUrlPlaceholder')"
-          @keydown.enter.prevent="preview"
-        />
+    <template #toolbar>
+      <div class="flex flex-col gap-3">
+        <p class="text-base-content/60 text-xs">{{ $t(hintKey, { max }) }}</p>
+        <div class="flex items-center gap-2">
+          <input
+            v-model="url"
+            type="url"
+            class="input input-sm min-w-0 flex-1 font-mono text-xs"
+            :placeholder="$t('routingPolicyRuleUrlPlaceholder')"
+            @keydown.enter.prevent="preview"
+          />
+          <button
+            type="button"
+            class="btn btn-primary btn-sm"
+            :disabled="loading || !url.trim()"
+            @click="preview"
+          >
+            <span
+              v-if="loading"
+              class="loading loading-spinner loading-xs"
+            />
+            {{ $t('routingPolicyRuleImportPreview') }}
+          </button>
+        </div>
+        <p
+          v-if="error"
+          class="text-error text-xs"
+        >
+          {{ error }}
+        </p>
+        <template v-if="entries">
+          <p
+            v-if="entries.length > max"
+            class="text-warning text-xs"
+          >
+            {{ $t('routingPolicyRuleImportTooMany', { count: entries.length, max }) }}
+          </p>
+          <p
+            v-else
+            class="text-base-content/60 text-xs"
+          >
+            {{ $t('routingPolicyRuleImportCount', { count: entries.length }) }}
+          </p>
+        </template>
+      </div>
+    </template>
+
+    <!-- 底栏:取消 / 导入固定在内容区下面 -->
+    <template #footer>
+      <div class="flex justify-end gap-2">
         <button
           type="button"
-          class="btn btn-primary btn-sm"
-          :disabled="loading || !url.trim()"
-          @click="preview"
+          class="btn btn-sm"
+          @click="isOpen = false"
         >
-          <span
-            v-if="loading"
-            class="loading loading-spinner loading-xs"
-          />
-          {{ $t('routingPolicyRuleImportPreview') }}
+          {{ $t('cancel') }}
+        </button>
+        <button
+          v-if="entries"
+          type="button"
+          class="btn btn-primary btn-sm"
+          :disabled="!entries.length || entries.length > max"
+          @click="apply"
+        >
+          {{ $t('routingPolicyRuleImportApply') }}
         </button>
       </div>
-      <p
-        v-if="error"
-        class="text-error text-xs"
-      >
-        {{ error }}
-      </p>
-      <template v-if="entries">
-        <p
-          class="text-base-content/60 text-xs"
-        >
-          {{ $t('routingPolicyRuleImportCount', { count: entries.length }) }}
-        </p>
-        <p
-          v-if="entries.length > max"
-          class="text-warning text-xs"
-        >
-          {{ $t('routingPolicyRuleImportTooMany', { count: entries.length, max }) }}
-        </p>
-        <div class="border-base-300/60 max-h-80 overflow-y-auto rounded-lg border">
-          <p
-            v-if="!entries.length"
-            class="text-base-content/50 py-8 text-center text-xs"
-          >
-            {{ $t('geoEntriesEmpty') }}
-          </p>
-          <ul v-else>
-            <li
-              v-for="(entry, index) in entries"
-              :key="`${entry.type}:${entry.value}:${index}`"
-              class="border-base-300/40 flex items-center gap-2 border-b px-3 py-1.5 last:border-b-0"
-            >
-              <span class="badge badge-ghost badge-xs shrink-0">{{ typeLabel(entry.type) }}</span>
-              <span class="min-w-0 flex-1 truncate font-mono text-xs">{{ entry.value }}</span>
-            </li>
-          </ul>
-        </div>
-      </template>
-    </div>
-
-    <!-- 底栏:取消 / 导入固定在内容区下面,与 v0.1.334 一致 -->
-    <template #footer>
-      <button
-        type="button"
-        class="btn btn-sm"
-        @click="isOpen = false"
-      >
-        {{ $t('cancel') }}
-      </button>
-      <button
-        v-if="entries"
-        type="button"
-        class="btn btn-primary btn-sm"
-        :disabled="!entries.length || entries.length > max"
-        @click="apply"
-      >
-        {{ $t('routingPolicyRuleImportApply') }}
-      </button>
     </template>
-  </DialogWrapper>
+
+    <div
+      v-if="entries"
+      class="border-base-300/60 max-h-80 min-h-0 overflow-y-auto overscroll-contain rounded-lg border"
+    >
+      <ul v-if="entries.length">
+        <li
+          v-for="(entry, index) in entries"
+          :key="`${entry.type}:${entry.value}:${index}`"
+          class="border-base-300/40 flex items-center gap-2 border-b px-3 py-1.5 last:border-b-0"
+        >
+          <span class="badge badge-ghost badge-xs shrink-0">{{ typeLabel(entry.type) }}</span>
+          <span class="min-w-0 flex-1 truncate font-mono text-xs">{{ entry.value }}</span>
+        </li>
+      </ul>
+      <p
+        v-else
+        class="text-base-content/50 py-8 text-center text-xs"
+      >
+        {{ $t('geoEntriesEmpty') }}
+      </p>
+    </div>
 </template>
 
 <script setup lang="ts">

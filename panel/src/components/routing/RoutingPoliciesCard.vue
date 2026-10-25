@@ -313,44 +313,46 @@
     <DialogWrapper
       v-model="showEditor"
       :title="$t(editingCustom ? 'routingCustomEditTitle' : editing ? 'routingPolicyEditTitle' : 'routingPolicyAddTitle')"
-      box-class="w-full max-w-4xl h-[90dvh]"
+      box-class="w-full max-w-4xl"
+      mobile-fullscreen
     >
-      <div
-        v-if="draft"
-        class="flex flex-col gap-4"
-      >
-        <div class="flex items-end gap-2">
-          <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium">{{ $t('groupIconLabel') }}</label>
-            <div class="w-56">
-              <CountrySelect
-                v-model="draft.icon"
-                clearable
-                globes
-                brands
-                :placeholder="$t('groupIconNone')"
+      <!-- 图标 / 名称 / 规则表头固定在上面,规则再多也只滚下面那块 -->
+      <template #toolbar>
+        <div
+          v-if="draft"
+          class="flex flex-col gap-4"
+        >
+          <div class="flex flex-wrap items-end gap-2">
+            <div class="flex min-w-0 flex-col gap-1 max-sm:flex-1">
+              <label class="text-xs font-medium">{{ $t('groupIconLabel') }}</label>
+              <div class="w-56 max-sm:w-full">
+                <CountrySelect
+                  v-model="draft.icon"
+                  clearable
+                  globes
+                  brands
+                  :placeholder="$t('groupIconNone')"
+                />
+              </div>
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs font-medium">{{ $t('iconScaleLabel') }}</label>
+              <IconScaleInput v-model="draft.iconScale" />
+            </div>
+            <div class="flex min-w-0 flex-1 flex-col gap-1 max-sm:basis-full">
+              <label class="text-xs font-medium">{{ $t('routingPolicyNameLabel') }}</label>
+              <input
+                v-model="draft.name"
+                type="text"
+                class="input input-sm w-full"
+                :placeholder="$t('routingPolicyNamePlaceholder')"
               />
             </div>
           </div>
-          <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium">{{ $t('iconScaleLabel') }}</label>
-            <IconScaleInput v-model="draft.iconScale" />
-          </div>
-          <div class="flex min-w-0 flex-1 flex-col gap-1">
-            <label class="text-xs font-medium">{{ $t('routingPolicyNameLabel') }}</label>
-            <input
-              v-model="draft.name"
-              type="text"
-              class="input input-sm w-full"
-              :placeholder="$t('routingPolicyNamePlaceholder')"
-            />
-          </div>
-        </div>
 
-        <!-- 一条规则一行:拖动柄 + 类型 + 值 + 备注(前置自定义分流还多一列这一行自己的出口)。
-             前置自定义分流按拖动后的顺序保存(顺序即匹配顺序);站点集里各行是「或」的关系,
-             拖完按类型归位,备注挂在「类型:值」上。站点集走哪条线路不在这儿定:在「代理」页点选。 -->
-        <div class="flex flex-col gap-2">
+          <!-- 一条规则一行:拖动柄 + 类型 + 值 + 备注(前置自定义分流还多一列这一行自己的出口)。
+               前置自定义分流按拖动后的顺序保存(顺序即匹配顺序);站点集里各行是「或」的关系,
+               拖完按类型归位,备注挂在「类型:值」上。站点集走哪条线路不在这儿定:在「代理」页点选。 -->
           <div class="flex items-center justify-between gap-2">
             <label class="text-xs font-medium">{{ $t('routingPolicyRulesLabel') }}</label>
             <div class="flex items-center gap-1">
@@ -378,13 +380,19 @@
           >
             {{ $t('routingCustomRulesHint') }}
           </p>
+        </div>
+      </template>
 
-          <p
-            v-if="!rules.length"
-            class="text-base-content/50 text-xs"
-          >
-            {{ $t('routingPolicyNoRuleYet') }}
-          </p>
+      <div
+        v-if="draft"
+        class="flex flex-col gap-4"
+      >
+        <p
+          v-if="!rules.length"
+          class="text-base-content/50 text-xs"
+        >
+          {{ $t('routingPolicyNoRuleYet') }}
+        </p>
 
           <Draggable
             v-if="rules.length"
@@ -400,11 +408,14 @@
             @end="sortRules"
           >
             <template #item="{ element: rule, index }">
-              <div class="flex items-center gap-2 max-sm:flex-wrap">
+              <div
+                :data-rule-key="rule.key"
+                class="flex flex-wrap items-center gap-2 sm:flex-nowrap"
+              >
             <Bars3Icon class="drag-handle text-base-content/40 h-4 w-4 shrink-0 cursor-move" />
             <select
               v-model="rule.type"
-              class="select select-sm w-[9.875rem] shrink-0 max-sm:w-auto max-sm:min-w-0 max-sm:grow max-sm:basis-[35%]"
+              class="select select-sm w-36 shrink-0 max-sm:w-auto max-sm:min-w-0 max-sm:grow max-sm:basis-[35%]"
             >
               <option
                 v-for="opt in ruleTypeOptions(rule.type)"
@@ -416,7 +427,7 @@
             </select>
             <!-- geosite/geoip 的值来自上游真有的那份名单,给带搜索的下拉框,
                  外加一个「详情」看它到底包含哪些域名/IP -->
-            <div class="flex min-w-0 flex-1 items-center gap-2">
+            <div class="flex min-w-0 flex-1 items-center gap-2 max-sm:order-3 max-sm:grow max-sm:basis-[60%]">
               <GeoRuleValue
                 v-if="rule.type === 'geosite' || rule.type === 'geoip'"
                 v-model="rule.value"
@@ -433,6 +444,7 @@
               <input
                 v-else
                 v-model="rule.value"
+                data-rule-value
                 type="text"
                 class="input input-sm min-w-0 flex-1 font-mono text-xs"
                 :placeholder="$t(placeholderKey(rule.type))"
@@ -472,7 +484,6 @@
               </div>
             </template>
           </Draggable>
-        </div>
       </div>
 
       <!-- 取消 / 保存固定在底栏,规则多了只滚中间 -->
@@ -499,73 +510,19 @@
       </template>
     </DialogWrapper>
 
-    <DialogWrapper
+    <!-- 导入规则:和客户端分流、地区组共用同一个弹窗 -->
+    <RuleImportDialog
       v-model="showRuleImport"
-      :title="$t('routingPolicyRuleImportTitle')"
-      box-class="w-full max-w-2xl"
-    >
-      <div class="flex flex-col gap-3">
-        <p class="text-base-content/60 text-xs">{{ $t('routingPolicyRuleImportHint') }}</p>
-        <div class="flex items-center gap-2">
-          <input
-            v-model="importUrl"
-            type="url"
-            class="input input-sm min-w-0 flex-1 font-mono text-xs"
-            :placeholder="$t('routingPolicyRuleUrlPlaceholder')"
-            @keydown.enter.prevent="previewImport"
-          />
-          <button
-            type="button"
-            class="btn btn-primary btn-sm"
-            :disabled="importLoading || !importUrl.trim()"
-            @click="previewImport"
-          >
-            <span v-if="importLoading" class="loading loading-spinner loading-xs" />
-            {{ $t('routingPolicyRuleImportPreview') }}
-          </button>
-        </div>
-        <p v-if="importError" class="text-error text-xs">{{ importError }}</p>
-        <template v-if="importPreview">
-          <p class="text-base-content/60 text-xs">
-            {{ $t('routingPolicyRuleImportCount', { count: importPreview.length }) }}
-          </p>
-          <div class="border-base-300/60 max-h-80 overflow-y-auto rounded-lg border">
-            <p v-if="!importPreview.length" class="text-base-content/50 py-8 text-center text-xs">
-              {{ $t('geoEntriesEmpty') }}
-            </p>
-            <ul v-else>
-              <li
-                v-for="(entry, index) in importPreview"
-                :key="`${entry.type}:${entry.value}:${index}`"
-                class="border-base-300/40 flex items-center gap-2 border-b px-3 py-1.5 last:border-b-0"
-              >
-                <span class="badge badge-ghost badge-xs shrink-0">{{ importTypeLabel(entry.type) }}</span>
-                <span class="min-w-0 flex-1 truncate font-mono text-xs">{{ entry.value }}</span>
-              </li>
-            </ul>
-          </div>
-          <div class="flex justify-end gap-2">
-            <button type="button" class="btn btn-sm" @click="showRuleImport = false">
-              {{ $t('cancel') }}
-            </button>
-            <button
-              type="button"
-              class="btn btn-primary btn-sm"
-              :disabled="!importPreview.length"
-              @click="applyImportedRules"
-            >
-              {{ $t('routingPolicyRuleImportApply') }}
-            </button>
-          </div>
-        </template>
-      </div>
-    </DialogWrapper>
+      :max="RULE_IMPORT_MAX"
+      @import="applyImportedRules"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import type { OpenboxCustomPolicy, OpenboxCustomRule, OpenboxProfile, OpenboxRoutingPolicy, OpenboxUserGroup } from '@/api/openbox'
-import { fetchNodeGroups, importRuleList, RULESET_TAG_PATTERN } from '@/api/openbox'
+import { fetchNodeGroups, RULESET_TAG_PATTERN } from '@/api/openbox'
+import RuleImportDialog from '@/components/clientapp/RuleImportDialog.vue'
 import CountryFlag from '@/components/common/CountryFlag.vue'
 import CountrySelect from '@/components/common/CountrySelect.vue'
 import IconScaleInput from '@/components/common/IconScaleInput.vue'
@@ -861,11 +818,8 @@ const draft = ref<OpenboxRoutingPolicy | null>(null)
 const rules = ref<RuleRow[]>([])
 
 type ImportedRule = { type: string; value: string }
+const RULE_IMPORT_MAX = 200
 const showRuleImport = ref(false)
-const importUrl = ref('')
-const importPreview = ref<ImportedRule[] | null>(null)
-const importLoading = ref(false)
-const importError = ref('')
 
 const importTypeMap: Record<string, RuleType | undefined> = {
   domain: 'domain',
@@ -873,35 +827,13 @@ const importTypeMap: Record<string, RuleType | undefined> = {
   domain_keyword: 'domainKeyword',
   ip_cidr: 'ipCidr',
 }
-const importTypeLabel = (type: string) => {
-  const mapped = importTypeMap[type]
-  return mapped ? t(RULE_TYPES.find((item) => item.type === mapped)?.labelKey || type) : type
-}
 const openRuleImport = () => {
-  importUrl.value = ''
-  importPreview.value = null
-  importError.value = ''
   showRuleImport.value = true
 }
-const previewImport = async () => {
-  const url = importUrl.value.trim()
-  if (!url || importLoading.value) return
-  importLoading.value = true
-  importError.value = ''
-  try {
-    const result = await importRuleList(url)
-    importPreview.value = (result.entries || []).filter((entry) => importTypeMap[entry.type] && entry.value.trim())
-  } catch (error) {
-    importPreview.value = null
-    importError.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    importLoading.value = false
-  }
-}
-const applyImportedRules = () => {
-  if (!importPreview.value?.length) return
+const applyImportedRules = (entries: ImportedRule[]) => {
+  if (!entries.length) return
   const outbound = rules.value[rules.value.length - 1]?.outbound || ''
-  const imported = importPreview.value.flatMap((entry) => {
+  const imported = entries.flatMap((entry) => {
     const type = importTypeMap[entry.type]
     return type ? [{ key: ++ruleKeySeed, type, value: entry.value, outbound, note: '' }] : []
   })
