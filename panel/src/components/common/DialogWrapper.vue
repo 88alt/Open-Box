@@ -21,9 +21,9 @@
           class="modal-box bg-base-100 relative overflow-hidden p-0"
           :class="[
             blurIntensity < 5 && 'backdrop-blur-sm!',
-            !mobileFullscreen && 'flex max-h-[90dvh] flex-col max-md:max-h-[70dvh]',
+            'flex max-h-[90dvh] flex-col max-md:max-h-[70dvh]',
             mobileFullscreen &&
-              'max-md:h-dvh max-md:min-h-dvh max-md:w-screen max-md:max-w-none max-md:rounded-none max-md:m-0',
+              'h-[90dvh] max-md:h-dvh max-md:max-h-dvh max-md:min-h-dvh max-md:w-screen max-md:max-w-none max-md:rounded-none max-md:m-0',
             boxClass,
           ]"
           @click.stop
@@ -58,10 +58,7 @@
           <div
             v-if="isOpen"
             :class="[
-              'dialog-content',
-              mobileFullscreen
-                ? 'h-[calc(100dvh-3rem)] max-h-[calc(100dvh-3rem)] overflow-hidden'
-                : 'min-h-0 flex-1 overflow-y-auto overscroll-contain',
+              'dialog-content min-h-0 flex-1 overflow-y-auto overscroll-contain',
               noPadding ? 'p-0' : 'p-4',
               contentClass,
             ]"

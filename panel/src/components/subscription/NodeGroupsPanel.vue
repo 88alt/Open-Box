@@ -167,8 +167,267 @@
     <DialogWrapper
       v-model="showEditor"
       :title="$t(editing?.id ? 'groupEditTitle' : 'groupAddTitle')"
-      box-class="w-full max-w-4xl h-[90dvh] max-md:h-dvh max-md:max-h-dvh max-md:min-h-dvh max-md:w-screen max-md:max-w-none max-md:rounded-none max-md:m-0"
+      box-class="grid! w-full max-w-4xl grid-rows-[auto_minmax(0,max-content)_minmax(12rem,1fr)_auto] max-sm:grid-rows-[auto_minmax(0,max-content)_minmax(16rem,1fr)_auto]"
+      content-class="flex flex-col overflow-hidden!"
+      mobile-fullscreen
     >
+      <!-- 弹窗分四块:标题 / 工具栏(基本设置,固定在上面)/ 成员区(占满剩余高度,只在列表里滚)/ 底栏(取消 保存)。
+           弹窗本身不出滚动条;高度不够时只有穿梭框里的列表在滚 -->
+      <template #toolbar>
+        <div
+          v-if="draft"
+          class="flex flex-col gap-4"
+        >
+          <div class="flex flex-wrap items-end gap-2">
+            <!-- 图标:和地区关键词那边同一个国旗选择器。节点组多半就是按国家/地区分的
+                 (香港-自动、台湾-自动),给它配一面旗,列表里一眼就找得到。 -->
+            <div class="flex min-w-0 flex-col gap-1 max-sm:flex-1">
+              <label class="text-xs font-medium">{{ $t('groupIconLabel') }}</label>
+              <!-- w-56:公司名(Google 云端硬盘)和通用图标名(拒绝(停止))比国名长得多,窄了就截断 -->
+              <div class="w-56 max-sm:w-full">
+                <CountrySelect
+                  v-model="draft.icon"
+                  clearable
+                  globes
+                  brands
+                  :placeholder="$t('groupIconNone')"
+                />
+              </div>
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs font-medium">{{ $t('iconScaleLabel') }}</label>
+              <IconScaleInput v-model="draft.iconScale" />
+            </div>
+            <div class="flex min-w-0 flex-1 flex-col gap-1 max-sm:basis-full">
+              <label class="text-xs font-medium">{{ $t('groupNameLabel') }}</label>
+              <input
+                v-model="draft.name"
+                type="text"
+                class="input input-sm w-full"
+              />
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-end gap-3 max-sm:gap-2">
+            <div class="flex flex-col gap-1 max-sm:min-w-0 max-sm:flex-1">
+              <label class="text-xs font-medium">{{ $t('groupTypeLabel') }}</label>
+              <select
+                v-model="draft.type"
+                class="select select-sm max-sm:w-full"
+                @change="onTypeChange"
+              >
+                <option value="urltest">{{ $t('groupType_urltest') }}</option>
+                <option value="selector">{{ $t('groupType_selector') }}</option>
+                <option value="failover">{{ $t('groupType_failover') }}</option>
+              </select>
+            </div>
+            <!-- 故障转移:检测间隔按秒填(按设定间隔进行健康检查,不是分钟级的择优测速);容差只给多节点页签里的
+                 内部自动择优用,页签全是单节点时没有用武之地,置灰说明;超时 / 回切直接排在同一行右侧 -->
+            <template v-if="isFailover">
+              <div class="flex flex-col gap-1">
+                <label class="text-xs font-medium">{{ $t('groupInterval') }}</label>
+                <div class="flex items-center gap-1">
+                  <input
+                    v-model.number="intervalSeconds"
+                    type="number"
+                    min="5"
+                    max="86400"
+                    class="input input-sm w-20 max-sm:w-14"
+                    @blur="normalizeIntervalSeconds"
+                  />
+                  <span class="text-base-content/60 text-xs">{{ $t('groupUnitSecond') }}</span>
+                </div>
+              </div>
+              <div class="flex flex-col gap-1">
+                <label
+                  class="text-xs font-medium"
+                  v-tip="allLanesSingle ? $t('failoverToleranceUnused') : $t('failoverToleranceHint')"
+                >{{ $t('failoverTolerance') }}</label>
+                <div class="flex items-center gap-1">
+                  <input
+                    v-model.number="draft.tolerance"
+                    type="number"
+                    min="0"
+                    class="input input-sm w-20 max-sm:w-14"
+                    :disabled="allLanesSingle"
+                  />
+                  <span class="text-base-content/60 text-xs">{{ $t('groupUnitMs') }}</span>
+                </div>
+              </div>
+              <div
+                v-if="failoverSettings"
+                class="group-advanced ml-auto flex min-w-0 flex-nowrap items-end gap-3 max-sm:basis-full max-sm:gap-2"
+              >
+                <div class="flex flex-col gap-1">
+                  <label class="text-xs font-medium">{{ $t('failoverTimeout') }}</label>
+                  <div class="flex items-center gap-1">
+                    <input
+                      v-model.number="timeoutSeconds"
+                      type="number"
+                      min="1"
+                      max="60"
+                      class="input input-sm w-20 max-sm:w-14"
+                    />
+                    <span class="text-base-content/60 text-xs">{{ $t('groupUnitSecond') }}</span>
+                  </div>
+                </div>
+                <label class="flex h-8 cursor-pointer items-center gap-2">
+                  <input
+                    v-model="failoverSettings.restorePrimary"
+                    type="checkbox"
+                    class="toggle toggle-sm"
+                  />
+                  <span
+                    class="text-xs font-medium"
+                    v-tip="$t('failoverRestoreHint')"
+                  >{{ $t('failoverRestore') }}</span>
+                </label>
+                <div
+                  v-if="failoverSettings.restorePrimary"
+                  class="flex flex-col gap-1"
+                >
+                  <label
+                    class="text-xs font-medium"
+                    v-tip="$t('failoverHoldHint')"
+                  >{{ $t('failoverHold') }}</label>
+                  <div class="flex items-center gap-1">
+                    <input
+                      v-model.number="recoveryHoldSeconds"
+                      type="number"
+                      min="0"
+                      max="86400"
+                      class="input input-sm w-20 max-sm:w-14"
+                    />
+                    <span class="text-base-content/60 text-xs">{{ $t('groupUnitSecond') }}</span>
+                  </div>
+                </div>
+              </div>
+              <!-- 测速地址 + 可接受状态码:单独排一整行,不挤在规则 / 间隔 / 容差那一行里 -->
+              <div class="flex min-w-0 basis-full gap-3 max-sm:flex-col">
+                <div class="flex min-w-0 flex-1 flex-col gap-1">
+                  <label class="text-xs font-medium">{{ $t('groupTestUrl') }}</label>
+                  <input
+                    v-model="draft.testUrl"
+                    type="url"
+                    class="input input-sm w-full font-mono text-xs"
+                    :placeholder="$t('groupTestUrlPlaceholder')"
+                  />
+                </div>
+                <div class="flex shrink-0 flex-col gap-1 sm:w-40">
+                  <label
+                    class="text-xs font-medium"
+                    v-tip="$t('groupExpectedStatusHint')"
+                  >{{ $t('groupExpectedStatus') }}</label>
+                  <input
+                    v-model="draft.expectedStatus"
+                    type="text"
+                    class="input input-sm w-full font-mono text-xs"
+                    :placeholder="$t('groupExpectedStatusPlaceholder')"
+                  />
+                </div>
+              </div>
+            </template>
+            <!-- 检测间隔/容差只对 urltest 有意义:selector 是手动选,不会自己去测 -->
+            <template v-else-if="draft.type === 'urltest'">
+              <div class="flex flex-col gap-1">
+                <label class="text-xs font-medium">{{ $t('groupInterval') }}</label>
+                <div class="flex items-center gap-1">
+                  <input
+                    v-model.number="urltestIntervalSeconds"
+                    type="number"
+                    min="5"
+                    max="86400"
+                    class="input input-sm w-20 max-sm:w-14"
+                    @blur="normalizeIntervalSeconds"
+                  />
+                  <span class="text-base-content/60 text-xs">{{ $t('groupUnitSecond') }}</span>
+                </div>
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-xs font-medium">{{ $t('groupTolerance') }}</label>
+                <div class="flex items-center gap-1">
+                  <input
+                    v-model.number="draft.tolerance"
+                    type="number"
+                    min="0"
+                    class="input input-sm w-20 max-sm:w-14"
+                  />
+                  <span class="text-base-content/60 text-xs">{{ $t('groupUnitMs') }}</span>
+                </div>
+              </div>
+              <!-- 测速地址 + 可接受状态码:单独排一整行,不挤在规则 / 间隔 / 容差那一行里 -->
+              <div class="flex min-w-0 basis-full gap-3 max-sm:flex-col">
+                <div class="flex min-w-0 flex-1 flex-col gap-1">
+                  <label class="text-xs font-medium">{{ $t('groupTestUrl') }}</label>
+                  <input
+                    v-model="draft.testUrl"
+                    type="url"
+                    class="input input-sm w-full font-mono text-xs"
+                    :placeholder="$t('groupTestUrlPlaceholder')"
+                  />
+                </div>
+                <div class="flex shrink-0 flex-col gap-1 sm:w-40">
+                  <label
+                    class="text-xs font-medium"
+                    v-tip="$t('groupExpectedStatusHint')"
+                  >{{ $t('groupExpectedStatus') }}</label>
+                  <input
+                    v-model="draft.expectedStatus"
+                    type="text"
+                    class="input input-sm w-full font-mono text-xs"
+                    :placeholder="$t('groupExpectedStatusPlaceholder')"
+                  />
+                </div>
+              </div>
+            </template>
+          </div>
+          <!-- 从普通组切成故障转移时,原来引用了组的成员进不了页签(页签只放真实节点):列出来、拦住保存,
+               由用户决定是移除它们还是切回原类型;不悄悄展开也不悄悄丢 -->
+          <div
+            v-if="isFailover && blockedMembers.length"
+            class="fo-note flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
+          >
+            <span class="min-w-0 flex-1">{{ $t('failoverBlockedMembers', { members: blockedMembers.join('、') }) }}</span>
+            <button
+              type="button"
+              class="btn btn-xs"
+              @click="blockedMembers = []"
+            >
+              {{ $t('failoverDropBlocked') }}
+            </button>
+          </div>
+          <!-- 成员怎么来:动态组按关键词现算,静态组手工挑。放在这儿是因为下面整块
+               (穿梭框 / 关键词框)都归它管。故障转移只有静态一种,不给切换 -->
+          <p
+            v-if="isFailover"
+            class="text-base-content/60 text-xs"
+          >{{ $t('failoverStaticHint') }}</p>
+          <div
+            v-else
+            class="flex flex-wrap items-center justify-between gap-2"
+          >
+            <div
+              role="tablist"
+              class="tabs-box tabs tabs-xs w-fit shrink-0"
+            >
+              <a
+                role="tab"
+                :class="['tab', draft.mode === 'dynamic' && 'tab-active']"
+                @click="draft.mode = 'dynamic'"
+              >
+                {{ $t('groupModeDynamic') }}
+              </a>
+              <a
+                role="tab"
+                :class="['tab', draft.mode === 'static' && 'tab-active']"
+                @click="draft.mode = 'static'"
+              >
+                {{ $t('groupModeStatic') }}
+              </a>
+            </div>
+          </div>
+        </div>
+      </template>
       <!-- 取消 / 保存放在底栏:内容再长也只滚中间那块,按钮始终在弹窗底部 -->
       <template #footer>
         <button
@@ -193,350 +452,99 @@
       </template>
       <div
         v-if="draft"
-        class="flex flex-col gap-4"
+        class="flex min-h-0 flex-1 flex-col gap-4"
       >
-        <div class="flex items-end gap-2">
-          <!-- 图标:和地区关键词那边同一个国旗选择器。节点组多半就是按国家/地区分的
-               (香港-自动、台湾-自动),给它配一面旗,列表里一眼就找得到。 -->
-          <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium">{{ $t('groupIconLabel') }}</label>
-            <!-- w-56:公司名(Google 云端硬盘)和通用图标名(拒绝(停止))比国名长得多,窄了就截断 -->
-            <div class="w-56">
-              <CountrySelect
-                v-model="draft.icon"
-                clearable
-                globes
-                brands
-                :placeholder="$t('groupIconNone')"
-              />
-            </div>
-          </div>
-          <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium">{{ $t('iconScaleLabel') }}</label>
-            <IconScaleInput v-model="draft.iconScale" />
-          </div>
-          <div class="flex min-w-0 flex-1 flex-col gap-1">
-            <label class="text-xs font-medium">{{ $t('groupNameLabel') }}</label>
-            <input
-              v-model="draft.name"
-              type="text"
-              class="input input-sm w-full"
-            />
-          </div>
-        </div>
-
-        <div class="flex flex-wrap items-end gap-3">
-          <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium">{{ $t('groupTypeLabel') }}</label>
-            <select
-              v-model="draft.type"
-              class="select select-sm"
-              @change="onTypeChange"
-            >
-              <option value="urltest">{{ $t('groupType_urltest') }}</option>
-              <option value="selector">{{ $t('groupType_selector') }}</option>
-              <option value="failover">{{ $t('groupType_failover') }}</option>
-            </select>
-          </div>
-          <!-- 故障转移:检测间隔按秒填(按设定间隔进行健康检查,不是分钟级的择优测速);容差只给多节点页签里的
-               内部自动择优用,页签全是单节点时没有用武之地,置灰说明;超时 / 失败轮数 / 回切收进高级设置 -->
-          <template v-if="isFailover">
-            <div class="flex flex-col gap-1">
-              <label class="text-xs font-medium">{{ $t('groupInterval') }}</label>
-              <div class="flex items-center gap-1">
-                <input
-                  v-model.number="intervalSeconds"
-                  type="number"
-                  min="5"
-                  max="86400"
-                  class="input input-sm w-20"
-                  @blur="normalizeIntervalSeconds"
-                />
-                <span class="text-base-content/60 text-xs">{{ $t('groupUnitSecond') }}</span>
-              </div>
-            </div>
-            <div class="flex flex-col gap-1">
-              <label
-                class="text-xs font-medium"
-                v-tip="allLanesSingle ? $t('failoverToleranceUnused') : $t('failoverToleranceHint')"
-              >{{ $t('failoverTolerance') }}</label>
-              <div class="flex items-center gap-1">
-                <input
-                  v-model.number="draft.tolerance"
-                  type="number"
-                  min="0"
-                  class="input input-sm w-20"
-                  :disabled="allLanesSingle"
-                />
-                <span class="text-base-content/60 text-xs">{{ $t('groupUnitMs') }}</span>
-              </div>
-            </div>
-            <!-- 测速地址 + 可接受状态码:各占半行以上的宽度,单独排一整行,不挤在规则 / 间隔 / 容差那一行里 -->
-            <div class="flex w-full min-w-0 items-end gap-3">
-              <div class="flex min-w-0 flex-1 flex-col gap-1">
-                <label class="text-xs font-medium">{{ $t('groupTestUrl') }}</label>
-                <input
-                  v-model="draft.testUrl"
-                  type="url"
-                  class="input input-sm w-full font-mono text-xs"
-                  :placeholder="$t('groupTestUrlPlaceholder')"
-                />
-              </div>
-              <div class="flex w-40 shrink-0 flex-col gap-1">
-                <label
-                  class="text-xs font-medium"
-                  v-tip="$t('groupExpectedStatusHint')"
-                >{{ $t('groupExpectedStatus') }}</label>
-                <input
-                  v-model="draft.expectedStatus"
-                  type="text"
-                  class="input input-sm w-full font-mono text-xs"
-                  :placeholder="$t('groupExpectedStatusPlaceholder')"
-                />
-              </div>
-            </div>
-            <button
-              type="button"
-              class="btn btn-ghost btn-sm"
-              @click="showAdvanced = !showAdvanced"
-            >
-              {{ $t('failoverAdvanced') }}
-              <ChevronDownIcon :class="['h-3.5 w-3.5 transition-transform', showAdvanced && 'rotate-180']" />
-            </button>
-          </template>
-          <!-- 检测间隔/容差只对 urltest 有意义:selector 是手动选,不会自己去测 -->
-          <template v-else-if="draft.type === 'urltest'">
-            <div class="flex flex-col gap-1">
-              <label class="text-xs font-medium">{{ $t('groupInterval') }}</label>
-              <div class="flex items-center gap-1">
-                <input
-                  v-model.number="urltestIntervalSeconds"
-                  type="number"
-                  min="5"
-                  max="86400"
-                  class="input input-sm w-20"
-                  @blur="normalizeIntervalSeconds"
-                />
-                <span class="text-base-content/60 text-xs">{{ $t('groupUnitSecond') }}</span>
-              </div>
-            </div>
-            <div class="flex flex-col gap-1">
-              <label class="text-xs font-medium">{{ $t('groupTolerance') }}</label>
-              <div class="flex items-center gap-1">
-                <input
-                  v-model.number="draft.tolerance"
-                  type="number"
-                  min="0"
-                  class="input input-sm w-20"
-                />
-                <span class="text-base-content/60 text-xs">{{ $t('groupUnitMs') }}</span>
-              </div>
-            </div>
-            <!-- 测速地址 + 可接受状态码:各占半行以上的宽度,单独排一整行,不挤在规则 / 间隔 / 容差那一行里 -->
-            <div class="flex w-full min-w-0 items-end gap-3">
-              <div class="flex min-w-0 flex-1 flex-col gap-1">
-                <label class="text-xs font-medium">{{ $t('groupTestUrl') }}</label>
-                <input
-                  v-model="draft.testUrl"
-                  type="url"
-                  class="input input-sm w-full font-mono text-xs"
-                  :placeholder="$t('groupTestUrlPlaceholder')"
-                />
-              </div>
-              <div class="flex w-40 shrink-0 flex-col gap-1">
-                <label
-                  class="text-xs font-medium"
-                  v-tip="$t('groupExpectedStatusHint')"
-                >{{ $t('groupExpectedStatus') }}</label>
-                <input
-                  v-model="draft.expectedStatus"
-                  type="text"
-                  class="input input-sm w-full font-mono text-xs"
-                  :placeholder="$t('groupExpectedStatusPlaceholder')"
-                />
-              </div>
-            </div>
-          </template>
-        </div>
-        <div
-          v-if="isFailover && showAdvanced && failoverSettings"
-          class="bg-base-200/60 flex flex-wrap items-end gap-3 rounded-lg px-3 py-2"
-        >
-          <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium">{{ $t('failoverTimeout') }}</label>
-            <div class="flex items-center gap-1">
-              <input
-                v-model.number="timeoutSeconds"
-                type="number"
-                min="1"
-                max="60"
-                class="input input-sm w-20"
-              />
-              <span class="text-base-content/60 text-xs">{{ $t('groupUnitSecond') }}</span>
-            </div>
-          </div>
-          <label class="flex cursor-pointer items-center gap-2 pb-1.5">
-            <input
-              v-model="failoverSettings.restorePrimary"
-              type="checkbox"
-              class="toggle toggle-sm"
-            />
-            <span
-              class="text-xs font-medium"
-              v-tip="$t('failoverRestoreHint')"
-            >{{ $t('failoverRestore') }}</span>
-          </label>
-          <div
-            v-if="failoverSettings.restorePrimary"
-            class="flex flex-col gap-1"
-          >
-            <label
-              class="text-xs font-medium"
-              v-tip="$t('failoverHoldHint')"
-            >{{ $t('failoverHold') }}</label>
-            <div class="flex items-center gap-1">
-              <input
-                v-model.number="recoveryHoldSeconds"
-                type="number"
-                min="0"
-                max="86400"
-                class="input input-sm w-20"
-              />
-              <span class="text-base-content/60 text-xs">{{ $t('groupUnitSecond') }}</span>
-            </div>
-          </div>
-        </div>
-        <!-- 从普通组切成故障转移时,原来引用了组的成员进不了页签(页签只放真实节点):列出来、拦住保存,
-             由用户决定是移除它们还是切回原类型;不悄悄展开也不悄悄丢 -->
-        <div
-          v-if="isFailover && blockedMembers.length"
-          class="fo-note flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-        >
-          <span class="min-w-0 flex-1">{{ $t('failoverBlockedMembers', { members: blockedMembers.join('、') }) }}</span>
-          <button
-            type="button"
-            class="btn btn-xs"
-            @click="blockedMembers = []"
-          >
-            {{ $t('failoverDropBlocked') }}
-          </button>
-        </div>
-        <!-- 成员怎么来:动态组按关键词现算,静态组手工挑。放在这儿是因为下面整块
-             (穿梭框 / 关键词框)都归它管。故障转移只有静态一种,不给切换 -->
-        <p
-          v-if="isFailover"
-          class="text-base-content/60 text-xs"
-        >{{ $t('failoverStaticHint') }}</p>
-        <div
-          v-else
-          role="tablist"
-          class="tabs-box tabs tabs-xs w-fit"
-        >
-          <a
-            role="tab"
-            :class="['tab', draft.mode === 'dynamic' && 'tab-active']"
-            @click="draft.mode = 'dynamic'"
-          >
-            {{ $t('groupModeDynamic') }}
-          </a>
-          <a
-            role="tab"
-            :class="['tab', draft.mode === 'static' && 'tab-active']"
-            @click="draft.mode = 'static'"
-          >
-            {{ $t('groupModeStatic') }}
-          </a>
-        </div>
-
         <!-- 左右穿梭:左边是还没选的,右边是已选的,中间两个箭头搬运勾中的条目。
              每行的勾选框只表示"这条要不要搬",与"选没选中它当成员"是两回事——后者
              由它在左边还是右边表示,所以不会出现"几十个节点混在一列里看不出选了谁"
-             的老问题。行末的 › ‹ 是单条快捷键:不用先勾再按箭头,一下就挪过去。 -->
+             的老问题。行末的 › ‹ 是单条快捷键:不用先勾再按箭头,一下就挪过去。
+             两侧面板各自撑满剩余高度,列表在面板内部滚动。 -->
         <div
           v-if="draft.mode === 'static'"
-          class="grid grid-cols-[1fr_auto_1fr] gap-3"
+          class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-3 max-sm:grid-cols-1 max-sm:grid-rows-[minmax(0,1fr)_auto_minmax(0,1fr)]"
         >
-            <div class="border-base-content/10 flex min-h-0 flex-col rounded-lg border">
-              <div class="border-base-content/10 flex flex-col gap-1 border-b px-2 py-1.5">
-                <div class="flex items-center gap-2">
-                  <span class="text-xs font-medium whitespace-nowrap">
-                    {{ $t('groupAvailable') }} ({{ availableCandidates.length }})
-                  </span>
-                  <input
-                    v-model="memberFilter"
-                    type="text"
-                    class="input input-xs min-w-0 flex-1"
-                    :placeholder="$t('groupMemberFilter')"
-                  />
-                </div>
-                <BulkPick
-                  v-model:subscription="memberSub"
-                  :subscriptions="subscriptionOptions"
-                  :nodes-only="isFailover"
-                  @select-all="tickAll('available')"
-                  @invert="tickInvert('available')"
-                  @clear="tickNone('available')"
+          <div class="group-member-panel border-base-content/10 grid min-h-0 min-w-0 grid-rows-[minmax(0,max-content)_minmax(4rem,1fr)] overflow-hidden rounded-lg border">
+            <div class="group-member-controls border-base-content/10 flex min-h-0 flex-col gap-1 overflow-y-auto overscroll-contain border-b px-2 py-1.5 [&>*]:shrink-0">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-medium whitespace-nowrap">
+                  {{ $t('groupAvailable') }} ({{ availableCandidates.length }})
+                </span>
+                <input
+                  v-model="memberFilter"
+                  type="text"
+                  class="input input-xs min-w-0 flex-1"
+                  :placeholder="$t('groupMemberFilter')"
                 />
               </div>
-              <div class="max-h-64 overflow-y-auto">
-                <p
-                  v-if="!filteredAvailable.length"
-                  class="text-base-content/50 p-3 text-center text-xs"
-                >
-                  {{ $t('groupNoCandidates') }}
-                </p>
-                <label
-                  v-for="item in filteredAvailable"
-                  :key="item.kind + item.name"
-                  class="hover:bg-base-200/60 flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm"
-                >
-                  <input
-                    v-model="checkedAvailable"
-                    type="checkbox"
-                    class="checkbox checkbox-xs shrink-0"
-                    :value="item.name"
-                  />
-                  <span class="truncate">{{ item.name }}</span>
-                  <span
-                    v-if="item.kind === 'group'"
-                    class="badge badge-ghost badge-xs"
-                  >{{ $t('groupsTab') }}</span>
-                  <button
-                    type="button"
-                    class="btn btn-ghost btn-xs ml-auto shrink-0 px-1"
-                    v-tip="$t('groupMoveRight')"
-                    @click.prevent="addMember(item.name)"
-                  >
-                    <ChevronRightIcon class="text-base-content/30 h-4 w-4" />
-                  </button>
-                </label>
-              </div>
+              <BulkPick
+                v-model:subscription="memberSub"
+                :subscriptions="subscriptionOptions"
+                :nodes-only="isFailover"
+                @select-all="tickAll('available')"
+                @invert="tickInvert('available')"
+                @clear="tickNone('available')"
+              />
             </div>
-
-            <!-- 中间的搬运按钮:把勾中的条目整批挪过去。没勾任何东西时置灰,
-                 免得按下去什么都不发生还以为是坏的。 -->
-            <div class="flex flex-col items-center justify-center gap-2">
-              <button
-                type="button"
-                class="btn btn-sm btn-square"
-                :disabled="!checkedAvailable.length"
-                v-tip="$t('groupMoveRight')"
-                @click="moveRight"
+            <div class="group-member-list min-h-0 overflow-y-auto overscroll-contain">
+              <p
+                v-if="!filteredAvailable.length"
+                class="text-base-content/50 p-3 text-center text-xs"
               >
-                <ChevronRightIcon class="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                class="btn btn-sm btn-square"
-                :disabled="!checkedSelected.length"
-                v-tip="$t('groupMoveLeft')"
-                @click="moveLeft"
+                {{ $t('groupNoCandidates') }}
+              </p>
+              <label
+                v-for="item in filteredAvailable"
+                :key="item.kind + item.name"
+                class="hover:bg-base-200/60 flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm"
               >
-                <ChevronLeftIcon class="h-4 w-4" />
-              </button>
+                <input
+                  v-model="checkedAvailable"
+                  type="checkbox"
+                  class="checkbox checkbox-xs shrink-0"
+                  :value="item.name"
+                />
+                <span class="truncate">{{ item.name }}</span>
+                <span
+                  v-if="item.kind === 'group'"
+                  class="badge badge-ghost badge-xs"
+                >{{ $t('groupsTab') }}</span>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs ml-auto shrink-0 px-1"
+                  v-tip="$t('groupMoveRight')"
+                  @click.prevent="addMember(item.name)"
+                >
+                  <ChevronRightIcon class="text-base-content/30 h-4 w-4" />
+                </button>
+              </label>
             </div>
+          </div>
 
-            <div class="border-base-content/10 flex min-h-0 min-w-0 flex-col rounded-lg border">
+          <!-- 中间的搬运按钮:把勾中的条目整批挪过去。没勾任何东西时置灰,
+               免得按下去什么都不发生还以为是坏的。窄屏上下排列,箭头转 90 度 -->
+          <div class="flex flex-col items-center justify-center gap-2 max-sm:flex-row">
+            <button
+              type="button"
+              class="btn btn-sm btn-square"
+              :disabled="!checkedAvailable.length"
+              v-tip="$t('groupMoveRight')"
+              @click="moveRight"
+            >
+              <ChevronRightIcon class="h-4 w-4 max-sm:rotate-90" />
+            </button>
+            <button
+              type="button"
+              class="btn btn-sm btn-square"
+              :disabled="!checkedSelected.length"
+              v-tip="$t('groupMoveLeft')"
+              @click="moveLeft"
+            >
+              <ChevronLeftIcon class="h-4 w-4 max-sm:rotate-90" />
+            </button>
+          </div>
+
+          <div class="group-member-panel border-base-content/10 grid min-h-0 min-w-0 grid-rows-[minmax(0,max-content)_minmax(4rem,1fr)] overflow-hidden rounded-lg border">
+            <div class="group-member-controls flex min-h-0 flex-col overflow-y-auto overscroll-contain [&>*]:shrink-0">
               <!-- 故障转移:右侧上方是主备页签。顺序即优先级(第一个主用,后面依次备用),拖拽排序;
                    页签按稳定 id 认,拖完选中的还是原来那个;多了在容器内横向滚动,不把弹窗撑宽 -->
               <template v-if="isFailover && draft.lanes">
@@ -545,27 +553,31 @@
                     v-model="draft.lanes"
                     :animation="150"
                     :force-fallback="true"
+                    :fallback-tolerance="5"
                     :fallback-on-body="true"
+                    :delay="200"
+                    :delay-on-touch-only="true"
                     ghost-class="opacity-40"
                     item-key="id"
-                    class="flex min-w-0 flex-1 gap-1 overflow-x-auto"
+                    role="tablist"
+                    class="tabs-box tabs tabs-xs min-w-0 flex-nowrap overflow-x-auto overflow-y-hidden"
                   >
                     <template #item="{ element: lane, index }">
-                      <button
-                        type="button"
-                        :class="['btn btn-xs shrink-0 cursor-move whitespace-nowrap', lane.id === activeLaneId ? 'btn-primary' : 'btn-ghost border-base-content/15 border']"
+                      <a
+                        role="tab"
+                        :class="['tab shrink-0 cursor-move whitespace-nowrap', lane.id === activeLaneId && 'tab-active']"
                         @click="selectLane(lane.id)"
                       >
                         <!-- 页签栏只标角色和有效节点数;自定义名在下面当前页签那行改,不占页签栏的宽度 -->
                         {{ laneRoleLabel(index) }}
                         <span class="opacity-70 tabular-nums">· {{ validCount(lane) }}</span>
-                      </button>
+                      </a>
                     </template>
                   </Draggable>
                   <!-- 最多 3 个页签(主用 + 备用 1 + 备用 2),满了加号置灰 -->
                   <button
                     type="button"
-                    class="btn btn-ghost btn-square btn-xs shrink-0"
+                    class="btn btn-ghost btn-circle btn-sm shrink-0"
                     :disabled="draft.lanes.length >= FAILOVER_MAX_LANES"
                     :aria-label="$t('failoverAddLane')"
                     v-tip="draft.lanes.length >= FAILOVER_MAX_LANES ? $t('failoverMaxLanes', { n: FAILOVER_MAX_LANES }) : $t('failoverAddLane')"
@@ -636,41 +648,42 @@
                   @clear="tickNone('selected')"
                 />
               </div>
-              <div class="max-h-64 overflow-y-auto">
-                <p
-                  v-if="!filteredSelected.length"
-                  class="text-base-content/50 p-3 text-center text-xs"
-                >
-                  {{ $t('groupNoSelected') }}
-                </p>
-                <label
-                  v-for="name in filteredSelected"
-                  :key="name"
-                  class="hover:bg-base-200/60 flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm"
-                >
-                  <input
-                    v-model="checkedSelected"
-                    type="checkbox"
-                    class="checkbox checkbox-xs shrink-0"
-                    :value="name"
-                  />
-                  <button
-                    type="button"
-                    class="btn btn-ghost btn-xs shrink-0 px-1"
-                    v-tip="$t('groupMoveLeft')"
-                    @click.prevent="removeMember(name)"
-                  >
-                    <ChevronLeftIcon class="text-base-content/30 h-4 w-4" />
-                  </button>
-                  <span :class="['truncate', isFailover && !nodeNameSet.has(name) && 'line-through opacity-60']">{{ name }}</span>
-                  <!-- 订阅更新后已经不存在的节点:留着给用户看,不算有效节点、不进配置 -->
-                  <span
-                    v-if="isFailover && !nodeNameSet.has(name)"
-                    class="badge badge-ghost badge-xs shrink-0"
-                  >{{ $t('failoverInvalid') }}</span>
-                </label>
-              </div>
             </div>
+            <div class="group-member-list min-h-0 overflow-y-auto overscroll-contain">
+              <p
+                v-if="!filteredSelected.length"
+                class="text-base-content/50 p-3 text-center text-xs"
+              >
+                {{ $t('groupNoSelected') }}
+              </p>
+              <label
+                v-for="name in filteredSelected"
+                :key="name"
+                class="hover:bg-base-200/60 flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm"
+              >
+                <input
+                  v-model="checkedSelected"
+                  type="checkbox"
+                  class="checkbox checkbox-xs shrink-0"
+                  :value="name"
+                />
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs shrink-0 px-1"
+                  v-tip="$t('groupMoveLeft')"
+                  @click.prevent="removeMember(name)"
+                >
+                  <ChevronLeftIcon class="text-base-content/30 h-4 w-4" />
+                </button>
+                <span :class="['truncate', isFailover && !nodeNameSet.has(name) && 'line-through opacity-60']">{{ name }}</span>
+                <!-- 订阅更新后已经不存在的节点:留着给用户看,不算有效节点、不进配置 -->
+                <span
+                  v-if="isFailover && !nodeNameSet.has(name)"
+                  class="badge badge-ghost badge-xs shrink-0"
+                >{{ $t('failoverInvalid') }}</span>
+              </label>
+            </div>
+          </div>
         </div>
 
         <!-- 动态组:成员不落名单,只存关键词,生成配置时按当前节点现算。这样以后新加
@@ -678,9 +691,9 @@
              下面实时列出"按现在的节点会选中谁",免得关键词写完还得靠猜。 -->
         <div
           v-else
-          class="flex flex-col gap-2"
+          class="grid min-h-0 flex-1 grid-rows-[minmax(0,max-content)_minmax(4rem,1fr)] gap-2"
         >
-          <div class="flex flex-col gap-1">
+          <div class="flex min-h-0 flex-col gap-1 overflow-y-auto overscroll-contain [&>*]:shrink-0">
             <label class="text-xs font-medium">{{ $t('groupKeywordsLabel') }}</label>
             <input
               v-model="keywordsText"
@@ -690,11 +703,11 @@
             />
             <p class="text-base-content/50 text-xs">{{ $t('groupKeywordsHint') }}</p>
           </div>
-          <div class="border-base-content/10 rounded-lg border">
-            <div class="border-base-content/10 border-b px-3 py-1.5 text-xs font-medium">
+          <div class="border-base-content/10 flex min-h-0 flex-col overflow-hidden rounded-lg border">
+            <div class="border-base-content/10 shrink-0 border-b px-3 py-1.5 text-xs font-medium">
               {{ $t('groupDynamicMatched', { count: dynamicMatched.length }) }}
             </div>
-            <div class="max-h-56 overflow-y-auto">
+            <div class="group-member-list min-h-0 flex-1 overflow-y-auto overscroll-contain">
               <p
                 v-if="!dynamicMatched.length"
                 class="text-base-content/50 p-3 text-center text-xs"
@@ -943,7 +956,6 @@ import { fetchProxies } from '@/store/proxies'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import {
   Bars3Icon,
-  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   PencilSquareIcon,
@@ -1069,7 +1081,6 @@ const openEditor = (group: OpenboxUserGroup | null) => {
   normalBackup = null
   failoverBackup = null
   blockedMembers.value = []
-  showAdvanced.value = false
   activeLaneId.value = draft.value?.lanes?.[0]?.id ?? ''
   memberFilter.value = ''
   selectedFilter.value = ''
@@ -1099,7 +1110,6 @@ const ensureFailoverFields = (d: OpenboxUserGroup) => {
   d.failover = { ...FAILOVER_DEFAULTS, ...(d.failover || {}) }
 }
 const failoverSettings = computed(() => (draft.value?.type === 'failover' ? draft.value.failover ?? null : null))
-const showAdvanced = ref(false)
 const activeLaneId = ref('')
 const activeLane = computed(() => draft.value?.lanes?.find((l) => l.id === activeLaneId.value) ?? null)
 const nodeNameSet = computed(() => new Set(availableNodes.value.map((n) => n.name)))
