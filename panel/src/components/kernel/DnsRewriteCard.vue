@@ -317,7 +317,8 @@ const saveDraft = async () => {
   }
   if (d.kind === 'domain') {
     const domain = normalizeDomain(d.domain)
-    if (!domain || !DOMAIN_RE.test(domain) || domain.includes('*') || domain === source) {
+    // 目标可以是 *.xxx(保留完整子域前缀),但只有查询域名也以 *. 开头才成立
+    if (!domain || !DOMAIN_RE.test(domain) || domain.length > 253 || (domain.startsWith('*.') && !source.startsWith('*.')) || domain === source) {
       showNotification({ content: 'dnsRewriteBadDomain', type: 'alert-error' })
       return
     }
