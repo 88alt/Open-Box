@@ -67,6 +67,7 @@
   "config/truncate-proxy-name": "true",
   "config/two-columns": "false",
   "config/use-connection-card": "true",
+  "config/use-connection-card-mobile": "true",
   "config/use-large-proxy-group-icon": "true",
   "config/use-smart-group-sort": "false"
 }
