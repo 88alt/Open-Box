@@ -225,6 +225,7 @@
     >
       <form
         v-if="editing"
+        id="dns-filter-list-form"
         class="flex flex-col gap-3"
         @submit.prevent="saveEdit"
       >
@@ -260,16 +261,22 @@
             </button>
           </div>
         </label>
+      </form>
+
+      <!-- 取消 / 保存放底栏:内容区下面一条分割线(两端缩进到和内容边界对齐),对齐 v0.1.359 -->
+      <template #footer>
         <div class="flex justify-end gap-2">
           <button
             class="btn btn-sm"
             type="button"
             @click="showEditor = false"
           >
-            {{ $t('cancel') }}</button
-          ><button
+            {{ $t('cancel') }}
+          </button>
+          <button
             class="btn btn-primary btn-sm"
             type="submit"
+            form="dns-filter-list-form"
             :disabled="saving"
           >
             <span
@@ -279,7 +286,7 @@
             {{ $t('save') }}
           </button>
         </div>
-      </form>
+      </template>
     </DialogWrapper>
     <DnsFilterPreviewDialog
       v-if="showPreview && previewList"
@@ -295,6 +302,9 @@
           <p class="text-sm">{{ deleting?.name }}</p>
           <p class="text-base-content/60 font-mono text-xs break-all">{{ deleting?.url }}</p>
         </div>
+      </div>
+
+      <template #footer>
         <div class="flex justify-end gap-2">
           <button
             type="button"
@@ -312,7 +322,7 @@
             {{ $t('confirm') }}
           </button>
         </div>
-      </div>
+      </template>
     </DialogWrapper>
   </section>
 </template>
