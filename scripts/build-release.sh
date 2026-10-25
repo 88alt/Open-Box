@@ -276,8 +276,11 @@ trap 'rm -rf "$STAGE"' EXIT INT TERM
 mkdir -p "$STAGE/node/lib" "$STAGE/panel" "$STAGE/bin" "$STAGE/openwrt"
 
 # ---- 1. 构建前端 ----
-log "使用仓库里的面板前端 dist(取自上游,不自己编译)..."
-[ -f "$PANEL_DIR/dist/index.html" ] || { echo "ERROR: $PANEL_DIR/dist/index.html 不存在,请先运行 Sync upstream" >&2; exit 1; }
+# 本脚本不编译前端,只打包 $PANEL_DIR/dist:
+#   - catch-up-upstream 分支:dist 是 Sync upstream 取来的上游成品,提交在仓库里
+#   - main 分支:dist 不进仓库,由 Release 工作流在调用本脚本前先 `pnpm run build` 生成
+log "使用已就绪的面板前端 dist($PANEL_DIR/dist)..."
+[ -f "$PANEL_DIR/dist/index.html" ] || { echo "ERROR: $PANEL_DIR/dist/index.html 不存在:main 要先在 panel/ 下运行 pnpm run build,catch-up-upstream 要先运行 Sync upstream" >&2; exit 1; }
 cp -R "$PANEL_DIR/dist" "$STAGE/panel/dist"
 
 # ---- 2. pnpm deploy 出自包含 server ----

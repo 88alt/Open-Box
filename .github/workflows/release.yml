@@ -156,7 +156,7 @@ jobs:
 
   build:
     name: Build (${{ matrix.arch }})
-    needs: [kernel, geodata]
+    needs: [kernel, geodata, core]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -184,6 +184,20 @@ jobs:
       - name: Install panel dependencies
         working-directory: panel
         run: corepack pnpm install --frozen-lockfile
+
+      # 自研面板前端:main 的 panel/dist 不进仓库,这里现编;build-release.sh 只打包它
+      - name: Type-check and build panel frontend
+        working-directory: panel
+        run: |
+          corepack pnpm run type-check
+          corepack pnpm run build
+
+      # 自研核心(core 任务的两个架构产物):core-out/core-amd64/、core-out/core-arm64/,
+      # 每个目录里是 openbox-core 和 core-build.json。换入打包产物的步骤另做。
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: core-*
+          path: core-out
 
       - uses: actions/download-artifact@v4
         with:
