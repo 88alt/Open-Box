@@ -836,7 +836,11 @@ const zh: LANG_MESSAGE = {
   groupKeywordsLabel: '关键词',
   groupKeywordsPlaceholder: '关键词,用逗号分隔,如:香港,hk',
   groupKeywordsHint:
-    '节点名命中任一关键词就进组,留空 = 所有节点;新订阅也按此自动加入。链式代理不进动态组。',
+    '用逗号 , 分隔；OR 命中任一关键词就进组。留空 = 订阅范围内的全部节点；新节点按此自动加入，链式代理不进动态组。',
+  groupKeywordsAllHint:
+    '用逗号 , 分隔；AND 同时命中全部关键词才进组。留空 = 订阅范围内的全部节点；新节点按此自动加入，链式代理不进动态组。',
+  groupKeywordsMode: '关键词匹配方式',
+  groupSubscriptionMissing: '已删除的订阅',
   groupDynamicMatched: '当前命中 {count} 个节点',
   groupDynamicNoMatch: '当前没有节点命中这些关键词',
   groupDynamicSummary: '动态组 · 当前 {count} 个节点',

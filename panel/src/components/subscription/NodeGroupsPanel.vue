@@ -425,6 +425,57 @@
                 {{ $t('groupModeStatic') }}
               </a>
             </div>
+            <!-- 动态组:订阅范围 + 关键词 OR / AND(静态组没有这两项) -->
+            <div
+              v-if="draft.mode === 'dynamic'"
+              class="ml-auto flex min-w-0 items-center gap-2"
+            >
+              <select
+                v-model="draft.subscriptionId"
+                :aria-label="$t('subscriptions')"
+                :title="$t('subscriptions')"
+                class="select select-xs w-32 min-w-0"
+              >
+                <option value="">{{ $t('groupFilterAllSubscriptions') }}</option>
+                <option
+                  v-if="draft.subscriptionId && !groupSubscriptions.some((s) => s.id === draft?.subscriptionId)"
+                  :value="draft.subscriptionId"
+                >
+                  {{ $t('groupSubscriptionMissing') }}
+                </option>
+                <option
+                  v-for="sub in groupSubscriptions"
+                  :key="sub.id"
+                  :value="sub.id"
+                >
+                  {{ sub.name }}
+                </option>
+              </select>
+              <div
+                role="tablist"
+                :aria-label="$t('groupKeywordsMode')"
+                class="tabs-box tabs tabs-xs shrink-0"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="draft.keywordMode !== 'and'"
+                  :class="['tab', draft.keywordMode !== 'and' && 'tab-active']"
+                  @click="draft.keywordMode = 'or'"
+                >
+                  OR
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="draft.keywordMode === 'and'"
+                  :class="['tab', draft.keywordMode === 'and' && 'tab-active']"
+                  @click="draft.keywordMode = 'and'"
+                >
+                  AND
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </template>
@@ -701,7 +752,9 @@
               class="input input-sm w-full"
               :placeholder="$t('groupKeywordsPlaceholder')"
             />
-            <p class="text-base-content/50 text-xs">{{ $t('groupKeywordsHint') }}</p>
+            <p class="text-base-content/50 text-xs">
+              {{ $t(draft.keywordMode === 'and' ? 'groupKeywordsAllHint' : 'groupKeywordsHint') }}
+            </p>
           </div>
           <div class="border-base-content/10 flex min-h-0 flex-col overflow-hidden rounded-lg border">
             <div class="border-base-content/10 shrink-0 border-b px-3 py-1.5 text-xs font-medium">
@@ -942,7 +995,13 @@
 </template>
 
 <script setup lang="ts">
-import type { OpenboxFailoverLane, OpenboxFailoverSettings, OpenboxGroupType, OpenboxUserGroup } from '@/api/openbox'
+import type {
+  OpenboxFailoverLane,
+  OpenboxFailoverSettings,
+  OpenboxGroupsPayload,
+  OpenboxGroupType,
+  OpenboxUserGroup,
+} from '@/api/openbox'
 import { fetchDefaultNodeGroups, fetchNodeGroups, saveNodeGroups } from '@/api/openbox'
 import BulkPick from '@/components/subscription/BulkPick.vue'
 import CountryFlag from '@/components/common/CountryFlag.vue'
@@ -972,7 +1031,8 @@ import { useI18n } from 'vue-i18n'
 const { t, locale } = useI18n()
 
 const groups = ref<OpenboxUserGroup[]>([])
-const availableNodes = ref<Array<{ name: string; subscription: string }>>([])
+const availableNodes = ref<OpenboxGroupsPayload['availableNodes']>([])
+const groupSubscriptions = ref<OpenboxGroupsPayload['subscriptions']>([])
 const loading = ref(false)
 // 提示一律走右上角那套 toast(zashboard 自带的 showNotification),不在页面里挂
 // 内联文字:内联的会把列表往下顶、切走再回来还在,而且同一屏里两种提示样式看着
@@ -1005,6 +1065,7 @@ const load = async () => {
     const data = await fetchNodeGroups()
     groups.value = data.groups
     availableNodes.value = data.availableNodes
+    groupSubscriptions.value = data.subscriptions || []
   } catch (err) {
     notifyError(err)
   } finally {
@@ -1015,14 +1076,31 @@ onMounted(load)
 
 // 动态组报"按当前节点算出来是几个",静态组报名单里有几个。动态组的数字会随订阅
 // 变化,这正是它的意义所在,所以列表里就该显示算出来的那个数,而不是关键词条数。
+// 动态组的候选:链式代理不进动态组;匹配文本 = 地区名 + 节点名,和服务端一致
+const matchableNodes = computed(() =>
+  availableNodes.value
+    .filter((n) => !n.chain)
+    .map((n) => ({
+      name: n.name,
+      subscriptionId: n.subscriptionId,
+      text: normalizeForMatch(`${n.region || ''} ${n.name}`),
+    })),
+)
+
 const matchedNodes = (group: OpenboxUserGroup) => {
   const keywords = group.keywords || []
-  const names = availableNodes.value.map((n) => n.name)
-  if (!keywords.length) return names
-  return names.filter((name) => {
-    const lower = normalizeForMatch(name)
-    return keywords.some((kw) => keywordMatches(lower, kw))
-  })
+  // 选了订阅就只在该订阅的节点里匹配
+  const scoped = group.subscriptionId
+    ? matchableNodes.value.filter((n) => n.subscriptionId === group.subscriptionId)
+    : matchableNodes.value
+  if (!keywords.length) return scoped.map((n) => n.name)
+  return scoped
+    .filter((n) =>
+      group.keywordMode === 'and'
+        ? keywords.every((kw) => keywordMatches(n.text, kw))
+        : keywords.some((kw) => keywordMatches(n.text, kw)),
+    )
+    .map((n) => n.name)
 }
 
 const memberSummary = (group: OpenboxUserGroup) => {
@@ -1073,6 +1151,7 @@ const openEditor = (group: OpenboxUserGroup | null) => {
   if (draft.value) {
     if (!draft.value.mode) draft.value.mode = 'static'
     if (!draft.value.keywords) draft.value.keywords = []
+    if (!draft.value.subscriptionId) draft.value.subscriptionId = ''
     if (draft.value.icon === undefined) draft.value.icon = ''
     if (draft.value.expectedStatus === undefined) draft.value.expectedStatus = ''
     if (draft.value.type === 'failover') ensureFailoverFields(draft.value)
@@ -1429,10 +1508,10 @@ const autoSaving = ref(false)
 // 每个已选国家当前命中几个节点(只是参考,0 也能建)。列表顺序由 autoCountries
 // 本身决定——它就是拖拽排序的那个数组,所以不能再套一层 computed 去重排。
 const autoNodeCount = computed(() => {
-  const names = availableNodes.value.map((n) => normalizeForMatch(n.name))
+  const texts = matchableNodes.value.map((n) => n.text)
   const out: Record<string, number> = {}
   for (const c of COUNTRIES) {
-    out[c.code] = names.filter((n) => c.keywords.some((kw) => keywordMatches(n, kw))).length
+    out[c.code] = texts.filter((n) => c.keywords.some((kw) => keywordMatches(n, kw))).length
   }
   return out
 })
@@ -1658,7 +1737,13 @@ const saveDraft = async (typeChangeConfirmed = false) => {
       // 页签是唯一的成员来源:members / keywords 清空;页签名去掉首尾空白
       item = {
         ...base, mode: 'static', members: [], keywords: [],
-        lanes: (base.lanes ?? []).map((l) => ({ id: l.id, name: l.name.trim(), icon: l.icon || '', members: [...l.members] })),
+        lanes: (base.lanes ?? []).map((l) => ({
+          id: l.id,
+          name: l.name.trim(),
+          icon: l.icon || '',
+          members: [...l.members],
+          ...(l.manual ? { manual: true } : {}),
+        })),
         failover: { ...FAILOVER_DEFAULTS, ...(base.failover || {}) },
       }
     } else {

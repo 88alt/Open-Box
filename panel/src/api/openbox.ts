@@ -690,6 +690,8 @@ export interface OpenboxFailoverSettings {
 // 成员怎么来:static 手工挑(members),dynamic 按关键词现算(keywords)。
 // 动态组的意义是"以后加的订阅也自动进来"——成员在生成配置时按当前节点算。
 export type OpenboxGroupMode = 'static' | 'dynamic'
+// dynamic 用:多个关键词怎么组合。or = 命中任一个就进组(默认);and = 必须同时命中全部
+export type OpenboxKeywordMode = 'or' | 'and'
 
 export interface OpenboxUserGroup {
   id: string
@@ -705,8 +707,12 @@ export interface OpenboxUserGroup {
   icon?: string
   // 图标缩放:整数像素偏移,0 = 不缩放
   iconScale?: number
-  // dynamic 用:命中任一关键词的节点即成员;为空 = 全部节点
+  // dynamic 用:按关键词命中的节点即成员(or 命中任一个,and 同时命中全部);为空 = 范围内的全部节点
   keywords?: string[]
+  // dynamic 用:关键词组合方式,缺省 = or
+  keywordMode?: OpenboxKeywordMode
+  // dynamic 用:只在这个订阅的节点里匹配;空 = 全部订阅
+  subscriptionId?: string
   // static 用:手工挑出来的节点名/组名
   members: string[]
   interval?: string
@@ -807,7 +813,17 @@ export interface OpenboxGroupsPayload {
   types: OpenboxGroupType[]
   // 带订阅名,供成员选择器按订阅筛选;组没有订阅归属,不在这个列表里
   // upstream:链式代理节点的前置上游节点名(没挂前置的节点没有这个字段)
-  availableNodes: Array<{ name: string; subscription: string; upstream?: string }>
+  // subscriptionId:节点所属订阅(链式代理没有);region:识别出的地区名,动态组关键词一并参与匹配
+  availableNodes: Array<{
+    name: string
+    subscription: string
+    subscriptionId?: string
+    chain?: boolean
+    upstream?: string
+    region?: string
+  }>
+  // 动态组「订阅范围」下拉用
+  subscriptions: Array<{ id: string; name: string }>
   availableGroups: string[]
 }
 
