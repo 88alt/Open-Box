@@ -711,8 +711,6 @@ export interface OpenboxUserGroup {
   keywords?: string[]
   // dynamic 用:关键词组合方式,缺省 = or
   keywordMode?: OpenboxKeywordMode
-  // dynamic 用:只在这个订阅的节点里匹配;空 = 全部订阅
-  subscriptionId?: string
   // static 用:手工挑出来的节点名/组名
   members: string[]
   interval?: string
@@ -813,17 +811,14 @@ export interface OpenboxGroupsPayload {
   types: OpenboxGroupType[]
   // 带订阅名,供成员选择器按订阅筛选;组没有订阅归属,不在这个列表里
   // upstream:链式代理节点的前置上游节点名(没挂前置的节点没有这个字段)
-  // subscriptionId:节点所属订阅(链式代理没有);region:识别出的地区名,动态组关键词一并参与匹配
+  // chain:链式代理节点;region:识别出的地区名,动态组关键词一并参与匹配
   availableNodes: Array<{
     name: string
     subscription: string
-    subscriptionId?: string
     chain?: boolean
     upstream?: string
     region?: string
   }>
-  // 动态组「订阅范围」下拉用
-  subscriptions: Array<{ id: string; name: string }>
   availableGroups: string[]
 }
 

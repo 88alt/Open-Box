@@ -837,11 +837,10 @@ const zhTW: LANG_MESSAGE = {
   groupKeywordsLabel: '關鍵詞',
   groupKeywordsPlaceholder: '關鍵詞,用逗號分隔,如:香港,hk',
   groupKeywordsHint:
-    '用逗號 , 分隔；OR 命中任一關鍵詞就進組。留空 = 訂閱範圍內的全部節點；新節點按此自動加入，鏈式代理不進動態組。',
+    '用逗號 , 分隔；OR 命中任一關鍵詞就進組。留空 = 所有節點；新訂閱也按此自動加入，鏈式代理不進動態組。',
   groupKeywordsAllHint:
-    '用逗號 , 分隔；AND 同時命中全部關鍵詞才進組。留空 = 訂閱範圍內的全部節點；新節點按此自動加入，鏈式代理不進動態組。',
+    '用逗號 , 分隔；AND 同時命中全部關鍵詞才進組。留空 = 所有節點；新訂閱也按此自動加入，鏈式代理不進動態組。',
   groupKeywordsMode: '關鍵詞比對方式',
-  groupSubscriptionMissing: '已刪除的訂閱',
   groupDynamicMatched: '目前命中 {count} 個節點',
   groupDynamicNoMatch: '目前沒有節點命中這些關鍵詞',
   groupDynamicSummary: '動態組 · 目前 {count} 個節點',

@@ -871,11 +871,10 @@ const en = {
   groupKeywordsLabel: 'Keywords',
   groupKeywordsPlaceholder: 'Comma-separated, e.g. Hong Kong,hk',
   groupKeywordsHint:
-    'Separate keywords with commas (,). OR matches any keyword. Empty = all nodes in the subscription scope; new nodes follow this rule. Chain proxies are excluded.',
+    'Separate keywords with commas (,). OR matches any keyword. Empty = all nodes; new subscriptions follow this rule. Chain proxies are excluded.',
   groupKeywordsAllHint:
-    'Separate keywords with commas (,). AND matches every keyword. Empty = all nodes in the subscription scope; new nodes follow this rule. Chain proxies are excluded.',
+    'Separate keywords with commas (,). AND matches every keyword. Empty = all nodes; new subscriptions follow this rule. Chain proxies are excluded.',
   groupKeywordsMode: 'Keyword matching mode',
-  groupSubscriptionMissing: 'Deleted subscription',
   groupDynamicMatched: '{count} node(s) match right now',
   groupDynamicNoMatch: 'No node matches these keywords right now',
   groupDynamicSummary: 'Dynamic · {count} node(s) now',
