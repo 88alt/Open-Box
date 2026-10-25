@@ -1,3 +1,3 @@
 module github.com/timeflysoon/Open-Box/core
 
-go 1.22
+go 1.25.12
