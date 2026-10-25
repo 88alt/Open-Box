@@ -3,6 +3,7 @@
     v-model="isOpen"
     :title="$t(subscription ? 'subscriptionEditTitle' : 'subscriptionAddTitle')"
     box-class="w-full max-w-2xl"
+    content-class="flex flex-col overflow-hidden!"
   >
     <!-- 两组页签放在 DialogWrapper 的 toolbar 插槽(和 v0.1.357 一样):固定在标题下面,内容多了只滚下面的内容区。
          内容区的三个分区共存于 DOM,用 v-show 而不是 v-if 切换。这一点是必须的:
@@ -10,13 +11,13 @@
          会 emit 一次初始值。用 v-if 的话每次切走再切回都会重建组件,用户刚编辑的规则
          直接丢失、还会把 renameOptions 悄悄改回初始值。 -->
     <template #toolbar>
-      <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <div class="flex flex-wrap items-center justify-between gap-2">
         <!-- 左:来源模式。登录=用机场账号登录获取;订阅=填链接由服务端去抓;节点=直接粘贴一堆节点链接。
              修改已有订阅时锁死:一条订阅的来源是它的固有属性,允许中途切换只会得到一个两边都不完整的记录。
              要换来源就新建一条。 -->
         <div
           role="tablist"
-          class="tabs-box tabs tabs-xs sub-add-tabs"
+          class="tabs-box tabs tabs-xs"
           :class="isEditing && 'pointer-events-none opacity-60'"
           :aria-disabled="isEditing || undefined"
           :title="isEditing ? $t('subscriptionSourceLocked') : undefined"
@@ -35,7 +36,7 @@
         <!-- 右:内容分区 -->
         <div
           role="tablist"
-          class="tabs-box tabs tabs-xs sub-add-tabs"
+          class="tabs-box tabs tabs-xs"
         >
           <a
             v-for="item in tabs"
@@ -51,276 +52,281 @@
       </div>
     </template>
 
-    <div class="flex flex-col gap-4">
+    <div class="flex min-h-0 flex-1 flex-col">
       <div
         v-show="activeTab === 'source'"
-        class="flex flex-col gap-4"
+        class="min-h-0 overflow-y-auto overscroll-contain"
       >
-        <div class="flex flex-col gap-1">
-          <label class="text-xs font-medium">{{ $t('subscriptionNameLabel') }}</label>
-          <input
-            v-model="name"
-            type="text"
-            class="input input-sm w-full"
-            :placeholder="$t('subscriptionNamePlaceholder')"
-          />
-        </div>
-
-        <div
-          v-if="sourceMode !== 'paste'"
-          ref="urlRowsRef"
-          class="flex flex-col gap-2"
-        >
-          <template v-if="sourceMode === 'url'">
-            <div class="flex items-center justify-between gap-2">
-              <label class="text-xs font-medium">{{ $t('subscriptionUrlLabel') }}</label>
-              <button
-                type="button"
-                class="btn btn-ghost btn-xs"
-                @click="addUrlRow"
-              >
-                <PlusIcon class="h-3.5 w-3.5" />
-                {{ $t('subscriptionUrlAdd') }}
-              </button>
-            </div>
-            <!-- 一行一个地址:镜像、备用、几个机场合成一条都行,节点合在一起。只剩一行时不能删——至少要留一个输入框。 -->
-            <div
-              v-for="index in urls.keys()"
-              :key="index"
-              class="flex items-center gap-2"
-            >
-              <input
-                v-model="urls[index]"
-                data-subscription-url
-                type="text"
-                class="input input-sm min-w-0 flex-1"
-                placeholder="https://"
-                autocomplete="off"
-              />
-              <button
-                type="button"
-                class="btn btn-ghost btn-square btn-sm"
-                :class="urls.length === 1 ? 'text-base-content/30 cursor-not-allowed' : 'hover:text-error'"
-                :disabled="urls.length === 1"
-                v-tip="$t('delete')"
-                :aria-label="$t('delete')"
-                @click="urls.splice(index, 1)"
-              >
-                <TrashIcon class="h-4 w-4" />
-              </button>
-            </div>
-            <p class="text-base-content/50 text-xs">{{ $t('subscriptionUrlHint') }}</p>
-          </template>
-
-          <!-- 登录:Xboard / V2Board 账号。登录成功后服务端把账号存起来(密码不回传),
-               之后预览、保存都只带 loginId。 -->
-          <form
-            v-else
-            class="flex flex-col gap-3"
-            @submit.prevent="handleLogin"
-          >
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label class="flex flex-col gap-1 text-xs font-medium">
-                {{ $t('subscriptionLoginUrl') }}
-                <input
-                  ref="loginUrlRef"
-                  v-model="loginForm.url"
-                  type="text"
-                  class="input input-sm w-full"
-                  placeholder="https://"
-                  :disabled="loggingIn"
-                  autocomplete="url"
-                />
-              </label>
-              <label class="flex flex-col gap-1 text-xs font-medium">
-                UA
-                <input
-                  v-model="loginForm.userAgent"
-                  type="text"
-                  class="input input-sm w-full"
-                  :placeholder="$t('subscriptionLoginUaPlaceholder')"
-                  :disabled="loggingIn"
-                  autocomplete="off"
-                  spellcheck="false"
-                />
-              </label>
-              <label class="flex flex-col gap-1 text-xs font-medium">
-                {{ $t('subscriptionLoginUsername') }}
-                <input
-                  v-model="loginForm.username"
-                  type="text"
-                  class="input input-sm w-full"
-                  :disabled="loggingIn"
-                  autocomplete="username"
-                  autocapitalize="none"
-                  spellcheck="false"
-                />
-              </label>
-              <label class="flex flex-col gap-1 text-xs font-medium">
-                {{ $t('subscriptionLoginPassword') }}
-                <input
-                  v-model="loginForm.password"
-                  type="password"
-                  class="input input-sm w-full"
-                  :placeholder="loginId ? $t('subscriptionLoginPasswordSaved') : ''"
-                  :disabled="loggingIn"
-                  autocomplete="current-password"
-                />
-              </label>
-            </div>
-            <div class="flex items-center justify-between gap-2">
-              <p class="text-base-content/50 text-xs">{{ $t('subscriptionLoginHint') }}</p>
-              <button
-                type="submit"
-                class="btn btn-sm shrink-0"
-                :disabled="!canLogin || loggingIn"
-              >
-                <span
-                  v-if="loggingIn"
-                  class="loading loading-spinner loading-xs"
-                />
-                {{ $t('subscriptionLoginFetch') }}
-              </button>
-            </div>
-            <dl
-              v-if="account"
-              class="bg-base-200/60 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg p-3 text-xs sm:grid-cols-3"
-            >
-              <div
-                v-for="item in accountRows"
-                :key="item.label"
-                class="min-w-0"
-              >
-                <dt class="text-base-content/50">{{ $t(item.label) }}</dt>
-                <dd class="truncate font-medium">{{ item.value }}</dd>
-              </div>
-            </dl>
-          </form>
-
-          <!-- 定期更新:每隔几天、几点自动重新拉取。控件和后端设置里 Geo / 自身升级的计划一样。
-               右边是「订阅 DNS 解析」的展开开关,输入框在下面,三种来源模式共用 -->
-          <div class="flex items-start gap-x-3 gap-y-2 pt-1">
-            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
-              <span class="text-xs font-medium">{{ $t('subscriptionAutoUpdate') }}</span>
-              <input
-                v-model="autoUpdate.enabled"
-                type="checkbox"
-                class="toggle toggle-sm"
-              />
-              <template v-if="autoUpdate.enabled">
-                <span class="text-base-content/70 text-sm">{{ $t('geoUpdateEvery') }}</span>
-                <select
-                  v-model="autoUpdateInterval"
-                  class="select select-sm w-28"
-                >
-                  <option
-                    v-for="h in AUTO_UPDATE_HOURS"
-                    :key="`h${h}`"
-                    :value="`h${h}`"
-                  >{{ $t('geoUpdateHours', { hours: h }) }}</option>
-                  <option
-                    v-for="d in [1, 2, 3, 7, 14, 30]"
-                    :key="`d${d}`"
-                    :value="`d${d}`"
-                  >{{ $t('geoUpdateDays', { days: d }) }}</option>
-                </select>
-                <select
-                  v-if="autoUpdate.mode !== 'hours'"
-                  v-model.number="autoUpdate.hour"
-                  class="select select-sm w-24"
-                >
-                  <option
-                    v-for="h in 24"
-                    :key="h - 1"
-                    :value="h - 1"
-                  >{{ String(h - 1).padStart(2, '0') }}:00</option>
-                </select>
-              </template>
-            </div>
-            <button
-              type="button"
-              class="btn btn-ghost btn-xs shrink-0 gap-1 font-normal"
-              :aria-expanded="nodeDnsOpen"
-              @click="nodeDnsOpen = !nodeDnsOpen"
-            >
-              {{ $t('subscriptionNodeDnsToggle') }}
-              <ChevronDownIcon
-                class="h-3.5 w-3.5 transition-transform"
-                :class="nodeDnsOpen ? 'rotate-180' : ''"
-              />
-            </button>
+        <div class="flex flex-col gap-4">
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-medium">{{ $t('subscriptionNameLabel') }}</label>
+            <input
+              v-model="name"
+              type="text"
+              class="input input-sm w-full"
+              :placeholder="$t('subscriptionNamePlaceholder')"
+            />
           </div>
-          <p
-            v-if="autoUpdate.enabled"
-            class="text-base-content/50 text-xs"
-          >{{ $t('subscriptionAutoUpdateHint') }}</p>
-        </div>
 
-        <div
-          v-else
-          class="flex flex-col gap-1"
-        >
-          <div class="flex items-center gap-2">
-            <label class="text-xs font-medium">{{ $t('subscriptionContentLabel') }}</label>
-            <button
-              type="button"
-              class="btn btn-ghost btn-xs ml-auto gap-1 font-normal"
-              :aria-expanded="nodeDnsOpen"
-              @click="nodeDnsOpen = !nodeDnsOpen"
-            >
-              {{ $t('subscriptionNodeDnsToggle') }}
-              <ChevronDownIcon
-                class="h-3.5 w-3.5 transition-transform"
-                :class="nodeDnsOpen ? 'rotate-180' : ''"
-              />
-            </button>
-          </div>
-          <textarea
-            v-model="content"
-            rows="8"
-            class="textarea textarea-sm w-full font-mono"
-            :placeholder="$t('subscriptionContentPlaceholder')"
-          />
-          <p class="text-base-content/50 text-xs">{{ $t('subscriptionContentHint') }}</p>
-        </div>
-
-        <!-- 订阅 DNS 解析:机场要求节点域名用它自己的 DoH 解析时填(相当于 OpenClash 的
-             proxy-server-nameserver / nameserver-policy)。只解析这份订阅的节点服务器域名;
-             三种来源都能配 -->
-        <ExpandTransition>
           <div
-            v-if="nodeDnsOpen"
-            class="flex flex-col gap-1"
+            v-if="sourceMode !== 'paste'"
+            ref="urlRowsRef"
+            class="flex flex-col gap-2"
           >
-            <label class="text-xs font-medium">{{ $t('subscriptionNodeDnsLabel') }}</label>
-            <div class="flex flex-col gap-2 sm:flex-row">
-              <input
-                v-model="nodeDnsUrl"
-                type="text"
-                class="input input-sm min-w-0 flex-1 font-mono text-xs"
-                :placeholder="$t('subscriptionNodeDnsUrlPlaceholder')"
-                autocomplete="off"
-              />
-              <input
-                v-model="nodeDnsBootstrap"
-                type="text"
-                class="input input-sm w-full font-mono text-xs sm:w-48"
-                :placeholder="$t('subscriptionNodeDnsBootstrapPlaceholder')"
-                autocomplete="off"
-              />
+            <template v-if="sourceMode === 'url'">
+              <div class="flex items-center justify-between gap-2">
+                <label class="text-xs font-medium">{{ $t('subscriptionUrlLabel') }}</label>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs"
+                  @click="addUrlRow"
+                >
+                  <PlusIcon class="h-3.5 w-3.5" />
+                  {{ $t('subscriptionUrlAdd') }}
+                </button>
+              </div>
+              <!-- 一行一个地址:镜像、备用、几个机场合成一条都行,节点合在一起。只剩一行时不能删——至少要留一个输入框。 -->
+              <div
+                v-for="index in urls.keys()"
+                :key="index"
+                class="flex items-center gap-2"
+              >
+                <input
+                  v-model="urls[index]"
+                  data-subscription-url
+                  type="text"
+                  class="input input-sm min-w-0 flex-1"
+                  placeholder="https://"
+                  autocomplete="off"
+                />
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-square btn-sm"
+                  :class="urls.length === 1 ? 'text-base-content/30 cursor-not-allowed' : 'hover:text-error'"
+                  :disabled="urls.length === 1"
+                  v-tip="$t('delete')"
+                  :aria-label="$t('delete')"
+                  @click="urls.splice(index, 1)"
+                >
+                  <TrashIcon class="h-4 w-4" />
+                </button>
+              </div>
+              <p class="text-base-content/50 text-xs">{{ $t('subscriptionUrlHint') }}</p>
+            </template>
+
+            <!-- 登录:Xboard / V2Board 账号。登录成功后服务端把账号存起来(密码不回传),
+                 之后预览、保存都只带 loginId。 -->
+            <form
+              v-else
+              class="flex flex-col gap-3"
+              @submit.prevent="handleLogin"
+            >
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label class="flex flex-col gap-1 text-xs font-medium">
+                  {{ $t('subscriptionLoginUrl') }}
+                  <input
+                    ref="loginUrlRef"
+                    v-model="loginForm.url"
+                    type="text"
+                    class="input input-sm w-full"
+                    placeholder="https://"
+                    :disabled="loggingIn"
+                    autocomplete="url"
+                  />
+                </label>
+                <label class="flex flex-col gap-1 text-xs font-medium">
+                  UA
+                  <input
+                    v-model="loginForm.userAgent"
+                    type="text"
+                    class="input input-sm w-full"
+                    :placeholder="$t('subscriptionLoginUaPlaceholder')"
+                    :disabled="loggingIn"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                </label>
+                <label class="flex flex-col gap-1 text-xs font-medium">
+                  {{ $t('subscriptionLoginUsername') }}
+                  <input
+                    v-model="loginForm.username"
+                    type="text"
+                    class="input input-sm w-full"
+                    :disabled="loggingIn"
+                    autocomplete="username"
+                    autocapitalize="none"
+                    spellcheck="false"
+                  />
+                </label>
+                <label class="flex flex-col gap-1 text-xs font-medium">
+                  {{ $t('subscriptionLoginPassword') }}
+                  <input
+                    v-model="loginForm.password"
+                    type="password"
+                    class="input input-sm w-full"
+                    :placeholder="loginId ? $t('subscriptionLoginPasswordSaved') : ''"
+                    :disabled="loggingIn"
+                    autocomplete="current-password"
+                  />
+                </label>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-base-content/50 text-xs">{{ $t('subscriptionLoginHint') }}</p>
+                <button
+                  type="submit"
+                  class="btn btn-sm shrink-0"
+                  :disabled="!canLogin || loggingIn"
+                >
+                  <span
+                    v-if="loggingIn"
+                    class="loading loading-spinner loading-xs"
+                  />
+                  {{ $t('subscriptionLoginFetch') }}
+                </button>
+              </div>
+              <dl
+                v-if="account"
+                class="bg-base-200/60 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg p-3 text-xs sm:grid-cols-3"
+              >
+                <div
+                  v-for="item in accountRows"
+                  :key="item.label"
+                  class="min-w-0"
+                >
+                  <dt class="text-base-content/50">{{ $t(item.label) }}</dt>
+                  <dd class="truncate font-medium">{{ item.value }}</dd>
+                </div>
+              </dl>
+            </form>
+
+            <!-- 定期更新:每隔几天、几点自动重新拉取。控件和后端设置里 Geo / 自身升级的计划一样。
+                 右边是「订阅 DNS 解析」的展开开关,输入框在下面,三种来源模式共用 -->
+            <div class="flex items-start gap-x-3 gap-y-2 pt-1">
+              <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
+                <span class="text-xs font-medium">{{ $t('subscriptionAutoUpdate') }}</span>
+                <input
+                  v-model="autoUpdate.enabled"
+                  type="checkbox"
+                  class="toggle toggle-sm"
+                />
+                <template v-if="autoUpdate.enabled">
+                  <span class="text-base-content/70 text-sm">{{ $t('geoUpdateEvery') }}</span>
+                  <select
+                    v-model="autoUpdateInterval"
+                    class="select select-sm w-28"
+                  >
+                    <option
+                      v-for="h in AUTO_UPDATE_HOURS"
+                      :key="`h${h}`"
+                      :value="`h${h}`"
+                    >{{ $t('geoUpdateHours', { hours: h }) }}</option>
+                    <option
+                      v-for="d in [1, 2, 3, 7, 14, 30]"
+                      :key="`d${d}`"
+                      :value="`d${d}`"
+                    >{{ $t('geoUpdateDays', { days: d }) }}</option>
+                  </select>
+                  <select
+                    v-if="autoUpdate.mode !== 'hours'"
+                    v-model.number="autoUpdate.hour"
+                    class="select select-sm w-24"
+                  >
+                    <option
+                      v-for="h in 24"
+                      :key="h - 1"
+                      :value="h - 1"
+                    >{{ String(h - 1).padStart(2, '0') }}:00</option>
+                  </select>
+                </template>
+              </div>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs shrink-0 gap-1 font-normal"
+                :aria-expanded="nodeDnsOpen"
+                @click="nodeDnsOpen = !nodeDnsOpen"
+              >
+                {{ $t('subscriptionNodeDnsToggle') }}
+                <ChevronDownIcon
+                  class="h-3.5 w-3.5 transition-transform"
+                  :class="nodeDnsOpen ? 'rotate-180' : ''"
+                />
+              </button>
             </div>
             <p
-              v-if="nodeDnsError"
-              class="text-error text-xs"
-            >{{ $t(nodeDnsError) }}</p>
-            <p class="text-base-content/50 text-xs">{{ $t('subscriptionNodeDnsHint') }}</p>
+              v-if="autoUpdate.enabled"
+              class="text-base-content/50 text-xs"
+            >{{ $t('subscriptionAutoUpdateHint') }}</p>
           </div>
-        </ExpandTransition>
+
+          <div
+            v-else
+            class="flex flex-col gap-1"
+          >
+            <div class="flex items-center gap-2">
+              <label class="text-xs font-medium">{{ $t('subscriptionContentLabel') }}</label>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs ml-auto gap-1 font-normal"
+                :aria-expanded="nodeDnsOpen"
+                @click="nodeDnsOpen = !nodeDnsOpen"
+              >
+                {{ $t('subscriptionNodeDnsToggle') }}
+                <ChevronDownIcon
+                  class="h-3.5 w-3.5 transition-transform"
+                  :class="nodeDnsOpen ? 'rotate-180' : ''"
+                />
+              </button>
+            </div>
+            <textarea
+              v-model="content"
+              rows="8"
+              class="textarea textarea-sm w-full font-mono"
+              :placeholder="$t('subscriptionContentPlaceholder')"
+            />
+            <p class="text-base-content/50 text-xs">{{ $t('subscriptionContentHint') }}</p>
+          </div>
+
+          <!-- 订阅 DNS 解析:机场要求节点域名用它自己的 DoH 解析时填(相当于 OpenClash 的
+               proxy-server-nameserver / nameserver-policy)。只解析这份订阅的节点服务器域名;
+               三种来源都能配 -->
+          <ExpandTransition>
+            <div
+              v-if="nodeDnsOpen"
+              class="flex flex-col gap-1"
+            >
+              <label class="text-xs font-medium">{{ $t('subscriptionNodeDnsLabel') }}</label>
+              <div class="flex flex-col gap-2 sm:flex-row">
+                <input
+                  v-model="nodeDnsUrl"
+                  type="text"
+                  class="input input-sm min-w-0 flex-1 font-mono text-xs"
+                  :placeholder="$t('subscriptionNodeDnsUrlPlaceholder')"
+                  autocomplete="off"
+                />
+                <input
+                  v-model="nodeDnsBootstrap"
+                  type="text"
+                  class="input input-sm w-full font-mono text-xs sm:w-48"
+                  :placeholder="$t('subscriptionNodeDnsBootstrapPlaceholder')"
+                  autocomplete="off"
+                />
+              </div>
+              <p
+                v-if="nodeDnsError"
+                class="text-error text-xs"
+              >{{ $t(nodeDnsError) }}</p>
+              <p class="text-base-content/50 text-xs">{{ $t('subscriptionNodeDnsHint') }}</p>
+            </div>
+          </ExpandTransition>
+        </div>
       </div>
 
       <!-- key 绑到订阅 id:切换编辑对象时强制重建编辑器,否则它内部的 reactive 行
            不会随 initial 变化重新初始化,会把上一个订阅的规则带过来 -->
-      <div v-show="activeTab === 'rules'">
+      <div
+        v-show="activeTab === 'rules'"
+        class="flex min-h-0 flex-1 flex-col"
+      >
         <RenameRulesEditor
           :key="subscription?.id || 'new'"
           :initial="subscription?.renameOptions"
@@ -330,7 +336,7 @@
 
       <div
         v-show="activeTab === 'nodes'"
-        class="flex min-h-0 flex-col gap-3"
+        class="flex min-h-0 flex-1 flex-col gap-3"
       >
         <SubscriptionPreviewPanel
           :has-source="hasSource"
@@ -808,12 +814,3 @@ const handleSave = async () => {
   }
 }
 </script>
-
-<style>
-/* 弹窗里的两组分段页签:底色和 v0.1.317 一样(基础内容色 9% 叠在背景上),不带内阴影。
-   选择器带 #app-content 和两个类,优先级盖过全局的 #app-content .tabs-box。 */
-#app-content .tabs-box.sub-add-tabs {
-  background-color: color-mix(in oklab, var(--color-base-content) 9%, transparent);
-  box-shadow: none;
-}
-</style>

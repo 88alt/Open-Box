@@ -58,6 +58,7 @@
           <div
             v-if="isOpen"
             :class="[
+              'dialog-content',
               mobileFullscreen
                 ? 'h-[calc(100dvh-3rem)] max-h-[calc(100dvh-3rem)] overflow-hidden'
                 : 'min-h-0 flex-1 overflow-y-auto overscroll-contain',
