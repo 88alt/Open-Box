@@ -430,6 +430,28 @@
               v-if="draft.mode === 'dynamic'"
               class="ml-auto flex min-w-0 items-center gap-2"
             >
+              <!-- 订阅范围:只在这条订阅的节点里按关键词匹配;存的订阅已被删掉时仍保留原值并提示 -->
+              <select
+                v-model="draft.subscriptionId"
+                :aria-label="$t('subscriptions')"
+                :title="$t('subscriptions')"
+                class="select select-xs w-32 min-w-0"
+              >
+                <option value="">{{ $t('groupFilterAllSubscriptions') }}</option>
+                <option
+                  v-if="draft.subscriptionId && !groupSubscriptions.some((sub) => sub.id === draft?.subscriptionId)"
+                  :value="draft.subscriptionId"
+                >
+                  {{ $t('groupSubscriptionMissing') }}
+                </option>
+                <option
+                  v-for="sub in groupSubscriptions"
+                  :key="sub.id"
+                  :value="sub.id"
+                >
+                  {{ sub.name }}
+                </option>
+              </select>
               <div
                 role="tablist"
                 :aria-label="$t('groupKeywordsMode')"
@@ -1009,7 +1031,9 @@ import { useI18n } from 'vue-i18n'
 const { t, locale } = useI18n()
 
 const groups = ref<OpenboxUserGroup[]>([])
-const availableNodes = ref<Array<{ name: string; subscription: string; chain?: boolean; region?: string }>>([])
+const availableNodes = ref<Array<{ name: string; subscription: string; subscriptionId?: string; chain?: boolean; region?: string }>>([])
+// 动态组的「订阅范围」下拉:订阅 id + 名字
+const groupSubscriptions = ref<Array<{ id: string; name: string }>>([])
 const loading = ref(false)
 // 提示一律走右上角那套 toast(zashboard 自带的 showNotification),不在页面里挂
 // 内联文字:内联的会把列表往下顶、切走再回来还在,而且同一屏里两种提示样式看着
@@ -1042,6 +1066,7 @@ const load = async () => {
     const data = await fetchNodeGroups()
     groups.value = data.groups
     availableNodes.value = data.availableNodes
+    groupSubscriptions.value = data.subscriptions || []
   } catch (err) {
     notifyError(err)
   } finally {
@@ -1058,13 +1083,17 @@ const matchableNodes = computed(() =>
     .filter((n) => !n.chain)
     .map((n) => ({
       name: n.name,
+      subscriptionId: n.subscriptionId,
       text: normalizeForMatch(`${n.region || ''} ${n.name}`),
     })),
 )
 
 const matchedNodes = (group: OpenboxUserGroup) => {
   const keywords = group.keywords || []
-  const scoped = matchableNodes.value
+  // 选了订阅范围就只在那条订阅的节点里匹配;留空 = 全部订阅
+  const scoped = group.subscriptionId
+    ? matchableNodes.value.filter((n) => n.subscriptionId === group.subscriptionId)
+    : matchableNodes.value
   if (!keywords.length) return scoped.map((n) => n.name)
   return scoped
     .filter((n) =>
@@ -1123,6 +1152,7 @@ const openEditor = (group: OpenboxUserGroup | null) => {
   if (draft.value) {
     if (!draft.value.mode) draft.value.mode = 'static'
     if (!draft.value.keywords) draft.value.keywords = []
+    if (!draft.value.subscriptionId) draft.value.subscriptionId = ''
     if (draft.value.icon === undefined) draft.value.icon = ''
     if (draft.value.expectedStatus === undefined) draft.value.expectedStatus = ''
     if (draft.value.type === 'failover') ensureFailoverFields(draft.value)

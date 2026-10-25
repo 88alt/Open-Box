@@ -721,6 +721,8 @@ export interface OpenboxUserGroup {
   keywords?: string[]
   // dynamic 用:关键词组合方式,缺省 = or
   keywordMode?: OpenboxKeywordMode
+  // dynamic 用:只在这条订阅(订阅 id)的节点里按关键词匹配;空 = 全部订阅
+  subscriptionId?: string
   // static 用:手工挑出来的节点名/组名
   members: string[]
   interval?: string
@@ -825,10 +827,14 @@ export interface OpenboxGroupsPayload {
   availableNodes: Array<{
     name: string
     subscription: string
+    // 所属订阅的 id(动态组按订阅范围匹配用)
+    subscriptionId?: string
     chain?: boolean
     upstream?: string
     region?: string
   }>
+  // 订阅列表(id + 名字),动态组的「订阅范围」下拉用
+  subscriptions?: Array<{ id: string; name: string }>
   availableGroups: string[]
 }
 
