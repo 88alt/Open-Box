@@ -12,10 +12,6 @@ name: Release
 #   OPENBOX_KERNEL_REPO    上游仓库,默认 liandu2024/Open-Box
 #   OPENBOX_SOURCE_TAG     内核源码包(*-source.tar.gz)固定取自上游某个版本;留空 = 与内核所取版本相同
 #                          (手动运行时填写的 source_tag 输入框优先于这个变量)
-#
-# 自研核心(core/):云端按 core/go.mod 里的 Go 版本装 Go(现为 1.25.12),跑 go vet / go test,
-# 再编译 amd64 / arm64 两个 openbox-core,作为 Actions 产物 core-<arch> 上传。
-# 手动运行时勾选 core_only:只跑这一个任务,不取内核、不打包、不建标签、不发布,用来单独验证核心。
 
 on:
   push:
@@ -30,11 +26,6 @@ on:
         description: 内核源码包(*-source.tar.gz)取自上游哪个版本(如 v0.1.341);留空 = 与内核所取的上游版本相同
         required: false
         default: ''
-      core_only:
-        description: 只验证自研核心(装 Go、测试、编译 core/),不发布、不建标签;此时版本号随便填一个即可
-        type: boolean
-        required: false
-        default: false
 
 permissions:
   contents: write
@@ -46,47 +37,8 @@ env:
   OPENBOX_KERNEL_REPO: ${{ vars.OPENBOX_KERNEL_REPO || 'liandu2024/Open-Box' }}
 
 jobs:
-  # 自研核心:Go 版本取 core/go.mod,和代码声明的一致,不在这里另写一份
-  core:
-    name: Core (${{ matrix.arch }}, Go from core/go.mod)
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [amd64, arm64]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: core/go.mod
-          cache: false
-      - name: Go version
-        run: go version
-      # 测试只跑一遍(amd64 的任务里跑),arm64 任务只负责交叉编译
-      - name: Vet and test
-        if: matrix.arch == 'amd64'
-        working-directory: core
-        run: |
-          go vet ./...
-          go test ./...
-      # buildID 要和上游 panel/server/index.mjs 里写死的一致;main 里没有 panel/server,
-      # 从 catch-up-upstream 分支(只拉取上游)取出来给 build.sh
-      - name: Build openbox-core
-        run: |
-          git show origin/catch-up-upstream:panel/server/index.mjs > "$RUNNER_TEMP/index.mjs"
-          sh core/scripts/build.sh ${{ matrix.arch }} core-out/${{ matrix.arch }} "$RUNNER_TEMP/index.mjs"
-          cat core-out/${{ matrix.arch }}/core-build.json
-      - uses: actions/upload-artifact@v4
-        with:
-          name: core-${{ matrix.arch }}
-          path: core-out/${{ matrix.arch }}/
-          if-no-files-found: error
-
   geodata:
     name: Freeze complete Geo snapshot
-    if: ${{ !inputs.core_only }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -104,7 +56,6 @@ jobs:
   # 避免两个架构分别查 Latest 时恰好碰上上游发新版而拿到不同版本的内核。
   kernel-tag:
     name: Resolve upstream kernel release
-    if: ${{ !inputs.core_only }}
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
