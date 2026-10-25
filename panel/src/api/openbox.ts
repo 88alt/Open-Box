@@ -312,6 +312,28 @@ export interface OpenboxSubscriptionAutoUpdate {
 // url 是 https:// 的 DoH 地址;地址里是域名时 bootstrap 必填(用来解析这个域名的 DNS,IP)
 export interface OpenboxSubscriptionNodeDns { url: string; bootstrap?: string }
 
+// 机场在订阅响应头(subscription-userinfo)里给的流量用量 / 到期时间;字段都可能缺(null)
+export interface OpenboxSubscriptionUsage {
+  upload: number | null
+  download: number | null
+  total: number | null
+  expire: number | null
+}
+
+// 「登录」来源:Xboard / V2Board 账号登录后服务端记下的账号信息(密码不回传)
+export interface OpenboxSubscriptionAccount {
+  id: string
+  url: string
+  userAgent?: string
+  username: string
+  planName?: string | null
+  // 流量重置日期(秒级时间戳)/ 距下次重置的天数;都没有时看 resetKnown:true = 确定没有重置
+  resetAt?: number | null
+  resetDays?: number | null
+  resetKnown?: boolean
+  expiryKnown?: boolean
+}
+
 export interface OpenboxSubscription {
   id: string
   name: string
@@ -330,13 +352,11 @@ export interface OpenboxSubscription {
   nodeDns?: OpenboxSubscriptionNodeDns | null
   createdAt: number
   updatedAt: number
-  // 机场在订阅响应头(subscription-userinfo)里给的流量用量 / 到期时间;字段都可能缺(null)
-  usage?: {
-    upload: number | null
-    download: number | null
-    total: number | null
-    expire: number | null
-  } | null
+  usage?: OpenboxSubscriptionUsage | null
+  // 拉取订阅时用的 User-Agent;没配 = 默认
+  userAgent?: string
+  // 「登录」来源的订阅带账号信息
+  account?: OpenboxSubscriptionAccount | null
 }
 
 export interface OpenboxSubscriptionShare {
@@ -356,6 +376,8 @@ export interface OpenboxNodeSummary {
   originalTag: string
   type: string
   server: string
+  // 机场给的节点倍率(登录来源才有)
+  rate?: number | null
 }
 
 export interface OpenboxRenamePreviewEntry {
@@ -389,6 +411,15 @@ export interface OpenboxSubscriptionPreview {
   disabled?: Array<{ name: string }>
   preview: OpenboxRenamePreviewEntry[]
   groups: OpenboxNodeGroup[]
+  // 登录来源的预览会带上账号信息和用量
+  account?: OpenboxSubscriptionAccount
+  usage?: OpenboxSubscriptionUsage | null
+}
+
+// 登录成功的结果:除了预览本身,还有后续预览 / 保存用的 loginId
+export interface OpenboxSubscriptionLoginResult extends OpenboxSubscriptionPreview {
+  loginId: string
+  account: OpenboxSubscriptionAccount
 }
 
 export interface OpenboxSubscriptionSaveResult {
@@ -537,6 +568,8 @@ export const previewSubscription = async (payload: {
   url?: string
   urls?: string[]
   content?: string
+  userAgent?: string
+  loginId?: string
   // 只在 renameOptions.usePrefix 打开时有意义:服务端拿它当节点名前缀。
   name?: string
   renameOptions?: OpenboxRenameOptions
@@ -550,10 +583,27 @@ export const previewSubscription = async (payload: {
 // url 与 content 二选一(见 server/api/subscriptions.mjs 的 normalizeSource):
 // content 走的是「节点」模式——手上只有一堆分享链接、没有订阅地址时直接粘贴保存,
 // 服务端会把内容一并存下来,以便日后改重命名规则时重新解析。
+// 账号登录:成功后服务端存账号,回 loginId;之后预览 / 保存 / 测速只带 loginId。
+export const loginSubscription = async (payload: {
+  url: string
+  userAgent?: string
+  username: string
+  password: string
+  name?: string
+  renameOptions?: OpenboxRenameOptions
+}): Promise<OpenboxSubscriptionLoginResult> => {
+  return requestJson<OpenboxSubscriptionLoginResult>('/api/openbox/subscriptions/login', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export const createSubscription = async (payload: {
   url?: string
   urls?: string[]
   content?: string
+  userAgent?: string
+  loginId?: string
   name: string
   renameOptions?: OpenboxRenameOptions
   autoUpdate?: OpenboxSubscriptionAutoUpdate
@@ -570,7 +620,7 @@ export const createSubscription = async (payload: {
 // so a plain rename works even while the provider is unreachable (see subscriptions.mjs PATCH).
 export const updateSubscription = async (
   id: string,
-  payload: { name?: string; url?: string; urls?: string[]; content?: string; renameOptions?: OpenboxRenameOptions; autoUpdate?: OpenboxSubscriptionAutoUpdate; nodeDns?: OpenboxSubscriptionNodeDns | null; enabled?: boolean },
+  payload: { name?: string; url?: string; urls?: string[]; content?: string; userAgent?: string; loginId?: string; renameOptions?: OpenboxRenameOptions; autoUpdate?: OpenboxSubscriptionAutoUpdate; nodeDns?: OpenboxSubscriptionNodeDns | null; enabled?: boolean },
 ): Promise<OpenboxSubscriptionSaveResult> => {
   return requestJson(`/api/openbox/subscriptions/${encodeURIComponent(id)}`, {
     method: 'PATCH',
@@ -593,8 +643,11 @@ export const testNodeLatency = async (payload: {
   url?: string
   urls?: string[]
   content?: string
+  userAgent?: string
+  loginId?: string
   name?: string
   renameOptions?: OpenboxRenameOptions
+  nodeDns?: OpenboxSubscriptionNodeDns | null
   tags: string[]
   timeoutMs?: number
 }): Promise<OpenboxLatencyResult[]> => {

@@ -160,7 +160,13 @@
                   v-for="(entry, index) in rows"
                   :key="`${entry.originalTag}-${index}`"
                 >
-                  <td class="text-base-content/70 max-w-0 truncate text-sm">{{ entry.originalTag }}</td>
+                  <td class="text-base-content/70 max-w-0 truncate text-sm">
+                    {{ entry.originalTag }}
+                    <span
+                      v-if="rateMap.get(entry.originalTag) != null"
+                      class="text-main ml-1 text-xs"
+                    >{{ rateMap.get(entry.originalTag) }}×</span>
+                  </td>
                   <td class="max-w-0">
                     <!-- 过滤页签下这条根本不会导入,没有"新名"可言,也不该能改 -->
                     <span
@@ -265,7 +271,7 @@
 </template>
 
 <script setup lang="ts">
-import type { OpenboxLatencyResult, OpenboxRenameOptions, OpenboxSubscriptionPreview, OpenboxSkippedNode } from '@/api/openbox'
+import type { OpenboxLatencyResult, OpenboxRenameOptions, OpenboxSubscriptionNodeDns, OpenboxSubscriptionPreview, OpenboxSkippedNode } from '@/api/openbox'
 import { testNodeLatency } from '@/api/openbox'
 import CountryFlag from '@/components/common/CountryFlag.vue'
 import { latencyReasonText } from '@/helper/latencyReason'
@@ -287,8 +293,10 @@ const props = defineProps<{
   preview: OpenboxSubscriptionPreview | null
   overrides?: Record<string, string>
   // 测速要重新解析订阅,所以要把来源和当前规则一并带上
-  source?: { url?: string; urls?: string[]; content?: string; name?: string } | null
+  source?: { url?: string; urls?: string[]; content?: string; name?: string; loginId?: string; userAgent?: string } | null
   renameOptions?: OpenboxRenameOptions
+  // 这份订阅的节点域名专用解析;测速要按同样的解析重新拉订阅
+  nodeDns?: OpenboxSubscriptionNodeDns | null
 }>()
 
 const emit = defineEmits<{
@@ -296,6 +304,9 @@ const emit = defineEmits<{
   resetOverrides: []
   toggleDisabled: [{ originalTag: string; disabled: boolean }]
 }>()
+
+// 机场给的节点倍率(登录来源才有),按原名对齐
+const rateMap = computed(() => new Map((props.preview?.nodes || []).map((node) => [node.originalTag, node.rate])))
 
 const overrideCount = computed(() => Object.keys(props.overrides || {}).length)
 
@@ -354,7 +365,7 @@ const testOne = async (originalTag: string) => {
   if (!props.source || testing.value.has(originalTag)) return
   testing.value = new Set(testing.value).add(originalTag)
   try {
-    const [result] = await testNodeLatency({ ...props.source, renameOptions: props.renameOptions, tags: [originalTag] })
+    const [result] = await testNodeLatency({ ...props.source, renameOptions: props.renameOptions, nodeDns: props.nodeDns, tags: [originalTag] })
     latency.value = { ...latency.value, [originalTag]: result }
   } catch {
     latency.value = { ...latency.value, [originalTag]: { ok: false, error: 'request failed' } }
@@ -374,7 +385,7 @@ const testAll = async () => {
 
   testingAll.value = true
   try {
-    const results = await testNodeLatency({ ...props.source, renameOptions: props.renameOptions, tags })
+    const results = await testNodeLatency({ ...props.source, renameOptions: props.renameOptions, nodeDns: props.nodeDns, tags })
     const next = { ...latency.value }
     tags.forEach((tag, i) => { next[tag] = results[i] })
     latency.value = next

@@ -95,7 +95,7 @@
         <!-- 第二行:左边「更新于 … · 每天 04:00 自动更新」,右边流量用量 / 到期 + 进度条 -->
         <div class="text-base-content/60 flex items-start justify-between gap-3 text-xs">
           <div class="min-w-0 truncate text-left">
-            {{ $t('updated') }} {{ updatedAtText }}<template v-if="scheduleText"> · {{ scheduleText }}</template>
+            {{ $t('updated') }} {{ updatedAtText }}<template v-if="scheduleText"> · {{ scheduleText }}</template><template v-if="subscription.account?.planName"> · {{ subscription.account.planName }}</template>
           </div>
           <div
             v-if="usageInfo"

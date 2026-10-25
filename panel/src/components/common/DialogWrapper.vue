@@ -48,6 +48,13 @@
               <XMarkIcon class="h-4 w-4" />
             </button>
           </div>
+          <!-- 工具栏(可选):页签这类要固定在内容区上面的东西,内容多了只滚下面的内容区 -->
+          <div
+            v-if="slots.toolbar && isOpen"
+            class="dialog-toolbar max-h-[40dvh] min-h-0 shrink-0 overflow-y-auto overscroll-contain px-4 pt-4"
+          >
+            <slot name="toolbar" />
+          </div>
           <div
             v-if="isOpen"
             :class="[

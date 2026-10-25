@@ -4,53 +4,52 @@
     :title="$t(subscription ? 'subscriptionEditTitle' : 'subscriptionAddTitle')"
     box-class="w-full max-w-2xl"
   >
-    <!-- 三个页签共存于 DOM,用 v-show 而不是 v-if 切换。这一点是必须的:
+    <!-- 两组页签放在 DialogWrapper 的 toolbar 插槽(和 v0.1.357 一样):固定在标题下面,内容多了只滚下面的内容区。
+         内容区的三个分区共存于 DOM,用 v-show 而不是 v-if 切换。这一点是必须的:
          RenameRulesEditor 把地区/特征词典存在自己内部的 reactive 数组里,并且挂载时
          会 emit 一次初始值。用 v-if 的话每次切走再切回都会重建组件,用户刚编辑的规则
-         直接丢失、还会把 renameOptions 悄悄改回初始值——和之前编辑弹窗踩过的是同一类坑。 -->
-    <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-      <!-- 左:来源模式。订阅=填链接由服务端去抓;节点=直接粘贴一堆节点链接。
-           它取代了原来那个「没有链接?粘贴内容试试」的文字开关——那个写法既不显眼,
-           也没表达出"这是两条并列的录入方式"。
-           修改已有订阅时锁死:一条订阅到底是"有地址、可回源刷新"还是"粘贴保存的",
-           是它的固有属性。允许中途切换只会得到一个两边都不完整的记录——切到节点模式
-           时链接被清空、再也刷不了,切到订阅模式时已存的节点内容被丢掉。要换来源就
-           新建一条。 -->
-      <div
-        role="tablist"
-        class="tabs-box tabs tabs-xs sub-add-tabs"
-        :class="isEditing && 'pointer-events-none opacity-60'"
-        :aria-disabled="isEditing || undefined"
-        :title="isEditing ? $t('subscriptionSourceLocked') : undefined"
-      >
-        <a
-          v-for="item in sourceModes"
-          :key="item.key"
-          role="tab"
-          :class="['tab', sourceMode === item.key && 'tab-active']"
-          @click="!isEditing && (sourceMode = item.key)"
+         直接丢失、还会把 renameOptions 悄悄改回初始值。 -->
+    <template #toolbar>
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <!-- 左:来源模式。登录=用机场账号登录获取;订阅=填链接由服务端去抓;节点=直接粘贴一堆节点链接。
+             修改已有订阅时锁死:一条订阅的来源是它的固有属性,允许中途切换只会得到一个两边都不完整的记录。
+             要换来源就新建一条。 -->
+        <div
+          role="tablist"
+          class="tabs-box tabs tabs-xs sub-add-tabs"
+          :class="isEditing && 'pointer-events-none opacity-60'"
+          :aria-disabled="isEditing || undefined"
+          :title="isEditing ? $t('subscriptionSourceLocked') : undefined"
         >
-          {{ $t(item.label) }}
-        </a>
-      </div>
+          <a
+            v-for="item in sourceModes"
+            :key="item.key"
+            role="tab"
+            :class="['tab', sourceMode === item.key && 'tab-active']"
+            @click="!isEditing && (sourceMode = item.key)"
+          >
+            {{ $t(item.label) }}
+          </a>
+        </div>
 
-      <!-- 右:内容分区 -->
-      <div
-        role="tablist"
-        class="tabs-box tabs tabs-xs sub-add-tabs"
-      >
-        <a
-          v-for="item in tabs"
-          :key="item.key"
-          role="tab"
-          :class="['tab', activeTab === item.key && 'tab-active']"
-          @click="activeTab = item.key"
+        <!-- 右:内容分区 -->
+        <div
+          role="tablist"
+          class="tabs-box tabs tabs-xs sub-add-tabs"
         >
-          {{ $t(item.label) }}<template v-if="item.key === 'nodes' && preview">
-            ({{ preview.nodes.length }})</template>
-        </a>
+          <a
+            v-for="item in tabs"
+            :key="item.key"
+            role="tab"
+            :class="['tab', activeTab === item.key && 'tab-active']"
+            @click="activeTab = item.key"
+          >
+            {{ $t(item.label) }}<template v-if="item.key === 'nodes' && preview">
+              ({{ preview.nodes.length }})</template>
+          </a>
+        </div>
       </div>
-    </div>
+    </template>
 
     <div class="flex flex-col gap-4">
       <div
@@ -68,50 +67,138 @@
         </div>
 
         <div
-          v-if="sourceMode === 'url'"
+          v-if="sourceMode !== 'paste'"
+          ref="urlRowsRef"
           class="flex flex-col gap-2"
         >
-          <div class="flex items-center justify-between gap-2">
-            <label class="text-xs font-medium">{{ $t('subscriptionUrlLabel') }}</label>
-            <button
-              type="button"
-              class="btn btn-ghost btn-xs"
-              @click="urls.push('')"
+          <template v-if="sourceMode === 'url'">
+            <div class="flex items-center justify-between gap-2">
+              <label class="text-xs font-medium">{{ $t('subscriptionUrlLabel') }}</label>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs"
+                @click="addUrlRow"
+              >
+                <PlusIcon class="h-3.5 w-3.5" />
+                {{ $t('subscriptionUrlAdd') }}
+              </button>
+            </div>
+            <!-- 一行一个地址:镜像、备用、几个机场合成一条都行,节点合在一起。只剩一行时不能删——至少要留一个输入框。 -->
+            <div
+              v-for="index in urls.keys()"
+              :key="index"
+              class="flex items-center gap-2"
             >
-              <PlusIcon class="h-3.5 w-3.5" />
-              {{ $t('subscriptionUrlAdd') }}
-            </button>
-          </div>
-          <!-- 一行一个地址:镜像、备用、几个机场合成一条都行,节点合在一起。行内的删除按钮
-               和目标分流的规则行是同一套写法。只剩一行时不能删——至少要留一个输入框。 -->
-          <div
-            v-for="index in urls.keys()"
-            :key="index"
-            class="flex items-center gap-2"
+              <input
+                v-model="urls[index]"
+                data-subscription-url
+                type="text"
+                class="input input-sm min-w-0 flex-1"
+                placeholder="https://"
+                autocomplete="off"
+              />
+              <button
+                type="button"
+                class="btn btn-ghost btn-square btn-sm"
+                :class="urls.length === 1 ? 'text-base-content/30 cursor-not-allowed' : 'hover:text-error'"
+                :disabled="urls.length === 1"
+                v-tip="$t('delete')"
+                :aria-label="$t('delete')"
+                @click="urls.splice(index, 1)"
+              >
+                <TrashIcon class="h-4 w-4" />
+              </button>
+            </div>
+            <p class="text-base-content/50 text-xs">{{ $t('subscriptionUrlHint') }}</p>
+          </template>
+
+          <!-- 登录:Xboard / V2Board 账号。登录成功后服务端把账号存起来(密码不回传),
+               之后预览、保存都只带 loginId。 -->
+          <form
+            v-else
+            class="flex flex-col gap-3"
+            @submit.prevent="handleLogin"
           >
-            <input
-              v-model="urls[index]"
-              type="text"
-              class="input input-sm min-w-0 flex-1"
-              placeholder="https://"
-              autocomplete="off"
-            />
-            <button
-              type="button"
-              class="btn btn-ghost btn-square btn-sm"
-              :class="urls.length === 1 ? 'text-base-content/30 cursor-not-allowed' : 'hover:text-error'"
-              :disabled="urls.length === 1"
-              v-tip="$t('delete')"
-              :aria-label="$t('delete')"
-              @click="urls.splice(index, 1)"
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label class="flex flex-col gap-1 text-xs font-medium">
+                {{ $t('subscriptionLoginUrl') }}
+                <input
+                  ref="loginUrlRef"
+                  v-model="loginForm.url"
+                  type="text"
+                  class="input input-sm w-full"
+                  placeholder="https://"
+                  :disabled="loggingIn"
+                  autocomplete="url"
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-xs font-medium">
+                UA
+                <input
+                  v-model="loginForm.userAgent"
+                  type="text"
+                  class="input input-sm w-full"
+                  :placeholder="$t('subscriptionLoginUaPlaceholder')"
+                  :disabled="loggingIn"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-xs font-medium">
+                {{ $t('subscriptionLoginUsername') }}
+                <input
+                  v-model="loginForm.username"
+                  type="text"
+                  class="input input-sm w-full"
+                  :disabled="loggingIn"
+                  autocomplete="username"
+                  autocapitalize="none"
+                  spellcheck="false"
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-xs font-medium">
+                {{ $t('subscriptionLoginPassword') }}
+                <input
+                  v-model="loginForm.password"
+                  type="password"
+                  class="input input-sm w-full"
+                  :placeholder="loginId ? $t('subscriptionLoginPasswordSaved') : ''"
+                  :disabled="loggingIn"
+                  autocomplete="current-password"
+                />
+              </label>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-base-content/50 text-xs">{{ $t('subscriptionLoginHint') }}</p>
+              <button
+                type="submit"
+                class="btn btn-sm shrink-0"
+                :disabled="!canLogin || loggingIn"
+              >
+                <span
+                  v-if="loggingIn"
+                  class="loading loading-spinner loading-xs"
+                />
+                {{ $t('subscriptionLoginFetch') }}
+              </button>
+            </div>
+            <dl
+              v-if="account"
+              class="bg-base-200/60 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg p-3 text-xs sm:grid-cols-3"
             >
-              <TrashIcon class="h-4 w-4" />
-            </button>
-          </div>
-          <p class="text-base-content/50 text-xs">{{ $t('subscriptionUrlHint') }}</p>
+              <div
+                v-for="item in accountRows"
+                :key="item.label"
+                class="min-w-0"
+              >
+                <dt class="text-base-content/50">{{ $t(item.label) }}</dt>
+                <dd class="truncate font-medium">{{ item.value }}</dd>
+              </div>
+            </dl>
+          </form>
 
           <!-- 定期更新:每隔几天、几点自动重新拉取。控件和后端设置里 Geo / 自身升级的计划一样。
-               右边是「订阅 DNS 解析」的展开开关,输入框在下面,两种来源模式共用 -->
+               右边是「订阅 DNS 解析」的展开开关,输入框在下面,三种来源模式共用 -->
           <div class="flex items-start gap-x-3 gap-y-2 pt-1">
             <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
               <span class="text-xs font-medium">{{ $t('subscriptionAutoUpdate') }}</span>
@@ -199,34 +286,36 @@
 
         <!-- 订阅 DNS 解析:机场要求节点域名用它自己的 DoH 解析时填(相当于 OpenClash 的
              proxy-server-nameserver / nameserver-policy)。只解析这份订阅的节点服务器域名;
-             「订阅」和「节点」两种来源都能配 -->
-        <div
-          v-if="nodeDnsOpen"
-          class="flex flex-col gap-1"
-        >
-          <label class="text-xs font-medium">{{ $t('subscriptionNodeDnsLabel') }}</label>
-          <div class="flex flex-col gap-2 sm:flex-row">
-            <input
-              v-model="nodeDnsUrl"
-              type="text"
-              class="input input-sm min-w-0 flex-1 font-mono text-xs"
-              :placeholder="$t('subscriptionNodeDnsUrlPlaceholder')"
-              autocomplete="off"
-            />
-            <input
-              v-model="nodeDnsBootstrap"
-              type="text"
-              class="input input-sm w-full font-mono text-xs sm:w-48"
-              :placeholder="$t('subscriptionNodeDnsBootstrapPlaceholder')"
-              autocomplete="off"
-            />
+             三种来源都能配 -->
+        <ExpandTransition>
+          <div
+            v-if="nodeDnsOpen"
+            class="flex flex-col gap-1"
+          >
+            <label class="text-xs font-medium">{{ $t('subscriptionNodeDnsLabel') }}</label>
+            <div class="flex flex-col gap-2 sm:flex-row">
+              <input
+                v-model="nodeDnsUrl"
+                type="text"
+                class="input input-sm min-w-0 flex-1 font-mono text-xs"
+                :placeholder="$t('subscriptionNodeDnsUrlPlaceholder')"
+                autocomplete="off"
+              />
+              <input
+                v-model="nodeDnsBootstrap"
+                type="text"
+                class="input input-sm w-full font-mono text-xs sm:w-48"
+                :placeholder="$t('subscriptionNodeDnsBootstrapPlaceholder')"
+                autocomplete="off"
+              />
+            </div>
+            <p
+              v-if="nodeDnsError"
+              class="text-error text-xs"
+            >{{ $t(nodeDnsError) }}</p>
+            <p class="text-base-content/50 text-xs">{{ $t('subscriptionNodeDnsHint') }}</p>
           </div>
-          <p
-            v-if="nodeDnsError"
-            class="text-error text-xs"
-          >{{ $t(nodeDnsError) }}</p>
-          <p class="text-base-content/50 text-xs">{{ $t('subscriptionNodeDnsHint') }}</p>
-        </div>
+        </ExpandTransition>
       </div>
 
       <!-- key 绑到订阅 id:切换编辑对象时强制重建编辑器,否则它内部的 reactive 行
@@ -251,14 +340,13 @@
           :overrides="overrides"
           :source="effectiveSource"
           :rename-options="effectiveRenameOptions"
+          :node-dns="effectiveNodeDns"
           @override="handleOverride"
           @reset-overrides="overrides = {}"
           @toggle-disabled="handleToggleDisabled"
         />
       </div>
     </div>
-
-    <div class="mt-5 flex flex-col gap-2"></div>
 
     <!-- 底栏走 DialogWrapper 的 footer 插槽(和 v0.1.317 一样):弹窗高度封顶在视口的 90%,
          内容多了只滚中间的内容区,标题栏和底栏固定不动,不会再顶到上面的页签 -->
@@ -289,14 +377,24 @@
 </template>
 
 <script setup lang="ts">
-import type { OpenboxRenameOptions, OpenboxSubscription, OpenboxSubscriptionAutoUpdate, OpenboxSubscriptionPreview } from '@/api/openbox'
-import { createSubscription, previewSubscription, updateSubscription } from '@/api/openbox'
+import type {
+  OpenboxRenameOptions,
+  OpenboxSubscription,
+  OpenboxSubscriptionAccount,
+  OpenboxSubscriptionAutoUpdate,
+  OpenboxSubscriptionPreview,
+  OpenboxSubscriptionUsage,
+} from '@/api/openbox'
+import { createSubscription, loginSubscription, previewSubscription, updateSubscription } from '@/api/openbox'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
+import ExpandTransition from '@/components/common/ExpandTransition.vue'
 import { ChevronDownIcon, PlusIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { debounce } from 'lodash'
 import { showNotification } from '@/helper/notification'
+import { prettyBytesHelper } from '@/helper/utils'
 import { notifySubscriptionSaved } from '@/store/openboxSubscriptions'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import dayjs from 'dayjs'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import RenameRulesEditor from './RenameRulesEditor.vue'
 import SubscriptionPreviewPanel from './SubscriptionPreviewPanel.vue'
@@ -313,20 +411,24 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-type SourceMode = 'url' | 'paste'
+type SourceMode = 'login' | 'url' | 'paste'
 type DialogTab = 'source' | 'rules' | 'nodes'
 
 const sourceModes: { key: SourceMode; label: string }[] = [
+  { key: 'login', label: 'subscriptionTabLogin' },
   { key: 'url', label: 'subscriptionTabSource' },
   { key: 'paste', label: 'subscriptionTabNodes' },
 ]
 // 编辑已有订阅时,按它到底是"有链接"还是"粘贴来的"决定初始模式
 const hasUrlSource = (s?: OpenboxSubscription | null) => Boolean(s?.url || s?.urls?.length)
-const sourceMode = ref<SourceMode>(props.subscription && !hasUrlSource(props.subscription) ? 'paste' : 'url')
+// 有账号 = 登录来源;没地址也没账号 = 粘贴来源;其余是订阅地址
+const initialSourceMode = (): SourceMode =>
+  props.subscription?.account ? 'login' : props.subscription && !hasUrlSource(props.subscription) ? 'paste' : 'url'
+const sourceMode = ref<SourceMode>(initialSourceMode())
 const isEditing = computed(() => Boolean(props.subscription))
 
 const tabs: { key: DialogTab; label: string }[] = [
-  { key: 'source', label: 'subscriptionTabSource' },
+  { key: 'source', label: 'subscriptionTabName' },
   { key: 'rules', label: 'subscriptionTabRules' },
   { key: 'nodes', label: 'subscriptionTabNodes' },
 ]
@@ -343,6 +445,80 @@ const initialUrls = () => {
   return list.length ? [...list] : ['']
 }
 const urls = ref<string[]>(initialUrls())
+const urlRowsRef = ref<HTMLElement | null>(null)
+const addUrlRow = async () => {
+  urls.value.push('')
+  await nextTick()
+  if (!isOpen.value) return
+  const inputs = urlRowsRef.value?.querySelectorAll<HTMLInputElement>('[data-subscription-url]')
+  const last = inputs?.[inputs.length - 1]
+  last?.focus({ preventScroll: true })
+  last?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
+}
+
+// 登录来源:密码只在这里的表单里停留,登录成功后服务端存账号、回一个 loginId,
+// 之后预览和保存只带 loginId。改了站点 / UA / 用户名就作废这个 loginId,要重新登录。
+const initialLoginForm = () => ({
+  url: props.subscription?.account?.url || '',
+  userAgent: props.subscription?.account?.userAgent || '',
+  username: props.subscription?.account?.username || '',
+  password: '',
+})
+const loginForm = reactive(initialLoginForm())
+const loginUrlRef = ref<HTMLInputElement | null>(null)
+const loginId = ref(props.subscription?.account?.id || '')
+const account = ref<OpenboxSubscriptionAccount | null>(props.subscription?.account || null)
+const usage = ref<OpenboxSubscriptionUsage | null>(props.subscription?.usage || null)
+const loggingIn = ref(false)
+let loginSeq = 0
+const canLogin = computed(() => Boolean(loginForm.url.trim() && loginForm.username.trim() && loginForm.password))
+
+const accountRows = computed(() => {
+  const acc = account.value
+  const u = usage.value
+  if (!acc) return []
+  const unknown = t('subscriptionAccountUnknown')
+  const used = u && (u.upload !== null || u.download !== null) ? (u.upload || 0) + (u.download || 0) : null
+  const bytes = (n: number | null | undefined) =>
+    n == null ? unknown : prettyBytesHelper(Math.max(0, n), { maximumFractionDigits: 2 })
+  const date = (sec: number) => dayjs(sec * 1000).format('YYYY-MM-DD')
+  return [
+    { label: 'subscriptionAccountPlan', value: acc.planName || unknown },
+    { label: 'subscriptionAccountTotal', value: bytes(u?.total) },
+    { label: 'subscriptionAccountUsed', value: bytes(used) },
+    { label: 'subscriptionAccountRemaining', value: bytes(u?.total != null && used !== null ? u.total - used : null) },
+    {
+      label: 'subscriptionAccountReset',
+      value: acc.resetAt
+        ? date(acc.resetAt)
+        : acc.resetDays !== null && acc.resetDays !== undefined
+          ? t('subscriptionAccountResetDays', { days: acc.resetDays })
+          : acc.resetKnown
+            ? t('subscriptionAccountNoReset')
+            : unknown,
+    },
+    {
+      label: 'subscriptionAccountExpiry',
+      value: u?.expire ? date(u.expire) : acc.expiryKnown ? t('subscriptionAccountNoExpiry') : unknown,
+    },
+  ]
+})
+
+watch(
+  () => [loginForm.url, loginForm.userAgent, loginForm.username],
+  () => {
+    loginSeq += 1
+    loginId.value = ''
+    account.value = null
+    usage.value = null
+  },
+  { flush: 'sync' },
+)
+watch(sourceMode, async (mode) => {
+  if (mode !== 'login') return
+  await nextTick()
+  loginUrlRef.value?.focus({ preventScroll: true })
+})
 const content = ref(props.subscription?.content ?? '')
 // 定期更新计划;默认关着,打开时默认每天 04:00
 // 间隔可以按小时(每隔 N 小时,mode = 'hours')或按天(每隔 N 天的几点,没有 mode)
@@ -451,20 +627,22 @@ const saving = ref(false)
 // 预览里的前缀和保存后的不一样。
 const effectiveName = computed(() => name.value.trim() || t('subscriptionDefaultName'))
 
-const effectiveSource = computed<{ urls?: string[]; content?: string; name?: string } | null>(() => {
+const effectiveSource = computed<{ urls?: string[]; content?: string; name?: string; loginId?: string; userAgent?: string } | null>(() => {
   // 只有开了前缀,名字才影响解析结果;否则不带上,免得改个名字就重新拉一次订阅。
   const withName = renameOptions.value.usePrefix ? { name: effectiveName.value } : {}
+  if (sourceMode.value === 'login') return loginId.value ? { loginId: loginId.value, ...withName } : null
   if (sourceMode.value === 'paste') {
     const trimmedContent = content.value.trim()
     return trimmedContent ? { content: trimmedContent, ...withName } : null
   }
   // 空行和重复的地址不算;顺序保留,服务端拿第一条当老字段 url
   const list = [...new Set(urls.value.map((u) => u.trim()).filter(Boolean))]
-  return list.length ? { urls: list, ...withName } : null
+  const userAgent = props.subscription?.userAgent
+  return list.length ? { urls: list, ...(userAgent ? { userAgent } : {}), ...withName } : null
 })
 const hasSource = computed(() => effectiveSource.value !== null)
 
-const canSave = computed(() => hasSource.value && !previewing.value && !nodeDnsError.value)
+const canSave = computed(() => hasSource.value && !previewing.value && !loggingIn.value && !nodeDnsError.value)
 
 // Monotonic guard against out-of-order responses: a slow preview call for stale input must
 // never clobber a newer one that resolved first.
@@ -482,6 +660,10 @@ const runPreviewNow = async () => {
     const result = await previewSubscription({ ...src, renameOptions: effectiveRenameOptions.value })
     if (seq !== previewSeq) return
     preview.value = result
+    if (result.account) {
+      account.value = result.account
+      usage.value = result.usage || null
+    }
   } catch (error) {
     if (seq !== previewSeq) return
     preview.value = null
@@ -514,6 +696,43 @@ watch(
   { deep: true },
 )
 
+const handleLogin = async () => {
+  if (!canLogin.value || loggingIn.value) return
+  const seq = ++loginSeq
+  const rules = JSON.stringify(effectiveRenameOptions.value)
+  const prefixName = effectiveName.value
+  loggingIn.value = true
+  loginId.value = ''
+  try {
+    const result = await loginSubscription({ ...loginForm, name: effectiveName.value, renameOptions: effectiveRenameOptions.value })
+    if (seq !== loginSeq || !isOpen.value) return
+    loginId.value = result.loginId
+    account.value = result.account
+    usage.value = result.usage || null
+    loginForm.password = ''
+    preview.value = result
+    previewErrorMessage.value = ''
+    await nextTick()
+    // 登录返回的就是预览;等待期间规则和名字没动过,就不必再预览一次
+    if (rules === JSON.stringify(effectiveRenameOptions.value) && prefixName === effectiveName.value) debouncedPreview.cancel()
+    showNotification({
+      content: 'subscriptionLoginFetched',
+      type: 'alert-success',
+      params: { count: String(result.nodes.length) },
+    })
+  } catch (error) {
+    if (seq === loginSeq && isOpen.value) {
+      showNotification({
+        content: 'subscriptionLoginFailed',
+        type: 'alert-error',
+        params: { message: error instanceof Error ? error.message : String(error) },
+      })
+    }
+  } finally {
+    if (seq === loginSeq) loggingIn.value = false
+  }
+}
+
 const resetForm = () => {
   debouncedPreview.cancel()
   previewSeq += 1
@@ -527,7 +746,13 @@ const resetForm = () => {
   content.value = props.subscription?.content ?? ''
   overrides.value = { ...(props.subscription?.renameOptions?.overrides || {}) }
   disabledTags.value = [...(props.subscription?.renameOptions?.disabled || [])]
-  sourceMode.value = props.subscription && !hasUrlSource(props.subscription) ? 'paste' : 'url'
+  sourceMode.value = initialSourceMode()
+  Object.assign(loginForm, initialLoginForm())
+  loginId.value = props.subscription?.account?.id || ''
+  account.value = props.subscription?.account || null
+  usage.value = props.subscription?.usage || null
+  loginSeq += 1
+  loggingIn.value = false
   preview.value = null
   previewing.value = false
   previewErrorMessage.value = ''
@@ -536,9 +761,17 @@ const resetForm = () => {
 
 watch(isOpen, (open) => {
   if (open) resetForm()
+  else {
+    // 关掉就别让密码留在内存里,也别让还在飞的登录结果落回表单
+    loginSeq += 1
+    loginForm.password = ''
+    loggingIn.value = false
+  }
 })
 
 onBeforeUnmount(() => {
+  loginSeq += 1
+  loginForm.password = ''
   debouncedPreview.cancel()
 })
 
@@ -554,7 +787,7 @@ const handleSave = async () => {
       name: effectiveName.value,
       renameOptions: effectiveRenameOptions.value,
       // 粘贴来的订阅没有地址可回源,计划一律关
-      autoUpdate: sourceMode.value === 'url' ? autoUpdate.value : { enabled: false, days: 1, hour: 4 },
+      autoUpdate: sourceMode.value !== 'paste' ? autoUpdate.value : { enabled: false, days: 1, hour: 4 },
       // 地址留空或没通过校验 = 不用专用解析器(服务端存成没有);「订阅」「节点」两种来源都能配
       nodeDns: effectiveNodeDns.value,
     }
