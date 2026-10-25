@@ -97,6 +97,7 @@
         {{ $t('geoEntriesEmpty') }}
       </p>
     </div>
+  </DialogWrapper>
 </template>
 
 <script setup lang="ts">
