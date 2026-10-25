@@ -72,6 +72,17 @@
           </button>
         </div>
         <ul class="min-h-0 flex-1 overflow-y-auto text-sm">
+          <!-- 「不指定」:传了 emptyLabel 才有,排在最前,选它就是清空 -->
+          <li v-if="emptyLabel && match(emptyLabel)">
+            <div
+              class="hover:bg-base-200 flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left"
+              :class="{ 'bg-base-200': !modelValue }"
+              :data-active="!modelValue"
+              @click="choose('')"
+            >
+              <span class="min-w-0 flex-1 truncate">{{ emptyLabel }}</span>
+            </div>
+          </li>
           <template v-if="tab === 'nodes'">
             <template v-if="visibleBuiltin.length">
               <li class="text-base-content/50 px-2 pt-2 pb-1 text-xs font-medium">{{ $t('groupBuiltinBadge') }}</li>
@@ -168,7 +179,7 @@
             </li>
           </template>
           <li
-            v-if="(tab === 'nodes' && !nodeSections.length && !visibleBuiltin.length) || (tab === 'groups' && !visibleGroups.length)"
+            v-if="!(emptyLabel && match(emptyLabel)) && ((tab === 'nodes' && !nodeSections.length && !visibleBuiltin.length) || (tab === 'groups' && !visibleGroups.length))"
             class="text-base-content/50 px-2 py-3 text-center text-xs"
           >
             {{ $t('outboundPickerNoMatch') }}
@@ -200,6 +211,8 @@ export interface OutboundPickerOptions {
 const props = defineProps<{
   options: OutboundPickerOptions
   placeholder?: string
+  // 列表最前面多一项「不指定」(选中即清空);不传就没有这一项
+  emptyLabel?: string
 }>()
 const modelValue = defineModel<string>({ required: true })
 

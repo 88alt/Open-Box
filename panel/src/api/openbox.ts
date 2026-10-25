@@ -190,6 +190,8 @@ export interface OpenboxServer {
   obfs?: string
   // 仅 mixed:可选的认证用户名(和 password 成对)
   username?: string
+  // 这台共享入口的出口:出站 tag(节点名或节点组名),或 direct / block 占位;不填 = 按现有分流规则
+  outbound?: string
 }
 
 // 「终端分流」里的一条规则:这些来源 IP / 网段的全部流量走 outbound(server/engine/client-routes.mjs)
