@@ -47,6 +47,14 @@ export interface OpenboxCustomRule {
   outbound: string
   // 这一行的备注(可选)
   note?: string
+  // 所属页签 id(同一页签的规则共用一个出口)
+  tabId?: string
+}
+
+// 前置自定义分流的「出口页签」:页签顺序即匹配优先级,页签内按规则顺序匹配
+export interface OpenboxCustomTab {
+  id: string
+  outbound: string
 }
 
 export interface OpenboxCustomPolicy {
@@ -56,6 +64,8 @@ export interface OpenboxCustomPolicy {
   enabled?: boolean
   // 顺序即匹配顺序,先命中的先生效
   rules?: OpenboxCustomRule[]
+  // 出口页签(从左到右匹配);老档案没有这个字段,打开编辑器时按相邻同出口的规则归并
+  tabs?: OpenboxCustomTab[]
 }
 
 // 「出站」页签:每个站点集的 selector 里能选到哪几类东西
