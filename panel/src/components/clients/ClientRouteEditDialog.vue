@@ -112,24 +112,29 @@
         </div>
       </div>
 
+      <!-- 这些终端怎么处理:下拉三选一,当前选项的说明写在下面 -->
       <div class="flex flex-col gap-2">
-        <span class="text-xs font-medium">{{ $t('clientRouteModeLabel') }}</span>
-        <label
-          v-for="m in MODES"
-          :key="m.value"
-          class="flex cursor-pointer items-start gap-2 text-sm"
-        >
-          <input
+        <label class="flex flex-col gap-1">
+          <span class="text-xs font-medium">{{ $t('clientRouteModeLabel') }}</span>
+          <select
             v-model="form.mode"
-            type="radio"
-            :value="m.value"
-            class="radio radio-sm mt-0.5"
-          />
-          <span>
-            {{ $t(m.label) }}
-            <span class="text-base-content/50 block text-xs">{{ $t(m.hint) }}</span>
-          </span>
+            class="select select-sm w-full"
+          >
+            <option
+              v-for="m in MODES"
+              :key="m.value"
+              :value="m.value"
+            >
+              {{ $t(m.label) }}
+            </option>
+          </select>
         </label>
+        <p
+          v-if="modeHint"
+          class="text-base-content/60 text-xs"
+        >
+          {{ $t(modeHint) }}
+        </p>
       </div>
 
       <div
@@ -147,20 +152,22 @@
     </div>
 
     <template #footer>
-      <button
-        type="button"
-        class="btn btn-sm"
-        @click="isOpen = false"
-      >
-        {{ $t('cancel') }}
-      </button>
-      <button
-        type="button"
-        class="btn btn-primary btn-sm"
-        @click="submit"
-      >
-        {{ $t('save') }}
-      </button>
+      <div class="flex justify-end gap-2">
+        <button
+          type="button"
+          class="btn btn-sm"
+          @click="isOpen = false"
+        >
+          {{ $t('cancel') }}
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary btn-sm"
+          @click="submit"
+        >
+          {{ $t('save') }}
+        </button>
+      </div>
     </template>
   </DialogWrapper>
 </template>
@@ -217,6 +224,8 @@ const MODES: { value: ClientMode; label: string; hint: string }[] = [
   { value: 'bypass', label: 'clientRouteBypassLabel', hint: 'clientRouteBypassHint' },
   { value: 'admit', label: 'clientRouteAdmitLabel', hint: 'clientRouteAdmitHint' },
 ]
+
+const modeHint = computed(() => MODES.find((m) => m.value === form.mode)?.hint)
 
 watch(
   () => props.modelValue,
