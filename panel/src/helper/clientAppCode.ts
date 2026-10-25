@@ -1,11 +1,13 @@
 // Open-Box App(手机 / 电脑)的「码」:面板拼出来,App 扫码 / 点链接 / 导入文件后解析。
-// 这是和 App 之间的约定,格式不能随意改(App 认不出就配不上对)。参数顺序和字段名对照上游面板 v0.1.351 的构建产物。
+// 这是和 App 之间的约定,格式不能随意改(App 认不出就配不上对)。参数顺序和字段名对照上游面板 v0.1.359 的构建产物。
 //
-// 两种码,都是 openbox:// 开头、各字段 encodeURIComponent 后用 & 连接(v=2:码里不再带凭据,
+// 两种码,都是 openbox:// 开头、各字段 encodeURIComponent 后用 & 连接(码里不带凭据,
 // App 导入时要再输入「配对码」才能解开):
 //   import  本地分流(客户端配置):openbox://import?v=2&r=路由器ID&n=路由器名&lan=…&port=…[&pub=…]&p=nonce
-//   share   共享网络服务器:       openbox://share?v=2&r=…&n=…&lan=…&port=…[&pub=…]&s=密文&g=代数&sid=服务器ID&nm=服务器名
-// s 是服务端用配对码派生的密钥封住的节点分享链接(POST /api/openbox/client-app/share-codes 返回)。
+//   share   共享网络服务器:       openbox://share?v=3&r=…&n=…&lan=…&port=…[&pub=…]&g=代数&sid=服务器ID
+// share 的 v=3 是低密度码:不再把密文(s)和服务器名(nm)塞进码里,码短了,二维码的格子少、扫起来容易,
+// 服务器名再长也不影响。App 扫到后用 sid + 代数 + 配对码,经路由器面板取回节点配置,所以首次导入需能访问路由器面板。
+// 代数 g 是 16 位小写十六进制(POST /api/openbox/client-app/share-codes 返回),不是这个格式就不出码。
 
 import * as ipaddr from 'ipaddr.js'
 
@@ -40,15 +42,16 @@ const head = (router: AppCodeRouter): [string, string | number][] => [
 export const buildClientImportCode = (router: AppCodeRouter & { nonce: string }) =>
   `openbox://import?${query([...head(router), ['p', router.nonce]])}`
 
-// 共享网络服务器的码。seal 是服务端封好的节点分享链接和代数;还没拿到密文或没有路由器 ID 时回空串
+// 共享网络服务器的码(v=3 低密度)。seal 是服务端给的代数;代数不合格式、没有路由器 ID 或服务器 ID 时回空串
+const GEN_RE = /^[0-9a-f]{16}$/
 export const buildShareAppCode = (
   router: AppCodeRouter,
   server: { id: string; name?: string },
-  seal: { sealed: string; gen: number | string },
+  seal: { gen: number | string; sealed?: string },
 ) =>
-  !seal.sealed || !router.routerId
+  !GEN_RE.test(String(seal.gen)) || !router.routerId || !server.id
     ? ''
-    : `openbox://share?${query([...head(router), ['s', seal.sealed], ['g', seal.gen], ['sid', server.id], ['nm', server.name || server.id]])}`
+    : `openbox://share?${query([['v', '3'], ...head(router).slice(1), ['g', seal.gen], ['sid', server.id]])}`
 
 // ---- 码里的 lan / pub:跟着浏览器当前打开面板的地址走 ----
 

@@ -73,12 +73,14 @@
     >
       <div
         v-if="current"
+        ref="qrContentRef"
         class="flex flex-col gap-3 text-sm"
       >
         <img
           v-if="qrDataUrl"
           :src="qrDataUrl"
-          class="h-56 w-56 self-center rounded-lg bg-white p-1"
+          :style="{ width: `${qrWidth}px` }"
+          class="max-w-full self-center rounded-lg bg-white p-1 [image-rendering:pixelated]"
           alt="QR"
         />
         <p class="text-base-content/60 text-center text-xs">{{ $t('shareCodeAppHint') }}</p>
@@ -184,6 +186,7 @@ import { buildShareAppCode, panelPublicBase, pickLanAddress } from '@/helper/cli
 import { showNotification } from '@/helper/notification'
 import { buildShareLink, isLocalAddress } from '@/helper/shareLink'
 import { ArrowPathIcon, ClipboardDocumentIcon, QrCodeIcon, ServerStackIcon } from '@heroicons/vue/24/outline'
+import { useElementSize } from '@vueuse/core'
 import QRCode from 'qrcode'
 import { computed, onMounted, ref, watch } from 'vue'
 
@@ -196,6 +199,20 @@ const loading = ref(true)
 const showQr = ref(false)
 const currentId = ref('')
 const qrDataUrl = ref('')
+const qrContentRef = ref<HTMLElement>()
+const { width: qrContentWidth } = useElementSize(qrContentRef)
+// 二维码一边的格子数(含四周各 4 格留白)。码是低密度的(v=3),格子少,显示成整数倍像素,边缘才清晰
+const qrCells = ref(0)
+const QR_MARGIN = 4
+const QR_PADDING = 8 // 图片的 p-1:左右各 4px
+const qrWidth = computed(() => {
+  const cells = qrCells.value
+  if (!cells) return 256
+  // 希望的每格像素:整张图约 248px,每格至少 3px;弹窗窄时按可用宽度往下缩,至少 1px
+  const wanted = Math.max(3, Math.ceil(248 / cells))
+  const fit = qrContentWidth.value > 0 ? Math.max(1, Math.floor((qrContentWidth.value - QR_PADDING) / cells)) : wanted
+  return cells * Math.min(wanted, fit) + QR_PADDING
+})
 
 // 服务端给每台服务器封好的密文和配对码(服务器列表一变就重新取:换密码后链接也变了)
 const seals = ref<Record<string, OpenboxShareCodeSeal>>({})
@@ -294,12 +311,15 @@ watch(
   async (value) => {
     if (!value) {
       qrDataUrl.value = ''
+      qrCells.value = 0
       return
     }
     try {
-      qrDataUrl.value = await QRCode.toDataURL(value, { margin: 1, width: 352 })
+      qrCells.value = QRCode.create(value).modules.size + QR_MARGIN * 2
+      qrDataUrl.value = await QRCode.toDataURL(value, { margin: QR_MARGIN, scale: 6 })
     } catch {
       qrDataUrl.value = ''
+      qrCells.value = 0
     }
   },
   { immediate: true },
