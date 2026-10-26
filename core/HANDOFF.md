@@ -1,7 +1,7 @@
 openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
 
 写给下一位接手 core 的 AI。读完这份和 core/README.md,就可以接着做,不用反复问维护者。
-进度的实时来源是 git log -- core;本文的进度是 2026-10-26 的快照,冲突时以 git log 为准。
+进度要对账:main 下的提交记录(git log -- core)是实时来源,本文第三节是 2026-10-26 的快照;两者冲突时以提交记录为准,并在补丁里顺手更新第三节。
 
 ========================================
 零、先读这一节
@@ -16,7 +16,8 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
 
 接手后先做:
 1. 克隆 https://github.com/timeflysoon/Open-Box(公开),git checkout main(默认分支 catch-up-upstream 里没有 core/)。
-2. git log --oneline -- core 看最近做到哪;读 core/README.md。
+2. 先对账:git fetch 后看 git log --oneline origin/main -- core,和第三节、core/README.md 的进度表对照。提交里已经做了、文档没标的,以提交为准,
+   不要重复实现、重复推送。每次出补丁前再 git fetch 一次,确认 origin/main 没有新提交。
 3. 沙箱里确认 go version、node -v(缺 Go 用 apt 装;沙箱访问不了 Go 模块代理,只用标准库)。
 4. 按第四节的顺序做;每块做完 go vet ./... 和 go test ./... 全绿再出补丁。
 

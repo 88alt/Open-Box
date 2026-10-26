@@ -10,7 +10,10 @@
 4. `docs/ENDPOINTS.md`:前端调用的全部接口(方法、路径、前端函数、类型位置)。这是接口契约。
 
 ## 怎么接着做(不用再问维护者)
-1. `git log --oneline -- backend/ core/` 看最近做到哪;以 `STATUS.md` 为准。
+1. **先对账,再动手**:`git fetch` 后把 `git log --oneline origin/main -- backend/`(必要时加 `--stat`)和 `STATUS.md` 对照着看。
+   - 提交里已经做了、`STATUS.md` 却没打勾的:先补打勾和日志(单独一个提交 `backend: 补记进度 <条目>`),**不要重复实现、重复推送**。
+   - `STATUS.md` 打了勾、却找不到对应提交的:当作未完成。
+   - 每次出补丁前再 `git fetch` 一次,看 `origin/main` 有没有新提交,避免和别人重复或漏掉。
 2. 取第一个未完成条目,按 `docs/DESIGN.md` 里该阶段的约定实现,**同时写测试**(没有测试的条目不算完成)。
 3. 完成后:在 `STATUS.md` 打勾并在「日志」里加一行(日期、条目、一句话);提交说明格式 `backend: <阶段> <做了什么>`,
    例如 `backend: M1 订阅 CRUD 与预览接口`。一次提交只做一个条目。
