@@ -37,6 +37,8 @@ func run(args []string) int {
 	}
 
 	srv := server.New(server.Options{Logger: log, Version: version})
+	// 前端静态文件与前端路由回落;必须最后挂,/api 下的路径由各接口分组优先处理
+	srv.Mux().Handle("/", server.StaticHandler(cfg.WebDir))
 
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
