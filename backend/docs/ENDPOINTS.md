@@ -325,3 +325,9 @@
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
 | GET | `/api/storage` | `STORAGE_API_URL` (helper/persistentStorage.ts:4) | — | L |
+
+## 后端自带的接口(前端不调用)
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/health` | 健康检查,免登录,返回 `{ "ok": true, "version": "..." }`,给 procd / systemd / 监控用 |

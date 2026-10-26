@@ -2,10 +2,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
+	"os/signal"
+	"syscall"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/server"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
 )
 
@@ -30,6 +35,22 @@ func run(args []string) int {
 		log.Error("初始化目录失败", "err", err)
 		return 1
 	}
-	log.Info("openbox-backend 启动", "version", version, "listen", cfg.Listen, "data", cfg.DataDir, "web", cfg.WebDir)
+
+	srv := server.New(server.Options{Logger: log, Version: version})
+
+	ln, err := net.Listen("tcp", cfg.Listen)
+	if err != nil {
+		log.Error("监听失败", "addr", cfg.Listen, "err", err)
+		return 1
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	log.Info("openbox-backend 启动", "version", version, "listen", ln.Addr().String(), "data", cfg.DataDir, "web", cfg.WebDir)
+	if err := srv.Serve(ctx, ln); err != nil {
+		log.Error("服务异常退出", "err", err)
+		return 1
+	}
+	log.Info("已退出")
 	return 0
 }
