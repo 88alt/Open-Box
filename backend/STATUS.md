@@ -4,10 +4,10 @@
 标注「需真机」的条目,代码和单元测试做完后打 `[~]`(代码完成,待真机验证),由维护者真机验证后改成 `[x]`。
 接口分组名对应 `docs/ENDPOINTS.md` 里的二级标题。
 
-## 状态:尚未开始写代码(只有设计文档和接口清单)
+## 状态:M0 进行中
 
 ## M0 骨架
-- [ ] `go.mod`、`cmd/openbox-backend`、参数 / 环境变量 / 路径(`internal/system/paths.go`)
+- [x] `go.mod`、`cmd/openbox-backend`、参数 / 环境变量 / 路径(`internal/system/paths.go`)
 - [ ] HTTP 服务、日志(slog)、优雅退出、统一错误响应 `{ "error": "..." }`
 - [ ] 原子写存储 `internal/store`(含并发测试)
 - [ ] 静态文件服务 + 前端路由回落
@@ -59,4 +59,4 @@
 - [ ] 清理旧文件 `scripts/native-arm64/`(联调通过之后)
 
 ## 日志(新的在最上面)
-- (空)文档与接口清单已建立,尚无代码。
+- 2026-10-25 M0 go.mod、入口、参数/环境变量/路径(internal/system/paths.go):命令行 > 环境变量 > 默认值。
