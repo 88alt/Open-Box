@@ -14,11 +14,13 @@ import (
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
 	profileapi "github.com/timeflysoon/Open-Box/backend/internal/api/profile"
 	storageapi "github.com/timeflysoon/Open-Box/backend/internal/api/storage"
+	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
 	"github.com/timeflysoon/Open-Box/backend/internal/profile"
 	"github.com/timeflysoon/Open-Box/backend/internal/server"
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
+	"github.com/timeflysoon/Open-Box/backend/internal/subs"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
 )
 
@@ -97,6 +99,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 		coreAPI = profile.CoreAdapter{C: core.New(cfg.Core)}
 	}
 	profileapi.Register(srv.Mux(), profileapi.Deps{Profile: profile.New(st, coreAPI, log)})
+	subsapi.Register(srv.Mux(), subsapi.Deps{Subs: subs.New(st, nil)})
 
 	// 前端静态文件与前端路由回落;最后挂,/api 下的路径由各接口分组优先处理
 	srv.Mux().Handle("/", server.StaticHandler(cfg.WebDir))

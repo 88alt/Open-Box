@@ -294,6 +294,8 @@
 
 ## `/api/openbox/subscriptions`
 
+实现约定(M1):错误码 400 = 输入有问题(含订阅内容里没有可用节点),404 = 订阅不存在,501 = `login`(账号登录来源暂不支持),502 = 订阅服务器那头出错(连不上 / 超时 / HTTP 非 2xx)。`url` 与 `urls` 同时给时 `url` 排第一;`content` 优先于地址。时间戳 `createdAt` / `updatedAt` 是毫秒。`PATCH` 只改传了的字段,`autoUpdate` / `nodeDns` 传 `null` = 清除。
+
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
 | GET | `/api/openbox/subscriptions` | `fetchSubscriptions` (api/openbox.ts:542) | { subscriptions: OpenboxSubscription[] } | () |

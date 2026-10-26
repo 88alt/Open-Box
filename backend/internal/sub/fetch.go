@@ -21,6 +21,14 @@ const (
 	DefaultFetchTimeout = 30 * time.Second
 )
 
+// FetchError 表示「订阅服务器那一头」的问题(连不上、超时、HTTP 非 2xx、内容过大),
+// 与调用方自己传错地址区分开,接口层据此返回 502 而不是 400。
+type FetchError struct{ Msg string }
+
+func (e *FetchError) Error() string { return e.Msg }
+
+func fetchErr(format string, a ...any) error { return &FetchError{Msg: fmt.Sprintf(format, a...)} }
+
 // Usage 是响应头 subscription-userinfo 里的用量;缺的字段为 nil(前端当 null)。
 type Usage struct {
 	Upload   *int64 `json:"upload"`
@@ -57,20 +65,20 @@ func Fetch(ctx context.Context, client *http.Client, rawURL, userAgent string) (
 	resp, err := client.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, fmt.Errorf("拉取订阅已取消或超时(%s)", u.Hostname())
+			return nil, fetchErr("拉取订阅已取消或超时(%s)", u.Hostname())
 		}
-		return nil, fmt.Errorf("无法连接订阅服务器 %s", u.Hostname())
+		return nil, fetchErr("无法连接订阅服务器 %s", u.Hostname())
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, fmt.Errorf("订阅服务器返回 HTTP %d", resp.StatusCode)
+		return nil, fetchErr("订阅服务器返回 HTTP %d", resp.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxBodyBytes+1))
 	if err != nil {
-		return nil, fmt.Errorf("读取订阅内容失败(%s)", u.Hostname())
+		return nil, fetchErr("读取订阅内容失败(%s)", u.Hostname())
 	}
 	if len(body) > MaxBodyBytes {
-		return nil, fmt.Errorf("订阅内容超过 %d MiB", MaxBodyBytes>>20)
+		return nil, fetchErr("订阅内容超过 %d MiB", MaxBodyBytes>>20)
 	}
 	return &Fetched{Body: body, Usage: ParseUserinfo(resp.Header.Get("Subscription-Userinfo"))}, nil
 }
