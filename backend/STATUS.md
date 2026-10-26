@@ -9,7 +9,7 @@
 ## M0 骨架
 - [x] `go.mod`、`cmd/openbox-backend`、参数 / 环境变量 / 路径(`internal/system/paths.go`)
 - [x] HTTP 服务、日志(slog)、优雅退出、统一错误响应 `{ "error": "..." }`
-- [ ] 原子写存储 `internal/store`(含并发测试)
+- [x] 原子写存储 `internal/store`(含并发测试)
 - [ ] 静态文件服务 + 前端路由回落
 - [ ] `/api/auth/*`:setup、login、logout、status、change-password(密码哈希、会话、登录限速)
 - [ ] `/api/storage`、`/api/background-image`
@@ -59,5 +59,6 @@
 - [ ] 清理旧文件 `scripts/native-arm64/`(联调通过之后)
 
 ## 日志(新的在最上面)
+- 2026-10-25 M0 原子写存储 internal/store(临时文件 → fsync → rename;同文件读改写串行;损坏文件报错不覆盖;含并发测试,-race 通过)。
 - 2026-10-25 M0 HTTP 服务(internal/server)、slog、优雅退出、统一错误响应(internal/httpx)、/api/health。
 - 2026-10-25 M0 go.mod、入口、参数/环境变量/路径(internal/system/paths.go):命令行 > 环境变量 > 默认值。
