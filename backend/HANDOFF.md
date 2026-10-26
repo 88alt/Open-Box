@@ -3,9 +3,9 @@
 写给下一位接手后端的 AI。读完这份,再按顺序读 backend/README.md、backend/docs/DESIGN.md、backend/STATUS.md、backend/docs/ENDPOINTS.md,
 就可以接着做,不用反复问维护者。进度要看两处并对账:backend/STATUS.md 和 main 下的提交记录(git log -- backend);本文的进度是 2026-10-26 的快照。
 
-========================================
-零、先读这一节
-========================================
+
+# 零、先读这一节
+
 - backend 是什么:自己写的 Go 后端(目录 backend/),取代上游闭源的 panel/server。前端(panel/)通过 HTTP 调用它,接口清单是 backend/docs/ENDPOINTS.md。
   目录名故意不用 panel/server:同步脚本会把 panel/server 从 main 剔除,而 backend/ 在 KEEP 里。
 - 它与 core 的关系:core(openbox-core)是另一个独立项目,无状态的 stdin/stdout JSON 程序,后端用子进程方式调用它生成 sing-box 配置等。
