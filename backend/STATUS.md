@@ -1,10 +1,10 @@
 # 进度
 
 **怎么用**:从上到下,做第一个没打勾的条目。完成 = 实现 + 测试通过 + 在这里打勾 + 在「日志」加一行 + 提交(`backend: <阶段> <做了什么>`)。
-标注「需真机」的条目,代码和单元测试做完后打 `[~]`(代码完成,待真机验证),由维护者真机验证后改成 `[x]`。
+标注「需真机」的条目,代码和单元测试做完后打 `[~]`(代码完成,待真机验证),由维护者真机验证后改成 `[x]`。沙盒里无法验证的云端项(例如 Actions 首次运行)同样先打 `[~]`,由维护者确认后改成 `[x]`。
 接口分组名对应 `docs/ENDPOINTS.md` 里的二级标题。
 
-## 状态:M0 进行中
+## 状态:M0 代码完成,待云端 Actions 首次运行确认(见下方 [~])
 
 ## M0 骨架
 - [x] `go.mod`、`cmd/openbox-backend`、参数 / 环境变量 / 路径(`internal/system/paths.go`)
@@ -13,7 +13,7 @@
 - [x] 静态文件服务 + 前端路由回落
 - [x] `/api/auth/*`:setup、login、logout、status、change-password(密码哈希、会话、登录限速)
 - [x] `/api/storage`、`/api/background-image`
-- [ ] Actions:`go vet`、`go test`、编译 amd64 / arm64(`backend` 的独立工作流,不动 `release.yml`)
+- [~] Actions:`go vet`、`go test`、编译 amd64 / arm64(`backend` 的独立工作流,不动 `release.yml`)
 
 ## M1 配置流水线
 - [ ] `core` 子进程客户端(`hello` + 15 个方法,超时、输入输出上限、错误传递)
@@ -59,6 +59,7 @@
 - [ ] 清理旧文件 `scripts/native-arm64/`(联调通过之后)
 
 ## 日志(新的在最上面)
+- 2026-10-25 M0 Actions 工作流 backend.yml(gofmt、go vet、go test -race、交叉编译 amd64/arm64);本地已验证同样的命令全部通过,待推送后第一次云端运行确认,确认后改成 [x]。
 - 2026-10-25 M0 /api/storage(整体替换 config/ 设置快照)、/api/background-image(GET / PUT / DELETE,data URL 校验与体积上限);ENDPOINTS 补全方法。
 - 2026-10-25 M0 /api/auth/*:setup / login / logout / status / change-password;PBKDF2 哈希、签名会话 Cookie、按 IP 限速;鉴权中间件;ENDPOINTS 校正了 auth 的方法并补充错误码约定;DESIGN D7 记录偏差。
 - 2026-10-25 M0 静态文件服务 + 前端路由回落(缺失的带扩展名资源返回 404,不回落成 HTML;assets/ 长缓存,index.html 不缓存)。
