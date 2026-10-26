@@ -9,10 +9,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
 	storageapi "github.com/timeflysoon/Open-Box/backend/internal/api/storage"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
+	"github.com/timeflysoon/Open-Box/backend/internal/core"
 	"github.com/timeflysoon/Open-Box/backend/internal/server"
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
@@ -45,6 +47,8 @@ func run(args []string) int {
 		log.Error("初始化失败", "err", err)
 		return 1
 	}
+
+	checkCore(cfg.Core, log)
 
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
@@ -88,4 +92,21 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 	// 前端静态文件与前端路由回落;最后挂,/api 下的路径由各接口分组优先处理
 	srv.Mux().Handle("/", server.StaticHandler(cfg.WebDir))
 	return srv, nil
+}
+
+// checkCore 启动时握手一次,只记日志:核心不可用时面板的其它功能(登录、设置)仍可用,
+// 需要核心的接口(M1 起)会在调用时返回明确错误。
+func checkCore(path string, log *slog.Logger) {
+	if !core.Available(path) {
+		log.Warn("找不到 openbox-core,生成配置等功能将不可用", "path", path)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	info, err := core.New(path).Hello(ctx)
+	if err != nil {
+		log.Warn("openbox-core 握手失败", "path", path, "err", err)
+		return
+	}
+	log.Info("openbox-core 可用", "path", path, "implementation", info.Implementation, "protocol", info.Protocol, "build", info.BuildID)
 }
