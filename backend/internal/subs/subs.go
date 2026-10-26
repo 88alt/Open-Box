@@ -249,6 +249,34 @@ func (s *Service) PoolNodes(ctx context.Context) ([]sub.Node, error) {
 	return out, nil
 }
 
+// CatalogNode 是节点池里的一个节点和它所属的订阅(给节点组的成员选择器用)。
+type CatalogNode struct {
+	SubscriptionID   string
+	SubscriptionName string
+	Node             sub.Node
+}
+
+// Catalog 返回全部订阅(含停用的)和已启用订阅的节点,按订阅顺序。
+func (s *Service) Catalog(ctx context.Context) ([]Record, []CatalogNode, error) {
+	recs, nodes, err := s.loadAll()
+	if err != nil {
+		return nil, nil, err
+	}
+	if recs == nil {
+		recs = []Record{}
+	}
+	out := []CatalogNode{}
+	for _, r := range recs {
+		if !r.Enabled {
+			continue
+		}
+		for _, n := range nodes[r.ID] {
+			out = append(out, CatalogNode{SubscriptionID: r.ID, SubscriptionName: r.Name, Node: n})
+		}
+	}
+	return recs, out, nil
+}
+
 func takenTags(recs []Record, nodes map[string][]sub.Node, exceptID string) map[string]bool {
 	t := map[string]bool{}
 	for _, r := range recs {

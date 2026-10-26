@@ -246,11 +246,11 @@ func apply(nodes []sub.Node, opts renameOpts, subName string, taken map[string]b
 		used[tag] = true
 		n.OriginalTag = orig
 		n.Tag = tag
-		n.RegionCode = ""
+		n.RegionCode, n.RegionName = "", ""
 		code := ""
 		if region != nil {
 			code = region.code
-			n.RegionCode = code
+			n.RegionCode, n.RegionName = code, region.name
 		}
 		res.Nodes = append(res.Nodes, n)
 		res.Preview = append(res.Preview, PreviewEntry{OriginalTag: orig, NewTag: tag, RegionCode: code})

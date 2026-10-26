@@ -41,7 +41,9 @@ type Node struct {
 	Tag         string `json:"tag"`
 	OriginalTag string `json:"originalTag,omitempty"`
 	// RegionCode 是改名时命中的地区所绑定的国家代码(ISO 3166-1 alpha-2),没命中为空;界面按它显示国旗。
-	RegionCode string         `json:"regionCode,omitempty"`
+	RegionCode string `json:"regionCode,omitempty"`
+	// RegionName 是命中的地区条目的名字(如「香港」),节点组的动态关键词会同时匹配它;core 不读。
+	RegionName string         `json:"regionName,omitempty"`
 	Type       string         `json:"type"`
 	Server     string         `json:"server"`
 	ServerPort int            `json:"server_port"`

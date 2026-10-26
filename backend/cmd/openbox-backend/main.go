@@ -12,11 +12,13 @@ import (
 	"time"
 
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
+	groupsapi "github.com/timeflysoon/Open-Box/backend/internal/api/groups"
 	profileapi "github.com/timeflysoon/Open-Box/backend/internal/api/profile"
 	storageapi "github.com/timeflysoon/Open-Box/backend/internal/api/storage"
 	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
+	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/profile"
 	"github.com/timeflysoon/Open-Box/backend/internal/server"
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
@@ -95,11 +97,19 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 
 	// 核心不可用时档案接口照常工作,只是旧版分流迁移和默认节点组不可用
 	var coreAPI profile.Core
+	var groupsCore nodegroups.Core
 	if core.Available(cfg.Core) {
-		coreAPI = profile.CoreAdapter{C: core.New(cfg.Core)}
+		cc := core.New(cfg.Core)
+		coreAPI = profile.CoreAdapter{C: cc}
+		groupsCore = nodegroups.CoreAdapter{C: cc}
 	}
-	profileapi.Register(srv.Mux(), profileapi.Deps{Profile: profile.New(st, coreAPI, log)})
-	subsapi.Register(srv.Mux(), subsapi.Deps{Subs: subs.New(st, nil)})
+	profileSvc := profile.New(st, coreAPI, log)
+	subsSvc := subs.New(st, nil)
+	profileapi.Register(srv.Mux(), profileapi.Deps{Profile: profileSvc})
+	subsapi.Register(srv.Mux(), subsapi.Deps{Subs: subsSvc})
+	groupsapi.Register(srv.Mux(), groupsapi.Deps{
+		Groups: nodegroups.New(st, groupsCore, subsSvc, nodegroups.ChainsFromProfile(profileSvc)),
+	})
 
 	// 前端静态文件与前端路由回落;最后挂,/api 下的路径由各接口分组优先处理
 	srv.Mux().Handle("/", server.StaticHandler(cfg.WebDir))

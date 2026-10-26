@@ -23,7 +23,8 @@
 - [x] 订阅拉取与解析(`internal/sub`:URL 拉取、分享链接 / base64、sing-box 格式、用量头 `subscription-userinfo`、自定义 UA)
 - [x] Clash / Mihomo 格式解析(`internal/sub/clash.go` + 自带的 YAML 子集解析器 `miniyaml.go`)
 - [x] 订阅改名规则(`renameOptions`:地区词典、特征词、模板、序号、过滤、禁用、前缀;`internal/subs/rename.go`)。预览用的 `groups` 生成并入下面「节点组」条目
-- [ ] `/api/openbox/nodes`、`/api/openbox/groups`、`/api/openbox/policies`、`/api/openbox/chain-proxies`
+- [x] `/api/openbox/groups`(GET / PUT;`internal/nodegroups`、`internal/api/groups`)
+- [ ] `/api/openbox/nodes`、`/api/openbox/policies`、`/api/openbox/chain-proxies`(其中 `nodes/latency`、`chain-proxies/latency` 要调 `sing-box tools fetch`,放到 `internal/singbox` 之后;`policies/entries` 依赖规则集)
 - [ ] `/api/openbox/rulesets`
 - [ ] 配置生成 → `sing-box check` → 原子替换 → 回滚(`internal/singbox`)
 - [ ] `/api/openbox/service`、`/api/openbox/kernel`
@@ -62,6 +63,7 @@
 - [ ] 清理旧文件 `scripts/native-arm64/`(联调通过之后)
 
 ## 日志(新的在最上面)
+- 2026-10-26 M1 /api/openbox/groups:新增 internal/nodegroups(服务层)和 internal/api/groups。GET 返回 groups / types / availableNodes / subscriptions / availableGroups,PUT 整份覆盖。规范化、重名补名、环检测都交给 core(normalizeGroups / emitGroups),后端只做:组名唯一且不与节点重名(400)、按 id 识别改名并迁移其它组(含故障转移页签)的引用、报告悬空成员(dangling)和成环被丢的组(dropped)、落盘 groups.json。节点清单取已启用订阅的节点加启用的链式代理;为让动态组关键词能匹配地区名,sub.Node 新增 regionName(改名命中时写入,core 不读),subs.Service 新增 Catalog。测试编译仓库里真实的 core 运行(没有 Go 时跳过),覆盖默认组、节点清单、保存回读、名字校验、改名迁移、故障转移页签迁移、悬空与环、核心不可用 503。已知没做:站点集(routing)里按组名引用出站,改名时是否要同步迁移要等 policies 条目对照前端后决定;`changed`(提示重启内核)等配置生成条目一起做。
 - 2026-10-26 M1 订阅改名规则 internal/subs/rename.go:按前端 RenameRulesEditor 的语义实现。顺序:过滤关键词 → 逐条禁用 → 识别地区 / 特征 → 手工改名(不占序号)或按模板命名 → 订阅名前缀 → 全局去重。地区:regionDict 按顺序取第一个命中的条目,顺序即优先级,命中后节点带 regionCode(预览 preview[].regionCode 给界面显示国旗),重命名总开关关掉时也识别;特征:featureKeywords 里第一个命中的词转大写(旧档案 featureDict 扁平化,显式空数组 = 不加特征);模板 {region} {feature} {seq},没特征时连同相邻「-」去掉,未识别地区用 unknownLabel(默认「其他」),序号在同一(地区, 特征)内从 1 数、按 seqPad 补零(默认 2,最大 6)。缺失的项用与前端 rename-defaults.ts 一致的默认值(地区词典、特征词、过滤词「官网 / 工单 / 客服」);显式给空数组才表示「没有」。关键词不区分大小写;不超过 3 个字符的纯 ASCII 词(hk、us、2x)要求两侧不是字母,避免 us 命中 Russia、de 命中 Sweden(这是本实现的决定,前端没有规定)。Node 新增 regionCode(core 不读,不影响配置生成)。已有的订阅接口测试默认带 enabled:false,免得被默认模板改名干扰。
 - 2026-10-26 M1 Clash / Mihomo 解析:只切出顶层 `proxies` 段再解析(配置其它部分的写法不影响);自带 YAML 子集解析器 miniyaml.go(块映射 / 序列、流式 {} [] 可跨行、引号、注释、锚点 / 别名 / `<<`;多行文本、tab 缩进、多文档报错;标量保持字符串避免丢前导零)。节点映射:ss(obfs / v2ray-plugin,其它插件进 skipped)、vmess、vless(含 reality、flow;encryption 非 none 不支持)、trojan(必走 TLS)、hysteria2(ports 跳跃、obfs)、tuic(v5;v4 token 版不支持)、anytls、socks5、http;传输层 ws(early data、v2ray-http-upgrade)/ grpc / h2 / http,其它(xhttp、kcp 等)进 skipped;wireguard 等进 skipped;direct / reject / dns 忽略;整份 Clash 再 base64 也认。skip-cert-verify 不写(core 的 emit 对非 reality 恒开 insecure)。语法错误返回 `ErrClashInvalid`(接口 400)。测试里核对了与分享链接解析出的节点形状完全一致。
 - 2026-10-26 M1 /api/openbox/subscriptions*:列表 / 新增 / 修改(PATCH 只改传了的字段;只改名、开关、计划不联网,来源 / UA / 改名规则变了才重新拉取)/ 删除 / 排序(必须是全部 id 的排列)/ 刷新 / 预览(不落盘)/ login 返回 501;支持多条订阅地址合并和粘贴节点内容(content 模式刷新 = 重新解析,不联网);数据存 subscriptions.json(元数据)和 sub-nodes.json(节点池,先写节点再写元数据);节点名全局唯一(同订阅内和跨订阅重名都加序号,内核出站不能重名);改名目前只做过滤关键词、逐条禁用、手工改名、订阅名前缀,regionDict / 特征词 / 模板等键原样保存但还不参与(见下一条未完成项);changed 表示节点池变了(前端提示重启内核);拉取失败返回 502、输入有问题 400、不支持 501。新增 subs.Service.PoolNodes 供配置生成取已启用订阅的节点。

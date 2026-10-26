@@ -186,6 +186,8 @@
 
 ## `/api/openbox/groups`
 
+实现约定(M1):组存 `groups.json`(经 core `normalizeGroups` 补全,含内置直连 / 拒绝),没存过时 GET 返回默认节点组(不落盘)。PUT 整份覆盖:名字留空由核心补「分组-N」;组与组重名、与节点(含启用的链式代理)重名返回 400;按 id 对比旧档,改名的组在 `renamed` 里返回,其它组(含故障转移页签)对它的引用自动迁移;`dangling` 是既不是节点也不是组的成员;`dropped` 是核心 `emitGroups` 判定要丢弃的组(成环,`reason: "cycle"`)。`availableNodes` = 已启用订阅的节点(带订阅名 / id、改名识别出的地区名)+ 启用的链式代理(`chain: true`、`upstream`);`subscriptions` 含停用的订阅;`availableGroups` = 已启用的组名(含内置直连 / 拒绝)。核心不可用返回 503。
+
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
 | GET | `/api/openbox/groups` | `fetchNodeGroups` (api/openbox.ts:844) | OpenboxGroupsPayload | () |
