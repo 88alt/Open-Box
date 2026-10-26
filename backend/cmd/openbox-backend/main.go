@@ -8,10 +8,12 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
+	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
 	groupsapi "github.com/timeflysoon/Open-Box/backend/internal/api/groups"
 	profileapi "github.com/timeflysoon/Open-Box/backend/internal/api/profile"
 	rulesetsapi "github.com/timeflysoon/Open-Box/backend/internal/api/rulesets"
@@ -23,6 +25,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/profile"
 	"github.com/timeflysoon/Open-Box/backend/internal/rulelist"
 	"github.com/timeflysoon/Open-Box/backend/internal/server"
+	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
 	"github.com/timeflysoon/Open-Box/backend/internal/subs"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
@@ -109,9 +112,21 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 	subsSvc := subs.New(st, nil)
 	profileapi.Register(srv.Mux(), profileapi.Deps{Profile: profileSvc})
 	subsapi.Register(srv.Mux(), subsapi.Deps{Subs: subsSvc})
-	groupsapi.Register(srv.Mux(), groupsapi.Deps{
-		Groups: nodegroups.New(st, groupsCore, subsSvc, nodegroups.ChainsFromProfile(profileSvc)),
-	})
+	groupsSvc := nodegroups.New(st, groupsCore, subsSvc, nodegroups.ChainsFromProfile(profileSvc))
+	groupsapi.Register(srv.Mux(), groupsapi.Deps{Groups: groupsSvc})
+	var genCore singbox.Caller
+	if core.Available(cfg.Core) {
+		genCore = core.New(cfg.Core)
+	}
+	gen := singbox.NewGenerator(genCore, st, profileSvc, groupsSvc, subsSvc,
+		singbox.System{Resolvers: func() []string { return system.ReadResolvers("/etc/resolv.conf") }, LocalSubnets: system.LocalSubnets},
+		singbox.Options{
+			RulesetDir: filepath.Join(cfg.DataDir, "rules"),
+			CacheFile:  filepath.Join(cfg.DataDir, "cache.db"),
+			CertPath:   filepath.Join(cfg.ConfigDir, "certs", "server.crt"),
+			KeyPath:    filepath.Join(cfg.ConfigDir, "certs", "server.key"),
+		})
+	configpreviewapi.Register(srv.Mux(), configpreviewapi.Deps{Gen: gen})
 
 	rulesetsapi.Register(srv.Mux(), rulesetsapi.Deps{Lists: rulelist.NewService(nil)})
 

@@ -111,6 +111,8 @@
 
 ## `/api/openbox/config`
 
+实现约定(M1):每次现算,不落盘、不校验、不动系统;`config.experimental.clash_api.secret` 返回 `***`。核心报错(如「出站名称重复」)原文放在 `error` 里返回 400;核心不可用 503。
+
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
 | GET | `/api/openbox/config/preview` | `fetchConfigPreview` (api/openbox.ts:949) | { config: OpenboxConfigPreview } | () |
