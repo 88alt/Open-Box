@@ -31,9 +31,15 @@
 - [ ] `/api/openbox/rulesets/entries`(按分类名)、`/refresh`(现为 501,依赖随包规则库、`sing-box` 与配置生成)
 - [~] 配置生成与校验(`internal/singbox`:`Generator.Build` 装配并调用 core `configDetailed`,`Check` 运行 `sing-box check`)。生成已用真实 core 测试;`Check` 只用假的 sing-box 脚本测过,**需真机**用真实内核验证
 - [ ] 原子替换 → 重启后健康检查 → 失败回滚(`internal/singbox` 的部署部分,依赖 `service`)
-- [ ] 生成配置引用的本地规则集文件(`rules/*.srs`、`obnode-direct*.json`、`flip/*`)的落盘:没有它们,`sing-box check` 会因文件不存在而失败,部署之前必须先做
+- [x] 本地规则集文件落盘(第一部分,`internal/singbox/rulefiles.go` 的 `Files.WriteLocalSets`):按配置里 `route.rule_set` 的本地条目分类;`obnode-direct` / `obnode-direct-ip` 每次按 `Built.DirectHosts` 改写(空名单写占位),热切换动态集 `obflip-byp-*` / `obflip-need-*` 不存在才用 `sing-box rule-set compile` 编占位 `.srs`、已存在不覆盖
+- [ ] 本地规则集落盘(第二部分):热切换开关文件 `obflip-<id>.json` / `obflip-fallback.json`——内容取决于每个站点集此刻走直连还是走代理,**需要 core 配合**(见下面「需要 core 配合」)
+- [ ] 本地规则集落盘(第三部分):`geoip-*` / `geosite-*` 和用户规则集链接编成的 `.srs`——依赖随包规则库和 `rulesets/entries`;在这之前 `WriteLocalSets` 的 `Missing` 里会如实列出它们,部署步骤据此拒绝继续
 - [ ] `/api/openbox/service`、`/api/openbox/kernel`
 - [ ] 前端联调:添加订阅 → 生成配置 → sing-box 启动成功 **需真机**
+
+## 需要 core 配合(由 core 那边按 core/HANDOFF.md 另做;做完后回来勾掉)
+- [ ] 热切换开关状态:core 目前有 `FlipFlagMap` / `FlipFlagStates`(`core/internal/routing/flip.go`)但没有对外的方法,后端拿不到「开关 tag → 开 / 关」。
+  建议让 `configDetailed` 的返回多带一个 `flipFlags`({tag: bool}),或新增一个只算这个的方法;后端拿到后在 `WriteLocalSets` 里补 `flip-flag` 一类即可。注意:改返回值会影响 core 的金标准,需要同步处理。
 
 ## M2 DNS 与过滤
 - [ ] `/api/openbox/dns*`
@@ -68,6 +74,7 @@
 - [ ] 清理旧文件 `scripts/native-arm64/`(联调通过之后)
 
 ## 日志(新的在最上面)
+- 2026-10-26 M1 本地规则集落盘(第一部分)internal/singbox/rulefiles.go:`LocalSets` 从配置的 route.rule_set 取本地条目(同 tag 只留第一条),`Classify` 按 tag 分四类(node-direct / flip-flag / flip-dynamic / ruleset)。`Files.WriteLocalSets(ctx, cfg, directHosts)`:node-direct 两份每次改写(源码 JSON `{"version":3,"rules":[{"domain":[...]}]}` / `{"ip_cidr":[...]}`,空名单用文档保留的占位,0600 原子写);flip-dynamic 不存在才用已安装的 sing-box 编占位 .srs(192.0.2.255/32 与 2001:db8:ffff::ffff/128),已存在的留给热切换,不覆盖;其余(开关文件、规则库 / 用户规则集)报在 `Missing`(带 tag、类别、路径、原因),单个文件失败不中断其它,只有 ctx 取消才返回 error。测试覆盖分类、顺序与去重、两种名单与占位、格式不符、取消、没有 sing-box、权限与临时文件不残留;有真实 sing-box 时再跑占位编译(含「已存在不覆盖」)和「真实 core 生成配置 → 落盘」(缺的只能是开关和规则库两类)。没做:开关文件(见「需要 core 配合」)、规则库 .srs(见 M1 第三部分)、把它接进部署流程(部署步骤依赖 service)。node-direct 的 JSON 形状是后端自己的设计,sing-box 1.14.4 的 compile 和 check 认得;需真机用真实内核验证。
 - 2026-10-26 M1 节点测速 internal/probe + internal/api/latency:从完整配置摘出被测出站(含 detour、组成员、被引用的 DNS 服务器),起临时 sing-box(仅 127.0.0.1 的 http 入站,每任务一个用户名,路由按 auth_user),后端经 CONNECT 隧道请求并自己计时(sing-box 1.14 的 clash 延迟接口不认传入的地址,tools fetch 的耗时含进程启动,故不用;一律 CONNECT 是为了把「线路不通」和「目标回 502」分开)。nodes/latency 支持 jobs、预览(新增 Generator.BuildWith / PreviewOverride、subs.PreviewNodes,不落盘)和 NDJSON 进度;chain-proxies/latency 用 ChainOverride 加一条链式节点,`via` 静态推出。测试用真实 core 和真实 sing-box(没有则跳过);backend.yml 增加固定版本 1.14.4 的 sing-box 安装步骤。没做:ipUrls、延迟历史。需真机用真实订阅验证。
 - 2026-10-26 M1 配置生成与校验 internal/singbox + /api/openbox/config/preview:Generator.Build 把已启用订阅的节点(带 subscriptionId,节点 DNS 靠它找订阅)、节点组(nodegroups.Groups)、档案、启用的链式代理(sub.Parse 解析链接,tag = 名字,detour = 上游,chain = true,解析不了的跳过,上游是否存在 / 成环由 core 再核对)、系统 DNS(读 resolv.conf,去掉回环)、本机局域网网段(私有地址,跳过 tun 类接口)按 core configDetailed 的入参拼好调用;selections 暂传空,ruleLists / nativeBypass / dnsFilter 不传(core 自己算旁路计划;内容过滤启用时的名单属于 M2)。内核控制接口密钥(clash_api.secret)首次生成后存 runtime.json,之后不变;config/preview 把它遮成 `***`。Check:配置写到 ConfigDir 下的 0600 临时文件,运行 `<sing-box> check -c`,输出截断到 8 KiB 并把临时路径替换成 config.json,30 秒超时,结束删除临时文件;找不到可执行文件返回 ErrNoSingBox。平台默认 openwrt(core 只有 container 有差异)。没做:原子替换 / 回滚、启停(依赖 service),以及配置里本地规则集文件的落盘(见上面未勾选条目)。
 - 2026-10-26 M1 /api/openbox/rulesets/preview、/import:新增 internal/rulelist(拉取 + 解析)和 internal/api/rulesets。认 Clash 经典名单(DOMAIN / DOMAIN-SUFFIX / DOMAIN-KEYWORD / DOMAIN-REGEX / IP-CIDR / IP-CIDR6,no-resolve 等参数忽略)、YAML payload、裸写法(+.x / .x / *.x = 后缀,x = 完整域名,IP 与 CIDR,单个地址补 /32 /128);进程名、GEOIP 等认不得的行计入 skipped 但不报错;IP 段按掩码规整,域名转小写,去重保序。二进制名单(.mrs / .srs)明确返回 400:解码要引入 zstd 等依赖,沙盒拉不到模块、无法验证 go.sum,先不引入(DESIGN D10)。拉取只收 http / https,8 MiB 上限,30 秒超时,错误信息不带完整地址。preview 的结果在内存缓存 60 秒(最多 8 个链接,失败不缓存)。entries / refresh 返回 501。测试覆盖解析表、BOM / CRLF、重复、非法写法、超限、缓存过期与淘汰、分页过滤、错误码。
