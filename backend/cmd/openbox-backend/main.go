@@ -14,12 +14,14 @@ import (
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
 	groupsapi "github.com/timeflysoon/Open-Box/backend/internal/api/groups"
 	profileapi "github.com/timeflysoon/Open-Box/backend/internal/api/profile"
+	rulesetsapi "github.com/timeflysoon/Open-Box/backend/internal/api/rulesets"
 	storageapi "github.com/timeflysoon/Open-Box/backend/internal/api/storage"
 	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/profile"
+	"github.com/timeflysoon/Open-Box/backend/internal/rulelist"
 	"github.com/timeflysoon/Open-Box/backend/internal/server"
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
 	"github.com/timeflysoon/Open-Box/backend/internal/subs"
@@ -110,6 +112,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 	groupsapi.Register(srv.Mux(), groupsapi.Deps{
 		Groups: nodegroups.New(st, groupsCore, subsSvc, nodegroups.ChainsFromProfile(profileSvc)),
 	})
+
+	rulesetsapi.Register(srv.Mux(), rulesetsapi.Deps{Lists: rulelist.NewService(nil)})
 
 	// 前端静态文件与前端路由回落;最后挂,/api 下的路径由各接口分组优先处理
 	srv.Mux().Handle("/", server.StaticHandler(cfg.WebDir))

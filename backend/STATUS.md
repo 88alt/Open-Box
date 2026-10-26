@@ -25,7 +25,8 @@
 - [x] 订阅改名规则(`renameOptions`:地区词典、特征词、模板、序号、过滤、禁用、前缀;`internal/subs/rename.go`)。预览用的 `groups` 生成并入下面「节点组」条目
 - [x] `/api/openbox/groups`(GET / PUT;`internal/nodegroups`、`internal/api/groups`)
 - [ ] `/api/openbox/nodes`、`/api/openbox/policies`、`/api/openbox/chain-proxies`(其中 `nodes/latency`、`chain-proxies/latency` 要调 `sing-box tools fetch`,放到 `internal/singbox` 之后;`policies/entries` 依赖规则集)
-- [ ] `/api/openbox/rulesets`
+- [x] `/api/openbox/rulesets/preview`、`/import`(规则集链接的文本名单;`internal/rulelist`、`internal/api/rulesets`)
+- [ ] `/api/openbox/rulesets/entries`(按分类名)、`/refresh`(现为 501,依赖随包规则库、`sing-box` 与配置生成)
 - [ ] 配置生成 → `sing-box check` → 原子替换 → 回滚(`internal/singbox`)
 - [ ] `/api/openbox/service`、`/api/openbox/kernel`
 - [ ] 前端联调:添加订阅 → 生成配置 → sing-box 启动成功 **需真机**
@@ -63,6 +64,7 @@
 - [ ] 清理旧文件 `scripts/native-arm64/`(联调通过之后)
 
 ## 日志(新的在最上面)
+- 2026-10-26 M1 /api/openbox/rulesets/preview、/import:新增 internal/rulelist(拉取 + 解析)和 internal/api/rulesets。认 Clash 经典名单(DOMAIN / DOMAIN-SUFFIX / DOMAIN-KEYWORD / DOMAIN-REGEX / IP-CIDR / IP-CIDR6,no-resolve 等参数忽略)、YAML payload、裸写法(+.x / .x / *.x = 后缀,x = 完整域名,IP 与 CIDR,单个地址补 /32 /128);进程名、GEOIP 等认不得的行计入 skipped 但不报错;IP 段按掩码规整,域名转小写,去重保序。二进制名单(.mrs / .srs)明确返回 400:解码要引入 zstd 等依赖,沙盒拉不到模块、无法验证 go.sum,先不引入(DESIGN D10)。拉取只收 http / https,8 MiB 上限,30 秒超时,错误信息不带完整地址。preview 的结果在内存缓存 60 秒(最多 8 个链接,失败不缓存)。entries / refresh 返回 501。测试覆盖解析表、BOM / CRLF、重复、非法写法、超限、缓存过期与淘汰、分页过滤、错误码。
 - 2026-10-26 M1 /api/openbox/groups:新增 internal/nodegroups(服务层)和 internal/api/groups。GET 返回 groups / types / availableNodes / subscriptions / availableGroups,PUT 整份覆盖。规范化、重名补名、环检测都交给 core(normalizeGroups / emitGroups),后端只做:组名唯一且不与节点重名(400)、按 id 识别改名并迁移其它组(含故障转移页签)的引用、报告悬空成员(dangling)和成环被丢的组(dropped)、落盘 groups.json。节点清单取已启用订阅的节点加启用的链式代理;为让动态组关键词能匹配地区名,sub.Node 新增 regionName(改名命中时写入,core 不读),subs.Service 新增 Catalog。测试编译仓库里真实的 core 运行(没有 Go 时跳过),覆盖默认组、节点清单、保存回读、名字校验、改名迁移、故障转移页签迁移、悬空与环、核心不可用 503。已知没做:站点集(routing)里按组名引用出站,改名时是否要同步迁移要等 policies 条目对照前端后决定;`changed`(提示重启内核)等配置生成条目一起做。
 - 2026-10-26 M1 订阅改名规则 internal/subs/rename.go:按前端 RenameRulesEditor 的语义实现。顺序:过滤关键词 → 逐条禁用 → 识别地区 / 特征 → 手工改名(不占序号)或按模板命名 → 订阅名前缀 → 全局去重。地区:regionDict 按顺序取第一个命中的条目,顺序即优先级,命中后节点带 regionCode(预览 preview[].regionCode 给界面显示国旗),重命名总开关关掉时也识别;特征:featureKeywords 里第一个命中的词转大写(旧档案 featureDict 扁平化,显式空数组 = 不加特征);模板 {region} {feature} {seq},没特征时连同相邻「-」去掉,未识别地区用 unknownLabel(默认「其他」),序号在同一(地区, 特征)内从 1 数、按 seqPad 补零(默认 2,最大 6)。缺失的项用与前端 rename-defaults.ts 一致的默认值(地区词典、特征词、过滤词「官网 / 工单 / 客服」);显式给空数组才表示「没有」。关键词不区分大小写;不超过 3 个字符的纯 ASCII 词(hk、us、2x)要求两侧不是字母,避免 us 命中 Russia、de 命中 Sweden(这是本实现的决定,前端没有规定)。Node 新增 regionCode(core 不读,不影响配置生成)。已有的订阅接口测试默认带 enabled:false,免得被默认模板改名干扰。
 - 2026-10-26 M1 Clash / Mihomo 解析:只切出顶层 `proxies` 段再解析(配置其它部分的写法不影响);自带 YAML 子集解析器 miniyaml.go(块映射 / 序列、流式 {} [] 可跨行、引号、注释、锚点 / 别名 / `<<`;多行文本、tab 缩进、多文档报错;标量保持字符串避免丢前导零)。节点映射:ss(obfs / v2ray-plugin,其它插件进 skipped)、vmess、vless(含 reality、flow;encryption 非 none 不支持)、trojan(必走 TLS)、hysteria2(ports 跳跃、obfs)、tuic(v5;v4 token 版不支持)、anytls、socks5、http;传输层 ws(early data、v2ray-http-upgrade)/ grpc / h2 / http,其它(xhttp、kcp 等)进 skipped;wireguard 等进 skipped;direct / reject / dns 忽略;整份 Clash 再 base64 也认。skip-cert-verify 不写(core 的 emit 对非 reality 恒开 insecure)。语法错误返回 `ErrClashInvalid`(接口 400)。测试里核对了与分享链接解析出的节点形状完全一致。

@@ -257,6 +257,8 @@
 
 ## `/api/openbox/rulesets`
 
+实现约定(M1):`preview` / `import` 已实现,只收文本名单(Clash 经典 `.list`、YAML `payload`、一行一条的域名 / IP);条目 `type` 为 `domain` / `domain_suffix` / `domain_keyword` / `domain_regex` / `ip_cidr`,去重保序。`preview` 的 `q` 按值做不区分大小写的子串过滤,`total` 是名单总条数、`matched` 是命中数,`limit` 默认 50、最大 500;同一链接 60 秒内走内存缓存(搜索框边打边搜)。`import` 一次返回全部,超过 5 万条返回 400。二进制名单(.mrs / .srs)返回 400 并说明不支持;拉取失败 502。`entries`(按分类名)和 `refresh` 暂返回 501,等随包规则库、配置生成与 `sing-box` 就绪后再做。`/rulesets/check` 与 `/rulesets/refresh/status` 前端不调用,不实现。
+
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
 | GET | `/api/openbox/rulesets/entries?{x}` | `fetchRulesetEntries` (api/openbox.ts:882) | OpenboxRulesetEntries | ( tag: string, { q = '', offset = 0, limit = 50 }: { q?: string; offset?: number |
