@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -226,7 +227,7 @@ func TestErrors(t *testing.T) {
 	if _, err := Parse([]byte("hello world")); err != ErrUnrecognized {
 		t.Fatal(err)
 	}
-	if _, err := Parse([]byte("proxies:\n  - {name: a}\n")); err != ErrClashUnsupported {
+	if _, err := Parse([]byte("proxies:\n  - {name: a\n")); !errors.Is(err, ErrClashInvalid) {
 		t.Fatal(err)
 	}
 }

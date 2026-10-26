@@ -146,7 +146,7 @@ func (h *handlers) fail(w http.ResponseWriter, err error, what string) {
 		httpx.Error(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, subs.ErrNoLogin):
 		httpx.Error(w, http.StatusNotImplemented, err.Error())
-	case errors.Is(err, sub.ErrEmpty), errors.Is(err, sub.ErrNoNodes), errors.Is(err, sub.ErrUnrecognized), errors.Is(err, sub.ErrClashUnsupported):
+	case errors.Is(err, sub.ErrEmpty), errors.Is(err, sub.ErrNoNodes), errors.Is(err, sub.ErrUnrecognized), errors.Is(err, sub.ErrClashInvalid):
 		httpx.Error(w, http.StatusBadRequest, err.Error())
 	default:
 		// 拉取失败(连不上、HTTP 非 2xx、超时)等:来自订阅服务器,用 502 区别于本机错误

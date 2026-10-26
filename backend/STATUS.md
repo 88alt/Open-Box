@@ -21,7 +21,7 @@
 - [ ] `/api/openbox/config/preview`(依赖订阅 / 节点 / 节点组,排在「配置生成」条目里一起做)
 - [x] `/api/openbox/subscriptions`:列表、新增、修改、删除、排序、刷新、预览(`login` 返回 501)
 - [x] 订阅拉取与解析(`internal/sub`:URL 拉取、分享链接 / base64、sing-box 格式、用量头 `subscription-userinfo`、自定义 UA)
-- [ ] Clash / Mihomo 格式解析(`internal/sub/clash.go` 现在只识别并返回「暂不支持」;没有 YAML 库可用,要自己写够用的 proxies 子集解析)
+- [x] Clash / Mihomo 格式解析(`internal/sub/clash.go` + 自带的 YAML 子集解析器 `miniyaml.go`)
 - [ ] 订阅改名规则(`renameOptions`:地区词典、模板、序号、过滤、禁用、前缀)与预览用的 `preview` / `groups` 生成
 - [ ] `/api/openbox/nodes`、`/api/openbox/groups`、`/api/openbox/policies`、`/api/openbox/chain-proxies`
 - [ ] `/api/openbox/rulesets`
@@ -62,6 +62,7 @@
 - [ ] 清理旧文件 `scripts/native-arm64/`(联调通过之后)
 
 ## 日志(新的在最上面)
+- 2026-10-26 M1 Clash / Mihomo 解析:只切出顶层 `proxies` 段再解析(配置其它部分的写法不影响);自带 YAML 子集解析器 miniyaml.go(块映射 / 序列、流式 {} [] 可跨行、引号、注释、锚点 / 别名 / `<<`;多行文本、tab 缩进、多文档报错;标量保持字符串避免丢前导零)。节点映射:ss(obfs / v2ray-plugin,其它插件进 skipped)、vmess、vless(含 reality、flow;encryption 非 none 不支持)、trojan(必走 TLS)、hysteria2(ports 跳跃、obfs)、tuic(v5;v4 token 版不支持)、anytls、socks5、http;传输层 ws(early data、v2ray-http-upgrade)/ grpc / h2 / http,其它(xhttp、kcp 等)进 skipped;wireguard 等进 skipped;direct / reject / dns 忽略;整份 Clash 再 base64 也认。skip-cert-verify 不写(core 的 emit 对非 reality 恒开 insecure)。语法错误返回 `ErrClashInvalid`(接口 400)。测试里核对了与分享链接解析出的节点形状完全一致。
 - 2026-10-26 M1 /api/openbox/subscriptions*:列表 / 新增 / 修改(PATCH 只改传了的字段;只改名、开关、计划不联网,来源 / UA / 改名规则变了才重新拉取)/ 删除 / 排序(必须是全部 id 的排列)/ 刷新 / 预览(不落盘)/ login 返回 501;支持多条订阅地址合并和粘贴节点内容(content 模式刷新 = 重新解析,不联网);数据存 subscriptions.json(元数据)和 sub-nodes.json(节点池,先写节点再写元数据);节点名全局唯一(同订阅内和跨订阅重名都加序号,内核出站不能重名);改名目前只做过滤关键词、逐条禁用、手工改名、订阅名前缀,regionDict / 特征词 / 模板等键原样保存但还不参与(见下一条未完成项);changed 表示节点池变了(前端提示重启内核);拉取失败返回 502、输入有问题 400、不支持 501。新增 subs.Service.PoolNodes 供配置生成取已启用订阅的节点。
 - 2026-10-26 M1 订阅拉取与解析 internal/sub:Fetch(只收 http/https,16 MiB 上限,默认 UA v2rayN/7.0 可改,错误信息不带 token 的 URL,解析 subscription-userinfo 用量,expire 为 0 记 null);Parse 自动识别 sing-box JSON / Clash / 分享链接 / base64(标准与 URL 编码、带不带填充、含换行都收);链接支持 ss(SIP002 与旧写法、obfs-local / v2ray-plugin)、vmess(v2rayN)、vless(含 reality)、trojan、hysteria2 / hy2(mport、多端口写法)、tuic、anytls、socks、http(s);不支持的协议 / 插件 / 传输(kcp、xhttp 等)进 skipped 并带 reason;输出节点形状与 core 一致,已用真实 openbox-core 的 configDetailed 验证能生成出站。Clash 另列条目。
 - 2026-10-25 M1 /api/openbox/profile*、/api/openbox/defaults/*:档案用 map 存(未知键如 shareRegions / serverInfo 原样保留),默认值 + 已保存内容合成完整档案;PUT 是深度合并补丁(对象递归、数组整体替换、null 删键),合并后校验(端口写法、DNS 上游只收 IP/wan、tun、测速地址、状态码、更新计划等),失败 400 不落盘;rulesetDir 忽略客户端值;chainProxies[].node 只沿用服务端旧摘要;读到旧版分流(regions 等)时经 core migrateStoredRouting 迁移并写回(新版分流不起子进程);默认节点组由 core normalizeGroups 补全。config/preview 拆出,和配置生成一起做。
