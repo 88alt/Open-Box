@@ -46,6 +46,16 @@ jobs:
           fi
       - name: go vet
         run: go vet ./...
+      # 测速、校验的测试要真的 sing-box;固定版本,没有它这些测试会被 t.Skip 跳过
+      - name: Install sing-box
+        working-directory: .
+        env:
+          SING_BOX_VERSION: '1.14.4'
+        run: |
+          curl -fsSL -o sb.tgz "https://github.com/SagerNet/sing-box/releases/download/v${SING_BOX_VERSION}/sing-box-${SING_BOX_VERSION}-linux-amd64.tar.gz"
+          tar -xzf sb.tgz
+          sudo install -m 0755 "sing-box-${SING_BOX_VERSION}-linux-amd64/sing-box" /usr/local/bin/sing-box
+          sing-box version | head -1
       - name: go test
         run: go test -race -count=1 ./...
 

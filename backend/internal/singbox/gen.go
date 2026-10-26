@@ -169,8 +169,51 @@ func chainNodes(profile map[string]any) []any {
 	return out
 }
 
+// Override 让一次生成临时换掉一部分输入(测速用),不落盘、不影响已保存的数据。
+type Override struct {
+	// Nodes 非 nil:只用这些节点(带 subscriptionId),订阅换成 Subs,节点组与档案里的链式代理都不带
+	// (核心补内置的直连 / 拒绝)。用于测还没保存的订阅预览。
+	Nodes []any
+	Subs  []any
+	// ExtraChains 额外加上的链式节点(tag / detour / chain 已填好),用于测链式代理编辑框里还没保存的那一份。
+	ExtraChains []any
+}
+
+// PreviewOverride 把一份预览出来的节点(还没保存的订阅)变成 Override。
+func PreviewOverride(nodes []sub.Node, nodeDNS map[string]any, name string) (*Override, error) {
+	const previewID = "preview"
+	o := &Override{Nodes: []any{}, Subs: []any{map[string]any{"id": previewID, "name": name, "enabled": true, "nodeDns": nodeDNS}}}
+	for _, n := range nodes {
+		m, err := nodeJSON(subs.CatalogNode{SubscriptionID: previewID, SubscriptionName: name, Node: n})
+		if err != nil {
+			return nil, err
+		}
+		o.Nodes = append(o.Nodes, m)
+	}
+	return o, nil
+}
+
+// ChainOverride 把一条链式代理(分享链接 + 上游)变成只含它的 Override;链接解析不了返回错误。
+func ChainOverride(tag, link, upstream string) (*Override, error) {
+	res, err := sub.Parse([]byte(link))
+	if err != nil || len(res.Nodes) == 0 {
+		return nil, errors.New("链式代理的链接解析不了")
+	}
+	n, err := toMap(res.Nodes[0])
+	if err != nil {
+		return nil, err
+	}
+	n["tag"], n["detour"], n["chain"] = tag, upstream, true
+	delete(n, "originalTag")
+	delete(n, "regionCode")
+	return &Override{ExtraChains: []any{n}}, nil
+}
+
 // Build 调用核心生成配置。
-func (g *Generator) Build(ctx context.Context) (*Built, error) {
+func (g *Generator) Build(ctx context.Context) (*Built, error) { return g.BuildWith(ctx, nil) }
+
+// BuildWith 与 Build 相同,但可用 Override 临时替换节点或加链式节点。o 为 nil 就是 Build。
+func (g *Generator) BuildWith(ctx context.Context, o *Override) (*Built, error) {
 	if g.core == nil {
 		return nil, ErrCoreUnavailable
 	}
@@ -191,6 +234,7 @@ func (g *Generator) Build(ctx context.Context) (*Built, error) {
 		return nil, fmt.Errorf("读取内核控制密钥失败: %w", err)
 	}
 
+	replaced := o != nil && o.Nodes != nil
 	nodes := make([]any, 0, len(cnodes))
 	for _, cn := range cnodes {
 		m, err := nodeJSON(cn)
@@ -201,6 +245,9 @@ func (g *Generator) Build(ctx context.Context) (*Built, error) {
 	}
 	subList := make([]any, 0, len(recs))
 	for _, r := range recs {
+		if replaced {
+			break
+		}
 		if !r.Enabled {
 			continue
 		}
@@ -216,6 +263,19 @@ func (g *Generator) Build(ctx context.Context) (*Built, error) {
 		p[k] = v
 	}
 	p["clashApiSecret"] = secret
+
+	var chains []any
+	if replaced {
+		nodes, subList, groups = o.Nodes, o.Subs, []any{}
+	} else {
+		chains = chainNodes(prof)
+	}
+	if o != nil {
+		chains = append(chains, o.ExtraChains...)
+	}
+	if chains == nil {
+		chains = []any{}
+	}
 
 	var resolvers, subnets []string
 	if g.sys.Resolvers != nil {
@@ -236,7 +296,7 @@ func (g *Generator) Build(ctx context.Context) (*Built, error) {
 		"profile":       p,
 		"systemDns":     strs(resolvers),
 		"localSubnets":  strs(subnets),
-		"chainNodes":    chainNodes(prof),
+		"chainNodes":    chains,
 	}
 	var res struct {
 		Config        json.RawMessage `json:"config"`

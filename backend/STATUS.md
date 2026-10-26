@@ -24,7 +24,9 @@
 - [x] Clash / Mihomo 格式解析(`internal/sub/clash.go` + 自带的 YAML 子集解析器 `miniyaml.go`)
 - [x] 订阅改名规则(`renameOptions`:地区词典、特征词、模板、序号、过滤、禁用、前缀;`internal/subs/rename.go`)。预览用的 `groups` 生成并入下面「节点组」条目
 - [x] `/api/openbox/groups`(GET / PUT;`internal/nodegroups`、`internal/api/groups`)
-- [ ] `/api/openbox/nodes`、`/api/openbox/policies`、`/api/openbox/chain-proxies`(其中 `nodes/latency`、`chain-proxies/latency` 要调 `sing-box tools fetch`,放到 `internal/singbox` 之后;`policies/entries` 依赖规则集)
+- [x] `/api/openbox/nodes/latency`、`/api/openbox/chain-proxies/latency`(`internal/probe` + `internal/api/latency`;已保存节点 / 预览 / NDJSON 进度;链式测速暂无 `ipUrls`)
+- [ ] `/api/openbox/policies/entries`(依赖规则集 entries)
+- [ ] 链式代理测速的 IP 地区(`ipUrls`:正文原样回传,只认白名单主机 api.ip.sb / ipwho.is / api.ipapi.is)
 - [x] `/api/openbox/rulesets/preview`、`/import`(规则集链接的文本名单;`internal/rulelist`、`internal/api/rulesets`)
 - [ ] `/api/openbox/rulesets/entries`(按分类名)、`/refresh`(现为 501,依赖随包规则库、`sing-box` 与配置生成)
 - [~] 配置生成与校验(`internal/singbox`:`Generator.Build` 装配并调用 core `configDetailed`,`Check` 运行 `sing-box check`)。生成已用真实 core 测试;`Check` 只用假的 sing-box 脚本测过,**需真机**用真实内核验证
@@ -51,7 +53,7 @@
 ## M4 自动化
 - [ ] 订阅定时更新(调度器)
 - [ ] `/api/openbox/failover*`
-- [ ] 延迟历史采集
+- [ ] 延迟历史采集(含 `nodes/latency` 的 `record` 与响应 `history`,现在被忽略)
 
 ## M5 系统运维
 - [ ] `/api/openbox/backup`(含 query 参数的导出 / 导入)
@@ -66,6 +68,7 @@
 - [ ] 清理旧文件 `scripts/native-arm64/`(联调通过之后)
 
 ## 日志(新的在最上面)
+- 2026-10-26 M1 节点测速 internal/probe + internal/api/latency:从完整配置摘出被测出站(含 detour、组成员、被引用的 DNS 服务器),起临时 sing-box(仅 127.0.0.1 的 http 入站,每任务一个用户名,路由按 auth_user),后端经 CONNECT 隧道请求并自己计时(sing-box 1.14 的 clash 延迟接口不认传入的地址,tools fetch 的耗时含进程启动,故不用;一律 CONNECT 是为了把「线路不通」和「目标回 502」分开)。nodes/latency 支持 jobs、预览(新增 Generator.BuildWith / PreviewOverride、subs.PreviewNodes,不落盘)和 NDJSON 进度;chain-proxies/latency 用 ChainOverride 加一条链式节点,`via` 静态推出。测试用真实 core 和真实 sing-box(没有则跳过);backend.yml 增加固定版本 1.14.4 的 sing-box 安装步骤。没做:ipUrls、延迟历史。需真机用真实订阅验证。
 - 2026-10-26 M1 配置生成与校验 internal/singbox + /api/openbox/config/preview:Generator.Build 把已启用订阅的节点(带 subscriptionId,节点 DNS 靠它找订阅)、节点组(nodegroups.Groups)、档案、启用的链式代理(sub.Parse 解析链接,tag = 名字,detour = 上游,chain = true,解析不了的跳过,上游是否存在 / 成环由 core 再核对)、系统 DNS(读 resolv.conf,去掉回环)、本机局域网网段(私有地址,跳过 tun 类接口)按 core configDetailed 的入参拼好调用;selections 暂传空,ruleLists / nativeBypass / dnsFilter 不传(core 自己算旁路计划;内容过滤启用时的名单属于 M2)。内核控制接口密钥(clash_api.secret)首次生成后存 runtime.json,之后不变;config/preview 把它遮成 `***`。Check:配置写到 ConfigDir 下的 0600 临时文件,运行 `<sing-box> check -c`,输出截断到 8 KiB 并把临时路径替换成 config.json,30 秒超时,结束删除临时文件;找不到可执行文件返回 ErrNoSingBox。平台默认 openwrt(core 只有 container 有差异)。没做:原子替换 / 回滚、启停(依赖 service),以及配置里本地规则集文件的落盘(见上面未勾选条目)。
 - 2026-10-26 M1 /api/openbox/rulesets/preview、/import:新增 internal/rulelist(拉取 + 解析)和 internal/api/rulesets。认 Clash 经典名单(DOMAIN / DOMAIN-SUFFIX / DOMAIN-KEYWORD / DOMAIN-REGEX / IP-CIDR / IP-CIDR6,no-resolve 等参数忽略)、YAML payload、裸写法(+.x / .x / *.x = 后缀,x = 完整域名,IP 与 CIDR,单个地址补 /32 /128);进程名、GEOIP 等认不得的行计入 skipped 但不报错;IP 段按掩码规整,域名转小写,去重保序。二进制名单(.mrs / .srs)明确返回 400:解码要引入 zstd 等依赖,沙盒拉不到模块、无法验证 go.sum,先不引入(DESIGN D10)。拉取只收 http / https,8 MiB 上限,30 秒超时,错误信息不带完整地址。preview 的结果在内存缓存 60 秒(最多 8 个链接,失败不缓存)。entries / refresh 返回 501。测试覆盖解析表、BOM / CRLF、重复、非法写法、超限、缓存过期与淘汰、分页过滤、错误码。
 - 2026-10-26 M1 /api/openbox/groups:新增 internal/nodegroups(服务层)和 internal/api/groups。GET 返回 groups / types / availableNodes / subscriptions / availableGroups,PUT 整份覆盖。规范化、重名补名、环检测都交给 core(normalizeGroups / emitGroups),后端只做:组名唯一且不与节点重名(400)、按 id 识别改名并迁移其它组(含故障转移页签)的引用、报告悬空成员(dangling)和成环被丢的组(dropped)、落盘 groups.json。节点清单取已启用订阅的节点加启用的链式代理;为让动态组关键词能匹配地区名,sub.Node 新增 regionName(改名命中时写入,core 不读),subs.Service 新增 Catalog。测试编译仓库里真实的 core 运行(没有 Go 时跳过),覆盖默认组、节点清单、保存回读、名字校验、改名迁移、故障转移页签迁移、悬空与环、核心不可用 503。已知没做:站点集(routing)里按组名引用出站,改名时是否要同步迁移要等 policies 条目对照前端后决定;`changed`(提示重启内核)等配置生成条目一起做。

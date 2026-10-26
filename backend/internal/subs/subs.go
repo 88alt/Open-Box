@@ -350,6 +350,23 @@ func (s *Service) Preview(ctx context.Context, src Source, name string, rename m
 	}, nil
 }
 
+// PreviewNodes 做与 Preview 相同的拉取、解析、改名过滤,但返回完整的节点(给测速用,不落盘)。
+func (s *Service) PreviewNodes(ctx context.Context, src Source, name string, rename map[string]any) ([]sub.Node, error) {
+	r, err := normalizeSource(src)
+	if err != nil {
+		return nil, err
+	}
+	res, _, err := s.load(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	recs, nodes, err := s.loadAll()
+	if err != nil {
+		return nil, err
+	}
+	return apply(res.Nodes, parseRenameOpts(rename), name, takenTags(recs, nodes, "")).Nodes, nil
+}
+
 func nonNilSkipped(s []sub.Skipped) []sub.Skipped {
 	if s == nil {
 		return []sub.Skipped{}

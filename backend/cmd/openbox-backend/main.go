@@ -15,6 +15,7 @@ import (
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
 	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
 	groupsapi "github.com/timeflysoon/Open-Box/backend/internal/api/groups"
+	latencyapi "github.com/timeflysoon/Open-Box/backend/internal/api/latency"
 	profileapi "github.com/timeflysoon/Open-Box/backend/internal/api/profile"
 	rulesetsapi "github.com/timeflysoon/Open-Box/backend/internal/api/rulesets"
 	storageapi "github.com/timeflysoon/Open-Box/backend/internal/api/storage"
@@ -22,6 +23,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
+	"github.com/timeflysoon/Open-Box/backend/internal/probe"
 	"github.com/timeflysoon/Open-Box/backend/internal/profile"
 	"github.com/timeflysoon/Open-Box/backend/internal/rulelist"
 	"github.com/timeflysoon/Open-Box/backend/internal/server"
@@ -127,6 +129,14 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 			KeyPath:    filepath.Join(cfg.ConfigDir, "certs", "server.key"),
 		})
 	configpreviewapi.Register(srv.Mux(), configpreviewapi.Deps{Gen: gen})
+
+	// 节点测速:临时配置放在数据目录下的 tmp(0700),用完即删
+	probeDir := filepath.Join(cfg.DataDir, "tmp")
+	if err := os.MkdirAll(probeDir, 0o700); err != nil {
+		log.Warn("创建测速临时目录失败,节点测速不可用", "dir", probeDir, "error", err)
+	}
+	latencyapi.Register(srv.Mux(), latencyapi.Deps{Gen: gen, Subs: subsSvc, Profiles: profileSvc,
+		Runner: &probe.Runner{Bin: cfg.SingBox, Dir: probeDir}})
 
 	rulesetsapi.Register(srv.Mux(), rulesetsapi.Deps{Lists: rulelist.NewService(nil)})
 

@@ -85,6 +85,8 @@
 |---|---|---|---|---|
 | POST | `/api/openbox/chain-proxies/latency` | `testChainLatency` (api/openbox.ts:1775) | OpenboxChainLatencyResult | (payload: OpenboxChainLatencyPayload) |
 
+> 实现约定(M1):`link` 解析不了、缺 `upstream`、上游不存在或成环返回 400。测速用 `internal/probe`(临时 sing-box + 本机 http 入站,后端自己计时);`testUrl` 不传用档案的 `testUrl`;`via` 是按配置静态推出的上游选中节点(selector 取 default,urltest 取第一个成员),内核接入后改读控制接口。找不到 sing-box 返回 503。**未做**:`ipUrls`(IP 地区),响应里没有 `ip` 字段。
+
 ## `/api/openbox/client-app`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
@@ -225,6 +227,8 @@
 | POST | `/api/openbox/nodes/latency` | `testNodeLatency` (api/openbox.ts:666) | { results: OpenboxLatencyResult[] } | (payload: { url?: string urls?: string[] content?: string userAgent?: string log |
 | POST | `/api/openbox/nodes/latency` | `testStoredLatency` (api/openbox.ts:1793) | OpenboxStoredLatencyResponse | (jobs: OpenboxStoredLatencyJob[], timeoutMs?: number) |
 | POST | `/api/openbox/nodes/latency` | `testStoredLatencyStream` (api/openbox.ts:1805) | — | ( jobs: OpenboxStoredLatencyJob[], onDone: (indices: number[]) |
+
+> 实现约定(M1):请求体有 `url` / `urls` / `content` / `loginId` 之一 = 预览(拉取、解析、改名后按 `tags` 测,不落盘,测速地址取档案 `testUrl`;`loginId` 返回 501),否则按 `jobs` 测已保存节点(`url` 缺省取档案 `testUrl`)。`results` 与 `tags` / `jobs` 一一对应。`reason`:`not-found`(是组或已不在订阅里)、`invalid`(地址不合法或 sing-box 起不来,`error` 带原因)、`timeout`、`failed`。`timeoutMs` 默认 5000,上限 30000;一次最多 500 个,同时测 16 个。`progress:true`(仅 jobs)回 NDJSON:每测完一个 `{"done":[下标]}`,最后 `{"results":[...]}`,出错 `{"error":"..."}`。找不到 sing-box 返回 503。**未做**:延迟历史(`record` 忽略,响应没有 `history`)。
 
 ## `/api/openbox/penetration`
 
