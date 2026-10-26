@@ -13,7 +13,7 @@
 | D4 | 与 `openbox-core` 的集成:**第一阶段用子进程**,走 `core/README.md` 描述的 stdin/stdout JSON 协议(`protocol:1`,15 个方法 + `hello`) | `core/` 的金标准测试保持有效、零改动;`core/internal` 不能被别的模块直接 import |
 | D5 | 不校验 `hello` 返回的 `buildID`(那是为上游 Node 服务端写死的期望值);只要求 `implementation:"go-native"`、`protocol:1` | 自己的后端自己的核心 |
 | D6 | 持久化:**JSON 文件 + 原子写**(写临时文件 → fsync → rename),进程内用互斥锁串行化同一文件的读改写。流量 / 延迟历史等时序数据到 M5 再决定是否引入嵌入式数据库(优先纯 Go、无 CGO) | 路由器上依赖越少越好;配置数据量小 |
-| D7 | 认证:首次设置密码(`/api/auth/setup`)→ 登录得到会话 Cookie(`HttpOnly`、`SameSite=Strict`);密码用 scrypt 或 argon2id 存哈希;登录失败做限速 | 面板在局域网,但仍要防暴力破解 |
+| D7 | 认证:首次设置密码(`/api/auth/setup`)→ 登录得到会话 Cookie(`HttpOnly`、`SameSite=Strict`);密码存哈希;登录失败做限速。**实现(M0)**:哈希用标准库 `crypto/pbkdf2`(PBKDF2-HMAC-SHA256,60 万次,哈希串带算法名和迭代次数,可平滑升级),不用 scrypt / argon2id;会话是无状态签名 Cookie(30 天),改密换密钥使其它会话失效 | 面板在局域网,但仍要防暴力破解。沙盒拉不到 `golang.org/x/crypto`,无法验证带依赖的 `go.sum`;PBKDF2 零依赖,也比 scrypt / argon2id 省内存,适合路由器。以后要换算法,新增一种哈希前缀即可,不影响旧密码 |
 | D8 | 前端静态文件由后端提供(`panel/dist`,目录可配置);`/api` 以外的路径回落到 `index.html` | 与前端开发代理一致 |
 | D9 | 激活相关接口(`/api/openbox/activation*`)只返回固定的「无需激活」状态,不保存任何东西 | 后端没有授权概念;前端残留调用不能报错 |
 | D10 | 只依赖标准库和少量成熟的第三方库(例如 `golang.org/x/crypto`);每引入一个依赖要在提交说明里写理由 | 体积和供应链风险 |
@@ -54,6 +54,7 @@
 ## 6. 工程约定
 - 每个接口分组一个包:`internal/api/<分组>`,导出 `Register(mux, deps)`;处理函数只做参数解析、校验、调用服务层、写响应。业务逻辑放服务层,系统副作用放 `internal/system`。
 - 响应格式、错误格式以前端 `requestJson` 的预期为准:成功返回 JSON;失败返回非 2xx,并带 `{ "error": "<给人看的中文信息>" }`(前端的 `extractErrorMessage` 会读)。写新接口前先读 `panel/src/api/openbox.ts` 对应函数。
+  例外是 `/api/auth/*`:机器码放在 `code` 或 `error` 字段,详见 `docs/ENDPOINTS.md` 的「鉴权与错误码约定」。公共小工具在 `internal/httpx`(`Error` / `CodeError` / `ErrorCode` / `Methods` / `DecodeJSON`)。
 - 测试:表驱动单元测试;处理函数用 `httptest`;需要 sing-box 的测试在没有可执行文件时 `t.Skip`,云端 Actions 里装好后跑。
 - 日志:标准库 `log/slog`,默认 info;不要在日志里打印密码、订阅 URL 里的 token。
 - 并发:对同一个数据文件的写入必须经过 `store` 的锁;长耗时操作(拉订阅、测速)用 `context` 带超时,可被取消。

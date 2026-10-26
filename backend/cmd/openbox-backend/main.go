@@ -10,7 +10,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
+	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/server"
+	"github.com/timeflysoon/Open-Box/backend/internal/store"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
 )
 
@@ -36,9 +39,11 @@ func run(args []string) int {
 		return 1
 	}
 
-	srv := server.New(server.Options{Logger: log, Version: version})
-	// 前端静态文件与前端路由回落;必须最后挂,/api 下的路径由各接口分组优先处理
-	srv.Mux().Handle("/", server.StaticHandler(cfg.WebDir))
+	srv, err := newApp(cfg, log)
+	if err != nil {
+		log.Error("初始化失败", "err", err)
+		return 1
+	}
 
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
@@ -55,4 +60,30 @@ func run(args []string) int {
 	}
 	log.Info("已退出")
 	return 0
+}
+
+// newApp 组装存储、各接口分组和中间件。
+func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
+	st, err := store.Open(cfg.StateDir())
+	if err != nil {
+		return nil, err
+	}
+	authMgr, err := auth.NewManager(st)
+	if err != nil {
+		return nil, err
+	}
+	if !authMgr.PasswordSet() {
+		log.Warn("尚未设置访问密码:任何能访问本端口的人都可以设置,请尽快在面板里设置")
+	}
+
+	srv := server.New(server.Options{
+		Logger:     log,
+		Version:    version,
+		Middleware: []server.Middleware{authapi.Require(authMgr)},
+	})
+	authapi.Register(srv.Mux(), authapi.Deps{Auth: authMgr, Log: log})
+
+	// 前端静态文件与前端路由回落;最后挂,/api 下的路径由各接口分组优先处理
+	srv.Mux().Handle("/", server.StaticHandler(cfg.WebDir))
+	return srv, nil
 }

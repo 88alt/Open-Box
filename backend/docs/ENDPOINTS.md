@@ -2,39 +2,47 @@
 
 由 `panel/src` 里的调用点自动提取(主要在 `api/openbox.ts`、`api/clientApp.ts`、`store/auth.ts`)。
 这份清单是后端要实现的**接口契约**:路径、方法以这里为准;请求体 / 响应体的具体字段以对应的 TypeScript 类型(`api/openbox.ts` 里同名接口)为准。
-提取是脚本做的,可能漏掉动态拼接的路径或把同一路径的多个方法合并;发现遗漏时直接在这里补上,并在 `backend/STATUS.md` 对应位置记一笔。
+提取是脚本做的,可能漏掉动态拼接的路径、把同一路径的多个方法合并,或把「URL 常量」误记成 GET(`/api/auth/*`、`/api/storage`、`/api/background-image` 已人工校正);发现遗漏时直接在这里补上,并在 `backend/STATUS.md` 对应位置记一笔。
 
 共 103 个(方法, 路径)组合,89 个不同路径。
+
+## 鉴权与错误码约定(以 `store/auth.ts` 为准,已实现)
+
+- 状态:首次运行(没设过密码)为 `{ enabled:false, authenticated:true, passwordSet:false }`;设置后为 `{ enabled:true, authenticated:<会话是否有效>, passwordSet:true }`。
+- 没设密码时,除 `/api/auth/*`、`/api/health` 外的 `/api/*` 一律 `403 { "error":"PASSWORD_SETUP_REQUIRED" }`;已设密码但没登录:`401 { "code":"ACCESS_PASSWORD_REQUIRED" }`。
+- 登录 / 修改密码时密码错误:`401 { "code":"ACCESS_PASSWORD_INVALID" }`;失败次数过多:`429`(带 `Retry-After`,`code: ACCESS_PASSWORD_LOCKED`)。
+- 设置 / 修改密码的失败码放在 `error` 字段:`PASSWORD_TOO_SHORT`(400)、`PASSWORD_TOO_LONG`(400)、`PASSWORD_ALREADY_SET`(409)。
+- 以上响应都带 `message`(中文,给人看)。其它接口的错误仍是 `{ "error": "<中文>" }`。
 
 ## `/api/auth/change-password`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/auth/change-password` | `AUTH_CHANGE_PASSWORD_API_URL` (store/auth.ts:14) | — | L |
+| POST | `/api/auth/change-password` | `changePassword` (store/auth.ts:341) | `{ ok, enabled, authenticated, passwordSet }` | `{ currentPassword, newPassword }` |
 
 ## `/api/auth/login`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/auth/login` | `AUTH_LOGIN_API_URL` (store/auth.ts:11) | — | L |
+| POST | `/api/auth/login` | `loginWithAccessPassword` (store/auth.ts:241) | `{ ok, enabled, authenticated, passwordSet }` | `{ password }` |
 
 ## `/api/auth/logout`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/auth/logout` | `AUTH_LOGOUT_API_URL` (store/auth.ts:12) | — | L |
+| POST | `/api/auth/logout` | `logoutAccessPassword` (store/auth.ts:278) | `{ ok }` | — |
 
 ## `/api/auth/setup`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/auth/setup` | `AUTH_SETUP_API_URL` (store/auth.ts:13) | — | L |
+| POST | `/api/auth/setup` | `setupPassword` (store/auth.ts:305) | `{ ok, enabled, authenticated, passwordSet }` | `{ password }` |
 
 ## `/api/auth/status`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/auth/status` | `AUTH_STATUS_API_URL` (store/auth.ts:10) | — | L |
+| GET | `/api/auth/status` | `fetchServerAuthStatus` (store/auth.ts:216) | `{ enabled, authenticated, passwordSet }` | — |
 
 ## `/api/background-image`
 
