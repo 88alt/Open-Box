@@ -134,6 +134,8 @@
 | GET | `/api/openbox/defaults/groups` | `fetchDefaultNodeGroups` (api/openbox.ts:1629) | { groups: OpenboxUserGroup[] } | () |
 | GET | `/api/openbox/defaults/routing` | `fetchDefaultRouting` (api/openbox.ts:1633) | { routing: OpenboxProfileRouting } | () |
 
+> 实现约定(M1):`defaults/groups` 由 openbox-core 的 `normalizeGroups` 补全,核心不可用时 `503`。默认值的取舍见 `docs/DESIGN.md` 第 8 节。
+
 ## `/api/openbox/deploy`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
@@ -240,6 +242,10 @@
 | PUT | `/api/openbox/profile` | `saveProfile` (api/openbox.ts:534) | { profile: OpenboxProfile } | (patch: Record<string, unknown>) |
 | GET | `/api/openbox/profile/defaults?region=cn` | `fetchDnsRewriteDefaults` (api/openbox.ts:522) | { dnsRewriteDefaults?: OpenboxDnsRewriteRule[] } | () |
 | GET | `/api/openbox/profile/defaults?region={x}` | `fetchProfileDefaults` (api/openbox.ts:528) | { defaults: OpenboxProfileDefaults } | (region: string) |
+
+> 实现约定(M1):GET 返回「默认值 + 已保存内容」的完整档案。PUT 的请求体是**补丁**,深度合并(对象递归合并,数组和标量整体替换,`null` 删除该键,下次读取由默认值补上),合并后整体校验,失败 `400 { error }` 且不落盘;`rulesetDir` 由服务端决定,客户端传的忽略;`chainProxies[].node` 只读(link 没变沿用旧摘要)。请求体上限 1 MiB。未知键原样保留。
+
+> 实现约定(M1):`region` 取 `cn` / `intl`(缺省 `cn`,其它 400)。响应同时带 `defaults` 和 `dnsRewriteDefaults`(两个前端函数共用同一路径)。
 
 ## `/api/openbox/route-test`
 

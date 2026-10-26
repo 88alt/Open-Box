@@ -76,3 +76,7 @@
 | 默认监听地址与端口 | `0.0.0.0:3036`(与现有联调用的端口一致),可由参数覆盖 |
 | v0.1.318 快照的许可 | 不可用,见第 7 节 |
 | 版本号 | 过渡期 `v0.1.<上游号>-main.<n>` |
+| 默认分流(`defaults/routing`) | 一个「国内直连」站点集(`geosite-cn` + `geoip-cn`,默认直连),兜底「其他」走第一个节点组;自研定的起点,没有参照上游。规则集名在随包规则库里没有时会被 core 过滤 |
+| 默认节点组(`defaults/groups`) | 内置直连 / 拒绝 + 一个动态 urltest 组「自动选择」(全部节点),由 core `normalizeGroups` 补全字段 |
+| DNS 重写默认项(`dnsRewriteDefaults`) | 空数组:没有可靠依据的规则不预置,「恢复默认」= 清空;以后有依据再补 |
+| 档案默认值 | `region` 默认 `cn`;DNS 上游按前端 `regionDefaultsPatch`;`testUrl` 用 gstatic 204,`directTestUrl` 用华为 connectivitycheck 204;流量保留 12 个月 |
