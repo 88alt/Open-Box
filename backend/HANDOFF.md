@@ -20,7 +20,8 @@
 2. 先对账:git fetch 后把 git log --oneline origin/main -- backend 和 STATUS.md 对照着看。提交里已经做了、STATUS.md 没打勾的,先单独补打勾和日志,
    不要重复实现、重复推送;STATUS.md 打了勾、找不到对应提交的,当作未完成。对完账再取第一个没打勾的条目。每次出补丁前再 git fetch 一次,确认 origin/main 没有新提交。
 3. 沙箱里确认 go version(缺 Go 用 apt 装);沙箱访问不了 Go 模块代理,优先用标准库;需要 sing-box 的测试在没有可执行文件时 t.Skip。
-4. 做完一个条目:go vet ./... 和 go test ./... 全绿,STATUS.md 打勾并加日志,提交说明 "backend: <阶段> <做了什么>"。
+4. 做完一个条目:go vet ./... 和 go test ./... 全绿,STATUS.md 打勾并加日志——**和代码放在同一个提交、同一个补丁里,不要拆开,也不要留到最后补**
+   (额度可能随时用完,拆开就会出现代码已交付、清单没更新的漂移);提交说明 "backend: <阶段> <做了什么>"。
 
 ========================================
 一、已定决策(详细见 docs/DESIGN.md 第二节)
