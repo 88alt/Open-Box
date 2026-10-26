@@ -12,7 +12,7 @@
 - [x] 原子写存储 `internal/store`(含并发测试)
 - [x] 静态文件服务 + 前端路由回落
 - [x] `/api/auth/*`:setup、login、logout、status、change-password(密码哈希、会话、登录限速)
-- [ ] `/api/storage`、`/api/background-image`
+- [x] `/api/storage`、`/api/background-image`
 - [ ] Actions:`go vet`、`go test`、编译 amd64 / arm64(`backend` 的独立工作流,不动 `release.yml`)
 
 ## M1 配置流水线
@@ -59,6 +59,7 @@
 - [ ] 清理旧文件 `scripts/native-arm64/`(联调通过之后)
 
 ## 日志(新的在最上面)
+- 2026-10-25 M0 /api/storage(整体替换 config/ 设置快照)、/api/background-image(GET / PUT / DELETE,data URL 校验与体积上限);ENDPOINTS 补全方法。
 - 2026-10-25 M0 /api/auth/*:setup / login / logout / status / change-password;PBKDF2 哈希、签名会话 Cookie、按 IP 限速;鉴权中间件;ENDPOINTS 校正了 auth 的方法并补充错误码约定;DESIGN D7 记录偏差。
 - 2026-10-25 M0 静态文件服务 + 前端路由回落(缺失的带扩展名资源返回 404,不回落成 HTML;assets/ 长缓存,index.html 不缓存)。
 - 2026-10-25 M0 原子写存储 internal/store(临时文件 → fsync → rename;同文件读改写串行;损坏文件报错不覆盖;含并发测试,-race 通过)。

@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
+	storageapi "github.com/timeflysoon/Open-Box/backend/internal/api/storage"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/server"
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
@@ -82,6 +83,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 		Middleware: []server.Middleware{authapi.Require(authMgr)},
 	})
 	authapi.Register(srv.Mux(), authapi.Deps{Auth: authMgr, Log: log})
+	storageapi.Register(srv.Mux(), storageapi.Deps{Store: st})
 
 	// 前端静态文件与前端路由回落;最后挂,/api 下的路径由各接口分组优先处理
 	srv.Mux().Handle("/", server.StaticHandler(cfg.WebDir))

@@ -4,7 +4,7 @@
 这份清单是后端要实现的**接口契约**:路径、方法以这里为准;请求体 / 响应体的具体字段以对应的 TypeScript 类型(`api/openbox.ts` 里同名接口)为准。
 提取是脚本做的,可能漏掉动态拼接的路径、把同一路径的多个方法合并,或把「URL 常量」误记成 GET(`/api/auth/*`、`/api/storage`、`/api/background-image` 已人工校正);发现遗漏时直接在这里补上,并在 `backend/STATUS.md` 对应位置记一笔。
 
-共 103 个(方法, 路径)组合,89 个不同路径。
+共 103 个(方法, 路径)组合,89 个不同路径(`/api/auth/*`、`/api/storage`、`/api/background-image` 校正后组合数略有增加)。
 
 ## 鉴权与错误码约定(以 `store/auth.ts` 为准,已实现)
 
@@ -48,7 +48,9 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/background-image` | `BACKGROUND_IMAGE_API_URL` (helper/indexeddb.ts:5) | — | L |
+| GET | `/api/background-image` | `getBase64FromServer` (helper/indexeddb.ts:123) | `{ image: string }`(没有时为空串) | — |
+| PUT | `/api/background-image` | `saveBase64ToServer` (helper/indexeddb.ts:109) | `{ ok }` | `{ image }`,必须是 `data:image/` 开头,上限 12 MiB |
+| DELETE | `/api/background-image` | `deleteBase64FromServer` (helper/indexeddb.ts:138) | `{ ok }` | — |
 
 ## `/api/controller-ws/{x}`
 
@@ -332,7 +334,8 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/storage` | `STORAGE_API_URL` (helper/persistentStorage.ts:4) | — | L |
+| GET | `/api/storage` | `fetchRemoteSnapshot` (helper/persistentStorage.ts:85) | `{ entries: Record<string,string> }` | — |
+| PUT | `/api/storage` | `saveRemoteSnapshot` (helper/persistentStorage.ts:108) | `{ ok, count }`(前端不读响应体) | `{ entries }`,整体替换;只保留 `config/` 开头的字符串条目 |
 
 ## 后端自带的接口(前端不调用)
 
