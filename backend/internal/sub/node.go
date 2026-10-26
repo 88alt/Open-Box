@@ -38,12 +38,14 @@ var (
 
 // Node 是一个解析好的节点。
 type Node struct {
-	Tag         string         `json:"tag"`
-	OriginalTag string         `json:"originalTag,omitempty"`
-	Type        string         `json:"type"`
-	Server      string         `json:"server"`
-	ServerPort  int            `json:"server_port"`
-	Fields      map[string]any `json:"fields"`
+	Tag         string `json:"tag"`
+	OriginalTag string `json:"originalTag,omitempty"`
+	// RegionCode 是改名时命中的地区所绑定的国家代码(ISO 3166-1 alpha-2),没命中为空;界面按它显示国旗。
+	RegionCode string         `json:"regionCode,omitempty"`
+	Type       string         `json:"type"`
+	Server     string         `json:"server"`
+	ServerPort int            `json:"server_port"`
+	Fields     map[string]any `json:"fields"`
 }
 
 // Skipped 是没能导入的条目。

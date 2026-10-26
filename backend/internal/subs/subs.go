@@ -370,6 +370,18 @@ func validateRename(m map[string]any) error {
 			return bad("renameOptions.%s 条目过多", k)
 		}
 	}
+	if a, ok := m["regionDict"].([]any); ok {
+		if len(a) > maxKeywords {
+			return bad("地区关键词最多 %d 行", maxKeywords)
+		}
+		for _, e := range a {
+			if em, ok := e.(map[string]any); ok {
+				if kws, ok := em["keywords"].([]any); ok && len(kws) > maxKeywords*10 {
+					return bad("renameOptions.regionDict 条目过多")
+				}
+			}
+		}
+	}
 	if a, ok := m["excludeKeywords"].([]any); ok && len(a) > maxKeywords {
 		return bad("过滤关键词最多 %d 条", maxKeywords)
 	}

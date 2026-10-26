@@ -77,7 +77,8 @@ func (e *env) do(method, path string, body any) (int, map[string]any) {
 
 func (e *env) create(t *testing.T, name, url string, extra map[string]any) string {
 	t.Helper()
-	body := map[string]any{"name": name, "url": url}
+	// 这些测试关心的是别的行为,默认关掉按模板改名;改名本身见 TestRename*。
+	body := map[string]any{"name": name, "url": url, "renameOptions": map[string]any{"enabled": false}}
 	for k, v := range extra {
 		body[k] = v
 	}
@@ -117,7 +118,7 @@ func TestCreateListShape(t *testing.T) {
 	e := newEnv(t)
 	e.pages["https://a.example/sub"] = links("HK-1", "US-1")
 	code, m := e.do("POST", "/api/openbox/subscriptions", map[string]any{
-		"name": " 机场A ", "url": "https://a.example/sub", "userAgent": "clash.meta",
+		"name": " 机场A ", "url": "https://a.example/sub", "userAgent": "clash.meta", "renameOptions": map[string]any{"enabled": false},
 		"autoUpdate": map[string]any{"enabled": true, "days": 1, "hour": 4},
 		"nodeDns":    map[string]any{"url": "https://dns.example/dns-query", "bootstrap": "1.1.1.1"},
 	})
@@ -218,7 +219,7 @@ func TestMultiURLMerge(t *testing.T) {
 	e := newEnv(t)
 	e.pages["https://a/1"] = links("A", "B")
 	e.pages["https://a/2"] = links("B", "C") // B 重名
-	code, m := e.do("POST", "/api/openbox/subscriptions", map[string]any{"name": "多", "urls": []string{"https://a/1", "https://a/2", "https://a/1"}})
+	code, m := e.do("POST", "/api/openbox/subscriptions", map[string]any{"name": "多", "urls": []string{"https://a/1", "https://a/2", "https://a/1"}, "renameOptions": map[string]any{"enabled": false}})
 	if code != 200 || m["nodeCount"] != float64(4) {
 		t.Fatal(code, m)
 	}
@@ -271,6 +272,7 @@ func TestRenameFilterAndPrefix(t *testing.T) {
 		"disabled":        []string{"US-1"},
 		"overrides":       map[string]string{"HK-2": "香港 二号"},
 		"usePrefix":       true,
+		"enabled":         false,
 		"regionDict":      []any{map[string]any{"code": "HK", "name": "香港", "keywords": []string{"HK"}}},
 	}
 	code, m := e.do("POST", "/api/openbox/subscriptions/preview", map[string]any{"url": "https://a", "name": "破晓", "renameOptions": opts})
@@ -287,7 +289,7 @@ func TestRenameFilterAndPrefix(t *testing.T) {
 	if d := m["disabled"].([]any); len(d) != 1 || d[0].(map[string]any)["name"] != "US-1" {
 		t.Fatalf("%v", m["disabled"])
 	}
-	if pv := m["preview"].([]any); len(pv) != 2 || pv[1].(map[string]any)["originalTag"] != "HK-2" {
+	if pv := m["preview"].([]any); len(pv) != 2 || pv[1].(map[string]any)["originalTag"] != "HK-2" || pv[0].(map[string]any)["regionCode"] != "HK" {
 		t.Fatalf("%v", m["preview"])
 	}
 	for _, k := range []string{"format", "skipped", "groups", "usage"} {
@@ -361,12 +363,12 @@ func TestPatchEnabledAndRebuild(t *testing.T) {
 	e.do("PATCH", "/api/openbox/subscriptions/"+id, map[string]any{"enabled": true})
 	// 改过滤规则:重新解析
 	e.pages["https://a"] = links("A", "B", "C")
-	code, m = e.do("PATCH", "/api/openbox/subscriptions/"+id, map[string]any{"renameOptions": map[string]any{"excludeKeywords": []string{"B"}}})
+	code, m = e.do("PATCH", "/api/openbox/subscriptions/"+id, map[string]any{"renameOptions": map[string]any{"enabled": false, "excludeKeywords": []string{"B"}}})
 	if code != 200 || m["nodeCount"] != float64(2) || m["changed"] != true {
 		t.Fatal(code, m)
 	}
 	// 名称前缀开着时,改订阅名要重算节点名
-	e.do("PATCH", "/api/openbox/subscriptions/"+id, map[string]any{"renameOptions": map[string]any{"usePrefix": true}})
+	e.do("PATCH", "/api/openbox/subscriptions/"+id, map[string]any{"renameOptions": map[string]any{"enabled": false, "usePrefix": true}})
 	e.do("PATCH", "/api/openbox/subscriptions/"+id, map[string]any{"name": "N2"})
 	if pool, _ := e.svc.PoolNodes(context.Background()); pool[0].Tag != "N2 | A" {
 		t.Fatalf("%+v", pool)
