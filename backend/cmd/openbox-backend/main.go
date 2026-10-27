@@ -175,14 +175,6 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 	}
 	wanDNS := func() []string { return system.ReadWANDNS(system.WANResolverFiles) }
 
-	// DNS 域名过滤:设置读写和名单预览(应用、查询记录和统计见 STATUS.md)
-	dnsfilterapi.Register(srv.Mux(), dnsfilterapi.Deps{
-		Profiles: profileSvc,
-		Preview: dnsfilter.NewPreviewer(func(ctx context.Context, u string) ([]byte, error) {
-			return rulelist.Fetch(ctx, nil, u)
-		}).Preview,
-	})
-
 	// 上游 DNS(只读):从 netifd / systemd-resolved 记录的文件里读,不碰任何系统设置
 	dnsapi.Register(srv.Mux(), dnsapi.Deps{
 		WAN:      wanDNS,
@@ -232,6 +224,41 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 		peCore = policyentries.CoreAdapter{C: core.New(cfg.Core)}
 	}
 	policiesapi.Register(srv.Mux(), policiesapi.Deps{Entries: policyentries.New(profileSvc, peCore, lists).WithGeo(geoLib)})
+
+	// DNS 域名过滤:设置读写、名单预览、下载名单并应用(应用 = 编规则集 + 走一次完整部署:校验 → 原子替换 → 重启 → 健康检查 → 失败回滚)。
+	// 内核没在运行时只更新名单、不部署,不会为了应用名单把代理启动起来。
+	rulesDir := filepath.Join(cfg.DataDir, "rules")
+	fetchList := func(ctx context.Context, u string) ([]byte, error) { return rulelist.Fetch(ctx, nil, u) }
+	deployer := &singbox.Deployer{
+		Build:   singbox.ListedBuilder{Gen: gen, Lists: singbox.ListFiles{Rules: lists, SingBox: cfg.SingBox, Dir: rulesDir}},
+		Files:   singbox.Files{SingBox: cfg.SingBox, GeoDir: cfg.GeoDir},
+		SingBox: cfg.SingBox, ConfigDir: cfg.ConfigDir,
+		Service: svcCtl, ServiceName: cfg.CoreService,
+	}
+	filterFiles := singbox.FilterFiles{SingBox: cfg.SingBox}
+	filterSvc := &dnsfilter.Service{
+		Profiles: profileSvc, Store: st,
+		CacheDir: filepath.Join(cfg.DataDir, "dns-filter"), RulesDir: rulesDir,
+		Fetch: fetchList,
+		Write: filterFiles.Sync,
+		Prune: func(dir string, groups []dnsfilter.Group) { filterFiles.Prune(dir, groups) },
+		Running: func(ctx context.Context) (bool, error) {
+			info, err := svcCtl.Status(ctx, cfg.CoreService)
+			return info.Running, err
+		},
+		Deploy: func(ctx context.Context) error {
+			if r := deployer.Deploy(ctx); !r.OK {
+				return &dnsfilter.ApplyError{Msg: r.Message}
+			}
+			return nil
+		},
+	}
+	gen.WithFilter(filterSvc)
+	dnsfilterapi.Register(srv.Mux(), dnsfilterapi.Deps{
+		Profiles: profileSvc,
+		Filter:   filterSvc,
+		Preview:  dnsfilter.NewPreviewer(fetchList).Preview,
+	})
 
 	// 前端静态文件与前端路由回落;最后挂,/api 下的路径由各接口分组优先处理
 	srv.Mux().Handle("/", server.StaticHandler(cfg.WebDir))

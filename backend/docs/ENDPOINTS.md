@@ -182,6 +182,8 @@
 | GET | `/api/openbox/dns-filter/records?{x})}` | `fetchDnsFilterRecords` (api/openbox.ts:172) | { rows: DnsFilterRecord[]; total: number; page: number; pageSize: number } | (search: string, result: string, page: number, pageSize = 20) |
 | GET | `/api/openbox/dns-filter/summary` | `fetchDnsFilterSummary` (api/openbox.ts:171) | DnsFilterSummary | () |
 
+实现约定(M2):`apply` 请求体可空,`{ update?: bool, listId?: string }`:`update` 为真重新下载启用的名单(带 `listId` 只重下那一份),否则只下载没有缓存的;之后编成规则集并走一次完整部署,成功返回新的状态。关闭过滤时也走 `apply`(把规则撤下来),不下载名单。错误码:409 = 已有应用在进行,或内核没在运行(名单已更新保存但没应用,不会替用户启动内核);400 = 没有这份名单 / 一份能用的名单都没有;500 = 部署失败(`error` 里写着回滚情况);503 = 没接应用服务。GET 返回的 `lists[id].error` 是上次下载 / 解析失败的原因(失败时沿用上次的缓存),`pending` 表示设置与已应用的不一致。
+
 ## `/api/openbox/factory-reset`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
