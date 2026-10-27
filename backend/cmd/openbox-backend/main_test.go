@@ -69,6 +69,10 @@ func TestAppWiring(t *testing.T) {
 		t.Fatalf("dns/wan: %d %s", code, body)
 	}
 
+	if code, body := get(c, ts.URL+"/api/openbox/dns/region-detect"); code != 200 || !strings.Contains(body, `"pending":false`) || !strings.Contains(body, `"region":"cn"`) {
+		t.Fatalf("dns/region-detect: %d %s", code, body)
+	}
+
 	// 重启:密码保留,旧 Cookie 仍有效
 	ts2, _ := start()
 	jar, _ := cookiejar.New(nil)

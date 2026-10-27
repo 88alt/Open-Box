@@ -1,17 +1,29 @@
-// Package dns 实现 /api/openbox/dns/* 里与「上游 DNS」有关的接口。
-// 本包目前只有只读的 GET /api/openbox/dns/wan;region-detect、upstream-test、flush-cache 见 STATUS.md M2 的后续条目。
+// Package dns 实现 /api/openbox/dns/* 里与「上游 DNS」有关的接口:
+// GET dns/wan、GET / POST dns/region-detect。upstream-test、flush-cache 见 STATUS.md M2 的后续条目。
 package dns
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
+	"github.com/timeflysoon/Open-Box/backend/internal/regiondetect"
 )
+
+// Detector 按出口公网 IP 判地区(*regiondetect.Detector 实现它),测试里换假的。
+type Detector interface {
+	Pending() bool
+	Detect(ctx context.Context) regiondetect.Result
+}
 
 // Deps 是本分组的依赖。
 type Deps struct {
 	// WAN 返回系统此刻的上游 DNS(*system.ReadWANDNS 的包装),测试里换假的。为空或返回 nil 都按「没有」处理。
 	WAN func() []string
+	// Region 返回档案里此刻的 DNS 地区("cn" / "intl");为空或返回别的值都按 "cn"(与前端一致)。
+	Region func(ctx context.Context) string
+	// Detector 为空时 region-detect 返回 503。
+	Detector Detector
 }
 
 // Register 把接口挂到 mux 上。
@@ -19,6 +31,35 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.HandleFunc("/api/openbox/dns/wan", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodGet: d.wan,
 	}))
+	mux.HandleFunc("/api/openbox/dns/region-detect", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodGet:  d.regionState,
+		http.MethodPost: d.regionDetect,
+	}))
+}
+
+// regionState 对应前端 fetchDnsRegionState:{ pending, region }。
+// pending 只在有一次判断正在进行时为真;后端启动时不会自己判、更不会自己改档案(见 STATUS.md 日志)。
+func (d Deps) regionState(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	region := "cn"
+	if d.Region != nil && d.Region(r.Context()) == "intl" {
+		region = "intl"
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"pending": d.Detector != nil && d.Detector.Pending(),
+		"region":  region,
+	})
+}
+
+// regionDetect 对应前端 detectDnsRegion:只查、只回报,不写档案(前端拿到结果后自己走 saveProfile)。
+// 判不出来仍是 200,region 为 null、error 写原因;前端按「判不出来就按当前地区」处理。
+func (d Deps) regionDetect(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Detector == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "地区判断不可用")
+		return
+	}
+	httpx.JSON(w, http.StatusOK, d.Detector.Detect(r.Context()))
 }
 
 // wan 对应前端 fetchWanDns:{ servers: string[] }。读不到时回空数组而不是报错——

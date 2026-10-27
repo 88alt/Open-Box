@@ -30,6 +30,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/policyentries"
 	"github.com/timeflysoon/Open-Box/backend/internal/probe"
 	"github.com/timeflysoon/Open-Box/backend/internal/profile"
+	"github.com/timeflysoon/Open-Box/backend/internal/regiondetect"
 	"github.com/timeflysoon/Open-Box/backend/internal/rulelist"
 	"github.com/timeflysoon/Open-Box/backend/internal/server"
 	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
@@ -149,7 +150,23 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 	})
 
 	// 上游 DNS(只读):从 netifd / systemd-resolved 记录的文件里读,不碰任何系统设置
-	dnsapi.Register(srv.Mux(), dnsapi.Deps{WAN: func() []string { return system.ReadWANDNS(system.WANResolverFiles) }})
+	dnsapi.Register(srv.Mux(), dnsapi.Deps{
+		WAN: func() []string { return system.ReadWANDNS(system.WANResolverFiles) },
+		// 档案里的 DNS 地区;读不到按 cn(与前端一致)
+		Region: func(ctx context.Context) string {
+			p, err := profileSvc.Get(ctx)
+			if err != nil {
+				return "cn"
+			}
+			if d, ok := p["dns"].(map[string]any); ok {
+				if r, _ := d["region"].(string); r != "" {
+					return r
+				}
+			}
+			return "cn"
+		},
+		Detector: &regiondetect.Detector{},
+	})
 
 	// 节点测速:临时配置放在数据目录下的 tmp(0700),用完即删
 	probeDir := filepath.Join(cfg.DataDir, "tmp")

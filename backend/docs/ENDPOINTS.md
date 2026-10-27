@@ -165,6 +165,8 @@
 
 > 实现约定(M2):`dns/wan` 只读,回 `{ "servers": string[] }`(读不到是空数组,不报错);服务器取自 netifd / systemd-resolved 记录的上游文件,不读指向本机的 `/etc/resolv.conf`(顺序见 `internal/system/wandns.go`)。
 
+> 实现约定(M2):`dns/region-detect` 的 GET 回 `{ pending, region }`(`pending` 只在一次判断进行中为真,`region` 取档案 `dns.region`);POST 按出口公网 IP 判一次,回 `{ region: "cn" | "intl" | null, ip, error? }`,判不出来仍是 200、`region` 为 null;只查不写档案,不在启动时自动判。
+
 ## `/api/openbox/dns-filter`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
