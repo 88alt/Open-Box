@@ -1,7 +1,8 @@
 // Package latency 实现 /api/openbox/nodes/latency 和 /api/openbox/chain-proxies/latency(节点测速)。
 //
 // 测速由 internal/probe 完成:起一个只含被测出站的临时 sing-box,经本机 http 入站发请求并计时。
-// 没做的:延迟历史(请求里的 record、响应里的 history,见 STATUS 的 M3 条目)、链式代理的「IP 地区」(ipUrls)。
+// 链式代理测速可带 ipUrls:经同一条线路再请求 IP 信息接口,把正文原样交回(前端按答话那一家的格式解析)。
+// 没做的:延迟历史(请求里的 record、响应里的 history,见 STATUS 的 M3 条目)。
 package latency
 
 import (
@@ -9,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -248,6 +250,40 @@ type chainReq struct {
 	IPURLs    []string `json:"ipUrls"`
 }
 
+// IP 信息接口的白名单:前端设置里能选的三家。后端只放行这几个主机,免得「出口 IP」功能变成能让路由器
+// 经任意线路去请求任意地址的入口。正文最多交回 16 KiB,和前端类型 OpenboxChainLatencyResult.ip 的约定一致。
+var ipHosts = map[string]bool{"api.ip.sb": true, "ipwho.is": true, "api.ipapi.is": true}
+
+const (
+	maxIPURLs = 5
+	ipBodyMax = 16 << 10
+)
+
+// normalizeIPURLs 校验并去重 ipUrls:必须是 https、主机在白名单里、没有账号、端口只能是 443。
+// 错误信息里要带「ipUrls」:前端靠它认出「后端的白名单和这边对不上」,丢掉 IP 信息后重测一次。
+func normalizeIPURLs(list []string) ([]string, error) {
+	var out []string
+	seen := map[string]bool{}
+	for _, raw := range list {
+		raw = strings.TrimSpace(raw)
+		u, err := url.Parse(raw)
+		if err != nil || u.Scheme != "https" || u.User != nil || !ipHosts[strings.ToLower(u.Hostname())] || (u.Port() != "" && u.Port() != "443") {
+			return nil, errors.New("ipUrls 里有不支持的地址:只认 https 的 api.ip.sb、ipwho.is、api.ipapi.is")
+		}
+		u.Fragment = ""
+		u.Host = strings.ToLower(u.Hostname()) // 主机名不分大小写、默认端口 443 省掉,「同一个地址」才能去重
+		key := u.String()
+		if !seen[key] {
+			seen[key] = true
+			out = append(out, key)
+		}
+	}
+	if len(out) > maxIPURLs {
+		return nil, errors.New("ipUrls 最多 5 个")
+	}
+	return out, nil
+}
+
 func (h *handlers) chain(w http.ResponseWriter, r *http.Request) {
 	httpx.NoStore(w)
 	var req chainReq
@@ -261,6 +297,11 @@ func (h *handlers) chain(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Upstream == "" {
 		httpx.Error(w, http.StatusBadRequest, "请选择上游节点或节点组")
+		return
+	}
+	ipURLs, err := normalizeIPURLs(req.IPURLs)
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	ctx := r.Context()
@@ -284,12 +325,24 @@ func (h *handlers) chain(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "这条链式代理生成不出出站,请检查上游是否存在、是否成环")
 		return
 	}
-	res, err := h.Runner.Run(ctx, m, []probe.Job{{Tag: chainProbeTag, URL: u}}, probe.Options{Timeout: timeoutOf(req.TimeoutMs)})
+	// 测速和 IP 地区同一次起内核、并行跑;IP 这一项按 ipUrls 的顺序试到第一个成功
+	jobs := []probe.Job{{Tag: chainProbeTag, URL: u}}
+	if len(ipURLs) > 0 {
+		jobs = append(jobs, probe.Job{Tag: chainProbeTag, URL: ipURLs[0], Capture: ipBodyMax, Fallback: ipURLs[1:]})
+	}
+	res, err := h.Runner.Run(ctx, m, jobs, probe.Options{Timeout: timeoutOf(req.TimeoutMs)})
 	if err != nil {
 		fail(w, err, "测速失败")
 		return
 	}
 	out := map[string]any{"via": ResolveVia(built.Config, req.Upstream), "ok": res[0].OK}
+	if len(res) > 1 {
+		if res[1].OK {
+			out["ip"] = map[string]any{"ok": true, "url": res[1].URL, "body": res[1].Body}
+		} else {
+			out["ip"] = map[string]any{"ok": false, "error": res[1].Error}
+		}
+	}
 	if res[0].OK {
 		out["ms"] = res[0].Ms
 	} else {

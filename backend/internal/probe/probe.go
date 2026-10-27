@@ -54,12 +54,22 @@ type Result struct {
 	Ms     int    `json:"ms,omitempty"`
 	Error  string `json:"error,omitempty"`
 	Reason string `json:"reason,omitempty"` // invalid / not-found / timeout / refused / failed
+
+	// 以下两项只在取回正文的任务(Job.Capture > 0)成功时才有,不进 JSON:由调用方自己决定怎么交给前端。
+	URL  string `json:"-"` // 实际答话的地址(回退时可能不是 Job.URL)
+	Body string `json:"-"` // 响应正文,最多 Job.Capture 字节,已规整成合法 UTF-8
 }
 
 // Job 是一次测速任务。
 type Job struct {
 	Tag string // 要测的出站
 	URL string // 测速地址(http / https)
+
+	// Capture > 0 时,任务改为「取回正文」:只认 2xx(3xx 不跟随,按失败算),最多读 Capture 字节放进 Result.Body。
+	// URL 失败后按 Fallback 的顺序逐个再试,第一个成功的为准;全部失败时 Error 里按「主机: 原因」列出每一家。
+	// 每一次尝试各有一份完整的超时。用于「经这条线路看出口 IP」,不是测速,Ms 只是这次请求的耗时。
+	Capture  int
+	Fallback []string
 }
 
 // Material 是从完整配置里摘出的、测速要用的部分。
@@ -344,7 +354,7 @@ func (r *Runner) Run(ctx context.Context, m *Material, jobs []Job, opt Options) 
 		go func(i int) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			results[i] = fetchOnce(ctx, addr, users[i], jobs[i].URL, timeout)
+			results[i] = runJob(ctx, addr, users[i], jobs[i], timeout)
 			if opt.OnDone != nil {
 				opt.OnDone(i)
 			}
@@ -352,6 +362,44 @@ func (r *Runner) Run(ctx context.Context, m *Material, jobs []Job, opt Options) 
 	}
 	wg.Wait()
 	return results, ctx.Err()
+}
+
+// runJob 跑一个任务:普通测速只请求一次;取回正文的任务按 URL、Fallback 的顺序试到第一个成功。
+func runJob(ctx context.Context, proxyAddr, user string, j Job, timeout time.Duration) Result {
+	if j.Capture <= 0 {
+		return fetch(ctx, proxyAddr, user, j.URL, timeout, 0)
+	}
+	urls := []string{j.URL}
+	for _, f := range j.Fallback {
+		if validTestURL(f) {
+			urls = append(urls, f)
+		}
+	}
+	var fails []string
+	var last Result
+	for _, u := range urls {
+		r := fetch(ctx, proxyAddr, user, u, timeout, j.Capture)
+		if r.OK {
+			r.URL = u
+			return r
+		}
+		last = r
+		fails = append(fails, hostOf(u)+": "+r.Error)
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	if len(fails) > 1 {
+		last.Error = strings.Join(fails, ";")
+	}
+	return last
+}
+
+func hostOf(s string) string {
+	if u, err := url.Parse(s); err == nil && u.Hostname() != "" {
+		return u.Hostname()
+	}
+	return "?"
 }
 
 func validTestURL(s string) bool {
@@ -422,9 +470,11 @@ type bufConn struct {
 
 func (b *bufConn) Read(p []byte) (int, error) { return b.r.Read(p) }
 
-// fetchOnce 经临时入站(用户名 = 任务)请求 target,返回从发起请求到收到响应头的耗时。
-// 证书不校验:测的是线路是否通,不是目标站点的证书(与节点出站的做法一致)。
-func fetchOnce(ctx context.Context, proxyAddr, user, target string, timeout time.Duration) Result {
+// fetch 经临时入站(用户名 = 任务)请求 target。
+// capture == 0:返回从发起请求到收到响应头的耗时,不看状态码(204 / 404 都算线路通)。
+// capture > 0:要求 2xx,并读回最多 capture 字节正文;耗时算到正文读完。
+// 证书不校验:测的是线路是否通,不是目标站点的证书(与节点出站的做法一致;路由器上常常没有根证书包)。
+func fetch(ctx context.Context, proxyAddr, user, target string, timeout time.Duration, capture int) Result {
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(cctx, http.MethodGet, target, nil)
@@ -446,14 +496,30 @@ func fetchOnce(ctx context.Context, proxyAddr, user, target string, timeout time
 	if err != nil {
 		return classify(err, cctx)
 	}
-	elapsed := time.Since(start)
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4<<10))
-	resp.Body.Close()
-	ms := int(elapsed.Milliseconds())
-	if ms < 1 {
-		ms = 1
+	defer resp.Body.Close()
+	if capture <= 0 {
+		elapsed := time.Since(start)
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4<<10))
+		return Result{OK: true, Ms: msOf(elapsed)}
 	}
-	return Result{OK: true, Ms: ms}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return Result{Error: fmt.Sprintf("HTTP %d", resp.StatusCode), Reason: "failed"}
+	}
+	buf, err := io.ReadAll(io.LimitReader(resp.Body, int64(capture)))
+	if err != nil {
+		return classify(err, cctx)
+	}
+	if len(buf) == 0 {
+		return Result{Error: "响应是空的", Reason: "failed"}
+	}
+	return Result{OK: true, Ms: msOf(time.Since(start)), Body: strings.ToValidUTF8(string(buf), "\uFFFD")}
+}
+
+func msOf(d time.Duration) int {
+	if ms := int(d.Milliseconds()); ms > 1 {
+		return ms
+	}
+	return 1
 }
 
 func classify(err error, ctx context.Context) Result {

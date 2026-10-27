@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -341,5 +342,158 @@ func TestResolveVia(t *testing.T) {
 	}
 	if got := ResolveVia(cfg, "loop"); got != "loop" {
 		t.Errorf("成环应止步: %q", got)
+	}
+}
+
+// ipProxy 是 fwdProxy 的变体:隧道里发往 443 端口的 CONNECT(出口 IP 接口)桥接到本机的 TLS 服务 tlsAddr,
+// 其余照旧(CONNECT 回 200,普通请求回 204)。这样白名单里的真实主机名不用真上网也能走完整条链路。
+func ipProxy(t *testing.T, tlsAddr string) (port int) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, rw, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		_, _ = rw.WriteString("HTTP/1.1 200 Connection established\r\n\r\n")
+		_ = rw.Flush()
+		br := bufio.NewReader(rw)
+		for {
+			in, err := http.ReadRequest(br)
+			if err != nil {
+				return
+			}
+			if in.Method != http.MethodConnect {
+				_, _ = c.Write([]byte("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n"))
+				return
+			}
+			_, _ = c.Write([]byte("HTTP/1.1 200 Connection established\r\n\r\n"))
+			if _, p, _ := net.SplitHostPort(in.Host); p == "443" {
+				up, err := net.Dial("tcp", tlsAddr)
+				if err != nil {
+					return
+				}
+				defer up.Close()
+				go func() { _, _ = io.Copy(up, br); _ = up.Close() }()
+				_, _ = io.Copy(c, up)
+				return
+			}
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv.Listener.Addr().(*net.TCPAddr).Port
+}
+
+// fakeIPServices 按 Host 扮演三家 IP 接口:api.ip.sb 限流 429,ipwho.is 正常,api.ipapi.is 回空。
+func fakeIPServices(t *testing.T) string {
+	t.Helper()
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch strings.Split(r.Host, ":")[0] {
+		case "api.ip.sb":
+			http.Error(w, "limited", http.StatusTooManyRequests)
+		case "ipwho.is":
+			_, _ = w.Write([]byte(`{"ip":"203.0.113.9","country":"Testland","connection":{"org":"Test Net"}}`))
+		case "api.ipapi.is":
+			w.WriteHeader(200)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv.Listener.Addr().String()
+}
+
+func TestChainIP(t *testing.T) {
+	bin := needSingBox(t)
+	port := ipProxy(t, fakeIPServices(t))
+	e := newEnv(t, bin)
+	e.addSub(t, "A", fmt.Sprintf("http://u:p@127.0.0.1:%d#PX 01\n", port))
+	link := fmt.Sprintf("http://u:p@127.0.0.1:%d#CH", port)
+	call := func(ipUrls any) (int, map[string]any) {
+		body := map[string]any{"link": link, "upstream": "PX 01", "testUrl": target, "timeoutMs": 3000}
+		if ipUrls != nil {
+			body["ipUrls"] = ipUrls
+		}
+		w := e.post(t, "/api/openbox/chain-proxies/latency", body)
+		var out map[string]any
+		_ = json.Unmarshal(w.Body.Bytes(), &out)
+		return w.Code, out
+	}
+
+	// 第一家被限流,回退到第二家;正文原样交回,测速结果不受影响
+	code, out := call([]string{"https://api.ip.sb/geoip", "https://ipwho.is", "https://api.ipapi.is"})
+	ip, _ := out["ip"].(map[string]any)
+	if code != 200 || out["ok"] != true || out["via"] != "PX 01" || ip == nil || ip["ok"] != true || ip["url"] != "https://ipwho.is" {
+		t.Fatalf("%d %v", code, out)
+	}
+	var data struct{ IP, Country string }
+	if err := json.Unmarshal([]byte(ip["body"].(string)), &data); err != nil || data.IP != "203.0.113.9" || data.Country != "Testland" {
+		t.Fatalf("正文应原样交回: %v", ip)
+	}
+
+	// 全部失败:ip.ok=false 并逐家列原因,不带 url / body;测速本身照常成功
+	code, out = call([]string{"https://api.ip.sb/geoip", "https://api.ipapi.is"})
+	ip, _ = out["ip"].(map[string]any)
+	if code != 200 || out["ok"] != true || ip == nil || ip["ok"] != false || ip["url"] != nil || ip["body"] != nil ||
+		ip["error"] != "api.ip.sb: HTTP 429;api.ipapi.is: 响应是空的" {
+		t.Fatalf("%d %v", code, out)
+	}
+
+	// 没带 / 带了空数组:没有 ip 字段
+	for _, v := range []any{nil, []string{}} {
+		if code, out = call(v); code != 200 || out["ok"] != true || out["ip"] != nil {
+			t.Fatalf("%v → %d %v", v, code, out)
+		}
+	}
+
+	// 不在白名单里的地址一律 400,文案带「ipUrls」(前端靠它降级重测),而且一个请求都不会发出去
+	for _, bad := range [][]string{
+		{"http://ipwho.is"}, {"https://example.com/ip"}, {"https://u:p@ipwho.is"}, {"https://ipwho.is:8443"},
+		{""}, {"ipwho.is"}, {"https://ipwho.is", "https://evil.test"}, {"https://ipwho.is.evil.test"},
+	} {
+		code, out = call(bad)
+		if msg, _ := out["error"].(string); code != 400 || !strings.Contains(msg, "ipUrls") {
+			t.Fatalf("%v 应 400 且带 ipUrls: %d %v", bad, code, out)
+		}
+	}
+}
+
+// 线路本身不通(上游节点的端口是关的):测速失败,IP 这一项也如实失败,不会因此让整个请求报错。
+func TestChainIPLineDown(t *testing.T) {
+	bin := needSingBox(t)
+	port := ipProxy(t, fakeIPServices(t))
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	dead := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	e := newEnv(t, bin)
+	e.addSub(t, "A", fmt.Sprintf("http://u:p@127.0.0.1:%d#PX 01\n", dead))
+	w := e.post(t, "/api/openbox/chain-proxies/latency", map[string]any{
+		"link": fmt.Sprintf("http://u:p@127.0.0.1:%d#CH", port), "upstream": "PX 01", "testUrl": target, "timeoutMs": 2000,
+		"ipUrls": []string{"https://ipwho.is"},
+	})
+	var out map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &out)
+	ip, _ := out["ip"].(map[string]any)
+	if w.Code != 200 || out["ok"] != false || ip == nil || ip["ok"] != false || ip["error"] == "" {
+		t.Fatalf("%d %v", w.Code, out)
+	}
+}
+
+func TestNormalizeIPURLs(t *testing.T) {
+	got, err := normalizeIPURLs([]string{" https://API.ip.sb/geoip ", "https://api.ip.sb/geoip", "https://ipwho.is#x", "https://api.ipapi.is:443"})
+	want := []string{"https://api.ip.sb/geoip", "https://ipwho.is", "https://api.ipapi.is"}
+	if err != nil || strings.Join(got, "|") != strings.Join(want, "|") {
+		// 主机名转小写、去掉默认端口 443、去掉片段,再按完整地址去重,保持原顺序
+		t.Fatalf("%v %v", got, err)
+	}
+	var many []string
+	for i := 0; i < 6; i++ {
+		many = append(many, fmt.Sprintf("https://ipwho.is/%d", i))
+	}
+	if _, err := normalizeIPURLs(many); err == nil || !strings.Contains(err.Error(), "ipUrls") {
+		t.Fatalf("超过 5 个应拒绝: %v", err)
+	}
+	if got, err := normalizeIPURLs(nil); err != nil || len(got) != 0 {
+		t.Fatalf("%v %v", got, err)
 	}
 }

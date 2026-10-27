@@ -85,7 +85,7 @@
 |---|---|---|---|---|
 | POST | `/api/openbox/chain-proxies/latency` | `testChainLatency` (api/openbox.ts:1775) | OpenboxChainLatencyResult | (payload: OpenboxChainLatencyPayload) |
 
-> 实现约定(M1):`link` 解析不了、缺 `upstream`、上游不存在或成环返回 400。测速用 `internal/probe`(临时 sing-box + 本机 http 入站,后端自己计时);`testUrl` 不传用档案的 `testUrl`;`via` 是按配置静态推出的上游选中节点(selector 取 default,urltest 取第一个成员),内核接入后改读控制接口。找不到 sing-box 返回 503。**未做**:`ipUrls`(IP 地区),响应里没有 `ip` 字段。
+> 实现约定(M1):`link` 解析不了、缺 `upstream`、上游不存在或成环返回 400。测速用 `internal/probe`(临时 sing-box + 本机 http 入站,后端自己计时);`testUrl` 不传用档案的 `testUrl`;`via` 是按配置静态推出的上游选中节点(selector 取 default,urltest 取第一个成员),内核接入后改读控制接口。找不到 sing-box 返回 503。`ipUrls`(可选,IP 地区):只认 https 的 `api.ip.sb`、`ipwho.is`、`api.ipapi.is` 三个主机(端口只能是 443、不能带账号),主机名转小写、去掉 `:443` 与片段后去重,最多 5 个;有不合规的地址返回 400,文案里带「ipUrls」(前端靠它丢掉 IP 信息后重测)。带了之后和测速同一次起内核、并行,按顺序请求到第一个答 2xx 的为止(3xx 不跟随、非 2xx、空正文都按失败),每次尝试各有一份超时(`timeoutMs`);响应多一个 `ip`:成功 `{ok:true,url,body}`(`url` 是答话的那一家,`body` 是正文原样、最多 16 KiB、已规整成合法 UTF-8),全部失败 `{ok:false,error}`(`error` 按「主机: 原因」逐家列出,用「;」隔开)。没带或带空数组则没有 `ip` 字段。线路不通时测速失败,`ip` 也如实失败,不会让整个请求报错。这一路和测速一样不校验对方证书(路由器上常常没有根证书包)。
 
 ## `/api/openbox/client-app`
 

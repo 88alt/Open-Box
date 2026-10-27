@@ -3,10 +3,12 @@ package probe
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -124,8 +126,8 @@ func TestRunReal(t *testing.T) {
 	cfg := testCfgWith("127.0.0.1", fa.Port)
 	r := &Runner{Bin: bin, Dir: t.TempDir()}
 	jobs := []Job{
-		{"直连", ok.URL}, {"拒绝", ok.URL}, {"链尾", "http://chain-target.invalid/"}, {"直连", slow.URL},
-		{"直连", closedURL}, {"组", ok.URL}, {"没有", ok.URL}, {"直连", "ftp://x"},
+		{Tag: "直连", URL: ok.URL}, {Tag: "拒绝", URL: ok.URL}, {Tag: "链尾", URL: "http://chain-target.invalid/"}, {Tag: "直连", URL: slow.URL},
+		{Tag: "直连", URL: closedURL}, {Tag: "组", URL: ok.URL}, {Tag: "没有", URL: ok.URL}, {Tag: "直连", URL: "ftp://x"},
 	}
 	var mu sync.Mutex
 	done := map[int]bool{}
@@ -171,7 +173,7 @@ func TestRunInvalidConfig(t *testing.T) {
 	// 「坏」引用了不存在的 detour,sing-box 启动会失败;摘取时 detour 缺失不会被补上
 	m := Subset(cfg, []string{"坏"})
 	r := &Runner{Bin: bin, Dir: t.TempDir()}
-	res, err := r.Run(context.Background(), m, []Job{{"坏", "http://127.0.0.1:1/"}}, Options{Timeout: time.Second})
+	res, err := r.Run(context.Background(), m, []Job{{Tag: "坏", URL: "http://127.0.0.1:1/"}}, Options{Timeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,12 +185,91 @@ func TestRunInvalidConfig(t *testing.T) {
 func TestRunNoSingBox(t *testing.T) {
 	r := &Runner{Bin: "/nonexistent/sing-box", Dir: t.TempDir()}
 	m := Subset(testCfg(), []string{"直连"})
-	if _, err := r.Run(context.Background(), m, []Job{{"直连", "http://127.0.0.1:1/"}}, Options{}); err != ErrNoSingBox {
+	if _, err := r.Run(context.Background(), m, []Job{{Tag: "直连", URL: "http://127.0.0.1:1/"}}, Options{}); err != ErrNoSingBox {
 		t.Fatalf("got %v", err)
 	}
 	// 全是不可测任务时不需要 sing-box
-	res, err := r.Run(context.Background(), m, []Job{{"没有", "http://x/"}}, Options{})
+	res, err := r.Run(context.Background(), m, []Job{{Tag: "没有", URL: "http://x/"}}, Options{})
 	if err != nil || res[0].Reason != "not-found" {
 		t.Fatalf("%v %+v", err, res)
+	}
+}
+
+// TestCapture:取回正文的任务——2xx 才算数,3xx / 4xx / 空正文按失败,按顺序回退,正文截到上限,全部失败时逐家列原因。
+func TestCapture(t *testing.T) {
+	bin := needSingBox(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/json":
+			_, _ = w.Write([]byte(`{"ip":"203.0.113.9","country":"Testland"}`))
+		case "/big":
+			_, _ = w.Write([]byte(strings.Repeat("x", 100)))
+		case "/bad-utf8":
+			_, _ = w.Write([]byte("ok\xff\xfe"))
+		case "/empty":
+			w.WriteHeader(200)
+		case "/redirect":
+			http.Redirect(w, r, "/json", http.StatusFound)
+		case "/limited":
+			http.Error(w, "slow down", http.StatusTooManyRequests)
+		case "/slow":
+			time.Sleep(3 * time.Second)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	// 同一个服务用两个主机名(127.0.0.1 / localhost)访问,好让错误信息里能分出是哪一家
+	u := srv.URL
+	l := strings.Replace(srv.URL, "127.0.0.1", "localhost", 1)
+
+	cfg := testCfg()
+	r := &Runner{Bin: bin, Dir: t.TempDir()}
+	jobs := []Job{
+		0: {Tag: "直连", URL: u + "/json", Capture: 1024},
+		1: {Tag: "直连", URL: u + "/limited", Capture: 1024, Fallback: []string{l + "/json"}},
+		2: {Tag: "直连", URL: u + "/big", Capture: 16},
+		3: {Tag: "直连", URL: u + "/bad-utf8", Capture: 1024},
+		4: {Tag: "直连", URL: u + "/empty", Capture: 1024},
+		5: {Tag: "直连", URL: u + "/redirect", Capture: 1024},
+		6: {Tag: "直连", URL: u + "/limited", Capture: 1024, Fallback: []string{l + "/missing", "ftp://bad/", u + "/slow"}},
+		7: {Tag: "直连", URL: u + "/limited"}, // 普通测速:4xx 也算线路通
+		8: {Tag: "直连", URL: u + "/json", Capture: 1024, Fallback: []string{l + "/limited"}},
+	}
+	res, err := r.Run(context.Background(), Subset(cfg, []string{"直连"}), jobs, Options{Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res[0].OK || res[0].Body != `{"ip":"203.0.113.9","country":"Testland"}` || res[0].URL != u+"/json" {
+		t.Fatalf("应取回正文: %+v", res[0])
+	}
+	if !res[1].OK || res[1].URL != l+"/json" || !strings.Contains(res[1].Body, "Testland") {
+		t.Fatalf("第一个 429 后应回退到第二个: %+v", res[1])
+	}
+	if !res[2].OK || res[2].Body != strings.Repeat("x", 16) {
+		t.Fatalf("正文应截到上限: %+v", res[2])
+	}
+	if !res[3].OK || res[3].Body != "ok\uFFFD" {
+		t.Fatalf("非法 UTF-8 应被替换: %q", res[3].Body)
+	}
+	if res[4].OK || res[4].Error != "响应是空的" {
+		t.Fatalf("空正文应失败: %+v", res[4])
+	}
+	if res[5].OK || res[5].Error != "HTTP 302" {
+		t.Fatalf("重定向不跟随、按失败算: %+v", res[5])
+	}
+	want := "127.0.0.1: HTTP 429;localhost: HTTP 404;127.0.0.1: 超时"
+	if res[6].OK || res[6].Error != want {
+		t.Fatalf("全部失败应逐家列原因(不合法的回退地址跳过): %q 想要 %q", res[6].Error, want)
+	}
+	if !res[7].OK || res[7].Body != "" || res[7].URL != "" {
+		t.Fatalf("普通测速不取正文: %+v", res[7])
+	}
+	if !res[8].OK || res[8].URL != u+"/json" {
+		t.Fatalf("第一个成功就不再试后面的: %+v", res[8])
+	}
+	b, _ := json.Marshal(res[0])
+	if strings.Contains(string(b), "Testland") || strings.Contains(string(b), "json") {
+		t.Fatalf("正文和地址不进 JSON: %s", b)
 	}
 }
