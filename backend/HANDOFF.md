@@ -16,7 +16,7 @@
 - 沙箱里没有路由器:标"需真机"的条目,代码和单元测试做完后打 [~],由维护者真机验证后改 [x]。
 
 接手后先做:
-1. 克隆 https://github.com/timeflysoon/Open-Box(公开),git checkout main。
+1. 克隆 https://github.com/timeflysoon/Open-Box (公开),git checkout main。
 2. 先对账:git fetch 后把 git log --oneline origin/main -- backend 和 STATUS.md 对照着看。提交里已经做了、STATUS.md 没打勾的,先单独补打勾和日志,
    不要重复实现、重复推送;STATUS.md 打了勾、找不到对应提交的,当作未完成。对完账再取第一个没打勾的条目。每次出补丁前再 git fetch 一次,确认 origin/main 没有新提交。
 3. 沙箱里确认 go version(缺 Go 用 apt 装);沙箱访问不了 Go 模块代理,优先用标准库;需要 sing-box 的测试在没有可执行文件时 t.Skip。
