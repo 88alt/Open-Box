@@ -79,12 +79,14 @@ func NewGenerator(c Caller, st *store.Store, p Profiles, g Groups, cat Catalog, 
 
 // Built 是一次生成的结果。
 type Built struct {
-	Config         map[string]any `json:"config"`
-	DNSRuleOwners  any            `json:"dnsRuleOwners"`
-	DirectHosts    any            `json:"directHosts"`
-	Failover       any            `json:"failover"`
-	NodeCount      int            `json:"-"`
-	ProfileSecret  string         `json:"-"`
+	Config        map[string]any `json:"config"`
+	DNSRuleOwners any            `json:"dnsRuleOwners"`
+	DirectHosts   any            `json:"directHosts"`
+	Failover      any            `json:"failover"`
+	NodeCount     int            `json:"-"`
+	ProfileSecret string         `json:"-"`
+	// ListIssues:规则集链接没处理好的(tag → 原因),只有 ListedBuilder 会填;部署据此把原因写给用户。
+	ListIssues     map[string]string `json:"-"`
 	rawConfigBytes []byte
 }
 
@@ -177,6 +179,9 @@ type Override struct {
 	Subs  []any
 	// ExtraChains 额外加上的链式节点(tag / detour / chain 已填好),用于测链式代理编辑框里还没保存的那一份。
 	ExtraChains []any
+	// RuleLists 非 nil:传给 core 的 ruleLists(规则集链接编出了域名 / IP 哪几份),core 据此决定引用哪几份 .srs。
+	// 不传时 core 对每个链接只引用 list-<hash> 一份。
+	RuleLists map[string]ListShape
 }
 
 // PreviewOverride 把一份预览出来的节点(还没保存的订阅)变成 Override。
@@ -297,6 +302,9 @@ func (g *Generator) BuildWith(ctx context.Context, o *Override) (*Built, error) 
 		"systemDns":     strs(resolvers),
 		"localSubnets":  strs(subnets),
 		"chainNodes":    chains,
+	}
+	if o != nil && o.RuleLists != nil {
+		args["ruleLists"] = o.RuleLists
 	}
 	var res struct {
 		Config        json.RawMessage `json:"config"`

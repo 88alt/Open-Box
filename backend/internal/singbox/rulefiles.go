@@ -174,7 +174,12 @@ func (f Files) WriteLocalSets(ctx context.Context, cfg map[string]any, direct an
 			miss("热切换开关的内容取决于每个站点集此刻走直连还是走代理,需要 core 提供开关状态(见 STATUS.md「需要 core 配合」)")
 		default:
 			if !geodata.ValidTag(s.Tag) {
-				miss("用户规则集链接编成的 .srs 还没有生成(见 STATUS.md「本地规则集落盘(第三部分 b)」)")
+				// 用户规则集链接编成的 list-*:由 ListFiles.Sync 在生成配置前落盘,这里只确认文件在
+				if hasSRS(s.Path) {
+					rep.Kept = append(rep.Kept, s.Path)
+				} else {
+					miss("用户规则集链接的 .srs 还没有生成(拉取失败或没有走部署流程的规则集准备)")
+				}
 				continue
 			}
 			if s.Format != "binary" {
@@ -250,34 +255,41 @@ func writeFile(path string, data []byte) error {
 // writePlaceholderSRS 用 `sing-box rule-set compile` 把占位源码编成 .srs 再原子放到 path。
 // 用已安装的内核编,得到的二进制格式版本和它一致。
 func (f Files) writePlaceholderSRS(ctx context.Context, path string) error {
-	bin := f.SingBox
+	src, err := marshalSource(map[string]any{"ip_cidr": []string{placeholderCIDR4, placeholderCIDR6}})
+	if err != nil {
+		return err
+	}
+	_, err = compileSRS(ctx, f.SingBox, path, src, "placeholder.json")
+	return err
+}
+
+// compileSRS 把规则集源码 JSON 编成 .srs,原子放到 path。已有的文件内容完全相同则不改写(changed=false)。
+// label 用来替换错误信息里的临时文件路径。
+func compileSRS(ctx context.Context, singBox, path string, src []byte, label string) (changed bool, err error) {
+	bin := singBox
 	if bin == "" {
 		bin = "sing-box"
 	}
 	exe, err := exec.LookPath(bin)
 	if err != nil {
-		return ErrNoSingBox
+		return false, ErrNoSingBox
 	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("创建目录失败: %w", err)
-	}
-	src, err := marshalSource(map[string]any{"ip_cidr": []string{placeholderCIDR4, placeholderCIDR6}})
-	if err != nil {
-		return err
+		return false, fmt.Errorf("创建目录失败: %w", err)
 	}
 	in, err := os.CreateTemp(dir, ".compile-*.json")
 	if err != nil {
-		return fmt.Errorf("创建临时文件失败: %w", err)
+		return false, fmt.Errorf("创建临时文件失败: %w", err)
 	}
 	inName := in.Name()
 	defer os.Remove(inName)
 	if _, err := in.Write(src); err != nil {
 		in.Close()
-		return fmt.Errorf("写临时文件失败: %w", err)
+		return false, fmt.Errorf("写临时文件失败: %w", err)
 	}
 	if err := in.Close(); err != nil {
-		return err
+		return false, err
 	}
 	outName := inName + ".srs"
 	defer os.Remove(outName)
@@ -288,8 +300,11 @@ func (f Files) writePlaceholderSRS(ctx context.Context, path string) error {
 	lw := &limitedWriter{max: maxCheckOut}
 	cmd.Stdout, cmd.Stderr = lw, lw
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
 		if cctx.Err() != nil {
-			return fmt.Errorf("sing-box rule-set compile 超时(%s)", compileTimeout)
+			return false, fmt.Errorf("sing-box rule-set compile 超时(%s)", compileTimeout)
 		}
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {
@@ -297,18 +312,24 @@ func (f Files) writePlaceholderSRS(ctx context.Context, path string) error {
 			if msg == "" {
 				msg = ee.Error()
 			}
-			return fmt.Errorf("sing-box rule-set compile 失败: %s", strings.ReplaceAll(msg, inName, "placeholder.json"))
+			return false, fmt.Errorf("sing-box rule-set compile 失败: %s", strings.ReplaceAll(msg, inName, label))
 		}
-		return fmt.Errorf("运行 sing-box 失败: %w", err)
+		return false, fmt.Errorf("运行 sing-box 失败: %w", err)
 	}
 	data, err := os.ReadFile(outName)
 	if err != nil {
-		return fmt.Errorf("读编译结果失败: %w", err)
+		return false, fmt.Errorf("读编译结果失败: %w", err)
 	}
 	if len(data) == 0 {
-		return errors.New("sing-box rule-set compile 没有产出文件")
+		return false, errors.New("sing-box rule-set compile 没有产出文件")
 	}
-	return writeFile(path, data)
+	if old, err := os.ReadFile(path); err == nil && string(old) == string(data) {
+		return false, nil
+	}
+	if err := writeFile(path, data); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // copyGeo 把规则库里的 <tag>.srs 拷到 dst(拷贝而不是软链:规则库目录可能在别的分区、随升级替换,
@@ -355,4 +376,16 @@ func sameFile(a, b string) (bool, error) {
 		return false, err
 	}
 	return os.SameFile(fa, fb), nil
+}
+
+// hasSRS 报告 path 是不是一个文件头合格的 .srs。
+func hasSRS(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	head := make([]byte, len(srsMagic)+1)
+	n, _ := f.Read(head)
+	return n == len(head) && string(head[:len(srsMagic)]) == srsMagic
 }

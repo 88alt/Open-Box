@@ -411,3 +411,5 @@ func TestWriteLocalSetsGeoRealSingBoxRoundTrip(t *testing.T) {
 		t.Fatalf("读回内容 %s", b)
 	}
 }
+
+func jsonUnmarshal(b []byte, v any) error { return json.Unmarshal(b, v) }

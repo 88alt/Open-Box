@@ -135,8 +135,12 @@ func (d *Deployer) Deploy(ctx context.Context) DeployResult {
 		var bad []string
 		var why []string
 		for _, m := range rep.Missing {
+			reason := m.Reason
+			if r, ok := built.ListIssues[m.Tag]; ok {
+				reason = r
+			}
 			bad = append(bad, m.Tag)
-			why = append(why, m.Tag+"("+m.Reason+")")
+			why = append(why, m.Tag+"("+reason+")")
 		}
 		return fail(StageValidate, "配置引用的规则集还没准备好,未应用:"+strings.Join(why, "、"), bad)
 	}
