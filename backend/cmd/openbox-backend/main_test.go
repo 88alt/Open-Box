@@ -64,6 +64,11 @@ func TestAppWiring(t *testing.T) {
 		t.Fatalf("登录后未知接口应为 404: %d %s", code, body)
 	}
 
+	// 上游 DNS 接口已装配:登录后可读,读不到文件时也是 {"servers":[...]} 而不是 404
+	if code, body := get(c, ts.URL+"/api/openbox/dns/wan"); code != 200 || !strings.Contains(body, `"servers":[`) {
+		t.Fatalf("dns/wan: %d %s", code, body)
+	}
+
 	// 重启:密码保留,旧 Cookie 仍有效
 	ts2, _ := start()
 	jar, _ := cookiejar.New(nil)

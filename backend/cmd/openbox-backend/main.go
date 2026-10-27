@@ -14,6 +14,7 @@ import (
 
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
 	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
+	dnsapi "github.com/timeflysoon/Open-Box/backend/internal/api/dns"
 	groupsapi "github.com/timeflysoon/Open-Box/backend/internal/api/groups"
 	latencyapi "github.com/timeflysoon/Open-Box/backend/internal/api/latency"
 	policiesapi "github.com/timeflysoon/Open-Box/backend/internal/api/policies"
@@ -146,6 +147,9 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 		Kind:        initKind,
 		CoreService: cfg.CoreService, PanelName: cfg.PanelService, SingBox: cfg.SingBox,
 	})
+
+	// 上游 DNS(只读):从 netifd / systemd-resolved 记录的文件里读,不碰任何系统设置
+	dnsapi.Register(srv.Mux(), dnsapi.Deps{WAN: func() []string { return system.ReadWANDNS(system.WANResolverFiles) }})
 
 	// 节点测速:临时配置放在数据目录下的 tmp(0700),用完即删
 	probeDir := filepath.Join(cfg.DataDir, "tmp")

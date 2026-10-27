@@ -163,6 +163,8 @@
 | POST | `/api/openbox/dns/upstream-test` | `testDnsUpstream` (api/openbox.ts:1616) | OpenboxDnsUpstreamTestResult | (payload: OpenboxDnsUpstreamTestPayload) |
 | GET | `/api/openbox/dns/wan` | `fetchWanDns` (api/openbox.ts:1572) | { servers?: string[] } | () |
 
+> 实现约定(M2):`dns/wan` 只读,回 `{ "servers": string[] }`(读不到是空数组,不报错);服务器取自 netifd / systemd-resolved 记录的上游文件,不读指向本机的 `/etc/resolv.conf`(顺序见 `internal/system/wandns.go`)。
+
 ## `/api/openbox/dns-filter`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
