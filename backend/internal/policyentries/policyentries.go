@@ -3,11 +3,13 @@
 // 数据来源(都是后端自己的设计,依据前端 OpenboxPolicyEntries 的类型):
 //   - 站点集的手写条件(domain / domainSuffix / domainKeyword / ipCidr),来源记为 "custom";
 //   - 站点集引用的规则集链接(ruleUrls),拉回文本名单展开,来源记为链接的「主机 + 路径」(不带查询串,避免暴露 token);
+//   - 规则库分类(geosite-* / geoip-*,包括前置自定义分流里的 geosite / geoip / ruleset 行):
+//     用 internal/geodata 读随包规则库(交给 sing-box 解码)展开,来源记为分类名;
 //   - 前置自定义分流(固定的一条,名字取自档案里的 custom.name)的每一行;
 //   - 兜底站点集命中「其他所有」,没有条目,只返回 fallback = true。
 //
-// geosite-* / geoip-* 这类随包规则库里的分类需要读取规则库并交给 sing-box 解码,这部分还没做
-// (见 STATUS.md 的 rulesets/entries),所以它们如实列在 missing 里,不假装没有。
+// 展开不了的(没接规则库、规则库里没有这个分类、没有 sing-box、解码失败、名字不合法)如实列在 missing 里,
+// 不假装没有,也不让整个查询失败。
 package policyentries
 
 import (
@@ -20,6 +22,7 @@ import (
 	"unicode/utf16"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
+	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
 	"github.com/timeflysoon/Open-Box/backend/internal/rulelist"
 )
 
@@ -93,10 +96,16 @@ type Lists interface {
 	Load(ctx context.Context, rawURL string) (*rulelist.Result, error)
 }
 
+// Geo 是随包规则库(*geodata.Library 满足它)。
+type Geo interface {
+	Entries(ctx context.Context, tag string) (*geodata.Result, error)
+}
+
 // CoreAdapter 把 *core.Client 适配成 Core。
 type CoreAdapter struct{ C *core.Client }
 
-// NormalizeRouting 实现 Core。不传 geoTags:后端还没有规则库清单,核心就不会因「规则库里没有」而丢条目。
+// NormalizeRouting 实现 Core。不传 geoTags:传了核心会把规则库里没有的分类直接丢掉,
+// 而这里要的是如实把它们列进 missing,所以让核心保留全部。
 func (a CoreAdapter) NormalizeRouting(ctx context.Context, routing map[string]any) (Routing, error) {
 	var out Routing
 	if err := a.C.CallInto(ctx, "normalizeRouting", []any{routing}, &out); err != nil {
@@ -110,10 +119,17 @@ type Service struct {
 	profiles Profiles
 	core     Core // 可为 nil
 	lists    Lists
+	geo      Geo // 可为 nil:规则库分类全部列进 missing
 }
 
 // New 创建服务。c 可以为 nil(此时查询返回 ErrCoreUnavailable)。
 func New(p Profiles, c Core, l Lists) *Service { return &Service{profiles: p, core: c, lists: l} }
+
+// WithGeo 接上随包规则库,之后 geosite-* / geoip-* 分类会被展开;不接则它们如实列进 missing。
+func (s *Service) WithGeo(g Geo) *Service {
+	s.geo = g
+	return s
+}
 
 // Query 是查询参数。
 type Query struct {
@@ -268,6 +284,30 @@ func (m *missingList) add(s string) {
 
 const truncatedNote = "条目太多,只统计了前 30 万条"
 
+// expandGeo 把规则库分类 tag 的条目加进 c,来源记为分类名。没接规则库、名字不合法、分类不在库里、
+// 没有 sing-box、解码失败都记入 miss(不让整个查询失败);请求被取消则把取消错误交回去。
+func (s *Service) expandGeo(ctx context.Context, tag string, c *collector, miss *missingList) error {
+	if s.geo == nil || !geodata.ValidTag(tag) {
+		miss.add(tag)
+		return nil
+	}
+	res, err := s.geo.Entries(ctx, tag)
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		miss.add(tag)
+		return nil
+	}
+	for _, e := range res.Entries {
+		c.add(e.Type, e.Value, tag)
+	}
+	if res.Truncated {
+		miss.add(tag + "(" + truncatedNote + ")")
+	}
+	return nil
+}
+
 // expandList 拉取规则集链接并把条目加进 c;拉取失败记入 miss(不让整个查询失败)。
 func (s *Service) expandList(ctx context.Context, raw string, c *collector, miss *missingList) error {
 	label := urlLabel(raw)
@@ -312,7 +352,10 @@ func (s *Service) fromPolicy(ctx context.Context, p Policy) ([]Entry, []string, 
 		if _, ok := isListTag[tag]; ok {
 			continue
 		}
-		miss.add(tag) // geosite-* / geoip-*:需要随包规则库
+		// geosite-* / geoip-* 从随包规则库展开;展开不了的(或别的名字)记入 missing
+		if err := s.expandGeo(ctx, tag, c, miss); err != nil {
+			return nil, nil, err
+		}
 	}
 	if c.truncated {
 		miss.add(truncatedNote)
@@ -335,11 +378,17 @@ func (s *Service) fromCustom(ctx context.Context, rules []CustomRule) ([]Entry, 
 		case "port":
 			c.add(typePort, r.Value, sourceCustom)
 		case "geosite":
-			miss.add("geosite-" + r.Value)
+			if err := s.expandGeo(ctx, "geosite-"+r.Value, c, miss); err != nil {
+				return nil, nil, err
+			}
 		case "geoip":
-			miss.add("geoip-" + r.Value)
+			if err := s.expandGeo(ctx, "geoip-"+r.Value, c, miss); err != nil {
+				return nil, nil, err
+			}
 		case "ruleset":
-			miss.add(r.Value)
+			if err := s.expandGeo(ctx, r.Value, c, miss); err != nil {
+				return nil, nil, err
+			}
 		case "ruleUrl":
 			if err := s.expandList(ctx, r.Value, c, miss); err != nil {
 				return nil, nil, err

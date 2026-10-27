@@ -161,7 +161,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 	if core.Available(cfg.Core) {
 		peCore = policyentries.CoreAdapter{C: core.New(cfg.Core)}
 	}
-	policiesapi.Register(srv.Mux(), policiesapi.Deps{Entries: policyentries.New(profileSvc, peCore, lists)})
+	policiesapi.Register(srv.Mux(), policiesapi.Deps{Entries: policyentries.New(profileSvc, peCore, lists).WithGeo(geoLib)})
 
 	// 前端静态文件与前端路由回落;最后挂,/api 下的路径由各接口分组优先处理
 	srv.Mux().Handle("/", server.StaticHandler(cfg.WebDir))
