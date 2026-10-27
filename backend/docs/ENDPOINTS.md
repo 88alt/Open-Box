@@ -167,6 +167,8 @@
 
 > 实现约定(M2):`dns/region-detect` 的 GET 回 `{ pending, region }`(`pending` 只在一次判断进行中为真,`region` 取档案 `dns.region`);POST 按出口公网 IP 判一次,回 `{ region: "cn" | "intl" | null, ip, error? }`,判不出来仍是 200、`region` 为 null;只查不写档案,不在启动时自动判。
 
+> 实现约定(M2):`dns/flush-cache` 只接受 POST,回 `{ kernel, dnsmasq, resolved }`(每层是否清成功,各层独立);至少一层成功是 200,全都没清掉是 503 加 `error`。内核层走 sing-box 的 `POST /cache/dns/flush`,dnsmasq 层发 SIGHUP,resolved 层 `resolvectl flush-caches`;只让缓存失效,不改配置、不重启。
+
 ## `/api/openbox/dns-filter`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |

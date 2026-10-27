@@ -1,11 +1,12 @@
 // Package dns 实现 /api/openbox/dns/* 里与「上游 DNS」有关的接口:
-// GET dns/wan、GET / POST dns/region-detect。upstream-test、flush-cache 见 STATUS.md M2 的后续条目。
+// GET dns/wan、GET / POST dns/region-detect、POST dns/flush-cache。upstream-test 见 STATUS.md M2 的后续条目。
 package dns
 
 import (
 	"context"
 	"net/http"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
 	"github.com/timeflysoon/Open-Box/backend/internal/regiondetect"
 )
@@ -24,12 +25,17 @@ type Deps struct {
 	Region func(ctx context.Context) string
 	// Detector 为空时 region-detect 返回 503。
 	Detector Detector
+	// Flush 清三层 DNS 缓存(*dnscache.Layers.Flush);为空时 flush-cache 返回 503。
+	Flush func(ctx context.Context) dnscache.Result
 }
 
 // Register 把接口挂到 mux 上。
 func Register(mux *http.ServeMux, d Deps) {
 	mux.HandleFunc("/api/openbox/dns/wan", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodGet: d.wan,
+	}))
+	mux.HandleFunc("/api/openbox/dns/flush-cache", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodPost: d.flush,
 	}))
 	mux.HandleFunc("/api/openbox/dns/region-detect", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodGet:  d.regionState,
@@ -73,4 +79,19 @@ func (d Deps) wan(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 	httpx.JSON(w, http.StatusOK, map[string][]string{"servers": servers})
+}
+
+// flush 对应前端 flushDnsCache:内核、dnsmasq、systemd-resolved 各清一层,有一层清掉就算成功;
+// 全都清不掉回 503(前端会把 error 文字显示出来)。
+func (d Deps) flush(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	var res dnscache.Result
+	if d.Flush != nil {
+		res = d.Flush(r.Context())
+	}
+	if !res.Any() {
+		httpx.Error(w, http.StatusServiceUnavailable, "没有清掉任何一层 DNS 缓存:内核没在运行(或没开控制接口),也没有找到在运行的 dnsmasq 或 systemd-resolved")
+		return
+	}
+	httpx.JSON(w, http.StatusOK, res)
 }

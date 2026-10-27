@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
 	"github.com/timeflysoon/Open-Box/backend/internal/regiondetect"
 )
 
@@ -129,6 +130,36 @@ func TestRegionDetect(t *testing.T) {
 	}
 	for _, m := range []string{http.MethodPut, http.MethodDelete} {
 		if rec := callPath(Deps{Detector: f}, m, "/api/openbox/dns/region-detect"); rec.Code != http.StatusMethodNotAllowed {
+			t.Errorf("%s: %d", m, rec.Code)
+		}
+	}
+}
+
+func TestFlushCache(t *testing.T) {
+	// 有一层成功:200,三层各自如实回报
+	rec := callPath(Deps{Flush: func(context.Context) dnscache.Result { return dnscache.Result{Dnsmasq: true} }}, http.MethodPost, "/api/openbox/dns/flush-cache")
+	var got dnscache.Result
+	if rec.Code != 200 || rec.Header().Get("Cache-Control") != "no-store" || json.Unmarshal(rec.Body.Bytes(), &got) != nil || got != (dnscache.Result{Dnsmasq: true}) {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+	for _, k := range []string{`"kernel":false`, `"dnsmasq":true`, `"resolved":false`} {
+		if !strings.Contains(rec.Body.String(), k) {
+			t.Errorf("缺 %s: %s", k, rec.Body.String())
+		}
+	}
+	// 全都清不掉 / 没接实现:503 + error
+	for name, d := range map[string]Deps{
+		"全失败":  {Flush: func(context.Context) dnscache.Result { return dnscache.Result{} }},
+		"没接实现": {},
+	} {
+		rec := callPath(d, http.MethodPost, "/api/openbox/dns/flush-cache")
+		if rec.Code != 503 || !strings.Contains(rec.Body.String(), `"error"`) {
+			t.Errorf("%s: %d %s", name, rec.Code, rec.Body.String())
+		}
+	}
+	// 清缓存会动系统,只接受 POST
+	for _, m := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+		if rec := callPath(Deps{Flush: func(context.Context) dnscache.Result { return dnscache.Result{Kernel: true} }}, m, "/api/openbox/dns/flush-cache"); rec.Code != http.StatusMethodNotAllowed {
 			t.Errorf("%s: %d", m, rec.Code)
 		}
 	}

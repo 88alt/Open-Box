@@ -73,6 +73,11 @@ func TestAppWiring(t *testing.T) {
 		t.Fatalf("dns/region-detect: %d %s", code, body)
 	}
 
+	// 清 DNS 缓存已装配:POST 才有;测试机上没有可清的层时是 503 + error,而不是 404 / 405
+	if code, _ := get(c, ts.URL+"/api/openbox/dns/flush-cache"); code != 405 {
+		t.Fatalf("dns/flush-cache GET: %d", code)
+	}
+
 	// 重启:密码保留,旧 Cookie 仍有效
 	ts2, _ := start()
 	jar, _ := cookiejar.New(nil)

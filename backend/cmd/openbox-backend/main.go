@@ -25,6 +25,7 @@ import (
 	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
+	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
 	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/policyentries"
@@ -166,6 +167,15 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 			return "cn"
 		},
 		Detector: &regiondetect.Detector{},
+		// 清 DNS 缓存:内核(读正式配置里的控制接口)、dnsmasq(给进程发 SIGHUP)、systemd-resolved
+		Flush: dnscache.Layers{
+			Kernel: func(ctx context.Context) error {
+				return singbox.KernelFlushDNS(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
+			},
+			Dnsmasq:  func(context.Context) bool { return system.FlushDnsmasq("/proc", system.SignalHUP) },
+			Resolved: func(ctx context.Context) bool { return system.FlushResolved(ctx, system.ExecRunner) },
+			Log:      log,
+		}.Flush,
 	})
 
 	// 节点测速:临时配置放在数据目录下的 tmp(0700),用完即删
