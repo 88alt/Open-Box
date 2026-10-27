@@ -27,6 +27,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
+	"github.com/timeflysoon/Open-Box/backend/internal/dnsfilter"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnstest"
 	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
@@ -174,8 +175,13 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 	}
 	wanDNS := func() []string { return system.ReadWANDNS(system.WANResolverFiles) }
 
-	// DNS 域名过滤:目前只有设置读写(名单预览 / 应用、查询记录和统计见 STATUS.md)
-	dnsfilterapi.Register(srv.Mux(), dnsfilterapi.Deps{Profiles: profileSvc})
+	// DNS 域名过滤:设置读写和名单预览(应用、查询记录和统计见 STATUS.md)
+	dnsfilterapi.Register(srv.Mux(), dnsfilterapi.Deps{
+		Profiles: profileSvc,
+		Preview: dnsfilter.NewPreviewer(func(ctx context.Context, u string) ([]byte, error) {
+			return rulelist.Fetch(ctx, nil, u)
+		}).Preview,
+	})
 
 	// 上游 DNS(只读):从 netifd / systemd-resolved 记录的文件里读,不碰任何系统设置
 	dnsapi.Register(srv.Mux(), dnsapi.Deps{
