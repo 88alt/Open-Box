@@ -258,3 +258,156 @@ func TestWriteLocalSetsFromRealBuild(t *testing.T) {
 		t.Fatalf("node-direct 内容: %s err=%v", b, err)
 	}
 }
+
+// 假 .srs:只有文件头,够过 copyGeo 的头检查(不解码)。
+func fakeSRS(body string) []byte { return append([]byte("SRS\x03"), body...) }
+
+func writeGeo(t *testing.T, dir, tag string, data []byte) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, tag+".srs"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// 规则库里有的分类拷到配置指定的路径;内容相同再来一次不动;规则库变了才改写。
+func TestWriteLocalSetsCopiesGeoFromLibrary(t *testing.T) {
+	root := t.TempDir()
+	geo := filepath.Join(root, "geo")
+	writeGeo(t, geo, "geosite-cn", fakeSRS("v1"))
+	writeGeo(t, geo, "geoip-cn", fakeSRS("ip1"))
+	dst := filepath.Join(root, "rules")
+	cfg := cfgWith(
+		local("geosite-cn", "binary", filepath.Join(dst, "geosite-cn.srs")),
+		local("geoip-cn", "binary", filepath.Join(dst, "geoip-cn.srs")),
+	)
+	f := Files{GeoDir: geo}
+	rep, err := f.WriteLocalSets(context.Background(), cfg, nil)
+	if err != nil || !rep.OK() || len(rep.Written) != 2 || len(rep.Kept) != 0 {
+		t.Fatalf("rep=%+v err=%v", rep, err)
+	}
+	got, _ := os.ReadFile(filepath.Join(dst, "geosite-cn.srs"))
+	if string(got) != string(fakeSRS("v1")) {
+		t.Fatalf("内容 %q", got)
+	}
+	if st, _ := os.Stat(filepath.Join(dst, "geosite-cn.srs")); st.Mode().Perm() != 0o600 {
+		t.Fatalf("权限应为 0600: %v", st.Mode())
+	}
+	// 第二次:内容相同,不改写
+	rep, _ = f.WriteLocalSets(context.Background(), cfg, nil)
+	if !rep.OK() || len(rep.Written) != 0 || len(rep.Kept) != 2 {
+		t.Fatalf("第二次 rep=%+v", rep)
+	}
+	// 规则库更新:只改写变了的那份
+	writeGeo(t, geo, "geosite-cn", fakeSRS("v2"))
+	rep, _ = f.WriteLocalSets(context.Background(), cfg, nil)
+	if len(rep.Written) != 1 || len(rep.Kept) != 1 || !strings.HasSuffix(rep.Written[0], "geosite-cn.srs") {
+		t.Fatalf("更新后 rep=%+v", rep)
+	}
+	got, _ = os.ReadFile(filepath.Join(dst, "geosite-cn.srs"))
+	if string(got) != string(fakeSRS("v2")) {
+		t.Fatalf("更新后内容 %q", got)
+	}
+	// 没有留下临时文件
+	ents, _ := os.ReadDir(dst)
+	for _, e := range ents {
+		if !strings.HasSuffix(e.Name(), ".srs") {
+			t.Fatalf("残留 %s", e.Name())
+		}
+	}
+}
+
+func TestWriteLocalSetsGeoMissingAndInvalid(t *testing.T) {
+	root := t.TempDir()
+	geo := filepath.Join(root, "geo")
+	writeGeo(t, geo, "geosite-bad", []byte("not an srs"))
+	writeGeo(t, geo, "geosite-ok", fakeSRS("x"))
+	rules := filepath.Join(root, "rules")
+	cfg := cfgWith(
+		local("geosite-nope", "binary", filepath.Join(rules, "geosite-nope.srs")),
+		local("geosite-bad", "binary", filepath.Join(rules, "geosite-bad.srs")),
+		local("geosite-ok", "source", filepath.Join(rules, "geosite-ok.srs")), // 格式不对
+		local("list-0123abcd", "binary", filepath.Join(rules, "list-0123abcd.srs")),
+	)
+	rep, err := Files{GeoDir: geo}.WriteLocalSets(context.Background(), cfg, nil)
+	if err != nil || len(rep.Written) != 0 || len(rep.Missing) != 4 {
+		t.Fatalf("rep=%+v err=%v", rep, err)
+	}
+	want := []string{"规则库里没有分类", "不是有效的 .srs", "格式应为 binary", "用户规则集链接"}
+	for i, w := range want {
+		if !strings.Contains(rep.Missing[i].Reason, w) || rep.Missing[i].Kind != KindRuleset {
+			t.Errorf("missing[%d]=%+v 应含 %q", i, rep.Missing[i], w)
+		}
+	}
+	// 坏文件不能被拷过去
+	if _, err := os.Stat(filepath.Join(rules, "geosite-bad.srs")); err == nil {
+		t.Fatal("坏文件不该落盘")
+	}
+}
+
+func TestWriteLocalSetsGeoNoLibraryDir(t *testing.T) {
+	cfg := cfgWith(local("geoip-cn", "binary", filepath.Join(t.TempDir(), "geoip-cn.srs")))
+	rep, _ := Files{}.WriteLocalSets(context.Background(), cfg, nil)
+	if len(rep.Missing) != 1 || !strings.Contains(rep.Missing[0].Reason, "-geo-dir") {
+		t.Fatalf("rep=%+v", rep)
+	}
+}
+
+// 规则集目录就是规则库目录:目标和来源是同一个文件,不拷、不动。
+func TestWriteLocalSetsGeoSameFile(t *testing.T) {
+	dir := t.TempDir()
+	writeGeo(t, dir, "geosite-cn", fakeSRS("v1"))
+	cfg := cfgWith(local("geosite-cn", "binary", filepath.Join(dir, "geosite-cn.srs")))
+	rep, _ := Files{GeoDir: dir}.WriteLocalSets(context.Background(), cfg, nil)
+	if !rep.OK() || len(rep.Written) != 0 || len(rep.Kept) != 1 {
+		t.Fatalf("rep=%+v", rep)
+	}
+}
+
+// 分类名里的路径穿越不会被当成规则库分类(ValidTag 挡住),只会落入「用户规则集」那一类。
+func TestWriteLocalSetsGeoTraversalRejected(t *testing.T) {
+	root := t.TempDir()
+	writeGeo(t, root, "secret", fakeSRS("x"))
+	geo := filepath.Join(root, "geo")
+	os.MkdirAll(geo, 0o755)
+	cfg := cfgWith(local("geosite-../secret", "binary", filepath.Join(root, "out.srs")))
+	rep, _ := Files{GeoDir: geo}.WriteLocalSets(context.Background(), cfg, nil)
+	if len(rep.Written) != 0 || len(rep.Missing) != 1 {
+		t.Fatalf("rep=%+v", rep)
+	}
+	if _, err := os.Stat(filepath.Join(root, "out.srs")); err == nil {
+		t.Fatal("不该落盘")
+	}
+}
+
+// 真实 sing-box 编出的 .srs 放进规则库 → 拷到规则集目录 → 能被 decompile 读回。
+func TestWriteLocalSetsGeoRealSingBoxRoundTrip(t *testing.T) {
+	bin, err := exec.LookPath("sing-box")
+	if err != nil {
+		t.Skip("没有 sing-box,跳过")
+	}
+	root := t.TempDir()
+	geo := filepath.Join(root, "geo")
+	os.MkdirAll(geo, 0o755)
+	src := filepath.Join(root, "src.json")
+	os.WriteFile(src, []byte(`{"version":3,"rules":[{"domain_suffix":["example.cn","baidu.com"]}]}`), 0o600)
+	if out, err := exec.Command(bin, "rule-set", "compile", "--output", filepath.Join(geo, "geosite-cn.srs"), src).CombinedOutput(); err != nil {
+		t.Fatalf("compile: %v %s", err, out)
+	}
+	dst := filepath.Join(root, "rules", "geosite-cn.srs")
+	cfg := cfgWith(local("geosite-cn", "binary", dst))
+	rep, err := Files{SingBox: bin, GeoDir: geo}.WriteLocalSets(context.Background(), cfg, nil)
+	if err != nil || !rep.OK() || len(rep.Written) != 1 {
+		t.Fatalf("rep=%+v err=%v", rep, err)
+	}
+	back := filepath.Join(root, "back.json")
+	if out, err := exec.Command(bin, "rule-set", "decompile", "--output", back, dst).CombinedOutput(); err != nil {
+		t.Fatalf("decompile: %v %s", err, out)
+	}
+	b, _ := os.ReadFile(back)
+	if !strings.Contains(string(b), "baidu.com") || !strings.Contains(string(b), "example.cn") {
+		t.Fatalf("读回内容 %s", b)
+	}
+}
