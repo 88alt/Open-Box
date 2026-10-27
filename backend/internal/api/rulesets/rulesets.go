@@ -1,8 +1,8 @@
 // Package rulesets 实现 /api/openbox/rulesets/*。
 //
 // 已实现:preview、import(规则集链接指向的文本名单)、entries(按随包规则库里的分类名查,
-// 由 internal/geodata 交给 sing-box 解码)。
-// 未实现(501):refresh(立即重拉重编,要先有「规则集链接编成 .srs」的落盘和部署),等对应条目做完再接。
+// 由 internal/geodata 交给 sing-box 解码)、refresh(对一个链接立即重拉重编 .srs,
+// 由 internal/singbox 的 Refresher 做;只改规则集文件,不重启、不部署)。
 package rulesets
 
 import (
@@ -15,6 +15,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
 	"github.com/timeflysoon/Open-Box/backend/internal/rulelist"
+	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
 )
 
 const (
@@ -29,31 +30,34 @@ type GeoEntries interface {
 	Entries(ctx context.Context, tag string) (*geodata.Result, error)
 }
 
-// Deps 是本分组的依赖。Geo 为空时 entries 返回 503。
+// Refresher 对单个规则集链接立即重拉重编(测试里换成假的)。
+type Refresher interface {
+	Refresh(ctx context.Context, rawURL string) (*singbox.RefreshResult, error)
+}
+
+// maxRefreshBody 是 refresh 请求体上限(只有一个链接)。
+const maxRefreshBody = 8 << 10
+
+// Deps 是本分组的依赖。Geo 为空时 entries 返回 503;Refresh 为空时 refresh 返回 503。
 type Deps struct {
-	Lists *rulelist.Service
-	Geo   GeoEntries
+	Lists   *rulelist.Service
+	Geo     GeoEntries
+	Refresh Refresher
 }
 
 type handlers struct {
 	l *rulelist.Service
 	g GeoEntries
+	r Refresher
 }
 
 // Register 把本分组的接口挂到 mux 上。
 func Register(mux *http.ServeMux, d Deps) {
-	h := &handlers{l: d.Lists, g: d.Geo}
+	h := &handlers{l: d.Lists, g: d.Geo, r: d.Refresh}
 	mux.HandleFunc("/api/openbox/rulesets/preview", httpx.Methods(map[string]http.HandlerFunc{http.MethodGet: h.preview}))
 	mux.HandleFunc("/api/openbox/rulesets/import", httpx.Methods(map[string]http.HandlerFunc{http.MethodGet: h.importAll}))
 	mux.HandleFunc("/api/openbox/rulesets/entries", httpx.Methods(map[string]http.HandlerFunc{http.MethodGet: h.entries}))
-	mux.HandleFunc("/api/openbox/rulesets/refresh", httpx.Methods(map[string]http.HandlerFunc{http.MethodPost: notReady("规则集立即更新暂未实现(需要先把规则集链接编成 .srs 并落盘、再接部署)")}))
-}
-
-func notReady(msg string) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		httpx.NoStore(w)
-		httpx.Error(w, http.StatusNotImplemented, msg)
-	}
+	mux.HandleFunc("/api/openbox/rulesets/refresh", httpx.Methods(map[string]http.HandlerFunc{http.MethodPost: h.refresh}))
 }
 
 func (h *handlers) load(w http.ResponseWriter, r *http.Request) (string, *rulelist.Result, bool) {
@@ -180,4 +184,46 @@ func (h *handlers) entries(w http.ResponseWriter, r *http.Request) {
 		body["truncated"] = true // 分类条目超过上限,只列了前面的
 	}
 	httpx.JSON(w, http.StatusOK, body)
+}
+
+// refresh:对一个规则集链接立即重拉重编。只改规则集文件;needsRestart 为真时由前端提示用户重启(重新部署)。
+func (h *handlers) refresh(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if h.r == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "规则集立即更新未启用")
+		return
+	}
+	var body struct {
+		URL string `json:"url"`
+	}
+	if !httpx.DecodeJSON(w, r, &body, maxRefreshBody) {
+		return
+	}
+	res, err := h.r.Refresh(r.Context(), body.URL)
+	if err != nil {
+		var ri *singbox.RefreshInputError
+		var rb *singbox.RefreshBuildError
+		var in *rulelist.InputError
+		var fe *rulelist.FetchError
+		switch {
+		case errors.As(err, &ri):
+			httpx.Error(w, http.StatusBadRequest, ri.Msg)
+		case errors.As(err, &in):
+			httpx.Error(w, http.StatusBadRequest, in.Msg)
+		case errors.As(err, &fe):
+			httpx.Error(w, http.StatusBadGateway, fe.Msg)
+		case errors.Is(err, rulelist.ErrBinary), errors.Is(err, rulelist.ErrEmpty):
+			httpx.Error(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, singbox.ErrNoSingBox):
+			httpx.Error(w, http.StatusServiceUnavailable, err.Error())
+		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+			httpx.Error(w, http.StatusServiceUnavailable, "请求已取消或超时")
+		case errors.As(err, &rb):
+			httpx.Error(w, http.StatusInternalServerError, rb.Msg)
+		default:
+			httpx.Error(w, http.StatusInternalServerError, "规则集更新失败: "+err.Error())
+		}
+		return
+	}
+	httpx.JSON(w, http.StatusOK, res)
 }

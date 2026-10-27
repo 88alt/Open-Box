@@ -102,7 +102,7 @@ func CollectRuleURLs(routing any) []string {
 //   - 名单里某一类(域名 / IP)为空:不写那一份,删掉旧的;两类都空:两份都不要(形状全假);
 //   - 编完后删掉不再被任何链接引用的 list-*.srs。单个链接失败不影响其它;只有 ctx 取消才返回 error。
 func (l ListFiles) Sync(ctx context.Context, urls []string) (*ListReport, error) {
-	rep := &ListReport{Shapes: map[string]ListShape{}, Written: []string{}, Kept: []string{}, Pruned: []string{}, Dropped: map[string]int{}, Issues: []ListIssue{}}
+	rep := newListReport()
 	keep := map[string]bool{}
 	done := map[string]bool{}
 	for _, u := range urls {
@@ -114,79 +114,92 @@ func (l ListFiles) Sync(ctx context.Context, urls []string) (*ListReport, error)
 			continue
 		}
 		done[tag] = true
-		domPath := filepath.Join(l.Dir, tag+".srs")
-		ipPath := filepath.Join(l.Dir, tag+"-ip.srs")
-		fallback := func(reason string) {
-			d, i := hasSRS(domPath), hasSRS(ipPath)
-			if d || i {
-				rep.Shapes[tag] = ListShape{Domain: d, IP: i}
-				keep[tag+".srs"], keep[tag+"-ip.srs"] = d, i
-				rep.Issues = append(rep.Issues, ListIssue{Tag: tag, Reason: reason + "(沿用上次编好的文件)", UsedOld: true})
-				return
-			}
-			rep.Issues = append(rep.Issues, ListIssue{Tag: tag, Reason: reason})
+		if err := l.syncOne(ctx, u, tag, rep, keep); err != nil {
+			return rep, err
 		}
-		if l.Rules == nil {
-			fallback("没有配置规则集链接的拉取服务")
-			continue
-		}
-		res, err := l.Rules.Load(ctx, u)
-		if err != nil {
-			if ctx.Err() != nil {
-				return rep, ctx.Err()
-			}
-			fallback("拉取或解析规则集链接失败:" + err.Error())
-			continue
-		}
-		dom, ip, dropped := splitEntries(res.Entries)
-		if dropped > 0 {
-			rep.Dropped[tag] = dropped
-		}
-		shape := ListShape{Domain: len(dom) > 0, IP: len(ip) > 0}
-		failed := ""
-		for _, part := range []struct {
-			path string
-			rule map[string]any
-			has  bool
-			name string
-		}{
-			{domPath, dom, shape.Domain, tag + ".srs"},
-			{ipPath, ip, shape.IP, tag + "-ip.srs"},
-		} {
-			if !part.has {
-				if err := os.Remove(part.path); err == nil {
-					rep.Pruned = append(rep.Pruned, part.path)
-				}
-				continue
-			}
-			src, err := marshalSource(part.rule)
-			if err == nil {
-				var changed bool
-				changed, err = compileSRS(ctx, l.SingBox, part.path, src, part.name)
-				if err == nil {
-					if changed {
-						rep.Written = append(rep.Written, part.path)
-					} else {
-						rep.Kept = append(rep.Kept, part.path)
-					}
-					keep[part.name] = true
-					continue
-				}
-			}
-			if ctx.Err() != nil {
-				return rep, ctx.Err()
-			}
-			failed = err.Error()
-			break
-		}
-		if failed != "" {
-			fallback("编译规则集失败:" + failed)
-			continue
-		}
-		rep.Shapes[tag] = shape
 	}
 	l.prune(keep, rep)
 	return rep, nil
+}
+
+func newListReport() *ListReport {
+	return &ListReport{Shapes: map[string]ListShape{}, Written: []string{}, Kept: []string{}, Pruned: []string{}, Dropped: map[string]int{}, Issues: []ListIssue{}}
+}
+
+// syncOne 处理一个链接(拉取 → 拆分 → 编译),结果记进 rep,要保留的文件名记进 keep。
+// 只有 ctx 取消才返回 error;其余失败记成 Issue。不做清理(清理是 Sync 的事)。
+func (l ListFiles) syncOne(ctx context.Context, u, tag string, rep *ListReport, keep map[string]bool) error {
+	domPath := filepath.Join(l.Dir, tag+".srs")
+	ipPath := filepath.Join(l.Dir, tag+"-ip.srs")
+	fallback := func(reason string) {
+		d, i := hasSRS(domPath), hasSRS(ipPath)
+		if d || i {
+			rep.Shapes[tag] = ListShape{Domain: d, IP: i}
+			keep[tag+".srs"], keep[tag+"-ip.srs"] = d, i
+			rep.Issues = append(rep.Issues, ListIssue{Tag: tag, Reason: reason + "(沿用上次编好的文件)", UsedOld: true})
+			return
+		}
+		rep.Issues = append(rep.Issues, ListIssue{Tag: tag, Reason: reason})
+	}
+	if l.Rules == nil {
+		fallback("没有配置规则集链接的拉取服务")
+		return nil
+	}
+	res, err := l.Rules.Load(ctx, u)
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		fallback("拉取或解析规则集链接失败:" + err.Error())
+		return nil
+	}
+	dom, ip, dropped := splitEntries(res.Entries)
+	if dropped > 0 {
+		rep.Dropped[tag] = dropped
+	}
+	shape := ListShape{Domain: len(dom) > 0, IP: len(ip) > 0}
+	failed := ""
+	for _, part := range []struct {
+		path string
+		rule map[string]any
+		has  bool
+		name string
+	}{
+		{domPath, dom, shape.Domain, tag + ".srs"},
+		{ipPath, ip, shape.IP, tag + "-ip.srs"},
+	} {
+		if !part.has {
+			if err := os.Remove(part.path); err == nil {
+				rep.Pruned = append(rep.Pruned, part.path)
+			}
+			continue
+		}
+		src, err := marshalSource(part.rule)
+		if err == nil {
+			var changed bool
+			changed, err = compileSRS(ctx, l.SingBox, part.path, src, part.name)
+			if err == nil {
+				if changed {
+					rep.Written = append(rep.Written, part.path)
+				} else {
+					rep.Kept = append(rep.Kept, part.path)
+				}
+				keep[part.name] = true
+				continue
+			}
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		failed = err.Error()
+		break
+	}
+	if failed != "" {
+		fallback("编译规则集失败:" + failed)
+		return nil
+	}
+	rep.Shapes[tag] = shape
+	return nil
 }
 
 // splitEntries 把名单拆成域名一份、IP 一份(源码规则的字段);空的一份返回 nil。

@@ -154,7 +154,12 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 	lists := rulelist.NewService(nil)
 	// 随包规则库(只读):按分类名查条目时交给 sing-box 解码;临时文件放在上面建好的 tmp 里
 	geoLib := geodata.New(cfg.GeoDir, cfg.SingBox, probeDir)
-	rulesetsapi.Register(srv.Mux(), rulesetsapi.Deps{Lists: lists, Geo: geoLib})
+	// 规则集链接「立即更新」:只对一个链接重拉重编 .srs(目录与配置生成用的规则集目录一致),不重启、不部署
+	refresher := &singbox.Refresher{
+		Lists: singbox.ListFiles{SingBox: cfg.SingBox, Dir: filepath.Join(cfg.DataDir, "rules")},
+		Fetch: lists, URLs: gen,
+	}
+	rulesetsapi.Register(srv.Mux(), rulesetsapi.Deps{Lists: lists, Geo: geoLib, Refresh: refresher})
 
 	// 域名穿透:站点集命中哪些域名 / IP。核心不可用时接口返回 503,其它接口不受影响
 	var peCore policyentries.Core

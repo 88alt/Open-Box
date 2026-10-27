@@ -142,3 +142,60 @@ func TestServiceDoesNotCacheErrors(t *testing.T) {
 		t.Fatalf("失败不应缓存: %d", calls.Load())
 	}
 }
+
+// Reload 跳过缓存重新拉取,并刷新缓存;失败不动旧缓存;缓存已满时刷新已有的链接不挤掉别人。
+func TestServiceReload(t *testing.T) {
+	var calls atomic.Int32
+	body := "DOMAIN,old.com\n"
+	fail := false
+	s := NewService(func(context.Context, string) ([]byte, error) {
+		calls.Add(1)
+		if fail {
+			return nil, &FetchError{Msg: "连接超时"}
+		}
+		return []byte(body), nil
+	})
+	now := time.Unix(1000, 0)
+	s.now = func() time.Time { return now }
+	ctx := context.Background()
+
+	if r, _ := s.Load(ctx, "http://a.com"); r.Entries[0].Value != "old.com" {
+		t.Fatalf("首次: %+v", r.Entries)
+	}
+	body = "DOMAIN,new.com\n"
+	if r, _ := s.Load(ctx, "http://a.com"); r.Entries[0].Value != "old.com" || calls.Load() != 1 {
+		t.Fatal("Load 在缓存内应还是旧的")
+	}
+	r, err := s.Reload(ctx, "http://a.com")
+	if err != nil || r.Entries[0].Value != "new.com" || calls.Load() != 2 {
+		t.Fatalf("Reload 应重新拉取: %+v %v calls=%d", r, err, calls.Load())
+	}
+	if r, _ := s.Load(ctx, "http://a.com"); r.Entries[0].Value != "new.com" || calls.Load() != 2 {
+		t.Fatal("Reload 之后 Load 应读到新结果且不再联网")
+	}
+
+	fail = true
+	if _, err := s.Reload(ctx, "http://a.com"); err == nil {
+		t.Fatal("拉取失败应报错")
+	}
+	if r, _ := s.Load(ctx, "http://a.com"); r.Entries[0].Value != "new.com" {
+		t.Fatal("失败不该动旧缓存")
+	}
+
+	// 缓存满了:刷新已有的链接不该把别的链接挤出去
+	fail = false
+	for i := 1; i < cacheMax; i++ {
+		now = now.Add(time.Second)
+		_, _ = s.Load(ctx, "http://h"+string(rune('a'+i))+".com")
+	}
+	if len(s.cache) != cacheMax {
+		t.Fatalf("准备:缓存应正好满: %d", len(s.cache))
+	}
+	now = now.Add(time.Second)
+	if _, err := s.Reload(ctx, "http://a.com"); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.cache) != cacheMax {
+		t.Fatalf("刷新已有链接不该挤掉别人: %d", len(s.cache))
+	}
+}

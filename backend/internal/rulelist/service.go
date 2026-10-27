@@ -40,12 +40,24 @@ func NewService(fetch Fetcher) *Service {
 
 // Load 返回链接对应的解析结果(60 秒内同一链接走缓存)。
 func (s *Service) Load(ctx context.Context, rawURL string) (*Result, error) {
-	s.mu.Lock()
-	if c, ok := s.cache[rawURL]; ok && s.now().Sub(c.at) < cacheTTL {
+	return s.load(ctx, rawURL, false)
+}
+
+// Reload 跳过缓存重新拉取(「立即更新」用),成功后用新结果刷新缓存,
+// 之后的预览 / 域名穿透看到的就是刚拉到的这一份。拉取失败不动缓存。
+func (s *Service) Reload(ctx context.Context, rawURL string) (*Result, error) {
+	return s.load(ctx, rawURL, true)
+}
+
+func (s *Service) load(ctx context.Context, rawURL string, force bool) (*Result, error) {
+	if !force {
+		s.mu.Lock()
+		if c, ok := s.cache[rawURL]; ok && s.now().Sub(c.at) < cacheTTL {
+			s.mu.Unlock()
+			return c.res, nil
+		}
 		s.mu.Unlock()
-		return c.res, nil
 	}
-	s.mu.Unlock()
 
 	body, err := s.fetch(ctx, rawURL)
 	if err != nil {
@@ -58,7 +70,7 @@ func (s *Service) Load(ctx context.Context, rawURL string) (*Result, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.cache) >= cacheMax {
+	if _, has := s.cache[rawURL]; !has && len(s.cache) >= cacheMax {
 		oldest, first := "", true
 		var at time.Time
 		for k, v := range s.cache {
