@@ -287,6 +287,8 @@
 | POST | `/api/openbox/service/core/{x}` | `runServiceAction` (api/openbox.ts:1030) | OpenboxServiceActionResult | (action: OpenboxServiceAction) |
 | GET | `/api/openbox/service/status` | `fetchServiceStatus` (api/openbox.ts:1022) | OpenboxServiceStatus | () |
 
+实现约定(M1):`status` 的 `conflicts` 是正在运行的其它代理服务 `[{ id, label, running: true }]`,只读检测(OpenWrt 查 `/etc/init.d/<名> running`,systemd 用 `systemctl is-active`),名单见 `internal/system/conflicts.go` 的 `KnownConflicts`,自己的 sing-box 和后端服务名不算;检测失败当作没有,接口不报错。`pendingRestart` 暂恒为「没有」(随部署接 HTTP 再做),没有 `container` / `conflictAutoStopped`(后端不自动停别的服务)。
+
 ## `/api/openbox/site-latency`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |

@@ -136,8 +136,13 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 
 	// 服务控制:只通过系统自带的服务管理器(OpenWrt init.d / systemd)操作 sing-box
 	initKind := system.DetectInitHere()
+	svcCtl := &system.Services{Kind: initKind, Run: system.ExecRunner, ProcUptime: system.ReadProcUptime}
 	serviceapi.Register(srv.Mux(), serviceapi.Deps{
-		Services:    &system.Services{Kind: initKind, Run: system.ExecRunner, ProcUptime: system.ReadProcUptime},
+		Services: svcCtl,
+		Conflicts: &system.ConflictDetector{
+			Svc: svcCtl, Exclude: []string{cfg.CoreService, cfg.PanelService},
+			Exists: func(p string) bool { _, err := os.Stat(p); return err == nil },
+		},
 		Kind:        initKind,
 		CoreService: cfg.CoreService, PanelName: cfg.PanelService, SingBox: cfg.SingBox,
 	})

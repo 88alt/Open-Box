@@ -150,3 +150,54 @@ func TestKernelVersion(t *testing.T) {
 		t.Fatalf("没有 sing-box 应 200 且 ok:false: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+type fakeConflicts struct {
+	found []system.Conflict
+	err   error
+}
+
+func (f fakeConflicts) Find(context.Context) ([]system.Conflict, error) { return f.found, f.err }
+
+func statusWith(t *testing.T, c ConflictFinder, f *fake) map[string]any {
+	t.Helper()
+	mux := http.NewServeMux()
+	Register(mux, Deps{Services: f, Conflicts: c, Kind: system.InitOpenWrt, CoreService: "sing-box", PanelName: "openbox-backend", Arch: "arm64"})
+	rec := do(mux, http.MethodGet, "/api/openbox/service/status")
+	if rec.Code != 200 {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func TestStatusConflicts(t *testing.T) {
+	f := &fake{statuses: map[string]system.ServiceInfo{"sing-box": {Running: true, Raw: "running"}}}
+	// 前端 OpenboxConflictService:{id, label, running}
+	got := statusWith(t, fakeConflicts{found: []system.Conflict{{ID: "openclash", Label: "OpenClash", Running: true}}}, f)
+	c, _ := got["conflicts"].([]any)
+	if len(c) != 1 {
+		t.Fatalf("%v", got["conflicts"])
+	}
+	m := c[0].(map[string]any)
+	if m["id"] != "openclash" || m["label"] != "OpenClash" || m["running"] != true {
+		t.Fatalf("%v", m)
+	}
+	// 检测出错:尽力而为,状态接口照常 200、conflicts 是空数组(不是 null)
+	got = statusWith(t, fakeConflicts{err: errors.New("boom")}, f)
+	if c, ok := got["conflicts"].([]any); !ok || len(c) != 0 {
+		t.Fatalf("%v", got["conflicts"])
+	}
+	// 出错但查到了一部分:用查到的
+	got = statusWith(t, fakeConflicts{found: []system.Conflict{{ID: "passwall", Label: "PassWall", Running: true}}, err: errors.New("部分失败")}, f)
+	if c, _ := got["conflicts"].([]any); len(c) != 1 {
+		t.Fatalf("%v", got["conflicts"])
+	}
+	// 不接检测:空数组
+	got = statusWith(t, nil, f)
+	if c, ok := got["conflicts"].([]any); !ok || len(c) != 0 {
+		t.Fatalf("%v", got["conflicts"])
+	}
+}

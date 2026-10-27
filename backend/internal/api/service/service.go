@@ -20,9 +20,15 @@ type Controller interface {
 	Do(ctx context.Context, name, action string) (system.ActionResult, error)
 }
 
+// ConflictFinder 找出正在运行的其它代理服务(*system.ConflictDetector 实现它),测试里换假的。
+type ConflictFinder interface {
+	Find(ctx context.Context) ([]system.Conflict, error)
+}
+
 // Deps 是本分组的依赖。
 type Deps struct {
 	Services    Controller
+	Conflicts   ConflictFinder // 为空 = 不检测,conflicts 恒为空数组
 	Kind        system.InitKind
 	CoreService string // sing-box 的服务名
 	PanelName   string // 后端自己的服务名(只查开机自启)
@@ -52,7 +58,7 @@ func Register(mux *http.ServeMux, d Deps) {
 type statusResponse struct {
 	Core      system.ServiceInfo `json:"core"`
 	Panel     system.ServiceInfo `json:"panel"`
-	Conflicts []any              `json:"conflicts"`
+	Conflicts []system.Conflict  `json:"conflicts"`
 	Platform  string             `json:"platform"`
 	Arch      string             `json:"arch"`
 	// 还没重启生效的改动。部署流程接进来之前恒为「没有」。
@@ -67,7 +73,7 @@ type pending struct {
 func (d Deps) status(w http.ResponseWriter, r *http.Request) {
 	httpx.NoStore(w)
 	resp := statusResponse{
-		Conflicts:      []any{}, // 其它代理服务冲突的检测还没做
+		Conflicts:      []system.Conflict{},
 		Platform:       string(d.Kind),
 		Arch:           d.Arch,
 		PendingRestart: pending{Reasons: []string{}},
@@ -86,6 +92,12 @@ func (d Deps) status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp.Core = core
+	// 与其它代理服务冲突的检测:尽力而为,查不到就当没有,不让它拖垮状态接口
+	if d.Conflicts != nil {
+		if found, _ := d.Conflicts.Find(r.Context()); len(found) > 0 {
+			resp.Conflicts = found
+		}
+	}
 	// 后端自己的开机自启:查不到就不带这个字段
 	if p, err := d.Services.Status(r.Context(), d.PanelName); err == nil {
 		resp.Panel.Autostart = p.Autostart
