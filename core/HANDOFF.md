@@ -15,7 +15,7 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
 - 沙箱推不了仓库:每做完一块出一个 .patch(基于最新 origin/main),维护者在 Git Bash 里应用并推送(第七节)。
 
 接手后先做:
-1. 克隆 https://github.com/timeflysoon/Open-Box(公开),git checkout main(默认分支 catch-up-upstream 里没有 core/)。
+1. 克隆 https://github.com/timeflysoon/Open-Box (公开),git checkout main(默认分支 catch-up-upstream 里没有 core/)。
 2. 先对账:git fetch 后看 git log --oneline origin/main -- core,和第三节、core/README.md 的进度表对照。提交里已经做了、文档没标的,以提交为准,
    不要重复实现、重复推送。每次出补丁前再 git fetch 一次,确认 origin/main 没有新提交。
 3. 沙箱里确认 go version、node -v(缺 Go 用 apt 装;沙箱访问不了 Go 模块代理,只用标准库)。
