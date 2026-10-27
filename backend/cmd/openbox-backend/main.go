@@ -16,6 +16,7 @@ import (
 	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
 	groupsapi "github.com/timeflysoon/Open-Box/backend/internal/api/groups"
 	latencyapi "github.com/timeflysoon/Open-Box/backend/internal/api/latency"
+	policiesapi "github.com/timeflysoon/Open-Box/backend/internal/api/policies"
 	profileapi "github.com/timeflysoon/Open-Box/backend/internal/api/profile"
 	rulesetsapi "github.com/timeflysoon/Open-Box/backend/internal/api/rulesets"
 	serviceapi "github.com/timeflysoon/Open-Box/backend/internal/api/service"
@@ -24,6 +25,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
+	"github.com/timeflysoon/Open-Box/backend/internal/policyentries"
 	"github.com/timeflysoon/Open-Box/backend/internal/probe"
 	"github.com/timeflysoon/Open-Box/backend/internal/profile"
 	"github.com/timeflysoon/Open-Box/backend/internal/rulelist"
@@ -147,7 +149,16 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 	latencyapi.Register(srv.Mux(), latencyapi.Deps{Gen: gen, Subs: subsSvc, Profiles: profileSvc,
 		Runner: &probe.Runner{Bin: cfg.SingBox, Dir: probeDir}})
 
-	rulesetsapi.Register(srv.Mux(), rulesetsapi.Deps{Lists: rulelist.NewService(nil)})
+	// 规则集链接服务共用一份(含 60 秒内存缓存):规则集预览和「域名穿透」都会拉同一批链接
+	lists := rulelist.NewService(nil)
+	rulesetsapi.Register(srv.Mux(), rulesetsapi.Deps{Lists: lists})
+
+	// 域名穿透:站点集命中哪些域名 / IP。核心不可用时接口返回 503,其它接口不受影响
+	var peCore policyentries.Core
+	if core.Available(cfg.Core) {
+		peCore = policyentries.CoreAdapter{C: core.New(cfg.Core)}
+	}
+	policiesapi.Register(srv.Mux(), policiesapi.Deps{Entries: policyentries.New(profileSvc, peCore, lists)})
 
 	// 前端静态文件与前端路由回落;最后挂,/api 下的路径由各接口分组优先处理
 	srv.Mux().Handle("/", server.StaticHandler(cfg.WebDir))

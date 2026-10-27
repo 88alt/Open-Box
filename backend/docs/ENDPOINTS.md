@@ -242,6 +242,8 @@
 |---|---|---|---|---|
 | GET | `/api/openbox/policies/entries?{x}` | `fetchPolicyEntries` (api/openbox.ts:1214) | OpenboxPolicyEntries | (params: { name: string tab?: 'all' \| 'domain' \| 'ip' q?: string sort?: 'type' |
 
+> 实现约定(M1):`name` 是站点集名(必填,缺少 400,没有这个站点集 404)。取自档案的路由,先交给核心 `normalizeRouting` 规范化。`name` 等于兜底站点集名时返回 `fallback:true` 和空条目(兜底命中其余所有目标);等于前置自定义分流名时展开它的每一行(含端口规则,`family:"other"`);否则展开该站点集的手写条件(来源 `custom`)和规则集链接(来源是链接的「主机 + 路径」,不带账号、查询串和片段)。条目 `type` 为 `domain` / `domain_suffix` / `domain_keyword` / `domain_regex` / `ip_cidr`(和 `rulesets/preview` 一致)或 `port`;同类型、同内容、同来源去重,总量最多 30 万条。`tab` 取 `all` / `domain` / `ip`(其它 400);`counts` 是各档总条数(不受 `tab` 和 `q` 影响,`other` 族只算进 `all`),`total` 是当前档的条数,`matched` 是当前档里命中 `q` 的条数;`q` 不区分大小写,匹配内容和来源;`sort` 取 `type` / `content` / `source`(其它 400,缺省保持原顺序),`dir` 取 `asc` / `desc`;`limit` 默认 50、最大 500。`missing` 列出展开不了的来源:规则库分类(`geosite-*` / `geoip-*`,随包规则库还没做)、拉取失败的规则集链接(只写「主机 + 路径」)、没有链接可展开的 `list-*`;单个链接失败不会让整个请求失败。没有 openbox-core 时返回 503。
+
 ## `/api/openbox/profile`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
