@@ -26,6 +26,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
+	"github.com/timeflysoon/Open-Box/backend/internal/dnstest"
 	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/policyentries"
@@ -150,23 +151,47 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 		CoreService: cfg.CoreService, PanelName: cfg.PanelService, SingBox: cfg.SingBox,
 	})
 
+	// 节点测速和 DNS 上游测试共用的临时目录:临时配置放在数据目录下的 tmp(0700),用完即删
+	probeDir := filepath.Join(cfg.DataDir, "tmp")
+	if err := os.MkdirAll(probeDir, 0o700); err != nil {
+		log.Warn("创建测速临时目录失败,节点测速、DNS 上游测试不可用", "dir", probeDir, "error", err)
+	}
+	probeRunner := &probe.Runner{Bin: cfg.SingBox, Dir: probeDir}
+
+	// 档案里的 DNS 地区;读不到按 cn(与前端一致)
+	dnsRegion := func(ctx context.Context) string {
+		p, err := profileSvc.Get(ctx)
+		if err != nil {
+			return "cn"
+		}
+		if d, ok := p["dns"].(map[string]any); ok {
+			if r, _ := d["region"].(string); r != "" {
+				return r
+			}
+		}
+		return "cn"
+	}
+	wanDNS := func() []string { return system.ReadWANDNS(system.WANResolverFiles) }
+
 	// 上游 DNS(只读):从 netifd / systemd-resolved 记录的文件里读,不碰任何系统设置
 	dnsapi.Register(srv.Mux(), dnsapi.Deps{
-		WAN: func() []string { return system.ReadWANDNS(system.WANResolverFiles) },
-		// 档案里的 DNS 地区;读不到按 cn(与前端一致)
-		Region: func(ctx context.Context) string {
-			p, err := profileSvc.Get(ctx)
-			if err != nil {
-				return "cn"
-			}
-			if d, ok := p["dns"].(map[string]any); ok {
-				if r, _ := d["region"].(string); r != "" {
-					return r
-				}
-			}
-			return "cn"
-		},
+		WAN:      wanDNS,
+		Region:   dnsRegion,
 		Detector: &regiondetect.Detector{},
+		// 上游测试:临时 sing-box 让内核真查一次;代理侧经生成配置里的兜底出站
+		Test: (&dnstest.Tester{
+			Query:   probeRunner,
+			WAN:     wanDNS,
+			Region:  dnsRegion,
+			Profile: profileSvc.Get,
+			Config: func(ctx context.Context) (map[string]any, error) {
+				b, err := gen.Build(ctx)
+				if err != nil {
+					return nil, err
+				}
+				return b.Config, nil
+			},
+		}).Test,
 		// 清 DNS 缓存:内核(读正式配置里的控制接口)、dnsmasq(给进程发 SIGHUP)、systemd-resolved
 		Flush: dnscache.Layers{
 			Kernel: func(ctx context.Context) error {
@@ -178,13 +203,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 		}.Flush,
 	})
 
-	// 节点测速:临时配置放在数据目录下的 tmp(0700),用完即删
-	probeDir := filepath.Join(cfg.DataDir, "tmp")
-	if err := os.MkdirAll(probeDir, 0o700); err != nil {
-		log.Warn("创建测速临时目录失败,节点测速不可用", "dir", probeDir, "error", err)
-	}
-	latencyapi.Register(srv.Mux(), latencyapi.Deps{Gen: gen, Subs: subsSvc, Profiles: profileSvc,
-		Runner: &probe.Runner{Bin: cfg.SingBox, Dir: probeDir}})
+	latencyapi.Register(srv.Mux(), latencyapi.Deps{Gen: gen, Subs: subsSvc, Profiles: profileSvc, Runner: probeRunner})
 
 	// 规则集链接服务共用一份(含 60 秒内存缓存):规则集预览和「域名穿透」都会拉同一批链接
 	lists := rulelist.NewService(nil)

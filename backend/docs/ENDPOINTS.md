@@ -169,6 +169,8 @@
 
 > 实现约定(M2):`dns/flush-cache` 只接受 POST,回 `{ kernel, dnsmasq, resolved }`(每层是否清成功,各层独立);至少一层成功是 200,全都没清掉是 503 加 `error`。内核层走 sing-box 的 `POST /cache/dns/flush`,dnsmasq 层发 SIGHUP,resolved 层 `resolvectl flush-caches`;只让缓存失效,不改配置、不重启。
 
+> 实现约定(M2):`dns/upstream-test` 只接受 POST,请求 `{ side: "direct" | "proxy", server, protocol, port? }`:`server` 只收 IPv4 / IPv6 或 `wan`(不收域名),`protocol` 只有 `udp` / `tcp`(缺省:直连 udp、代理 tcp),`port` 缺省 53;不合法回 400 加 `error`,没有 sing-box 或核心不可用回 503。测了但没通是 200、`ok: false` 加 `error`(超时、上游回错误码、内核起不来都在里面)。做法:起临时 sing-box,只开 127.0.0.1 的 direct 入站并把进来的 DNS 查询劫持给内核自己的 DNS 模块,内核 DNS 里只有被测的这一台,后端发一个 A 查询并计时,所以测的是内核按所选协议、经所选线路真的去问。`wan` 固定直连、固定 UDP 53,测系统上游 DNS 的第一台(读不到按地区退回 223.5.5.5 / 1.1.1.1,并写进 `note`),`wan` 为真。代理侧经生成配置的兜底出站(`route.final`)去连,`policy` 是这个出口的名字,`via` / `chain` 是它当前默认选中的节点和逐跳线路(链首在前);出口是自动选择组时内核按延迟挑,`via` 只能写组名并在 `note` 里说明;兜底出口是直连时 `via` 为空。测试域名取档案:代理侧 `testUrl` 的主机、直连侧 `directTestUrl` 的主机。`warning` 暂不出现:解析之后再请求测速地址那一步没有做。
+
 ## `/api/openbox/dns-filter`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |

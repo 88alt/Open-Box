@@ -1,12 +1,14 @@
 // Package dns 实现 /api/openbox/dns/* 里与「上游 DNS」有关的接口:
-// GET dns/wan、GET / POST dns/region-detect、POST dns/flush-cache。upstream-test 见 STATUS.md M2 的后续条目。
+// GET dns/wan、GET / POST dns/region-detect、POST dns/flush-cache、POST dns/upstream-test。
 package dns
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
+	"github.com/timeflysoon/Open-Box/backend/internal/dnstest"
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
 	"github.com/timeflysoon/Open-Box/backend/internal/regiondetect"
 )
@@ -27,7 +29,11 @@ type Deps struct {
 	Detector Detector
 	// Flush 清三层 DNS 缓存(*dnscache.Layers.Flush);为空时 flush-cache 返回 503。
 	Flush func(ctx context.Context) dnscache.Result
+	// Test 让内核按所选协议向一台 DNS 上游真查一次(*dnstest.Tester.Test);为空时 upstream-test 返回 503。
+	Test func(ctx context.Context, req dnstest.Request) (dnstest.Result, error)
 }
+
+const maxTestBody = 4 << 10
 
 // Register 把接口挂到 mux 上。
 func Register(mux *http.ServeMux, d Deps) {
@@ -36,6 +42,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	}))
 	mux.HandleFunc("/api/openbox/dns/flush-cache", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodPost: d.flush,
+	}))
+	mux.HandleFunc("/api/openbox/dns/upstream-test", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodPost: d.upstreamTest,
 	}))
 	mux.HandleFunc("/api/openbox/dns/region-detect", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodGet:  d.regionState,
@@ -94,4 +103,31 @@ func (d Deps) flush(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, res)
+}
+
+// upstreamTest 对应前端 testDnsUpstream。请求不合法回 400;现在测不了(没有 sing-box、核心不可用)回 503;
+// 测了但没通是 200 加 ok:false 和原因(前端按 ok 判断,并把 error 显示出来)。
+func (d Deps) upstreamTest(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Test == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "DNS 上游测试不可用")
+		return
+	}
+	var req dnstest.Request
+	if !httpx.DecodeJSON(w, r, &req, maxTestBody) {
+		return
+	}
+	res, err := d.Test(r.Context(), req)
+	var ie *dnstest.InputError
+	var ue *dnstest.UnavailableError
+	switch {
+	case errors.As(err, &ie):
+		httpx.Error(w, http.StatusBadRequest, ie.Msg)
+	case errors.As(err, &ue):
+		httpx.Error(w, http.StatusServiceUnavailable, ue.Msg)
+	case err != nil:
+		httpx.Error(w, http.StatusInternalServerError, "DNS 上游测试失败: "+err.Error())
+	default:
+		httpx.JSON(w, http.StatusOK, res)
+	}
 }

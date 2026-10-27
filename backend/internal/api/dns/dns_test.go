@@ -3,6 +3,7 @@ package dns
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
+	"github.com/timeflysoon/Open-Box/backend/internal/dnstest"
 	"github.com/timeflysoon/Open-Box/backend/internal/regiondetect"
 )
 
@@ -160,6 +162,78 @@ func TestFlushCache(t *testing.T) {
 	// 清缓存会动系统,只接受 POST
 	for _, m := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
 		if rec := callPath(Deps{Flush: func(context.Context) dnscache.Result { return dnscache.Result{Kernel: true} }}, m, "/api/openbox/dns/flush-cache"); rec.Code != http.StatusMethodNotAllowed {
+			t.Errorf("%s: %d", m, rec.Code)
+		}
+	}
+}
+
+func postTest(d Deps, body string) *httptest.ResponseRecorder {
+	mux := http.NewServeMux()
+	Register(mux, d)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/openbox/dns/upstream-test", strings.NewReader(body)))
+	return rec
+}
+
+func TestUpstreamTest(t *testing.T) {
+	var got dnstest.Request
+	ok := func(_ context.Context, r dnstest.Request) (dnstest.Result, error) {
+		got = r
+		return dnstest.Result{OK: true, Ms: 12, Server: r.Server, Protocol: r.Protocol, Port: 53, Via: "节点", Chain: []string{"头", "节点"}, Policy: "其他"}, nil
+	}
+	// 请求体按前端的字段名解析,结果的字段名也和前端类型一致
+	rec := postTest(Deps{Test: ok}, `{"side":"proxy","server":"1.1.1.1","protocol":"tcp","port":53}`)
+	if rec.Code != 200 || rec.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("%d %v %s", rec.Code, rec.Header(), rec.Body.String())
+	}
+	if got != (dnstest.Request{Side: "proxy", Server: "1.1.1.1", Protocol: "tcp", Port: 53}) {
+		t.Errorf("请求解析不对: %+v", got)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["ok"] != true || m["ms"] != float64(12) || m["via"] != "节点" || m["policy"] != "其他" || m["port"] != float64(53) || len(m["chain"].([]any)) != 2 {
+		t.Errorf("结果不对: %s", rec.Body.String())
+	}
+	if _, has := m["error"]; has {
+		t.Errorf("成功时不该有 error: %s", rec.Body.String())
+	}
+
+	// 测了没通:200 + ok:false + error;via 字段始终在(前端当字符串用)
+	rec = postTest(Deps{Test: func(context.Context, dnstest.Request) (dnstest.Result, error) {
+		return dnstest.Result{Error: "超时:8 秒内没有答复", Server: "10.0.0.9", Protocol: "udp", Port: 53}, nil
+	}}, `{"side":"direct","server":"10.0.0.9"}`)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"ok":false`) || !strings.Contains(rec.Body.String(), `"via":""`) || !strings.Contains(rec.Body.String(), "超时") {
+		t.Errorf("%d %s", rec.Code, rec.Body.String())
+	}
+
+	// 错误映射
+	for name, c := range map[string]struct {
+		err  error
+		code int
+	}{
+		"请求不合法":     {&dnstest.InputError{Msg: "side 只能是 direct 或 proxy"}, 400},
+		"现在测不了":     {&dnstest.UnavailableError{Msg: "找不到 sing-box 可执行文件,无法测试"}, 503},
+		"别的错误":      {errors.New("boom"), 500},
+		"包了一层的 400": {errors.Join(errors.New("外层"), &dnstest.InputError{Msg: "x"}), 400},
+	} {
+		c := c
+		rec := postTest(Deps{Test: func(context.Context, dnstest.Request) (dnstest.Result, error) { return dnstest.Result{}, c.err }}, `{"side":"x"}`)
+		if rec.Code != c.code || !strings.Contains(rec.Body.String(), `"error"`) {
+			t.Errorf("%s: %d %s", name, rec.Code, rec.Body.String())
+		}
+	}
+
+	// 没接实现 → 503;坏 JSON → 400;只接受 POST
+	if rec := postTest(Deps{}, `{}`); rec.Code != 503 {
+		t.Errorf("没接实现: %d", rec.Code)
+	}
+	if rec := postTest(Deps{Test: ok}, `{`); rec.Code != 400 {
+		t.Errorf("坏 JSON: %d", rec.Code)
+	}
+	for _, m := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+		if rec := callPath(Deps{Test: ok}, m, "/api/openbox/dns/upstream-test"); rec.Code != http.StatusMethodNotAllowed {
 			t.Errorf("%s: %d", m, rec.Code)
 		}
 	}
