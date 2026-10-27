@@ -3,6 +3,7 @@ package system
 import (
 	"io"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -56,6 +57,39 @@ func TestLoadConfigPrecedence(t *testing.T) {
 	}
 	if cfg.StateDir() != filepath.Join(cfg.DataDir, "state") {
 		t.Fatalf("StateDir 不对: %s", cfg.StateDir())
+	}
+}
+
+func TestLoadConfigGeoDir(t *testing.T) {
+	cfg, err := LoadConfig(nil, noEnv, io.Discard)
+	if err != nil || cfg.GeoDir != filepath.Clean(DefaultPaths().GeoDir) {
+		t.Fatalf("默认规则库目录不对: %q %v", cfg.GeoDir, err)
+	}
+	fromEnv := func(k string) string {
+		if k == EnvGeoDir {
+			return "/env/geo"
+		}
+		return ""
+	}
+	cfg, err = LoadConfig(nil, fromEnv, io.Discard)
+	if err != nil || cfg.GeoDir != filepath.Clean("/env/geo") {
+		t.Fatalf("环境变量没生效: %q %v", cfg.GeoDir, err)
+	}
+	cfg, err = LoadConfig([]string{"-geo-dir", "/flag/geo"}, fromEnv, io.Discard)
+	if err != nil || cfg.GeoDir != filepath.Clean("/flag/geo") {
+		t.Fatalf("命令行参数应优先于环境变量: %q %v", cfg.GeoDir, err)
+	}
+	if _, err := LoadConfig([]string{"-geo-dir", " "}, noEnv, io.Discard); err == nil {
+		t.Fatal("规则库目录为空应报错")
+	}
+	// 规则库是只读目录,由安装包放入,Ensure 不创建它
+	root := t.TempDir()
+	p := Paths{DataDir: filepath.Join(root, "data"), ConfigDir: filepath.Join(root, "conf"), GeoDir: filepath.Join(root, "geo")}
+	if err := p.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(p.GeoDir); !os.IsNotExist(err) {
+		t.Fatalf("Ensure 不该创建规则库目录: %v", err)
 	}
 }
 

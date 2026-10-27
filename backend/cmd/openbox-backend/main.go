@@ -24,6 +24,7 @@ import (
 	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
+	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/policyentries"
 	"github.com/timeflysoon/Open-Box/backend/internal/probe"
@@ -151,7 +152,9 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 
 	// 规则集链接服务共用一份(含 60 秒内存缓存):规则集预览和「域名穿透」都会拉同一批链接
 	lists := rulelist.NewService(nil)
-	rulesetsapi.Register(srv.Mux(), rulesetsapi.Deps{Lists: lists})
+	// 随包规则库(只读):按分类名查条目时交给 sing-box 解码;临时文件放在上面建好的 tmp 里
+	geoLib := geodata.New(cfg.GeoDir, cfg.SingBox, probeDir)
+	rulesetsapi.Register(srv.Mux(), rulesetsapi.Deps{Lists: lists, Geo: geoLib})
 
 	// 域名穿透:站点集命中哪些域名 / IP。核心不可用时接口返回 503,其它接口不受影响
 	var peCore policyentries.Core

@@ -1,16 +1,18 @@
 // Package rulesets 实现 /api/openbox/rulesets/*。
 //
-// 已实现:preview、import(规则集链接指向的文本名单)。
-// 未实现(501):entries(按规则库里的分类名查,要读随包的 geosite / geoip 并交给 sing-box 解码)、
-// refresh(立即重拉重编,要先有配置生成与部署),等对应条目做完再接。
+// 已实现:preview、import(规则集链接指向的文本名单)、entries(按随包规则库里的分类名查,
+// 由 internal/geodata 交给 sing-box 解码)。
+// 未实现(501):refresh(立即重拉重编,要先有「规则集链接编成 .srs」的落盘和部署),等对应条目做完再接。
 package rulesets
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
 	"github.com/timeflysoon/Open-Box/backend/internal/rulelist"
 )
@@ -22,18 +24,29 @@ const (
 	maxImport = 50000
 )
 
-// Deps 是本分组的依赖。
-type Deps struct{ Lists *rulelist.Service }
+// GeoEntries 是随包规则库(测试里换成假的)。
+type GeoEntries interface {
+	Entries(ctx context.Context, tag string) (*geodata.Result, error)
+}
 
-type handlers struct{ l *rulelist.Service }
+// Deps 是本分组的依赖。Geo 为空时 entries 返回 503。
+type Deps struct {
+	Lists *rulelist.Service
+	Geo   GeoEntries
+}
+
+type handlers struct {
+	l *rulelist.Service
+	g GeoEntries
+}
 
 // Register 把本分组的接口挂到 mux 上。
 func Register(mux *http.ServeMux, d Deps) {
-	h := &handlers{l: d.Lists}
+	h := &handlers{l: d.Lists, g: d.Geo}
 	mux.HandleFunc("/api/openbox/rulesets/preview", httpx.Methods(map[string]http.HandlerFunc{http.MethodGet: h.preview}))
 	mux.HandleFunc("/api/openbox/rulesets/import", httpx.Methods(map[string]http.HandlerFunc{http.MethodGet: h.importAll}))
-	mux.HandleFunc("/api/openbox/rulesets/entries", httpx.Methods(map[string]http.HandlerFunc{http.MethodGet: notReady("按分类名查看规则集条目暂未实现(需要随包规则库与 sing-box)")}))
-	mux.HandleFunc("/api/openbox/rulesets/refresh", httpx.Methods(map[string]http.HandlerFunc{http.MethodPost: notReady("规则集立即更新暂未实现(需要配置生成与部署)")}))
+	mux.HandleFunc("/api/openbox/rulesets/entries", httpx.Methods(map[string]http.HandlerFunc{http.MethodGet: h.entries}))
+	mux.HandleFunc("/api/openbox/rulesets/refresh", httpx.Methods(map[string]http.HandlerFunc{http.MethodPost: notReady("规则集立即更新暂未实现(需要先把规则集链接编成 .srs 并落盘、再接部署)")}))
 }
 
 func notReady(msg string) http.HandlerFunc {
@@ -116,4 +129,55 @@ func (h *handlers) importAll(w http.ResponseWriter, r *http.Request) {
 		"url": u, "total": len(res.Entries), "matched": len(res.Entries),
 		"offset": 0, "limit": len(res.Entries), "entries": res.Entries,
 	})
+}
+
+// entries:按随包规则库里的分类名(geosite-cn、geoip-cn 等)查条目,形状与 preview 一致,
+// 多一个 tag。分页 + 关键词过滤:total 是分类总条数,matched 是命中关键词的条数。
+func (h *handlers) entries(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if h.g == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "规则库未启用")
+		return
+	}
+	tag := strings.TrimSpace(r.URL.Query().Get("tag"))
+	if tag == "" {
+		httpx.Error(w, http.StatusBadRequest, "缺少 tag 参数")
+		return
+	}
+	res, err := h.g.Entries(r.Context(), tag)
+	if err != nil {
+		var de *geodata.DecodeError
+		switch {
+		case errors.Is(err, geodata.ErrInvalidTag):
+			httpx.Error(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, geodata.ErrNotFound):
+			httpx.Error(w, http.StatusNotFound, "规则库里没有分类 "+tag)
+		case errors.Is(err, geodata.ErrNoLibrary):
+			httpx.Error(w, http.StatusServiceUnavailable, "随包规则库目录不存在(安装不完整,或 -geo-dir 路径不对)")
+		case errors.Is(err, geodata.ErrNoSingBox):
+			httpx.Error(w, http.StatusServiceUnavailable, err.Error())
+		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+			httpx.Error(w, http.StatusServiceUnavailable, "请求已取消或超时")
+		case errors.As(err, &de):
+			httpx.Error(w, http.StatusInternalServerError, de.Msg)
+		default:
+			httpx.Error(w, http.StatusInternalServerError, "读取规则库失败: "+err.Error())
+		}
+		return
+	}
+	hits := rulelist.Filter(res.Entries, r.URL.Query().Get("q"))
+	offset := intParam(r, "offset", 0, 0, len(hits))
+	limit := intParam(r, "limit", defaultLimit, 1, maxLimit)
+	end := offset + limit
+	if end > len(hits) {
+		end = len(hits)
+	}
+	body := map[string]any{
+		"tag": tag, "total": len(res.Entries), "matched": len(hits),
+		"offset": offset, "limit": limit, "entries": hits[offset:end],
+	}
+	if res.Truncated {
+		body["truncated"] = true // 分类条目超过上限,只列了前面的
+	}
+	httpx.JSON(w, http.StatusOK, body)
 }

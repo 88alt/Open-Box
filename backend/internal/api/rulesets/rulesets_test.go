@@ -114,8 +114,8 @@ func TestErrors(t *testing.T) {
 }
 
 func TestNotImplementedEndpoints(t *testing.T) {
-	h, _ := setup(t, "")
-	if code, m := get(h, "GET", "/api/openbox/rulesets/entries?tag=geosite-cn"); code != 501 || m["error"] == nil {
+	h, _ := setup(t, "") // setup 没接规则库:entries 不可用(503),refresh 还没做(501)
+	if code, m := get(h, "GET", "/api/openbox/rulesets/entries?tag=geosite-cn"); code != 503 || m["error"] == nil {
 		t.Fatalf("entries: %d %v", code, m)
 	}
 	if code, m := get(h, "POST", "/api/openbox/rulesets/refresh"); code != 501 || m["error"] == nil {

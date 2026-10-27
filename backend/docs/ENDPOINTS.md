@@ -265,7 +265,7 @@
 
 ## `/api/openbox/rulesets`
 
-实现约定(M1):`preview` / `import` 已实现,只收文本名单(Clash 经典 `.list`、YAML `payload`、一行一条的域名 / IP);条目 `type` 为 `domain` / `domain_suffix` / `domain_keyword` / `domain_regex` / `ip_cidr`,去重保序。`preview` 的 `q` 按值做不区分大小写的子串过滤,`total` 是名单总条数、`matched` 是命中数,`limit` 默认 50、最大 500;同一链接 60 秒内走内存缓存(搜索框边打边搜)。`import` 一次返回全部,超过 5 万条返回 400。二进制名单(.mrs / .srs)返回 400 并说明不支持;拉取失败 502。`entries`(按分类名)和 `refresh` 暂返回 501,等随包规则库、配置生成与 `sing-box` 就绪后再做。`/rulesets/check` 与 `/rulesets/refresh/status` 前端不调用,不实现。
+实现约定(M1):`preview` / `import` 已实现,只收文本名单(Clash 经典 `.list`、YAML `payload`、一行一条的域名 / IP);条目 `type` 为 `domain` / `domain_suffix` / `domain_keyword` / `domain_regex` / `ip_cidr`,去重保序。`preview` 的 `q` 按值做不区分大小写的子串过滤,`total` 是名单总条数、`matched` 是命中数,`limit` 默认 50、最大 500;同一链接 60 秒内走内存缓存(搜索框边打边搜)。`import` 一次返回全部,超过 5 万条返回 400。二进制名单(.mrs / .srs)返回 400 并说明不支持;拉取失败 502。`entries`(按随包规则库的分类名查)已实现:`tag` 必填(缺少 400;不是 `geosite-` / `geoip-` 开头加字母数字和 `. _ ! @ -` 的名字 400;规则库里没有这个分类 404),`q` / `offset` / `limit` 与 `preview` 一致(`limit` 默认 50、最大 500),返回 `tag`、`total`(分类总条数)、`matched`(命中 `q` 的条数)、`offset`、`limit`、`entries`(空分类是 `[]`);分类条目超过 30 万时只列前面的并多一个 `truncated:true`。后端不自己解析 .srs,而是对 `<规则库目录>/<tag>.srs` 运行 `sing-box rule-set decompile`,所以看到的就是内核会匹配的那份;规则库目录由 `-geo-dir`(环境变量 `OPENBOX_GEO_DIR`)指定,只读、不下载,本地没有的分类如实 404;目录不存在或没有 `sing-box` 返回 503,解码失败返回 500 并带 `sing-box` 的原因。同一分类的解码结果在内存里缓存(按文件大小和修改时间失效,最多 2 个分类),同一时刻只解一个。`refresh` 暂返回 501,等规则集链接编成 `.srs` 的落盘和部署就绪后再做。`/rulesets/check` 与 `/rulesets/refresh/status` 前端不调用,不实现。
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
