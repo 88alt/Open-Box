@@ -27,6 +27,16 @@ const (
 	EnvWebDir    = "OPENBOX_WEB_DIR"
 	EnvSingBox   = "OPENBOX_SINGBOX"
 	EnvCore      = "OPENBOX_CORE"
+
+	// 服务名:交给系统服务管理器(OpenWrt init.d / systemd)的名字
+	EnvCoreService  = "OPENBOX_CORE_SERVICE"
+	EnvPanelService = "OPENBOX_PANEL_SERVICE"
+)
+
+// 服务名默认值。M6 打包时再和安装脚本对齐。
+const (
+	DefaultCoreService  = "sing-box"
+	DefaultPanelService = "openbox-backend"
 )
 
 // Paths 是后端用到的全部外部路径。M6 打包时再和安装脚本对齐默认值。
@@ -67,6 +77,8 @@ type Config struct {
 	Listen   string
 	LogLevel slog.Level
 	Paths
+	CoreService  string // sing-box 的服务名
+	PanelService string // 后端自己的服务名(只用来查开机自启)
 }
 
 // LoadConfig 解析命令行参数和环境变量。getenv 传入 os.Getenv;usage 输出写到 out。
@@ -88,6 +100,8 @@ func LoadConfig(args []string, getenv func(string) string, out io.Writer) (Confi
 	webDir := fs.String("web-dir", env(EnvWebDir, def.WebDir), "前端文件目录,即 panel/dist(环境变量 "+EnvWebDir+")")
 	singBox := fs.String("sing-box", env(EnvSingBox, def.SingBox), "sing-box 可执行文件(环境变量 "+EnvSingBox+")")
 	core := fs.String("core", env(EnvCore, def.Core), "openbox-core 可执行文件(环境变量 "+EnvCore+")")
+	coreSvc := fs.String("core-service", env(EnvCoreService, DefaultCoreService), "sing-box 的服务名(环境变量 "+EnvCoreService+")")
+	panelSvc := fs.String("panel-service", env(EnvPanelService, DefaultPanelService), "后端自己的服务名(环境变量 "+EnvPanelService+")")
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
 	}
@@ -102,9 +116,16 @@ func LoadConfig(args []string, getenv func(string) string, out io.Writer) (Confi
 	if err := validateListen(*listen); err != nil {
 		return Config{}, err
 	}
+	for name, v := range map[string]string{"core-service": *coreSvc, "panel-service": *panelSvc} {
+		if err := ValidServiceName(strings.TrimSpace(v)); err != nil {
+			return Config{}, fmt.Errorf("参数 %s 无效: %w", name, err)
+		}
+	}
 	cfg := Config{
-		Listen:   strings.TrimSpace(*listen),
-		LogLevel: level,
+		Listen:       strings.TrimSpace(*listen),
+		LogLevel:     level,
+		CoreService:  strings.TrimSpace(*coreSvc),
+		PanelService: strings.TrimSpace(*panelSvc),
 		Paths: Paths{
 			DataDir:   filepath.Clean(strings.TrimSpace(*dataDir)),
 			ConfigDir: filepath.Clean(strings.TrimSpace(*configDir)),

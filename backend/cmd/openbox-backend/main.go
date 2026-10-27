@@ -18,6 +18,7 @@ import (
 	latencyapi "github.com/timeflysoon/Open-Box/backend/internal/api/latency"
 	profileapi "github.com/timeflysoon/Open-Box/backend/internal/api/profile"
 	rulesetsapi "github.com/timeflysoon/Open-Box/backend/internal/api/rulesets"
+	serviceapi "github.com/timeflysoon/Open-Box/backend/internal/api/service"
 	storageapi "github.com/timeflysoon/Open-Box/backend/internal/api/storage"
 	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
@@ -129,6 +130,14 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 			KeyPath:    filepath.Join(cfg.ConfigDir, "certs", "server.key"),
 		})
 	configpreviewapi.Register(srv.Mux(), configpreviewapi.Deps{Gen: gen})
+
+	// 服务控制:只通过系统自带的服务管理器(OpenWrt init.d / systemd)操作 sing-box
+	initKind := system.DetectInitHere()
+	serviceapi.Register(srv.Mux(), serviceapi.Deps{
+		Services:    &system.Services{Kind: initKind, Run: system.ExecRunner, ProcUptime: system.ReadProcUptime},
+		Kind:        initKind,
+		CoreService: cfg.CoreService, PanelName: cfg.PanelService, SingBox: cfg.SingBox,
+	})
 
 	// 节点测速:临时配置放在数据目录下的 tmp(0700),用完即删
 	probeDir := filepath.Join(cfg.DataDir, "tmp")

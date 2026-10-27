@@ -18,6 +18,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.Listen != "0.0.0.0:3036" || cfg.LogLevel != slog.LevelInfo {
 		t.Fatalf("默认值不对: %+v", cfg)
 	}
+	if cfg.CoreService != DefaultCoreService || cfg.PanelService != DefaultPanelService {
+		t.Fatalf("默认服务名不对: %+v", cfg)
+	}
 	if cfg.Paths != func() Paths { p := DefaultPaths(); p.DataDir = filepath.Clean(p.DataDir); return p }() {
 		t.Fatalf("默认路径不对: %+v", cfg.Paths)
 	}
@@ -42,6 +45,15 @@ func TestLoadConfigPrecedence(t *testing.T) {
 	if cfg.Listen != ":2222" || cfg.DataDir != filepath.Clean("/flag/data") {
 		t.Fatalf("命令行参数应优先于环境变量: %+v", cfg)
 	}
+	cfg, err = LoadConfig([]string{"-core-service", "my-singbox"}, func(k string) string {
+		if k == EnvPanelService {
+			return "my-panel"
+		}
+		return ""
+	}, io.Discard)
+	if err != nil || cfg.CoreService != "my-singbox" || cfg.PanelService != "my-panel" {
+		t.Fatalf("服务名参数 / 环境变量没生效: %+v %v", cfg, err)
+	}
 	if cfg.StateDir() != filepath.Join(cfg.DataDir, "state") {
 		t.Fatalf("StateDir 不对: %s", cfg.StateDir())
 	}
@@ -57,6 +69,9 @@ func TestLoadConfigErrors(t *testing.T) {
 		"路径为空":        {"-web-dir", " "},
 		"未知参数":        {"-nope"},
 		"sing-box 为空": {"-sing-box", ""},
+		"服务名带空格":      {"-core-service", "a b"},
+		"服务名以-开头":     {"-core-service=-rf"},
+		"服务名为空":       {"-panel-service", ""},
 	}
 	for name, args := range cases {
 		t.Run(name, func(t *testing.T) {
