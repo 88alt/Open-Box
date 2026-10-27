@@ -15,6 +15,7 @@ import (
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
 	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
 	dnsapi "github.com/timeflysoon/Open-Box/backend/internal/api/dns"
+	dnsfilterapi "github.com/timeflysoon/Open-Box/backend/internal/api/dnsfilter"
 	groupsapi "github.com/timeflysoon/Open-Box/backend/internal/api/groups"
 	latencyapi "github.com/timeflysoon/Open-Box/backend/internal/api/latency"
 	policiesapi "github.com/timeflysoon/Open-Box/backend/internal/api/policies"
@@ -172,6 +173,9 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 		return "cn"
 	}
 	wanDNS := func() []string { return system.ReadWANDNS(system.WANResolverFiles) }
+
+	// DNS 域名过滤:目前只有设置读写(名单预览 / 应用、查询记录和统计见 STATUS.md)
+	dnsfilterapi.Register(srv.Mux(), dnsfilterapi.Deps{Profiles: profileSvc})
 
 	// 上游 DNS(只读):从 netifd / systemd-resolved 记录的文件里读,不碰任何系统设置
 	dnsapi.Register(srv.Mux(), dnsapi.Deps{
