@@ -27,6 +27,7 @@ import (
 	serviceapi "github.com/timeflysoon/Open-Box/backend/internal/api/service"
 	storageapi "github.com/timeflysoon/Open-Box/backend/internal/api/storage"
 	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
+	subsharesapi "github.com/timeflysoon/Open-Box/backend/internal/api/subshares"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
@@ -44,6 +45,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
 	"github.com/timeflysoon/Open-Box/backend/internal/subs"
+	"github.com/timeflysoon/Open-Box/backend/internal/subshare"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
 )
 
@@ -284,6 +286,22 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 	clientsapi.Register(srv.Mux(), clientsapi.Deps{
 		List: func() []system.Client { return system.ReadDHCPLeases(system.DHCPLeaseFiles, time.Now()) },
 	})
+
+	// 订阅分享(只管记录和 token;对外的 /sub/<token> 下发内容是另一条,还没做):新选的订阅必须存在
+	subsharesapi.Register(srv.Mux(), subsharesapi.Deps{Service: &subshare.Service{
+		Store: st,
+		SubscriptionIDs: func(ctx context.Context) ([]string, error) {
+			recs, err := subsSvc.List(ctx)
+			if err != nil {
+				return nil, err
+			}
+			ids := make([]string, 0, len(recs))
+			for _, r := range recs {
+				ids = append(ids, r.ID)
+			}
+			return ids, nil
+		},
+	}})
 
 	// 前端静态文件与前端路由回落;最后挂,/api 下的路径由各接口分组优先处理
 	srv.Mux().Handle("/", server.StaticHandler(cfg.WebDir))
