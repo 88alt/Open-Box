@@ -91,6 +91,8 @@ func TestPreviewCacheTTLAndEviction(t *testing.T) {
 	if calls["a"] != 2 {
 		t.Fatal("过期后应重新下载", calls)
 	}
+	// 三份各差 1 秒:同一时刻进缓存的两份并列「最旧」时,挤掉哪份取决于 map 遍历顺序,测试会偶发失败
+	now = now.Add(time.Second)
 	pv.Preview(ctx, PreviewQuery{URL: "b"})
 	now = now.Add(time.Second)
 	pv.Preview(ctx, PreviewQuery{URL: "c"}) // 超过缓存上限,挤掉最旧的 a
