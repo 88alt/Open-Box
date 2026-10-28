@@ -241,7 +241,9 @@
 |---|---|---|---|---|
 | GET | `/api/openbox/node-info/{x}` | `fetchNodeInfo` (api/openbox.ts:1873) | OpenboxNodeInfo | (tag: string) |
 
-实现约定(M3,仅 `GET node-info/{x}`):`x` 是节点的 tag(需 URL 编码);先在已启用订阅的节点里找,再找档案里启用的链式代理(名字就是 tag),都没有 404。`protocol` 是从外到内的协议层(类型、传输类型、`tls`、`reality`),`port` 为 0 时是 null,链式代理带 `detour`(= 它的 `upstream`)。入口地址:服务器是 IP 就直接用,是域名就用系统解析器解析(超时 5 秒),v4 / v6 分开并排序,sing-box 的 fake-ip 段(198.18.0.0/15)不算真实地址;解析不了是 200 加 `resolveError`、地址为空数组。`entryCountry` 目前恒为空串。
+实现约定(M3,仅 `GET node-info/{x}`):`x` 是节点的 tag(需 URL 编码);先在已启用订阅的节点里找,再找档案里启用的链式代理(名字就是 tag),都没有 404。`protocol` 是从外到内的协议层(类型、传输类型、`tls`、`reality`),`port` 为 0 时是 null,链式代理带 `detour`(= 它的 `upstream`)。入口地址:服务器是 IP 就直接用,是域名就用系统解析器解析(超时 5 秒),v4 / v6 分开并排序,sing-box 的 fake-ip 段(198.18.0.0/15)不算真实地址;解析不了是 200 加 `resolveError`、地址为空数组。`entryCountry` 只带缓存里已有的(查过 entry-country 之后才有),没有就是空串。
+
+实现约定(M3,`GET node-info/{x}/entry-country`):取这个节点入口地址里第一个公网 IPv4(已排序,没有再取第一个公网 IPv6;内网、回环、链路本地、CGNAT、fake-ip 段都不查,也不会发给第三方),按顺序问 api.ip.sb、ipwho.is、api.ipapi.is 三家的「按 IP 查询」接口(只认答的是同一个 IP 的),回 `{ip, country}`,`country` 是两位大写国家代码。成功缓存一天,失败缓存一分钟(调用方取消不缓存),最多 512 个 IP。节点没有 404;没有可查的公网入口地址(解析不了、全是内网 / 假 IP)或三家都查不到是 502 加中文原因(前端遇到错误只是不显示国旗)。
 | GET | `/api/openbox/node-info/{x}/entry-country` | `fetchNodeEntryCountry` (api/openbox.ts:1874) | { ip: string; country: string } | (tag: string) |
 | POST | `/api/openbox/node-info/{x}/exit` | `fetchNodeExit` (api/openbox.ts:1877) | OpenboxNodeExit | (tag: string, refresh = false) |
 

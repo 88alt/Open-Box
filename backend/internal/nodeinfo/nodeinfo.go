@@ -1,7 +1,8 @@
 // Package nodeinfo 实现 GET /api/openbox/node-info/{tag}:一个节点(或链式代理)的类型、协议层、服务器、端口、
 // 链式上游,以及入口地址的解析结果。响应形状取自前端 api/openbox.ts 的 OpenboxNodeInfo,没有参照上游。
 //
-// 入口国家(entryCountry)要查第三方的 IP 归属,不在这一条里:这里恒为空串,前端会再调 entry-country 去问。
+// 入口国家(entryCountry)要查第三方的 IP 归属:这里只带缓存里已有的(entry.go 的 EntryCountry 查并写缓存),
+// 没有就是空串,前端会再调 entry-country 去问。
 package nodeinfo
 
 import (
@@ -47,6 +48,14 @@ type Service struct {
 	// Lookup 解析域名;nil 时用系统解析器。
 	Lookup  func(ctx context.Context, host string) ([]netip.Addr, error)
 	Timeout time.Duration // 解析超时;0 = 5 秒
+
+	// Country 查一个公网 IP 的两位大写国家代码(EntryCountry 用);IsPublic 判断地址能不能拿去问。
+	// 两个都要配;没配时 entry-country 不可用,node-info 的 entryCountry 恒为空串。
+	Country  func(ctx context.Context, ip netip.Addr) (string, error)
+	IsPublic func(ip netip.Addr) bool
+	Now      func() time.Time // 缓存用的时钟;nil = 系统时钟
+
+	countries countryCache
 }
 
 // Get 返回 tag 对应的节点信息。节点池里的优先;其次是档案里启用的链式代理(名字就是 tag)。
@@ -68,6 +77,7 @@ func (s *Service) Get(ctx context.Context, tag string) (*Info, error) {
 		info.Port = &p
 	}
 	s.resolve(ctx, info)
+	s.cachedCountry(info) // 缓存里有才带;没有就留空,前端再调 entry-country
 	return info, nil
 }
 

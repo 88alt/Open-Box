@@ -17,6 +17,14 @@ type fake struct {
 	info *ni.Info
 	err  error
 	tag  string
+
+	entry    *ni.EntryResult
+	entryErr error
+}
+
+func (f *fake) EntryCountry(_ context.Context, tag string) (*ni.EntryResult, error) {
+	f.tag = tag
+	return f.entry, f.entryErr
 }
 
 func (f *fake) Get(_ context.Context, tag string) (*ni.Info, error) {
@@ -67,6 +75,38 @@ func TestErrorsAndMethods(t *testing.T) {
 		t.Errorf("内部错误应 500: %d", rec.Code)
 	}
 	if rec := do(&fake{}, http.MethodPost, "/api/openbox/node-info/x"); rec.Code != 405 {
+		t.Errorf("POST 应 405: %d", rec.Code)
+	}
+}
+
+func TestEntryCountry(t *testing.T) {
+	f := &fake{entry: &ni.EntryResult{IP: "203.0.113.2", Country: "JP"}}
+	rec := do(f, http.MethodGet, "/api/openbox/node-info/"+url.PathEscape("HK 01/备用")+"/entry-country")
+	if rec.Code != 200 || f.tag != "HK 01/备用" || strings.TrimSpace(rec.Body.String()) != `{"ip":"203.0.113.2","country":"JP"}` {
+		t.Errorf("形状: %d tag=%q %s", rec.Code, f.tag, rec.Body)
+	}
+	if rec.Header().Get("Cache-Control") == "" {
+		t.Error("应带 no-store")
+	}
+}
+
+func TestEntryCountryErrors(t *testing.T) {
+	cases := []struct {
+		err  error
+		code int
+		has  string
+	}{
+		{ni.ErrNotFound, 404, "没有这个节点"},
+		{&ni.ErrNoAddress{Reason: "域名不存在"}, 502, "域名不存在"},
+		{errors.New("查归属失败:api.ip.sb: 超时"), 502, "查归属失败"},
+	}
+	for _, c := range cases {
+		rec := do(&fake{entryErr: c.err}, http.MethodGet, "/api/openbox/node-info/x/entry-country")
+		if rec.Code != c.code || !strings.Contains(rec.Body.String(), c.has) {
+			t.Errorf("%v: %d %s", c.err, rec.Code, rec.Body)
+		}
+	}
+	if rec := do(&fake{}, http.MethodPost, "/api/openbox/node-info/x/entry-country"); rec.Code != 405 {
 		t.Errorf("POST 应 405: %d", rec.Code)
 	}
 }

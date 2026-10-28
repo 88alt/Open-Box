@@ -42,6 +42,8 @@ type Result struct {
 type Detector struct {
 	URLs   []string     // 空 = DefaultURLs
 	Client *http.Client // 空 = 默认客户端:不走环境里的代理变量,每家 6 秒超时
+	// LookupURLs 给 LookupCountry 生成接口地址;空 = LookupURLs 函数(测试用它指到本机假服务)
+	LookupURLs func(ip netip.Addr) []string
 
 	mu       sync.Mutex // 同一时刻只做一次;后来的请求排队,拿到的是自己那次的结果
 	inflight atomic.Int32
