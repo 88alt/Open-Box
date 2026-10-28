@@ -79,4 +79,5 @@
 | 默认分流(`defaults/routing`) | 一个「国内直连」站点集(`geosite-cn` + `geoip-cn`,默认直连),兜底「其他」走第一个节点组;自研定的起点,没有参照上游。规则集名在随包规则库里没有时会被 core 过滤 |
 | 默认节点组(`defaults/groups`) | 内置直连 / 拒绝 + 一个动态 urltest 组「自动选择」(全部节点),由 core `normalizeGroups` 补全字段 |
 | DNS 重写默认项(`dnsRewriteDefaults`) | 空数组:没有可靠依据的规则不预置,「恢复默认」= 清空;以后有依据再补 |
+| 客户端 App 的默认地区分流(`client-app/info` 的 `defaultShareRegions`,「恢复默认」= 存空数组) | 三组:「中国大陆」(`CN`;geosite cn、geoip cn 本地直连,其余经路由器;DNS 直连系统 DNS、代理 TCP 1.1.1.1)、「港澳」(`HK`、`MO`)、「其他地区」(默认组,`CN` / `HK` / `MO` 之外);后两组本地直连、只把 geosite cn、geoip cn 送回路由器,DNS 两侧都是系统 DNS(与前端 `regionDnsDefaults` 一致)。自研定的起点,没有参照上游;用户可随时改 |
 | 档案默认值 | `region` 默认 `cn`;DNS 上游按前端 `regionDefaultsPatch`;`testUrl` 用 gstatic 204,`directTestUrl` 用华为 connectivitycheck 204;流量保留 12 个月 |

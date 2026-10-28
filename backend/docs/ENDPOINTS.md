@@ -99,6 +99,8 @@
 | POST | `/api/openbox/client-app/share-codes` | `fetchShareCodeSeals` (api/clientApp.ts:215) | Record<string, OpenboxShareCodeSeal> | (links: Record<string, string>) |
 | POST | `/api/openbox/client-app/share-codes/{x}/rotate` | `rotateShareCode` (api/clientApp.ts:232) | OpenboxShareCodeRotated | (id: string) |
 
+实现约定(M2,只列已做的 `info`):`GET /client-app/info` 返回 `OpenboxClientAppInfo` 全部字段。`routerId` 第一次读时生成(32 位小写十六进制)并保存,之后不变,不提供更换;`lanAddresses` / `lanSubnets` 只含私有地址(跳过回环 / 隧道 / 容器网桥),IPv4 在前、LAN 口在前,`lanSubnets` 只有 IPv4;`panelPort` 是本后端监听的端口;`shareRegions` 没存或存了空数组 = 默认三组且 `shareRegionsCustomized` 为 false,`defaultShareRegions` 恒为默认三组;`serverInfo` 原样,`routerName` = `serverInfo.name`(去首尾空白)或「Open-Box」;`egressCountry` 暂恒为 `null`(`egress-country` 做了再接)。`share-codes*`、`client-config/file` 的封包格式前端没有规定,未做,见 STATUS.md。
+
 ## `/api/openbox/client-config`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |

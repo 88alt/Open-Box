@@ -14,6 +14,7 @@ import (
 
 	activationapi "github.com/timeflysoon/Open-Box/backend/internal/api/activation"
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
+	clientappapi "github.com/timeflysoon/Open-Box/backend/internal/api/clientapp"
 	clientsapi "github.com/timeflysoon/Open-Box/backend/internal/api/clients"
 	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
 	dnsapi "github.com/timeflysoon/Open-Box/backend/internal/api/dns"
@@ -29,6 +30,7 @@ import (
 	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
 	subsharesapi "github.com/timeflysoon/Open-Box/backend/internal/api/subshares"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
+	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsfilter"
@@ -286,6 +288,12 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 	clientsapi.Register(srv.Mux(), clientsapi.Deps{
 		List: func() []system.Client { return system.ReadDHCPLeases(system.DHCPLeaseFiles, time.Now()) },
 	})
+
+	// 客户端 App 页的信息:路由器标识、局域网地址与网段、地区分流、路由器名称。只读网卡和档案,
+	// 路由器 ID 第一次读时生成并存进状态目录。配对码、同步开关、封包等 App 私有约定的部分另列条目,还没做
+	clientappapi.Register(srv.Mux(), clientappapi.Deps{Service: &clientapp.Service{
+		Store: st, Profile: profileSvc.Get, LAN: system.LAN, PanelPort: clientapp.PortOf(cfg.Listen),
+	}})
 
 	// 订阅分享(只管记录和 token;对外的 /sub/<token> 下发内容是另一条,还没做):新选的订阅必须存在
 	subsharesapi.Register(srv.Mux(), subsharesapi.Deps{Service: &subshare.Service{

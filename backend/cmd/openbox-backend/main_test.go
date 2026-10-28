@@ -78,6 +78,20 @@ func TestAppWiring(t *testing.T) {
 		t.Fatalf("dns/flush-cache GET: %d", code)
 	}
 
+	// 客户端 App 信息已装配:路由器 ID 第一次读时生成,之后(含重启后)不变;POST 不被接受
+	var first, second struct {
+		RouterID     string `json:"routerId"`
+		RouterName   string `json:"routerName"`
+		ShareRegions []any  `json:"shareRegions"`
+	}
+	code, body := get(c, ts.URL+"/api/openbox/client-app/info")
+	if code != 200 || json.Unmarshal([]byte(body), &first) != nil || len(first.RouterID) != 32 || first.RouterName != "Open-Box" || len(first.ShareRegions) != 3 {
+		t.Fatalf("client-app/info: %d %s", code, body)
+	}
+	if resp, err := c.Post(ts.URL+"/api/openbox/client-app/info", "application/json", strings.NewReader("{}")); err != nil || resp.StatusCode != 405 {
+		t.Fatalf("client-app/info POST: %v %v", err, resp)
+	}
+
 	// 重启:密码保留,旧 Cookie 仍有效
 	ts2, _ := start()
 	jar, _ := cookiejar.New(nil)
@@ -90,6 +104,15 @@ func TestAppWiring(t *testing.T) {
 	resp.Body.Close()
 	if st["passwordSet"] != true || st["authenticated"] != true {
 		t.Fatalf("重启后状态不对: %v", st)
+	}
+	resp, err = c2.Get(ts2.URL + "/api/openbox/client-app/info")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&second)
+	resp.Body.Close()
+	if second.RouterID != first.RouterID {
+		t.Fatalf("重启后路由器 ID 变了: %s → %s", first.RouterID, second.RouterID)
 	}
 }
 
