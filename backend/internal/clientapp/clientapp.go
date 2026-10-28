@@ -29,6 +29,8 @@ const stateFile = "client-app"
 
 type state struct {
 	RouterID string `json:"routerId,omitempty"`
+	// Config 是本地分流(客户端配置)的同步状态,见 clientconfig.go。
+	Config *configState `json:"clientConfig,omitempty"`
 }
 
 // ServerInfo 是档案里的路由器标识(serverInfo),四个字段都可以空。原样回给前端。

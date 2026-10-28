@@ -290,10 +290,11 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 	})
 
 	// 客户端 App 页的信息:路由器标识、局域网地址与网段、地区分流、路由器名称。只读网卡和档案,
-	// 路由器 ID 第一次读时生成并存进状态目录。配对码、同步开关、封包等 App 私有约定的部分另列条目,还没做
-	clientappapi.Register(srv.Mux(), clientappapi.Deps{Service: &clientapp.Service{
+	// 路由器 ID 第一次读时生成并存进状态目录。本地分流的同步状态(client-config:开关、配对码、换码)也在这里;封包、App 用的公开同步接口等私有约定另列条目,还没做
+	clientAppSvc := &clientapp.Service{
 		Store: st, Profile: profileSvc.Get, LAN: system.LAN, PanelPort: clientapp.PortOf(cfg.Listen),
-	}})
+	}
+	clientappapi.Register(srv.Mux(), clientappapi.Deps{Service: clientAppSvc, Config: clientAppSvc})
 
 	// 订阅分享(只管记录和 token;对外的 /sub/<token> 下发内容是另一条,还没做):新选的订阅必须存在
 	subsharesapi.Register(srv.Mux(), subsharesapi.Deps{Service: &subshare.Service{

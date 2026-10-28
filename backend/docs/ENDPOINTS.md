@@ -110,6 +110,8 @@
 | POST | `/api/openbox/client-config/file` | `fetchClientConfigFile` (api/clientApp.ts:199) | OpenboxClientBundle | (lan: string, publicBase: string) |
 | POST | `/api/openbox/client-config/rotate` | `rotateClientConfig` (api/clientApp.ts:186) | OpenboxClientConfigIssue | () |
 
+实现约定(M2,只列已做的三条;`file` 未做):状态存在 `client-app.json`(与路由器 ID 同一文件)。`GET` 第一次读时生成配对码(8 个字符,取自去掉 I / O / 0 / 1 的 32 字符表,大写)和 nonce(16 位小写十六进制)并保存,**同步开关默认关**;其余字段 `routerId` / `routerName` / `lanAddresses` / `panelPort` 与 `client-app/info` 同源。`PUT enabled` 请求体必须是 `{"enabled": true|false}`(其它一律 400,上限 1 KiB),返回 `{enabled}`,不动配对码。`POST rotate` 换配对码和 nonce、`lastSyncAt` 清零、开关保持,返回换完的整份。三条响应都带 `Cache-Control: no-store`,配对码不写日志、错误响应里不出现。`lastSyncAt` 要等 App 用的公开同步接口(未做)来更新,现在恒为 0。`file` 和 App 用的公开接口的封包格式前端没有规定,见 STATUS.md。
+
 ## `/api/openbox/clients`
 
 实现约定(M2):只读。目前只有 DHCP 租约(dnsmasq 租约文件,只收 IPv4、不含已过期的)一路,按 IP 从小到大排;`name` 没有主机名时是空串,没有 MAC 时不带 `mac`;读不到租约回 `{ "clients": [] }`,不报错。前端说明里「今天流量里出现过的来源 IP」等 `traffic*` 做了再并进来。
