@@ -99,7 +99,9 @@
 | POST | `/api/openbox/client-app/share-codes` | `fetchShareCodeSeals` (api/clientApp.ts:215) | Record<string, OpenboxShareCodeSeal> | (links: Record<string, string>) |
 | POST | `/api/openbox/client-app/share-codes/{x}/rotate` | `rotateShareCode` (api/clientApp.ts:232) | OpenboxShareCodeRotated | (id: string) |
 
-实现约定(M2,只列已做的 `info`):`GET /client-app/info` 返回 `OpenboxClientAppInfo` 全部字段。`routerId` 第一次读时生成(32 位小写十六进制)并保存,之后不变,不提供更换;`lanAddresses` / `lanSubnets` 只含私有地址(跳过回环 / 隧道 / 容器网桥),IPv4 在前、LAN 口在前,`lanSubnets` 只有 IPv4;`panelPort` 是本后端监听的端口;`shareRegions` 没存或存了空数组 = 默认三组且 `shareRegionsCustomized` 为 false,`defaultShareRegions` 恒为默认三组;`serverInfo` 原样,`routerName` = `serverInfo.name`(去首尾空白)或「Open-Box」;`egressCountry` 暂恒为 `null`(`egress-country` 做了再接)。`share-codes*`、`client-config/file` 的封包格式前端没有规定,未做,见 STATUS.md。
+实现约定(M2,只列已做的 `info`):`GET /client-app/info` 返回 `OpenboxClientAppInfo` 全部字段。`routerId` 第一次读时生成(32 位小写十六进制)并保存,之后不变,不提供更换;`lanAddresses` / `lanSubnets` 只含私有地址(跳过回环 / 隧道 / 容器网桥),IPv4 在前、LAN 口在前,`lanSubnets` 只有 IPv4;`panelPort` 是本后端监听的端口;`shareRegions` 没存或存了空数组 = 默认三组且 `shareRegionsCustomized` 为 false,`defaultShareRegions` 恒为默认三组;`serverInfo` 原样,`routerName` = `serverInfo.name`(去首尾空白)或「Open-Box」;`egressCountry` 是上一次 `POST egress-country` 判出的 `{ip, country, at}`,没判过或缓存不合格时为 `null`。`share-codes*`、`client-config/file` 的封包格式前端没有规定,未做,见 STATUS.md。
+
+`POST /client-app/egress-country`(M2):无请求体,返回 `{ip, country, at}`(`country` 两位大写国家代码,`at` 毫秒,是「最后确认的时刻」)。只在内核服务在运行时才判(复用 `dns/region-detect` 的三家 https IP 接口,顺序问、第一家给出合法 IP 和国家代码的为准,只查询不改设置);出口 IP 和上次相同就沿用上次的国家、只刷新 `at`(前端一天内不再重判,不刷新的话过一天每次打开页面都会重判),不同才换国家;结果存在 `client-app.json` 的 `egressCountry`。内核没在运行 / 没有 procd 或 systemd(面板不在路由器上)503,读不出服务状态 500,三家接口都问不到 502(带「主机: 原因」),请求被取消 / 超时 503。
 
 ## `/api/openbox/client-config`
 

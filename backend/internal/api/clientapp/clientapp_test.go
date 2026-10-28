@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -173,5 +174,59 @@ func TestClientConfigErrorsAndMethods(t *testing.T) {
 	leak := &fakeConfig{is: clientapp.Issue{PairCode: "SECRET22"}, err: errors.New("失败")}
 	if rec := callPath(t, Deps{Config: leak}, http.MethodGet, "/api/openbox/client-config", ""); strings.Contains(rec.Body.String(), "SECRET22") {
 		t.Errorf("错误响应泄露了配对码: %s", rec.Body)
+	}
+}
+
+type fakeEgress struct {
+	e   clientapp.EgressCountry
+	err error
+}
+
+func (f fakeEgress) DetectEgressCountry(context.Context) (clientapp.EgressCountry, error) {
+	return f.e, f.err
+}
+
+func TestEgressCountryHandler(t *testing.T) {
+	const path = "/api/openbox/client-app/egress-country"
+	ok := fakeEgress{e: clientapp.EgressCountry{IP: "203.0.113.7", Country: "JP", At: 1700000000000}}
+	rec := callPath(t, Deps{Egress: ok}, http.MethodPost, path, "")
+	if rec.Code != 200 || !strings.Contains(rec.Header().Get("Cache-Control"), "no-store") {
+		t.Fatalf("%d %v", rec.Code, rec.Header())
+	}
+	var m map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	// 前端 OpenboxEgressCountry:ip / country / at(毫秒)
+	if len(m) != 3 || m["ip"] != "203.0.113.7" || m["country"] != "JP" || m["at"] != float64(1700000000000) {
+		t.Fatalf("%s", rec.Body)
+	}
+	for _, c := range []struct {
+		err  error
+		want int
+	}{
+		{clientapp.ErrNotRunning, 503},
+		{clientapp.ErrUnavailable, 503},
+		{&clientapp.DetectError{Msg: "判断地区失败:api.ip.sb: 超时"}, 502},
+		{context.Canceled, 503},
+		{errors.New("磁盘满了"), 500},
+	} {
+		rec := callPath(t, Deps{Egress: fakeEgress{err: c.err}}, http.MethodPost, path, "")
+		if rec.Code != c.want || !strings.Contains(rec.Body.String(), "error") {
+			t.Errorf("%v: %d %s(想要 %d)", c.err, rec.Code, rec.Body, c.want)
+		}
+	}
+	// 被包了一层的错误也认得
+	wrapped := fmt.Errorf("外层: %w", clientapp.ErrNotRunning)
+	if rec := callPath(t, Deps{Egress: fakeEgress{err: wrapped}}, http.MethodPost, path, ""); rec.Code != 503 {
+		t.Errorf("包一层: %d", rec.Code)
+	}
+	if rec := callPath(t, Deps{}, http.MethodPost, path, ""); rec.Code != 503 {
+		t.Errorf("没接服务: %d", rec.Code)
+	}
+	for _, m := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+		if rec := callPath(t, Deps{Egress: ok}, m, path, ""); rec.Code != 405 {
+			t.Errorf("%s: %d", m, rec.Code)
+		}
 	}
 }

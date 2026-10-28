@@ -2,6 +2,7 @@ package regiondetect
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -125,5 +126,18 @@ func TestBodyLimit(t *testing.T) {
 	r := (&Detector{URLs: []string{u}, Client: http.DefaultClient}).Detect(context.Background())
 	if r.Region != nil {
 		t.Fatalf("%+v", r)
+	}
+}
+
+func TestDetectExposesCountryCode(t *testing.T) {
+	d := &Detector{URLs: []string{serve(t, 200, `{"ip":"203.0.113.7","country_code":"jp"}`)}}
+	r := d.Detect(context.Background())
+	if r.Region == nil || *r.Region != "intl" || r.Country != "JP" || r.IP != "203.0.113.7" {
+		t.Fatalf("%+v", r)
+	}
+	// Country 只给后端内部用,不进 JSON(dns/region-detect 的响应形状不变)
+	b, _ := json.Marshal(r)
+	if strings.Contains(string(b), "JP") || strings.Contains(string(b), "ountry") {
+		t.Fatalf("Country 不该进 JSON: %s", b)
 	}
 }

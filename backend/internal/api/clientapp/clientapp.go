@@ -1,10 +1,11 @@
 // Package clientapp 实现 /api/openbox/client-app/* 和 /api/openbox/client-config* 里已做的部分:
-// GET client-app/info,以及本地分流的同步状态(GET client-config、PUT client-config/enabled、POST client-config/rotate)。
+// GET client-app/info、POST client-app/egress-country,以及本地分流的同步状态(GET client-config、PUT client-config/enabled、POST client-config/rotate)。
 // 响应形状取自前端 api/clientApp.ts 的类型,没有参照上游。
 package clientapp
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
@@ -23,10 +24,16 @@ type ConfigService interface {
 	RotateClientConfig(ctx context.Context) (clientapp.Issue, error)
 }
 
-// Deps 是本分组的依赖。Config 为 nil 时 client-config* 回 503。
+// EgressService 是按出口 IP 判国家要用的功能(*clientapp.Service 满足)。
+type EgressService interface {
+	DetectEgressCountry(ctx context.Context) (clientapp.EgressCountry, error)
+}
+
+// Deps 是本分组的依赖。Config 为 nil 时 client-config* 回 503,Egress 为 nil 时 egress-country 回 503。
 type Deps struct {
 	Service Service
 	Config  ConfigService
+	Egress  EgressService
 }
 
 // maxEnabledBody 是 PUT client-config/enabled 的请求体上限:只有一个布尔值。
@@ -36,6 +43,9 @@ const maxEnabledBody = 1 << 10
 func Register(mux *http.ServeMux, d Deps) {
 	mux.HandleFunc("/api/openbox/client-app/info", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodGet: d.info,
+	}))
+	mux.HandleFunc("/api/openbox/client-app/egress-country", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodPost: d.egressCountry,
 	}))
 	mux.HandleFunc("/api/openbox/client-config", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodGet: d.configGet,
@@ -119,4 +129,30 @@ func (d Deps) configRotate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, is)
+}
+
+// egressCountry 对应前端 detectEgressCountry:按出口公网 IP 判一次国家(只查不改设置),返回 {ip, country, at}。
+// 出口 IP 没变就沿用上次的国家;内核没在运行 / 没接上判断 503;三家 IP 接口都问不到 502;别的错误 500。
+func (d Deps) egressCountry(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Egress == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "出口国家判断不可用")
+		return
+	}
+	e, err := d.Egress.DetectEgressCountry(r.Context())
+	if err != nil {
+		var de *clientapp.DetectError
+		switch {
+		case errors.Is(err, clientapp.ErrNotRunning), errors.Is(err, clientapp.ErrUnavailable):
+			httpx.Error(w, http.StatusServiceUnavailable, err.Error())
+		case errors.As(err, &de):
+			httpx.Error(w, http.StatusBadGateway, de.Msg)
+		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+			httpx.Error(w, http.StatusServiceUnavailable, "判断出口国家被取消或超时")
+		default:
+			httpx.Error(w, http.StatusInternalServerError, "判断出口国家失败: "+err.Error())
+		}
+		return
+	}
+	httpx.JSON(w, http.StatusOK, e)
 }

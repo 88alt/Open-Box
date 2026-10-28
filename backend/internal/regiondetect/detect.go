@@ -34,6 +34,8 @@ type Result struct {
 	Region *string `json:"region"`
 	IP     string  `json:"ip"`
 	Error  string  `json:"error,omitempty"`
+	// Country 是接口给出的两位国家代码(大写),只给后端内部用(client-app/egress-country),不进 JSON。
+	Country string `json:"-"`
 }
 
 // Detector 按顺序问各家接口,第一家给出合法 IP 和国家代码的为准。
@@ -83,7 +85,7 @@ func (d *Detector) Detect(ctx context.Context) Result {
 			continue
 		}
 		r := RegionOf(cc)
-		return Result{Region: &r, IP: ip}
+		return Result{Region: &r, IP: ip, Country: cc}
 	}
 	return Result{IP: "", Error: "判断地区失败:" + strings.Join(fails, ";")}
 }

@@ -16,6 +16,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
 )
@@ -31,6 +32,8 @@ type state struct {
 	RouterID string `json:"routerId,omitempty"`
 	// Config 是本地分流(客户端配置)的同步状态,见 clientconfig.go。
 	Config *configState `json:"clientConfig,omitempty"`
+	// Egress 是上一次按出口 IP 判出的国家,见 egress.go。
+	Egress *EgressCountry `json:"egressCountry,omitempty"`
 }
 
 // ServerInfo 是档案里的路由器标识(serverInfo),四个字段都可以空。原样回给前端。
@@ -78,6 +81,12 @@ type Service struct {
 	PanelPort int
 	// Rand 生成路由器 ID 的随机源,默认 crypto/rand。
 	Rand io.Reader
+	// DetectEgress 查一次出口公网 IP 和它所在国家(两位大写代码);nil = 不支持,POST egress-country 回 503。
+	DetectEgress func(ctx context.Context) (ip, country string, err error)
+	// Running 报告内核服务在不在运行;nil = 不知道,POST egress-country 回 503。
+	Running func(ctx context.Context) (bool, error)
+	// Now 取当前时间,默认 time.Now(测试里换假的)。
+	Now func() time.Time
 }
 
 // PortOf 取 "host:port" 里的端口;格式不对或不在 1~65535 返回 0。
@@ -174,7 +183,7 @@ func (s *Service) Info(ctx context.Context) (Info, error) {
 		LanAddresses: addrs, LanSubnets: subnets, PanelPort: s.PanelPort,
 		ShareRegions: regions, ShareRegionsCustomized: customized, DefaultShareRegions: DefaultShareRegions(),
 		ServerInfo: si, ServerInfoDefaults: serverDefault{Name: DefaultRouterName},
-		EgressCountry: nil, // 按出口 IP 判国家(POST client-app/egress-country)还没做,做了再接上缓存
+		EgressCountry: s.cachedEgress(),
 	}, nil
 }
 

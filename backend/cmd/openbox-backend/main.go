@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -291,10 +292,26 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 
 	// 客户端 App 页的信息:路由器标识、局域网地址与网段、地区分流、路由器名称。只读网卡和档案,
 	// 路由器 ID 第一次读时生成并存进状态目录。本地分流的同步状态(client-config:开关、配对码、换码)也在这里;封包、App 用的公开同步接口等私有约定另列条目,还没做
+	egressDetector := &regiondetect.Detector{} // 与 dns/region-detect 各用各的:互不占用「判断中」状态
 	clientAppSvc := &clientapp.Service{
 		Store: st, Profile: profileSvc.Get, LAN: system.LAN, PanelPort: clientapp.PortOf(cfg.Listen),
+		// 出口国家:内核在运行时才判(只查询,不改任何设置),结果缓存在状态目录里
+		DetectEgress: func(ctx context.Context) (string, string, error) {
+			r := egressDetector.Detect(ctx)
+			if r.Region == nil {
+				return "", "", errors.New(r.Error)
+			}
+			return r.IP, r.Country, nil
+		},
+		Running: func(ctx context.Context) (bool, error) {
+			info, err := svcCtl.Status(ctx, cfg.CoreService)
+			if errors.Is(err, system.ErrNoInit) { // 面板不在路由器上(没有 procd / systemd):判断不可用,不是出错
+				return false, clientapp.ErrUnavailable
+			}
+			return info.Running, err
+		},
 	}
-	clientappapi.Register(srv.Mux(), clientappapi.Deps{Service: clientAppSvc, Config: clientAppSvc})
+	clientappapi.Register(srv.Mux(), clientappapi.Deps{Service: clientAppSvc, Config: clientAppSvc, Egress: clientAppSvc})
 
 	// 订阅分享(只管记录和 token;对外的 /sub/<token> 下发内容是另一条,还没做):新选的订阅必须存在
 	subsharesapi.Register(srv.Mux(), subsharesapi.Deps{Service: &subshare.Service{
