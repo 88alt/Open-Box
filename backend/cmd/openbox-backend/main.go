@@ -19,6 +19,7 @@ import (
 	dnsfilterapi "github.com/timeflysoon/Open-Box/backend/internal/api/dnsfilter"
 	groupsapi "github.com/timeflysoon/Open-Box/backend/internal/api/groups"
 	latencyapi "github.com/timeflysoon/Open-Box/backend/internal/api/latency"
+	latencyhistoryapi "github.com/timeflysoon/Open-Box/backend/internal/api/latencyhistory"
 	policiesapi "github.com/timeflysoon/Open-Box/backend/internal/api/policies"
 	profileapi "github.com/timeflysoon/Open-Box/backend/internal/api/profile"
 	rulesetsapi "github.com/timeflysoon/Open-Box/backend/internal/api/rulesets"
@@ -31,6 +32,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsfilter"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnstest"
 	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
+	"github.com/timeflysoon/Open-Box/backend/internal/latencyhistory"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/policyentries"
 	"github.com/timeflysoon/Open-Box/backend/internal/probe"
@@ -260,6 +262,14 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 		Filter:   filterSvc,
 		Preview:  dnsfilter.NewPreviewer(fetchList).Preview,
 	})
+
+	// 延迟历史:每个节点 / 组最近 10 次测速,后端记、各浏览器共享;sync 读一次内核的 /proxies 把成功的结果记下来
+	latencyhistoryapi.Register(srv.Mux(), latencyhistoryapi.Deps{Service: &latencyhistory.Service{
+		Store: st,
+		Kernel: func(ctx context.Context) ([]singbox.KernelProxy, error) {
+			return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
+		},
+	}})
 
 	// 激活和教程视频:没有对应概念,只回固定内容(DESIGN D9 和第 8 节),不保存任何东西
 	activationapi.Register(srv.Mux(), activationapi.Deps{

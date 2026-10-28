@@ -225,6 +225,8 @@
 | POST | `/api/openbox/latency-history/sync` | `syncLatencyHistory` (api/openbox.ts:1411) | { history: OpenboxLatencyHistory } | () |
 | GET | `/api/openbox/latency-history/version` | `fetchLatencyHistoryVersion` (api/openbox.ts:1406) | { updatedAt: number } | () |
 
+实现约定(M3):样本 `{time, delay, node?}` 的 `time` 是 RFC3339、`delay` 是毫秒(0 = 不通),节点组的样本带 `node`(当时选中的节点),节点自己的没有;每个名字只留最新 10 条(旧 → 新),同一时刻只留一条,最多记 5000 个名字。`samples` 一次最多 500 条,名字不能为空或超过 200 个字符、时间要合法、延迟 0 – 600000,**任何一条不合法整批 400、什么都不记**;请求体上限 256 KiB(413)。`sync` 读一次内核的 Clash API `GET /proxies`,把各代理的测速记录合进来(`delay` 为 0 的不记);内核读不到不是错误,照样回现有的历史。`updatedAt`(毫秒)只在内容真有变化时才更新,没变化也不写盘。
+
 ## `/api/openbox/node-info`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
