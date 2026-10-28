@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "left": [
+    {
+      "description": "机场、VPS",
+      "name": "安格超市",
+      "url": "https://blog.angeworld.cc/market"
+    },
+    {
+      "description": "原生住宅 IP",
+      "name": "TOPIP",
+      "url": "https://topip.sbs"
+    }
+  ],
+  "right": [
+    {
+      "description": "AI 中转站 · 订阅服务",
+      "name": "SUPERDOOR",
+      "url": "https://ai.superdoor.top"
+    },
+    {
+      "description": "按需付费",
+      "name": "OPENDOOR",
+      "url": "https://ai.opendoor.sbs"
+    }
+  ]
+}
