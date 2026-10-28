@@ -111,6 +111,42 @@ func TestPutErrors(t *testing.T) {
 	}
 }
 
+// shareRegions / serverInfo 的校验:400,原因是英文(前端原样显示),失败的请求不留改动;合法的整份覆盖。
+func TestPutShareRegionsAndServerInfo(t *testing.T) {
+	h := newHandler(t, nil)
+	two := `[{"id":"a","name":"a","regions":["CN"],"rules":[],"catchAll":"direct"},` +
+		`{"id":"x","name":"x","regions":["CN"],"rules":[],"catchAll":"direct"}]`
+	for _, c := range []struct{ body, want string }{
+		{`{"shareRegions":` + two + `}`, "region CN is in both a and x"},
+		{`{"shareRegions":[{"id":"a","name":"a","regions":[],"rules":[{"type":"ipcidr","value":"nope","action":"direct"}],"catchAll":"direct"}]}`, "not a valid ipcidr value"},
+		{`{"serverInfo":{"region":"cn"}}`, "region must be a two-letter uppercase country code"},
+	} {
+		code, body := call(h, "PUT", "/api/openbox/profile", c.body)
+		if msg, _ := body["error"].(string); code != 400 || !strings.Contains(msg, c.want) {
+			t.Fatalf("%s\n应是 400 且含 %q: %d %v", c.body, c.want, code, body)
+		}
+	}
+	_, body := call(h, "GET", "/api/openbox/profile", "")
+	if p := body["profile"].(map[string]any); p["shareRegions"] != nil || p["serverInfo"] != nil {
+		t.Fatalf("失败的 PUT 不应留下改动: %v %v", p["shareRegions"], p["serverInfo"])
+	}
+
+	code, body := call(h, "PUT", "/api/openbox/profile",
+		`{"shareRegions":[{"id":"jp","name":" 日本 ","regions":["JP"],"rules":[],"catchAll":"proxy"}],"serverInfo":{"name":"家里","icon":"JP"}}`)
+	if code != 200 {
+		t.Fatalf("合法的应保存: %d %v", code, body)
+	}
+	p := body["profile"].(map[string]any)
+	if g := p["shareRegions"].([]any)[0].(map[string]any); g["name"] != "日本" || g["dns"] == nil {
+		t.Fatalf("应返回规整后的值: %v", g)
+	}
+	// serverInfo 整份覆盖
+	code, body = call(h, "PUT", "/api/openbox/profile", `{"serverInfo":{"name":"办公室"}}`)
+	if si := body["profile"].(map[string]any)["serverInfo"].(map[string]any); code != 200 || len(si) != 1 || si["name"] != "办公室" {
+		t.Fatalf("serverInfo 应整份覆盖: %d %v", code, body)
+	}
+}
+
 func TestMethodNotAllowed(t *testing.T) {
 	h := newHandler(t, nil)
 	for _, p := range []string{"/api/openbox/profile", "/api/openbox/profile/defaults", "/api/openbox/defaults/routing", "/api/openbox/defaults/groups"} {

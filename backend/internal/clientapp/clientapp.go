@@ -187,7 +187,7 @@ func serverInfoOf(v any) ServerInfo {
 }
 
 // regionsOf 取档案里的地区分流。没存、存了空数组 = 默认三组(customized=false)。
-// 存了东西但读不出来(档案目前不校验 shareRegions,手工改坏的文件可能出现)= 给默认三组并标成「改过」,
+// 存了东西但读不出来(保存时会校验,但手工改坏的文件仍可能出现)= 给默认三组并标成「改过」,
 // 这样前端的「恢复默认」仍然能点,不会因为一份坏数据让整页打不开。
 func regionsOf(v any) (groups []Group, customized bool) {
 	arr, ok := v.([]any)

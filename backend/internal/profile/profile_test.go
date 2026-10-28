@@ -111,7 +111,7 @@ func TestCheck(t *testing.T) {
 		{"更新通道非法", `{"updates":{"openbox":{"channel":"x"}}}`, "channel"},
 		{"更新时刻越界", `{"updates":{"openbox":{"hour":24}}}`, "hour"},
 		{"更新天数为 0", `{"updates":{"openbox":{"days":0}}}`, "days"},
-		{"未知字段放行", `{"shareRegions":[{"a":1}],"serverInfo":{"x":1}}`, ""},
+		{"未知字段放行", `{"someFutureKey":{"a":1},"another":[1,2]}`, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -188,7 +188,7 @@ func TestGetFreshIsDefault(t *testing.T) {
 func TestPatchPersistsFullProfileAndKeepsUnknownKeys(t *testing.T) {
 	svc, st := newSvc(t, nil)
 	ctx := context.Background()
-	got, err := svc.Patch(ctx, j(t, `{"ipv6":true,"dns":{"mode":"hijack"},"shareRegions":[{"id":"a"}],"serverInfo":{"k":"v"}}`))
+	got, err := svc.Patch(ctx, j(t, `{"ipv6":true,"dns":{"mode":"hijack"},"shareRegions":[{"id":"a","name":"甲","regions":["JP"],"rules":[],"catchAll":"direct"}],"serverInfo":{"name":"家里"},"someFutureKey":{"k":"v"}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestPatchPersistsFullProfileAndKeepsUnknownKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got2["serverInfo"] == nil || got2["shareRegions"] == nil || got2["ipv6"] != true {
+	if got2["serverInfo"] == nil || got2["shareRegions"] == nil || got2["someFutureKey"] == nil || got2["ipv6"] != true {
 		t.Fatalf("后续补丁丢了旧内容: %v", got2)
 	}
 	// 落盘的是完整档案(默认值变化不会悄悄改变已保存的设置)
