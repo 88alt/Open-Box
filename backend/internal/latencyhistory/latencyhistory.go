@@ -63,6 +63,15 @@ type Service struct {
 	// Kernel 读内核当前的代理和测速记录;nil 或返回 error 时 Sync 只回现有的历史。
 	Kernel func(ctx context.Context) ([]singbox.KernelProxy, error)
 	Now    func() time.Time
+	// File 是存放历史的文件名(在 store 里);空 = "latency-history"。站点延迟用另一个文件,和节点历史互不混。
+	File string
+}
+
+func (s *Service) file() string {
+	if s.File != "" {
+		return s.File
+	}
+	return fileName
 }
 
 func (s *Service) now() time.Time {
@@ -83,7 +92,7 @@ func (s *Service) Get(context.Context) (History, int64, error) {
 
 func (s *Service) load() (*file, error) {
 	f := &file{}
-	if _, err := s.Store.Load(fileName, f); err != nil {
+	if _, err := s.Store.Load(s.file(), f); err != nil {
 		return nil, fmt.Errorf("读取延迟历史失败: %w", err)
 	}
 	if f.History == nil {
@@ -126,6 +135,33 @@ func (s *Service) Add(_ context.Context, in []Input) (History, error) {
 		return changed
 	})
 	return out, err
+}
+
+// Item 是要记的一条带线路的样本(站点延迟用)。
+type Item struct {
+	Name   string
+	Sample Sample
+}
+
+// Record 记几条样本(调用方保证内容合法:名字非空、时间是 RFC3339、延迟在范围内),返回整份最新的历史。
+func (s *Service) Record(_ context.Context, items []Item) (History, error) {
+	var out History
+	err := s.mutate(func(f *file) bool {
+		changed := false
+		for _, it := range items {
+			changed = merge(f, it.Name, it.Sample) || changed
+		}
+		out = f.History
+		return changed
+	})
+	if err != nil {
+		return nil, err
+	}
+	if out == nil { // 没有变化时 mutate 不回调结果:读现有的
+		h, _, err := s.Get(context.Background())
+		return h, err
+	}
+	return out, nil
 }
 
 // Sync 读一次内核,把它记着的测速结果合进来,返回整份历史。内核读不到不是错误(没有新东西可合),照样回现有的。
@@ -175,7 +211,7 @@ var errNoChange = errors.New("no change")
 // mutate 在 store 的锁里读改写;fn 返回 false 表示没变化:不写盘(路由器闪存)、不动 updatedAt。
 func (s *Service) mutate(fn func(f *file) bool) error {
 	f := &file{}
-	err := s.Store.Update(fileName, f, func() error {
+	err := s.Store.Update(s.file(), f, func() error {
 		if f.History == nil {
 			f.History = History{}
 		}

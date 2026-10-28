@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 )
 
@@ -20,6 +21,8 @@ type KernelConn struct {
 	Source   string   // 终端的来源 IP
 	Host     string   // 访问目标的域名(嗅探 / 解析出来的),没有时为空
 	DestIP   string   // 访问目标的 IP,没有时为空
+	// SourcePort 是来源端口(十进制字符串),没有时为空。站点延迟靠「来源 IP + 端口」认出自己发的那条连接。
+	SourcePort string
 }
 
 // KernelSnapshot 是某一刻的连接快照。UploadTotal / DownloadTotal 是内核自启动以来的累计总量
@@ -83,6 +86,7 @@ func parseKernelConnections(r io.Reader) (KernelSnapshot, error) {
 			Chains   []string `json:"chains"`
 			Metadata struct {
 				SourceIP      string `json:"sourceIP"`
+				SourcePort    any    `json:"sourcePort"`
 				Host          string `json:"host"`
 				DestinationIP string `json:"destinationIP"`
 			} `json:"metadata"`
@@ -99,6 +103,7 @@ func parseKernelConnections(r io.Reader) (KernelSnapshot, error) {
 		snap.Conns = append(snap.Conns, KernelConn{
 			ID: c.ID, Upload: c.Upload, Download: c.Download, Chains: c.Chains,
 			Source: c.Metadata.SourceIP, Host: c.Metadata.Host, DestIP: c.Metadata.DestinationIP,
+			SourcePort: portString(c.Metadata.SourcePort),
 		})
 	}
 	return snap, nil
@@ -117,4 +122,17 @@ func directTagsOf(cfg map[string]any) []string {
 		}
 	}
 	return tags
+}
+
+// portString 把 JSON 里的端口(Clash API 给的是字符串,也容忍数字)转成十进制字符串。
+func portString(v any) string {
+	switch x := v.(type) {
+	case string:
+		return x
+	case float64:
+		if x == float64(int64(x)) && x > 0 {
+			return strconv.FormatInt(int64(x), 10)
+		}
+	}
+	return ""
 }

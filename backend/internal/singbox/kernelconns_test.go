@@ -73,3 +73,20 @@ func TestKernelConnections(t *testing.T) {
 		t.Errorf("连不上: %v", err)
 	}
 }
+
+func TestParseKernelConnectionsSourcePort(t *testing.T) {
+	body := `{"uploadTotal":0,"downloadTotal":0,"connections":[
+	 {"id":"1","chains":["n","g"],"metadata":{"sourceIP":"127.0.0.1","sourcePort":"54321"}},
+	 {"id":"2","chains":["n"],"metadata":{"sourceIP":"127.0.0.1","sourcePort":8080}},
+	 {"id":"3","chains":["n"],"metadata":{"sourceIP":"127.0.0.1"}}]}`
+	snap, err := parseKernelConnections(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"54321", "8080", ""}
+	for i, c := range snap.Conns {
+		if c.SourcePort != want[i] {
+			t.Errorf("第 %d 条来源端口 %q,想要 %q", i+1, c.SourcePort, want[i])
+		}
+	}
+}

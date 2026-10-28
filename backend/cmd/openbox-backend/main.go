@@ -28,6 +28,7 @@ import (
 	rulesetsapi "github.com/timeflysoon/Open-Box/backend/internal/api/rulesets"
 	serversapi "github.com/timeflysoon/Open-Box/backend/internal/api/servers"
 	serviceapi "github.com/timeflysoon/Open-Box/backend/internal/api/service"
+	sitelatencyapi "github.com/timeflysoon/Open-Box/backend/internal/api/sitelatency"
 	storageapi "github.com/timeflysoon/Open-Box/backend/internal/api/storage"
 	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
 	subsharesapi "github.com/timeflysoon/Open-Box/backend/internal/api/subshares"
@@ -49,6 +50,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/rulelist"
 	"github.com/timeflysoon/Open-Box/backend/internal/server"
 	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
+	"github.com/timeflysoon/Open-Box/backend/internal/sitelatency"
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
 	"github.com/timeflysoon/Open-Box/backend/internal/subs"
 	"github.com/timeflysoon/Open-Box/backend/internal/subshare"
@@ -286,6 +288,14 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Store: st,
 		Kernel: func(ctx context.Context) ([]singbox.KernelProxy, error) {
 			return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
+		},
+	}})
+
+	// 站点延迟(概览页):请求经内核的面板入站走一遍路由,从内核连接列表认出线路;历史单独存 site-latency-history,不和节点历史混
+	sitelatencyapi.Register(srv.Mux(), sitelatencyapi.Deps{Service: &sitelatency.Service{
+		Hist: &latencyhistory.Service{Store: st, File: "site-latency-history"},
+		Snapshot: func(ctx context.Context) (singbox.KernelSnapshot, error) {
+			return singbox.KernelConnections(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
 		},
 	}})
 

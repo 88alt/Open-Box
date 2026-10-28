@@ -180,3 +180,30 @@ func TestNameCapAndConcurrency(t *testing.T) {
 		t.Error("已有的名字照常收")
 	}
 }
+
+func TestRecordAndSeparateFile(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodes := &Service{Store: st}
+	sites := &Service{Store: st, File: "site-latency-history"}
+	ctx := context.Background()
+	at := "2026-10-28T08:00:00Z"
+	h, err := sites.Record(ctx, []Item{{Name: "baidu", Sample: Sample{Time: at, Delay: 30, Node: "直连"}}})
+	if err != nil || len(h["baidu"]) != 1 || h["baidu"][0].Node != "直连" {
+		t.Fatalf("%v %v", h, err)
+	}
+	// 同一时刻再记:不变,仍返回现有的历史
+	h, err = sites.Record(ctx, []Item{{Name: "baidu", Sample: Sample{Time: at, Delay: 99}}})
+	if err != nil || len(h["baidu"]) != 1 || h["baidu"][0].Delay != 30 {
+		t.Fatalf("%v %v", h, err)
+	}
+	// 两份历史互不混
+	if nh, _, _ := nodes.Get(ctx); len(nh) != 0 {
+		t.Fatalf("节点历史不该看到站点的记录:%v", nh)
+	}
+	if sh, _, _ := sites.Get(ctx); len(sh["baidu"]) != 1 {
+		t.Fatal(sh)
+	}
+}
