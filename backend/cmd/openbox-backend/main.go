@@ -14,6 +14,7 @@ import (
 
 	activationapi "github.com/timeflysoon/Open-Box/backend/internal/api/activation"
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
+	clientsapi "github.com/timeflysoon/Open-Box/backend/internal/api/clients"
 	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
 	dnsapi "github.com/timeflysoon/Open-Box/backend/internal/api/dns"
 	dnsfilterapi "github.com/timeflysoon/Open-Box/backend/internal/api/dnsfilter"
@@ -277,6 +278,11 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 		KernelVersion: func(ctx context.Context) string {
 			return singbox.ReadKernelVersion(ctx, cfg.SingBox).Version
 		},
+	})
+
+	// 已知终端(只读):DHCP 租约里的设备,给「终端分流」选来源;流量里出现过的来源 IP 等 traffic* 做了再并进来
+	clientsapi.Register(srv.Mux(), clientsapi.Deps{
+		List: func() []system.Client { return system.ReadDHCPLeases(system.DHCPLeaseFiles, time.Now()) },
 	})
 
 	// 前端静态文件与前端路由回落;最后挂,/api 下的路径由各接口分组优先处理

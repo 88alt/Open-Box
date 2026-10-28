@@ -110,6 +110,8 @@
 
 ## `/api/openbox/clients`
 
+实现约定(M2):只读。目前只有 DHCP 租约(dnsmasq 租约文件,只收 IPv4、不含已过期的)一路,按 IP 从小到大排;`name` 没有主机名时是空串,没有 MAC 时不带 `mac`;读不到租约回 `{ "clients": [] }`,不报错。前端说明里「今天流量里出现过的来源 IP」等 `traffic*` 做了再并进来。
+
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
 | GET | `/api/openbox/clients` | `fetchKnownClients` (api/openbox.ts:1709) | { clients: Array<{ ip: string; name: string; mac?: string }> } | () |
