@@ -26,7 +26,7 @@ func TestAppWiring(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	start := func() (*httptest.Server, *http.Client) {
-		srv, err := newApp(cfg, log)
+		srv, _, err := newApp(cfg, log)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -76,6 +76,17 @@ func TestAppWiring(t *testing.T) {
 	// 清 DNS 缓存已装配:POST 才有;测试机上没有可清的层时是 503 + error,而不是 404 / 405
 	if code, _ := get(c, ts.URL+"/api/openbox/dns/flush-cache"); code != 405 {
 		t.Fatalf("dns/flush-cache GET: %d", code)
+	}
+
+	// 每日流量已装配:没有数据时月视图是空列表、占用是 0 天;后台采集器随 background 启动,没有内核时只是采样失败,不影响接口
+	if code, body := get(c, ts.URL+"/api/openbox/traffic/month"); code != 200 || !strings.Contains(body, `"days":[]`) || !strings.Contains(body, `"avgDays":0`) {
+		t.Fatalf("traffic/month: %d %s", code, body)
+	}
+	if code, body := get(c, ts.URL+"/api/openbox/traffic/usage"); code != 200 || !strings.Contains(body, `"days":0`) {
+		t.Fatalf("traffic/usage: %d %s", code, body)
+	}
+	if code, _ := get(c, ts.URL+"/api/openbox/traffic/day"); code != 400 {
+		t.Fatalf("traffic/day 缺 day: %d", code)
 	}
 
 	// 客户端 App 信息已装配:路由器 ID 第一次读时生成,之后(含重启后)不变;POST 不被接受

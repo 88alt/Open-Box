@@ -371,7 +371,13 @@
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
 | GET | `/api/openbox/traffic/month?${month ? ` | `fetchTrafficMonth` (api/openbox.ts:1487) | OpenboxTrafficMonth | (month?: string, countDirect = true) |
+| GET | `/api/openbox/traffic/day?day=&limit=&hour=&direct=` | `fetchTrafficDay` (api/openbox.ts:1489) | OpenboxTrafficDay | (day: string, limit = 500, hour?: number \| null, countDirect = true) |
+| GET | `/api/openbox/traffic/drill?day=&kind=&key=&by=&limit=&hour=&direct=` | `fetchTrafficDrill` (api/openbox.ts:1506) | OpenboxTrafficDrill | (day, kind, key, by, limit = 200, hour?, countDirect = true) |
 | GET | `/api/openbox/traffic/usage` | `fetchTrafficUsage` (api/openbox.ts:1482) | OpenboxTrafficUsage | () |
+
+> 实现约定(M3):四个接口都只接受 GET、响应 no-store。参数不合法回 400 加 `error`:`month` 要 `YYYY-MM`(缺省本月);`day` 必填 `YYYY-MM-DD`;`limit` 缺省 500(drill 前端传 200),范围 1 到 5000;`hour` 0 到 23(不给是整天);drill 的 `kind` / `by` 取 `client` / `node` / `host` 且不能相同,`key` 必填;`direct=0` 表示不统计直连,其余都统计。没有数据的日子 / 月份回空榜单和 0,不是 404。
+> 数据来源:后台每 10 秒读一次内核的 `/connections`(sing-box 官方 Clash API),总量取累计总量的增量(含已关闭的短连接),终端 / 节点 / 访问目标来自各连接的增量,所以 `other` = 总量 − 各节点之和 = 没采样到的短连接;节点取出站链第一项(实际出口),访问目标取域名、没有则取目的 IP。启动后第一次、以及内核断开重连后的第一次只建基线,不记数。「走直连」指走 `direct` 类型出站的连接,`direct.tag` 是配置里第一个 direct 出站的名字。终端的 `name` 取 DHCP 租约主机名,没有就不带;`self`(路由器自己的地址)暂不带。
+> 存储:数据目录下 `traffic/`,每天一个 `YYYY-MM-DD.json`(24 小时合计加「终端 × 节点 × 访问目标」三维表)、最近 7 天另有 `YYYY-MM-DD.hours.json`(每小时各自的三维表,只看某个小时时用)、`index.json`(每天摘要与文件大小)。超过 30 天的日子只留访问量最大的 200 个访问目标,其余并入「其他」;超过档案 `traffic.keepMonths`(缺省 12,最多 36)个月的整天删除;只看某个小时、而那天的小时明细已过期时,榜单为空、小时合计仍在。`usage` 只读索引:`rows` 是三维表条数,`perDay` / `hourPerDay` / `oldPerDay` 取最近 14 天的平均文件大小。
 
 ## `/api/openbox/update`
 

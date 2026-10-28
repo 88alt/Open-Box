@@ -31,6 +31,7 @@ import (
 	storageapi "github.com/timeflysoon/Open-Box/backend/internal/api/storage"
 	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
 	subsharesapi "github.com/timeflysoon/Open-Box/backend/internal/api/subshares"
+	trafficapi "github.com/timeflysoon/Open-Box/backend/internal/api/traffic"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
@@ -52,6 +53,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/subs"
 	"github.com/timeflysoon/Open-Box/backend/internal/subshare"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
+	"github.com/timeflysoon/Open-Box/backend/internal/traffic"
 )
 
 // version 由编译时 -ldflags "-X main.version=..." 注入。
@@ -76,7 +78,7 @@ func run(args []string) int {
 		return 1
 	}
 
-	srv, err := newApp(cfg, log)
+	srv, background, err := newApp(cfg, log)
 	if err != nil {
 		log.Error("初始化失败", "err", err)
 		return 1
@@ -93,23 +95,31 @@ func run(args []string) int {
 	defer stop()
 
 	log.Info("openbox-backend 启动", "version", version, "listen", ln.Addr().String(), "data", cfg.DataDir, "web", cfg.WebDir)
+	waitBackground := func() {}
+	if background != nil {
+		waitBackground = background(ctx)
+	}
 	if err := srv.Serve(ctx, ln); err != nil {
 		log.Error("服务异常退出", "err", err)
+		stop()
+		waitBackground()
 		return 1
 	}
+	waitBackground() // ctx 已结束:等后台任务写完盘再退出
 	log.Info("已退出")
 	return 0
 }
 
-// newApp 组装存储、各接口分组和中间件。
-func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
+// newApp 组装存储、各接口分组和中间件。返回的 background 在进程启动后调用(传入随退出信号结束的 ctx),
+// 启动后台任务(现在只有每日流量的采样)并返回等它们收尾的函数;没有后台任务时为 nil。
+func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx context.Context) (wait func()), error) {
 	st, err := store.Open(cfg.StateDir())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	authMgr, err := auth.NewManager(st)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !authMgr.PasswordSet() {
 		log.Warn("尚未设置访问密码:任何能访问本端口的人都可以设置,请尽快在面板里设置")
@@ -279,6 +289,65 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 		},
 	}})
 
+	// 每日流量:后台每 10 秒读一次内核的连接快照(/connections),按天、按小时、按终端 / 节点 / 访问目标记进数据目录下的 traffic/;
+	// 这里只读。终端名取 DHCP 租约;保留月数取档案的 traffic.keepMonths
+	var background func(ctx context.Context) func()
+	var trafficSource trafficapi.Source
+	if ts, err := traffic.Open(filepath.Join(cfg.DataDir, "traffic"), nil); err != nil {
+		log.Warn("创建流量统计目录失败,每日流量不可用", "error", err)
+	} else {
+		trafficSource = ts
+		configFile := filepath.Join(cfg.ConfigDir, "config.json")
+		lastErr := ""
+		collector := &traffic.Collector{
+			Store: ts,
+			Source: func(ctx context.Context) (singbox.KernelSnapshot, error) {
+				snap, err := singbox.KernelConnections(ctx, configFile)
+				if err == nil {
+					lastErr = ""
+				}
+				return snap, err
+			},
+			KeepMonths: func() int {
+				p, err := profileSvc.Get(context.Background())
+				if err != nil {
+					return 0
+				}
+				t, _ := p["traffic"].(map[string]any)
+				switch v := t["keepMonths"].(type) {
+				case float64:
+					return int(v)
+				case int:
+					return v
+				}
+				return 0
+			},
+			OnError: func(err error) { // 内核没在跑是常态:同一条错误只记一次,恢复后再出错才再记
+				if msg := err.Error(); msg != lastErr {
+					lastErr = msg
+					log.Warn("每日流量采样失败", "error", msg)
+				}
+			},
+		}
+		background = func(ctx context.Context) func() {
+			done := make(chan struct{})
+			go func() { defer close(done); collector.Run(ctx, traffic.DefaultInterval) }()
+			return func() { <-done }
+		}
+	}
+	trafficapi.Register(srv.Mux(), trafficapi.Deps{
+		Source: trafficSource,
+		Names: func() map[string]string {
+			names := map[string]string{}
+			for _, c := range system.ReadDHCPLeases(system.DHCPLeaseFiles, time.Now()) {
+				if c.Name != "" {
+					names[c.IP] = c.Name
+				}
+			}
+			return names
+		},
+	})
+
 	// 激活和教程视频:没有对应概念,只回固定内容(DESIGN D9 和第 8 节),不保存任何东西
 	activationapi.Register(srv.Mux(), activationapi.Deps{
 		Version: version,
@@ -346,7 +415,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 
 	// 前端静态文件与前端路由回落;最后挂,/api 下的路径由各接口分组优先处理
 	srv.Mux().Handle("/", server.StaticHandler(cfg.WebDir))
-	return srv, nil
+	return srv, background, nil
 }
 
 // checkCore 启动时握手一次,只记日志:核心不可用时面板的其它功能(登录、设置)仍可用,
