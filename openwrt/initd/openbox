@@ -352,7 +352,8 @@ openbox_apply_nft() {
 # 预检会 modprobe 一次,但重启后没人再加载它们,nft 提交规则时内核找不到模块就回 ENOENT:
 #   auto-redirect: setup nftables: flush nftables: conn.Receive: netlink receive: no such file or directory
 # (GitHub #225 的 N1:lsmod 里有 nfnetlink_queue、没有 nft_queue)。起内核前挨个 modprobe 一遍,没装的模块
-# 静默跳过——缺了就还是走降级纯 tun 那条路,面板会说明
+# 静默跳过:queue 只用于可选的首包预判,缺失时保留 auto_redirect;其它必需表达式缺失导致启动失败时,
+# 面板再走纯 tun 降级。内核自用 DNS 的防循环规则由 entry-bypass.nft 的 output 链独立保护。
 openbox_load_modules() {
 	for _ob_mod in tun nft_queue nft_nat nft_redir nft_tproxy nft_socket nft_fib_inet nft_ct; do
 		[ -d "/sys/module/$_ob_mod" ] || modprobe "$_ob_mod" >/dev/null 2>&1

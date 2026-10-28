@@ -50,14 +50,13 @@ start_service() {
 		fi
 		rm -f /www/luci-static/resources/view/openbox/status.js 2>/dev/null
 	fi
-	_luci_menu_src="$OPENBOX_ROOT/openwrt/luci/root/usr/share/luci/menu.d/luci-app-openbox.json"
-	_luci_menu_dst=/usr/share/luci/menu.d/luci-app-openbox.json
-	if [ -f "$_luci_menu_src" ] && { [ ! -f "$_luci_menu_dst" ] || ! cmp -s "$_luci_menu_src" "$_luci_menu_dst"; }; then
-		mkdir -p /usr/share/luci/menu.d 2>/dev/null
-		cp "$_luci_menu_src" "$_luci_menu_dst" 2>/dev/null && chmod 644 "$_luci_menu_dst" 2>/dev/null
-		# 菜单真换了才清 LuCI 的缓存 —— 不清的话它还按缓存里的老菜单去加载视图。
-		# 用 -rf:老版 LuCI 的 /tmp/luci-modulecache 是目录,rm -f 对目录返回非零。
-		rm -rf /tmp/luci-*cache* 2>/dev/null
+	if [ -f "$OPENBOX_ROOT/openwrt/bin/luci-compat.sh" ]; then
+		. "$OPENBOX_ROOT/openwrt/bin/luci-compat.sh"
+		if openbox_install_luci_compat "$OPENBOX_ROOT"; then
+			[ "$OPENBOX_LUCI_COMPAT_CHANGED" = 1 ] && rm -rf /tmp/luci-*cache* 2>/dev/null
+		else
+			echo "openbox-panel: failed to install Lua LuCI compatibility entry" >&2
+		fi
 	fi
 
 	# Node 堆上限。不设的话 V8 在内存不大的路由器上会把老生代一路放到几百 MB 才认真回收(2026-09-17 一台
