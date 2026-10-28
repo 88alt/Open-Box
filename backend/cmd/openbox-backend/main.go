@@ -26,6 +26,7 @@ import (
 	policiesapi "github.com/timeflysoon/Open-Box/backend/internal/api/policies"
 	profileapi "github.com/timeflysoon/Open-Box/backend/internal/api/profile"
 	rulesetsapi "github.com/timeflysoon/Open-Box/backend/internal/api/rulesets"
+	serversapi "github.com/timeflysoon/Open-Box/backend/internal/api/servers"
 	serviceapi "github.com/timeflysoon/Open-Box/backend/internal/api/service"
 	storageapi "github.com/timeflysoon/Open-Box/backend/internal/api/storage"
 	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
@@ -40,6 +41,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/latencyhistory"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/policyentries"
+	"github.com/timeflysoon/Open-Box/backend/internal/portcheck"
 	"github.com/timeflysoon/Open-Box/backend/internal/probe"
 	"github.com/timeflysoon/Open-Box/backend/internal/profile"
 	"github.com/timeflysoon/Open-Box/backend/internal/regiondetect"
@@ -286,6 +288,19 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 	})
 
 	// 已知终端(只读):DHCP 租约里的设备,给「终端分流」选来源;流量里出现过的来源 IP 等 traffic* 做了再并进来
+	// 共享网络:保存服务器前的端口检测(只读;自用端口 = 面板监听端口 + 内核固定端口 + 已部署配置里的非共享入站)
+	serversapi.Register(srv.Mux(), serversapi.Deps{Ports: &portcheck.Checker{
+		Servers: func(ctx context.Context) ([]portcheck.Server, error) {
+			p, err := profileSvc.Get(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return portcheck.ServersFromProfile(p), nil
+		},
+		Reserved:   []int{clientapp.PortOf(cfg.Listen)},
+		ConfigPath: filepath.Join(cfg.ConfigDir, "config.json"),
+	}})
+
 	clientsapi.Register(srv.Mux(), clientsapi.Deps{
 		List: func() []system.Client { return system.ReadDHCPLeases(system.DHCPLeaseFiles, time.Now()) },
 	})

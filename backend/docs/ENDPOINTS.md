@@ -305,6 +305,8 @@
 |---|---|---|---|---|
 | GET | `/api/openbox/servers/port-check?port={x}&id={x}` | `checkServerPort` (api/openbox.ts:1706) | OpenboxPortCheck | (port: number, id: string) |
 
+实现约定(M2):`port-check` 回 `{ ok, reason?, name? }`;端口不是 1–65535 的整数不是 400,而是 `{ ok: false, reason: "invalid" }`。`reason` 依次判 `invalid` → `reserved`(面板监听端口、内核固定端口 7853 / 7855 / 7891 / 9095、已部署配置里的控制接口和非 `share-*` 入站)→ `server`(档案里另一台服务器占着,`name` 是它的名字;`id` 是正在编辑的那台,自己不算)→ `listening`(读 `/proc/net`;因为不知道协议,TCP / UDP 任一被占都算)。读不到端口占用情况回 500。服务器本身存在档案的 `servers` 里,走 `/api/openbox/profile` 读写。
+
 ## `/api/openbox/service`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
