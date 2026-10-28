@@ -67,6 +67,9 @@
 | POST | `/api/openbox/activation` | `activate` (api/clientApp.ts:331) | OpenboxActivation | (code: string, left: string, right: string) |
 | PUT | `/api/openbox/activation` | `updateActivationText` (api/clientApp.ts:338) | OpenboxActivation | (left: string, right: string) |
 
+实现约定(M5,DESIGN D9):四个方法都回同一份固定状态 `{ activated: true, left: "", right: "", defaults: { left: "Open-Box <后端版本>", right: "sing-box <内核版本>" } }`,不保存任何东西(POST 的激活码随便给、PUT 的文字不存),不会出现「激活码不对」。内核版本读不到时右边只显示 `sing-box`。
+另有 `GET /api/openbox/tutorial-videos`(前端没有调用,DESIGN 第 8 节规定):固定回 `{ "videos": [], "updatedAt": 0, "staleAfterMs": 86400000 }`。
+
 ## `/api/openbox/backup`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |

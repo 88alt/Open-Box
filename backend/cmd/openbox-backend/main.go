@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	activationapi "github.com/timeflysoon/Open-Box/backend/internal/api/activation"
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
 	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
 	dnsapi "github.com/timeflysoon/Open-Box/backend/internal/api/dns"
@@ -258,6 +259,14 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, error) {
 		Profiles: profileSvc,
 		Filter:   filterSvc,
 		Preview:  dnsfilter.NewPreviewer(fetchList).Preview,
+	})
+
+	// 激活和教程视频:没有对应概念,只回固定内容(DESIGN D9 和第 8 节),不保存任何东西
+	activationapi.Register(srv.Mux(), activationapi.Deps{
+		Version: version,
+		KernelVersion: func(ctx context.Context) string {
+			return singbox.ReadKernelVersion(ctx, cfg.SingBox).Version
+		},
 	})
 
 	// 前端静态文件与前端路由回落;最后挂,/api 下的路径由各接口分组优先处理
