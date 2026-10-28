@@ -23,6 +23,7 @@ import (
 	groupsapi "github.com/timeflysoon/Open-Box/backend/internal/api/groups"
 	latencyapi "github.com/timeflysoon/Open-Box/backend/internal/api/latency"
 	latencyhistoryapi "github.com/timeflysoon/Open-Box/backend/internal/api/latencyhistory"
+	nodeinfoapi "github.com/timeflysoon/Open-Box/backend/internal/api/nodeinfo"
 	policiesapi "github.com/timeflysoon/Open-Box/backend/internal/api/policies"
 	profileapi "github.com/timeflysoon/Open-Box/backend/internal/api/profile"
 	rulesetsapi "github.com/timeflysoon/Open-Box/backend/internal/api/rulesets"
@@ -42,6 +43,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
 	"github.com/timeflysoon/Open-Box/backend/internal/latencyhistory"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
+	"github.com/timeflysoon/Open-Box/backend/internal/nodeinfo"
 	"github.com/timeflysoon/Open-Box/backend/internal/policyentries"
 	"github.com/timeflysoon/Open-Box/backend/internal/portcheck"
 	"github.com/timeflysoon/Open-Box/backend/internal/probe"
@@ -229,6 +231,11 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	})
 
 	latencyapi.Register(srv.Mux(), latencyapi.Deps{Gen: gen, Subs: subsSvc, Profiles: profileSvc, Runner: probeRunner})
+	// 节点信息:类型 / 协议层 / 服务器 / 链式上游 / 入口地址解析(入口国家和出口归属是后续条目)
+	nodeinfoapi.Register(srv.Mux(), nodeinfoapi.Deps{Service: &nodeinfo.Service{
+		Pool:    subsSvc.PoolNodes,
+		Profile: profileSvc.Get,
+	}})
 
 	// 规则集链接服务共用一份(含 60 秒内存缓存):规则集预览和「域名穿透」都会拉同一批链接
 	lists := rulelist.NewService(nil)
