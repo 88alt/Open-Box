@@ -189,3 +189,77 @@ func jsonAny(t *testing.T, v any) any {
 	}
 	return out
 }
+
+const okServers = `[{"id":"s1","enabled":true,"name":" 客厅 ","protocol":"mixed","port":7080,"address":" router.lan "},{"id":"s2","enabled":true,"name":"SS","protocol":"shadowsocks","port":8388,"method":"aes-256-gcm","password":"pw"}]`
+
+// 档案 servers 校验不过:返回 *ValidationError(接口回 400),已保存的内容原样不动;同一补丁里别的字段合法也作废。
+func TestPatchRejectsBadServersWithoutWriting(t *testing.T) {
+	svc, st := newSvc(t, nil)
+	ctx := context.Background()
+	if _, err := svc.Patch(ctx, j(t, `{"servers":`+okServers+`}`)); err != nil {
+		t.Fatal(err)
+	}
+	var before map[string]any
+	if _, err := st.Load(storeName, &before); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct{ name, patch, want string }{
+		{"端口重复", `{"servers":[{"id":"a","name":"a","protocol":"mixed","port":7080},{"id":"b","name":"b","protocol":"mixed","port":7080}]}`, "同一个端口"},
+		{"没有名称", `{"servers":[{"id":"a","protocol":"mixed","port":7080}]}`, "名称不能为空"},
+		{"不是数组", `{"servers":{}}`, "必须是数组"},
+		{"和合法字段一起", `{"ipv6":true,"servers":[{"id":"a","name":"a","protocol":"vless","port":1,"uuid":"x"}]}`, "uuid 格式不对"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := svc.Patch(ctx, j(t, c.patch))
+			var ve *ValidationError
+			if !errorsAs(err, &ve) || !strings.Contains(ve.Msg, c.want) {
+				t.Fatalf("应是含 %q 的 *ValidationError: %v", c.want, err)
+			}
+			var after map[string]any
+			if _, err := st.Load(storeName, &after); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(before, after) {
+				t.Fatalf("校验失败不该改动已保存的内容:\n之前 %v\n之后 %v", before, after)
+			}
+		})
+	}
+}
+
+// 合法的 servers 规整后保存并整份替换;没带 servers 的补丁不碰它(旧数据不会拦住不相关的保存);null 清掉。
+func TestPatchStoresNormalizedServers(t *testing.T) {
+	svc, _ := newSvc(t, nil)
+	ctx := context.Background()
+	got, err := svc.Patch(ctx, j(t, `{"servers":`+okServers+`}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := got["servers"].([]any)
+	s0 := list[0].(map[string]any)
+	if len(list) != 2 || s0["name"] != "客厅" || s0["address"] != "router.lan" {
+		t.Fatalf("应规整后保存: %v", list)
+	}
+	// 读回来端口仍是数字(落盘 JSON 往返)
+	again, err := svc.Get(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := again["servers"].([]any)[1].(map[string]any)["port"]; p != 8388.0 {
+		t.Fatalf("端口: %#v", p)
+	}
+	// 不带 servers 的补丁:不校验、不改
+	if _, err := svc.Patch(ctx, j(t, `{"ipv6":true}`)); err != nil {
+		t.Fatalf("%v", err)
+	}
+	// 整份替换:只剩一台
+	got, err = svc.Patch(ctx, j(t, `{"servers":[{"id":"only","name":"o","protocol":"mixed","port":7081}]}`))
+	if err != nil || len(got["servers"].([]any)) != 1 {
+		t.Fatalf("%v %v", got["servers"], err)
+	}
+	// 空数组:清空
+	got, err = svc.Patch(ctx, j(t, `{"servers":[]}`))
+	if err != nil || len(got["servers"].([]any)) != 0 {
+		t.Fatalf("%v %v", got["servers"], err)
+	}
+}

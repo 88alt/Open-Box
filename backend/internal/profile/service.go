@@ -8,6 +8,7 @@ import (
 
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
+	"github.com/timeflysoon/Open-Box/backend/internal/shareservers"
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
 )
 
@@ -109,6 +110,9 @@ func (s *Service) Patch(ctx context.Context, patch map[string]any) (map[string]a
 		if err := normalizeClientApp(cur, clean); err != nil {
 			return &ValidationError{Msg: err.Error()}
 		}
+		if err := normalizeServers(clean); err != nil {
+			return &ValidationError{Msg: err.Error()}
+		}
 		next := Merge(cur, clean)
 		if _, patched := patch["routing"]; patched {
 			s.migrate(ctx, next) // 新写入的 routing 同样可能带旧字段(例如从旧备份导入)
@@ -145,6 +149,21 @@ func normalizeClientApp(cur, clean map[string]any) error {
 		clean["serverInfo"] = norm
 		delete(cur, "serverInfo")
 	}
+	return nil
+}
+
+// normalizeServers 校验并规整补丁里的 servers(共享网络的服务器,规则见 shareservers.Normalize)。
+// 只在补丁带了 servers 时做:档案里已有的旧数据不会拦住不相关的保存。servers 是整份数组,合并时整体替换。
+func normalizeServers(clean map[string]any) error {
+	v, ok := clean["servers"]
+	if !ok || v == nil {
+		return nil
+	}
+	norm, err := shareservers.Normalize(v)
+	if err != nil {
+		return err
+	}
+	clean["servers"] = norm
 	return nil
 }
 
