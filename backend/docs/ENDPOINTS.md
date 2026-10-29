@@ -58,6 +58,11 @@
 |---|---|---|---|---|
 | GET | `/api/controller-ws/{x}` | `createWebSocket` (api/index.ts:257) | — | t |
 
+实现约定(M3):前端对内核控制接口的约定共两个前缀,**接口表只收字面路径,所以 REST 那一半没列在表里**:
+- `/api/controller/<路径>`:axios 的 `baseURL`(api/index.ts:13),代理、规则、连接、配置、提供者、延迟测试、重启 / 升级等几十个调用都走这里,后端原样转给内核的 Clash API(`GET /proxies`、`PUT /proxies/{组}`、`GET /proxies/{x}/delay`、`GET /connections`、`DELETE /connections/{id}`、`PATCH /configs`……),方法、路径(含转义)、查询、请求体和响应都不改;
+- `/api/controller-ws/<名字>`:`connections` / `logs` / `memory` / `traffic` 的 WebSocket,握手和帧原样转发,查询参数(如 `level`)保留。
+两个前缀都在登录保护之内;内核的 secret 由后端从正式配置里读出来加在发给内核的请求上,浏览器的 Cookie / Authorization / 自带的 `token` 参数不转;WebSocket 只接受同源;内核连不上返回 502 加 `{ message }`。
+
 ## `/api/openbox/activation`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |

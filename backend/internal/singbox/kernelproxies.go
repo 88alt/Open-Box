@@ -26,6 +26,24 @@ type KernelProxy struct {
 	History []KernelPoint
 }
 
+// ControllerFromFile 从正式配置里取内核控制接口(Clash API)的本机地址和 secret。
+// 配置读不到、不是合法 JSON、没有开控制接口都返回 error;secret 可以为空(没设密码)。
+func ControllerFromFile(configFile string) (addr, secret string, err error) {
+	b, err := readLimited(configFile, 16<<20)
+	if err != nil {
+		return "", "", fmt.Errorf("读不到当前配置: %w", err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		return "", "", errors.New("当前配置不是合法 JSON")
+	}
+	addr, secret = controllerOf(cfg)
+	if addr == "" {
+		return "", "", errors.New("配置里没有开启控制接口")
+	}
+	return addr, secret, nil
+}
+
 // KernelProxies 读正在运行的 sing-box 的代理列表和各自的测速记录(只读,GET /proxies,sing-box 官方 Clash API)。
 // 控制地址和 secret 取自正式配置;内核没在跑、没开控制接口、鉴权失败都返回 error。
 func KernelProxies(ctx context.Context, configFile string) ([]KernelProxy, error) {

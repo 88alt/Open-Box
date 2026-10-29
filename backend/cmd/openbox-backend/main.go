@@ -18,6 +18,7 @@ import (
 	clientappapi "github.com/timeflysoon/Open-Box/backend/internal/api/clientapp"
 	clientsapi "github.com/timeflysoon/Open-Box/backend/internal/api/clients"
 	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
+	controllerapi "github.com/timeflysoon/Open-Box/backend/internal/api/controller"
 	deployapi "github.com/timeflysoon/Open-Box/backend/internal/api/deploy"
 	diagnosticsapi "github.com/timeflysoon/Open-Box/backend/internal/api/diagnostics"
 	dnsapi "github.com/timeflysoon/Open-Box/backend/internal/api/dns"
@@ -40,6 +41,7 @@ import (
 	trafficapi "github.com/timeflysoon/Open-Box/backend/internal/api/traffic"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
+	"github.com/timeflysoon/Open-Box/backend/internal/controllerproxy"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
 	"github.com/timeflysoon/Open-Box/backend/internal/deploystate"
 	"github.com/timeflysoon/Open-Box/backend/internal/diagnostics"
@@ -451,6 +453,10 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			return names
 		},
 	})
+
+	// 内核控制接口(Clash API)的转发:/api/controller/ 是 REST,/api/controller-ws/ 是 WebSocket;
+	// 前端的代理、规则、连接、配置页和实时流量 / 日志都走这里。登录保护由全站的 Require 中间件统一管。
+	controllerapi.Register(srv.Mux(), controllerproxy.New(controllerproxy.FileResolver(filepath.Join(cfg.ConfigDir, "config.json"))))
 
 	// 诊断包:版本 / 固件 / 服务状态 / 脱敏的运行配置和档案 / 最近日志,只读
 	diagnosticsapi.Register(srv.Mux(), diagnosticsapi.Deps{Service: &diagnostics.Service{
