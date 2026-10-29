@@ -94,10 +94,21 @@ func (w *capWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// ExecRunner 是真正运行命令的 Runner。
+// ExecRunner 是真正运行命令的 Runner(输出各只留前 4 KiB,够看服务操作的报错)。
 func ExecRunner(ctx context.Context, name string, args ...string) (RunResult, error) {
+	return execRun(ctx, maxOut, name, args...)
+}
+
+// ExecRunnerCap 返回一个标准输出最多留 max 字节的 Runner(读系统日志这类输出长的命令用)。
+func ExecRunnerCap(max int) Runner {
+	return func(ctx context.Context, name string, args ...string) (RunResult, error) {
+		return execRun(ctx, max, name, args...)
+	}
+}
+
+func execRun(ctx context.Context, max int, name string, args ...string) (RunResult, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
-	out, errw := &capWriter{max: maxOut}, &capWriter{max: maxOut}
+	out, errw := &capWriter{max: max}, &capWriter{max: maxOut}
 	cmd.Stdout, cmd.Stderr = out, errw
 	err := cmd.Run()
 	res := RunResult{Stdout: out.buf.String(), Stderr: errw.buf.String()}

@@ -19,6 +19,7 @@ import (
 	clientsapi "github.com/timeflysoon/Open-Box/backend/internal/api/clients"
 	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
 	deployapi "github.com/timeflysoon/Open-Box/backend/internal/api/deploy"
+	diagnosticsapi "github.com/timeflysoon/Open-Box/backend/internal/api/diagnostics"
 	dnsapi "github.com/timeflysoon/Open-Box/backend/internal/api/dns"
 	dnsfilterapi "github.com/timeflysoon/Open-Box/backend/internal/api/dnsfilter"
 	groupsapi "github.com/timeflysoon/Open-Box/backend/internal/api/groups"
@@ -40,6 +41,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
 	"github.com/timeflysoon/Open-Box/backend/internal/deploystate"
+	"github.com/timeflysoon/Open-Box/backend/internal/diagnostics"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsfilter"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsqlog"
@@ -439,6 +441,15 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			return names
 		},
 	})
+
+	// 诊断包:版本 / 固件 / 服务状态 / 脱敏的运行配置和档案 / 最近日志,只读
+	diagnosticsapi.Register(srv.Mux(), diagnosticsapi.Deps{Service: &diagnostics.Service{
+		Version: version, CoreService: cfg.CoreService, PanelService: cfg.PanelService,
+		ConfigFile: filepath.Join(cfg.ConfigDir, "config.json"), Init: system.DetectInitHere(),
+		KernelVersion: func(ctx context.Context) string { return singbox.ReadKernelVersion(ctx, cfg.SingBox).Version },
+		ServiceStatus: svcCtl.Status,
+		Profile:       profileSvc.Get,
+	}})
 
 	// 激活和教程视频:没有对应概念,只回固定内容(DESIGN D9 和第 8 节),不保存任何东西
 	activationapi.Register(srv.Mux(), activationapi.Deps{

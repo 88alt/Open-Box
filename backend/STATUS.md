@@ -86,7 +86,7 @@
 - [ ] `/api/openbox/terminal-test`(含 `capability`):要建网络命名空间 + veth + DHCP,会改系统,必须可回滚,先按 DESIGN 第四节设计撤销流程,**需真机**
 - [ ] `/api/openbox/penetration`
 - [ ] `/api/controller-ws/{x}`(WebSocket 转发)
-- [ ] `/api/openbox/diagnostics`
+- [~] `GET /api/openbox/diagnostics`(诊断包;`internal/diagnostics`、`internal/api/diagnostics`、`system.ExecRunnerCap`):版本 / 固件 / 服务状态 / 脱敏的运行配置和档案 / 最近日志。**需真机**确认:真实路由器上 `logread -e` 和 `journalctl` 的输出能读到、脱敏后的运行配置里没有漏网的凭据
 
 ## M4 自动化
 - [ ] 订阅定时更新(调度器)
@@ -109,6 +109,7 @@
 - [ ] 清理旧文件 `scripts/native-arm64/`(联调通过之后)
 
 ## 日志(新的在最上面)
+- 2026-10-29 M5 GET /api/openbox/diagnostics(自己的设计,前端只规定「拉一份 JSON 存成文件」,内容格式没有规定,没有参照上游):新增 `internal/diagnostics`(`Service.Collect` 和脱敏 `Redact` / `ScrubString`)、`internal/api/diagnostics`,`system.ExecRunnerCap`(命令输出上限可调的 Runner;现有的 `ExecRunner` 只留 4 KiB,读日志不够用),接进 `main.go`。内容:生成时间、`redacted: true` 和提醒、后端版本和 Go 版本 / 系统 / 架构、固件(OpenWrt 读 `/etc/openwrt_release`,其它读 `/etc/os-release`,另有 `/proc/version` 首行、`/proc/meminfo` 的总量 / 可用 / 交换、开机时长)、内核版本、内核服务和本服务的状态、正在使用的内核配置(脱敏后的内容)、档案(脱敏)、两个服务最近 200 行日志(OpenWrt 用 `logread -e <服务名>`,systemd 用 `journalctl -u <服务名> -n 500`)。决定:一、整个过程只读,不改任何系统状态;二、每块独立收集,某一块读不到只在那一块写原因;三、脱敏分两道各自独立生效——按键名(密码 / 令牌 / UUID / 各种 key / 短 ID / 用户名 / SNI / 证书等,值整个换成占位,数字也换,空值保持空,布尔保留)和按值(各协议分享链接整条换掉,http(s) 链接只留「协议://主机」且带路径 / 参数 / 账号的加「/…」,PEM 整块换掉包括没有结尾的);`server` 只有和 `server_port` 在同一个对象里才抹(DNS 规则里的 `server` 是服务器标签,排查 DNS 要用),`host` / `path` / `headers` / `service_name` 只在 `transport` 里才抹(规则集的 `path` 是文件路径,留着);四、运行配置不是合法 JSON 就不放内容(原样放进去会绕过脱敏);五、日志每行也过一遍链接脱敏、超过 400 个字符截断,服务名只放行保守字符(拼进命令前先校验);六、日志里仍可能有用户访问过的域名,所以包里写明「发出去之前请自己再看一遍」。测试:脱敏(节点 / 传输 / reality / 密码类键 / DNS 规则和规则集路径要保留 / 不改传入的值 / 各种值形状 / 各种链接和 PEM)、整包不泄漏且该留的都在、OpenWrt 与 systemd 用对命令、日志只留最后 200 行并截断长行、各块独立失败、不合法服务名不进命令、命令失败带退出码且 stderr 脱敏。`go vet`、`go test -race` 全绿。
 - 2026-10-29 M3 route-test 的 resolve(自己的设计,依据前端 `OpenboxRouteTest.resolve` 的类型和注释、RFC 1035 / 3596 的报文格式、core 的 fake-ip 地址池常量,没有参照上游;原第 83 行拆成「resolve」和「剩下的部分」两条,本次只做 resolve):新增 `internal/routetest/resolve.go`(`Service.resolve`:构造 DNS 查询、向内核 DNS 入站发 UDP、被截断改 TCP、解析答复里的 A / AAAA 和 TTL、核对事务 ID)并接进 `Run`(域名目标才查,放在清 DNS 缓存之后、真实访问之前);`Service` 多了 `DNSAddr`(默认 `system.DefaultKernelDNSAddr`)和 `IPv6`(main.go 从档案顶层 `ipv6` 取)。决定:一、答案在 fake-ip 池里就把 `fakeIp` 和 `fakeIpLocal` 都标上——池是内核自己的 fake-ip 服务器发的,所以占位地址一定是内核自己发的;「代理侧解析时哪个节点应的」(`fakeIpFrom`)和「是不是缓存里的答案」(`cached`)要先知道哪台 DNS 服务器答的,留给 DNS 判定。二、AAAA 只在档案开了 IPv6 时才查,失败不影响 A 的结果,各有各的 `status6` / `error6`。三、`ttl` 取 A 答案里最小的剩余 TTL;没有答案没有 `ttl`。四、域名查不到(NXDOMAIN 等)不算接口错误,写在 `resolve.error`,后面的真实访问照常做。五、`answers` 永远是数组(没有答案是 `[]`,不是 null)。测试:假 DNS 服务器(UDP,带 TCP 的版本测截断重问)测答案 / TTL / 状态、双栈、fake-ip(A 或 AAAA 任一在池里)、NXDOMAIN / SERVFAIL / REFUSED / 只有 CNAME / 无答案、超时、入口没在听、事务 ID 不符、AAAA 失败不影响 A;报文构造和乱报文的解析(截断、压缩指针出界、非法标签长度)的表驱动测试;JSON 字段形状;`Run` 整条(域名目标才问、IP 目标不问、档案开了 IPv6 才问 AAAA);真实 sing-box 的 DNS 入站集成测试(没有可执行文件时跳过)。go vet ./... 与 go test ./... 全绿(含带 sing-box 和不带两种)。**需真机**:启动真实后端 + 内核后,规则页的路由测试输入一个域名,应该在结果里看到「解析」这一块有地址和耗时;关掉内核再测应显示「连不上内核的 DNS 入口」。
 - 2026-10-29 补记进度:DNS 接管接进部署的剩余两项(只改 STATUS.md,没有代码)。对账发现这一条里的「四」(`queryLog`)已经由 `records` / `summary` 和 `log-queries` 两条做完,只是没改状态;「五」(`Warnings` 要不要显示)和平台映射是两件「到时再定」的事。按 DESIGN 第 8 节的原则(没有依据的东西不预置、选保守做法)定下来:`Warnings` 不对外显示(前端没有字段可放,`TakeoverStatus.Warnings` 保留);`Platform` 保持默认 `openwrt`(core 只对 `container` 有行为,Docker 不在范围)。两项都不改行为,维护者想改随时可以回来改。
 

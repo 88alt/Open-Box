@@ -166,6 +166,8 @@
 |---|---|---|---|---|
 | GET | `/api/openbox/diagnostics` | `fetchDiagnostics` (api/openbox.ts:1556) | Record<string, unknown> | () |
 
+实现约定(M5):响应是一份自由格式的 JSON(前端只是把它存成文件),顶层有 `generatedAt`、`redacted`、`note`、`backend`、`firmware`、`kernel`、`services`、`config`、`profile`、`logs`。只读;每块独立,读不到只在那一块写 `error`。`config` 是正在使用的内核配置(脱敏后的 `content`),不是合法 JSON 就不放内容;`profile` 是脱敏后的档案;`logs.core` / `logs.panel` 是两个服务最近 200 行日志(数组,或 `{error}`)。凭据、节点地址、订阅链接、SNI、传输路径都会被抹掉,脱敏规则见 `internal/diagnostics/redact.go`;日志里可能留有访问过的域名,所以包里提醒用户发出去之前自己再看一遍。
+
 ## `/api/openbox/dns`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
