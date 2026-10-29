@@ -211,7 +211,7 @@ type Status struct {
 }
 
 // BuildStatus 拼出状态。名单还不会下载(lists 恒为空)、还没有应用过(applied 为 null)、
-// 查询日志还没接(connected 为假);所以「待应用」只看开关:开着就是还没生效。
+// 查询日志要由 Service 接上才有 connected(这里恒为假);所以「待应用」只看开关:开着就是还没生效。
 func BuildStatus(s Settings) Status {
 	return Status{
 		Settings: s,

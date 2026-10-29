@@ -1,6 +1,6 @@
 // Package dnsfilter 实现 /api/openbox/dns-filter 里的设置读写(GET 状态、PUT 保存设置)、
 // GET /api/openbox/dns-filter/preview(名单预览)和 POST /api/openbox/dns-filter/apply(下载名单并应用)。
-// 查询记录、统计是 dns-filter* 的后续一条,做到时在这里继续挂。
+// 以及 GET /api/openbox/dns-filter/records、/summary(dnsmasq 查询日志的记录与统计,数据来自 internal/dnsqlog)。
 package dnsfilter
 
 import (
@@ -11,8 +11,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsfilter"
+	"github.com/timeflysoon/Open-Box/backend/internal/dnsqlog"
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
 	"github.com/timeflysoon/Open-Box/backend/internal/profile"
 	"github.com/timeflysoon/Open-Box/backend/internal/rulelist"
@@ -32,6 +34,13 @@ type Applier interface {
 	Apply(ctx context.Context, update bool, listID string) (dnsfilter.Status, error)
 }
 
+// QueryLog 是查询记录与统计的来源(*dnsqlog.Log 满足),测试里换假的。
+type QueryLog interface {
+	Records(q dnsqlog.Query) dnsqlog.Page
+	Summarize(now time.Time) dnsqlog.Summary
+	Connected() bool
+}
+
 // Deps 是本分组的依赖。
 type Deps struct {
 	Profiles Profiles
@@ -39,11 +48,15 @@ type Deps struct {
 	Filter Applier
 	// Preview 下载并解析一份名单、分页返回(*dnsfilter.Previewer.Preview);为空时 preview 返回 503。
 	Preview func(ctx context.Context, q dnsfilter.PreviewQuery) (*dnsfilter.Preview, error)
+	// Log 提供查询记录与统计;为空时两个接口照常回 200,只是没有数据、connected 为假。
+	Log QueryLog
+	// Now 给统计用,默认 time.Now。
+	Now func() time.Time
 }
 
 // Register 把接口挂到 mux 上。
 func Register(mux *http.ServeMux, d Deps) {
-	h := &handlers{p: d.Profiles, preview: d.Preview, filter: d.Filter}
+	h := &handlers{p: d.Profiles, preview: d.Preview, filter: d.Filter, log: d.Log, now: d.Now}
 	mux.HandleFunc("/api/openbox/dns-filter", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodGet: h.get,
 		http.MethodPut: h.put,
@@ -54,12 +67,20 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.HandleFunc("/api/openbox/dns-filter/preview", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodGet: h.previewList,
 	}))
+	mux.HandleFunc("/api/openbox/dns-filter/records", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodGet: h.records,
+	}))
+	mux.HandleFunc("/api/openbox/dns-filter/summary", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodGet: h.summary,
+	}))
 }
 
 type handlers struct {
 	p       Profiles
 	preview func(ctx context.Context, q dnsfilter.PreviewQuery) (*dnsfilter.Preview, error)
 	filter  Applier
+	log     QueryLog
+	now     func() time.Time
 }
 
 // apply 对应前端 applyDnsFilter:POST {update?: bool, listId?: string}。
@@ -191,4 +212,63 @@ func (h *handlers) put(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, dnsfilter.BuildStatus(dnsfilter.FromProfile(p)))
+}
+
+// enabled 读「过滤是否启用」:有 Filter 时取它的状态,否则读档案。
+func (h *handlers) enabled(ctx context.Context) (bool, error) {
+	if h.filter != nil {
+		st, err := h.filter.Status(ctx)
+		return st.Settings.Enabled, err
+	}
+	p, err := h.p.Get(ctx)
+	if err != nil {
+		return false, err
+	}
+	return dnsfilter.FromProfile(p).Enabled, nil
+}
+
+// records 对应前端 fetchDnsFilterRecords:GET ?search=&result=&page=&pageSize=。
+// 返回 dnsmasq 查询日志里最近的查询(新的在前),result 为 "" 是全部、"dnsmasq" 是 dnsmasq 自己答的(缓存和本地记录)、
+// 其余按 blocked / allowed / error / unknown / cached / local 精确匹配;每页最多 100 条。没有日志来源时回空页,不报错。
+func (h *handlers) records(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	q := r.URL.Query()
+	size := intParam(q.Get("pageSize"))
+	if h.log == nil {
+		if size <= 0 {
+			size = 20
+		}
+		httpx.JSON(w, http.StatusOK, dnsqlog.Page{Rows: []dnsqlog.Record{}, Page: 1, PageSize: size})
+		return
+	}
+	httpx.JSON(w, http.StatusOK, h.log.Records(dnsqlog.Query{
+		Search: q.Get("search"), Result: q.Get("result"), Page: intParam(q.Get("page")), PageSize: size,
+	}))
+}
+
+// summary 对应前端 fetchDnsFilterSummary:最近 24 小时的查询数、拦截数、平均耗时、每小时曲线和热门域名。
+// enabled 是过滤开关;connected 是查询日志是否接上了(没接上时数字全是 0)。
+func (h *handlers) summary(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	enabled, err := h.enabled(r.Context())
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	now := time.Now
+	if h.now != nil {
+		now = h.now
+	}
+	var s dnsqlog.Summary
+	connected := false
+	if h.log != nil {
+		s, connected = h.log.Summarize(now()), h.log.Connected()
+	} else {
+		s = dnsqlog.New().Summarize(now())
+	}
+	httpx.JSON(w, http.StatusOK, struct {
+		Enabled   bool `json:"enabled"`
+		Connected bool `json:"connected"`
+		dnsqlog.Summary
+	}{enabled, connected, s})
 }

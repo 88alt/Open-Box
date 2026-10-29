@@ -197,6 +197,8 @@
 
 实现约定(M2):`apply` 请求体可空,`{ update?: bool, listId?: string }`:`update` 为真重新下载启用的名单(带 `listId` 只重下那一份),否则只下载没有缓存的;之后编成规则集并走一次完整部署,成功返回新的状态。关闭过滤时也走 `apply`(把规则撤下来),不下载名单。错误码:409 = 已有应用在进行,或内核没在运行(名单已更新保存但没应用,不会替用户启动内核);400 = 没有这份名单 / 一份能用的名单都没有;500 = 部署失败(`error` 里写着回滚情况);503 = 没接应用服务。GET 返回的 `lists[id].error` 是上次下载 / 解析失败的原因(失败时沿用上次的缓存),`pending` 表示设置与已应用的不一致。
 
+实现约定(M2,`records` / `summary`):数据来自 dnsmasq 的查询日志文件(启动参数 `-dns-query-log` / 环境变量 `OPENBOX_DNS_QUERY_LOG`,默认空 = 不读;后端只读这个文件,不改 dnsmasq 配置)。没有日志来源时两个接口照常回 200:`records` 是空页,`summary` 的各项数字为 0、`averageMs` 为 `null`、`hourly` 仍是 24 项、`connected` 为假;`DnsFilterStatus.connected` 同样取自日志是否在读。`records`:新的在前,`result` 为空是全部、`dnsmasq` 是 dnsmasq 自己答的(`cached` + `local`)、其余按 `blocked` / `allowed` / `error` / `unknown` / `cached` / `local` 精确匹配,`search` 在域名、来源地址、名单名里找子串(不分大小写),每页最多 100 条(默认 20),页码超出时收回到最后一页;`via` 恒为 `dnsmasq`,`elapsed` 只有上游应答的才有(毫秒,按后端读到 query 行和 reply 行的时间差算,没有就是 `null`),`list` 只有 `blocked` 的有。`blocked` 的判断:dnsmasq 日志里被拦的域名和真不存在的域名一样是 NXDOMAIN,所以应答是 NXDOMAIN 时再拿域名对一遍已应用的名单(规则与 core 的 `dnsFilter` 一致),对上才标 `blocked`;过滤没启用、没应用过、读不到名单缓存时一律不标。`summary`:最近 24 个整点小时(含当前这一小时,旧的在前),`hourly[].hour` 是该小时开始的毫秒时间戳,`elapsed` 是耗时总和(毫秒)、`timed` 是有耗时的条数,`topDomains` 取前 10。记录在内存里最近 2000 条,统计保留 48 小时,每 30 秒有变化就落盘到数据目录的 `dns-query-log.json`。
+
 ## `/api/openbox/factory-reset`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |

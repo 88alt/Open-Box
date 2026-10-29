@@ -351,3 +351,19 @@ func TestPendingAndCoreArtifactReadiness(t *testing.T) {
 		t.Errorf("地址变了,旧地址的统计不该显示: %+v", st.Lists["a"])
 	}
 }
+
+func TestStatusConnectedFollowsQueryLog(t *testing.T) {
+	h := newHarness(t, Settings{Enabled: true})
+	if st, err := h.sv.Status(context.Background()); err != nil || st.Connected {
+		t.Fatalf("没接查询日志时 connected 应为假: %v %v", st.Connected, err)
+	}
+	on := false
+	h.sv.Connected = func() bool { return on }
+	if st, _ := h.sv.Status(context.Background()); st.Connected {
+		t.Error("日志没在读时 connected 应为假")
+	}
+	on = true
+	if st, _ := h.sv.Status(context.Background()); !st.Connected {
+		t.Error("日志在读时 connected 应为真")
+	}
+}

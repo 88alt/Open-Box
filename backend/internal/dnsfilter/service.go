@@ -77,8 +77,11 @@ type Service struct {
 	// Deploy 走一次完整部署;失败返回 *ApplyError。
 	Deploy func(ctx context.Context) error
 	Now    func() time.Time
+	// Connected 报告 dnsmasq 查询日志是否接上了(状态里的 connected);为空当作没接。
+	Connected func() bool
 
 	busy atomic.Bool
+	mc   matcherCache // Classify 用的名单匹配器(match.go)
 }
 
 func (sv *Service) now() time.Time {
@@ -126,7 +129,7 @@ func pending(s Settings, ap *Applied) bool {
 	return s.Enabled && ap.Key != SettingsKey(s)
 }
 
-// Status 拼出前端要的状态。lists 只含设置里现有的名单;connected(查询日志)还没接。
+// Status 拼出前端要的状态。lists 只含设置里现有的名单;connected 取自 Connected(查询日志有没有在读)。
 func (sv *Service) Status(ctx context.Context) (Status, error) {
 	prof, err := sv.Profiles.Get(ctx)
 	if err != nil {
@@ -146,6 +149,7 @@ func (sv *Service) Status(ctx context.Context) (Status, error) {
 	out.Pending = pending(s, st.Applied)
 	out.Applied = st.Applied
 	out.Busy = sv.busy.Load()
+	out.Connected = sv.Connected != nil && sv.Connected()
 	return out, nil
 }
 
@@ -257,8 +261,10 @@ func (sv *Service) apply(ctx context.Context, update bool, listID string) error 
 	if sv.Prune != nil {
 		sv.Prune(sv.RulesDir, art.Groups)
 	}
-	if err := sv.update(func(st *state) { st.Applied = &Applied{Enabled: s.Enabled, Key: art.Key} }); err != nil {
-		return fmt.Errorf("已应用,但记录状态失败: %w", err)
+	uerr := sv.update(func(st *state) { st.Applied = &Applied{Enabled: s.Enabled, Key: art.Key} })
+	sv.mc.invalidate() // 刚应用完:查询记录的「被拦截」判断马上按新名单来,不等 TTL
+	if uerr != nil {
+		return fmt.Errorf("已应用,但记录状态失败: %w", uerr)
 	}
 	return nil
 }

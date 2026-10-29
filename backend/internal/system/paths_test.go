@@ -131,3 +131,28 @@ func TestEnsureCreatesPrivateDirs(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestLoadConfigDNSQueryLog(t *testing.T) {
+	cfg, err := LoadConfig(nil, noEnv, io.Discard)
+	if err != nil || cfg.DNSQueryLog != "" {
+		t.Fatalf("默认不读查询日志: %q %v", cfg.DNSQueryLog, err)
+	}
+	cfg, err = LoadConfig(nil, func(k string) string {
+		if k == EnvDNSQueryLog {
+			return " /tmp/../tmp/dnsmasq.log "
+		}
+		return ""
+	}, io.Discard)
+	if err != nil || cfg.DNSQueryLog != filepath.Clean("/tmp/dnsmasq.log") {
+		t.Fatalf("环境变量: %q %v", cfg.DNSQueryLog, err)
+	}
+	cfg, err = LoadConfig([]string{"-dns-query-log", "/var/log/dnsmasq.log"}, func(k string) string {
+		if k == EnvDNSQueryLog {
+			return "/ignored"
+		}
+		return ""
+	}, io.Discard)
+	if err != nil || cfg.DNSQueryLog != "/var/log/dnsmasq.log" {
+		t.Fatalf("命令行优先: %q %v", cfg.DNSQueryLog, err)
+	}
+}

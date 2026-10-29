@@ -42,6 +42,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/deploystate"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsfilter"
+	"github.com/timeflysoon/Open-Box/backend/internal/dnsqlog"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnssync"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnstest"
 	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
@@ -326,10 +327,16 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		},
 	}
 	gen.WithFilter(filterSvc)
+	// 查询记录与统计:读 dnsmasq 的查询日志(路径由 -dns-query-log / OPENBOX_DNS_QUERY_LOG 给,不给就不读);
+	// 应答是 NXDOMAIN 的域名拿已应用的名单对一遍,对上了才标「被拦截」
+	qlog := dnsqlog.New()
+	qlog.Classify = filterSvc.Classify
+	filterSvc.Connected = qlog.Connected
 	dnsfilterapi.Register(srv.Mux(), dnsfilterapi.Deps{
 		Profiles: profileSvc,
 		Filter:   filterSvc,
 		Preview:  dnsfilter.NewPreviewer(fetchList).Preview,
+		Log:      qlog,
 	})
 
 	// 延迟历史:每个节点 / 组最近 10 次测速,后端记、各浏览器共享;sync 读一次内核的 /proxies 把成功的结果记下来
@@ -501,6 +508,18 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			defer cancel()
 			dnsSync.Recover(rctx)
 		}()
+		return func() { wait(); <-done }
+	}
+
+	// 再加一项:跟读 dnsmasq 查询日志,并定期把记录和统计落盘(退出时等它写完)
+	withLog := background
+	background = func(ctx context.Context) func() {
+		wait := func() {}
+		if withLog != nil {
+			wait = withLog(ctx)
+		}
+		done := make(chan struct{})
+		go func() { defer close(done); dnsqlog.Run(ctx, qlog, cfg.DNSQueryLog, st, 0, nil) }()
 		return func() { wait(); <-done }
 	}
 	return srv, background, nil
