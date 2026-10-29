@@ -4,10 +4,9 @@
 // 自己的设计,依据前端 api/openbox.ts 的 OpenboxRouteTest / OpenboxProbeMethod 类型和注释、RouteComparison.vue 的用法,
 // 以及 sing-box 官方 Clash API 的 GET /connections,没有参照上游。
 //
-// 这一部分没有做、响应里如实标出的:
-//   - dns(按配置里的 DNS 规则预测这个域名会问哪台服务器):域名目标现在回 {error},IP 目标回 {skipped:true}
+// dns(按已部署配置里的 DNS 规则预测这个域名会问哪台服务器)见 dns.go。这一部分没有做、响应里如实标出的:
 //   - context(按终端预测),以及 exit.connectTo / noDomain / debug
-//     (resolve 做了:见 resolve.go,只是 cached / fakeIpFrom 两项没有;exit6 做了:见 exit6.go)
+//     (resolve 做了:见 resolve.go 和 dns.go 的 annotateResolve;exit6 做了:见 exit6.go)
 //   - TCP 探测方式:面板入站回 200 只说明内核接了请求,不说明它连上了目标,单凭隧道没法确认,所以如实报「暂不支持」
 //
 // 做法与 sitelatency 相同(复用它的 DialTunnel):先向面板入站发 CONNECT 建隧道,连接开着的时候读一次 /connections,
@@ -205,6 +204,7 @@ func (s *Service) Run(ctx context.Context, in Input) (*Result, error) {
 	if !isIP(in.Target) {
 		ipv6 := s.IPv6 != nil && s.IPv6(ctx)
 		res.Resolve = s.resolve(ctx, in.Target, ipv6)
+		annotateResolve(res.Resolve, res.DNS)
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}

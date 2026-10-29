@@ -358,3 +358,23 @@ func TestRunIncludesResolveForDomains(t *testing.T) {
 		t.Fatalf("IP 目标不该解析:%+v", res.Resolve)
 	}
 }
+
+func TestResolveMarksForeignFakeIP(t *testing.T) {
+	// 198.18.0.0/16 是别处(节点那一侧)的 fake-ip:只标 fakeIp,不是内核自己发的;内核自己的池 198.19.0.0/16 两项都标
+	for _, c := range []struct {
+		ip          string
+		fake, local bool
+	}{
+		{"198.18.0.9", true, false},
+		{"198.19.0.9", true, true},
+		{"198.17.255.255", false, false},
+		{"198.20.0.1", false, false},
+		{"93.184.216.34", false, false},
+	} {
+		f := newFakeDNS(t, false, func(req []byte, _ bool) []byte { return reply(req, 0, false, a4(c.ip, 30)) })
+		r := (&Service{DNSAddr: f.addr, Timeout: 2 * time.Second}).resolve(context.Background(), "example.com", false)
+		if r.FakeIP != c.fake || r.FakeIPLocal != c.local {
+			t.Errorf("%s: fakeIp=%v local=%v,想要 %v %v", c.ip, r.FakeIP, r.FakeIPLocal, c.fake, c.local)
+		}
+	}
+}

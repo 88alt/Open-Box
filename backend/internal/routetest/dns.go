@@ -89,6 +89,26 @@ func (p *DNSPredictor) fillRuntime(d *dnsdecide.Decision, v *dnsdecide.View, pro
 	}
 }
 
+// cachedMaxMS:代理侧解析不超过这么多毫秒就当是内核缓存里的答案——经线路去问至少要一个来回,不会这么快。
+// 是经验阈值,没有在真机上标定过。
+const cachedMaxMS = 5
+
+// annotateResolve 按 DNS 判定给 resolve 补两项(判定没有、或算不出服务器是否走代理时都不补,不猜):
+//   - fakeIpFrom:答案是占位地址、又不是内核自己发的,而这台服务器走代理,就是 detour 此刻落到的那个节点截下查询并应答的;
+//   - cached:服务器走代理、拿到真实地址、几毫秒就回来了(每次探测前会先清内核的 DNS 缓存,所以多半是清缓存没成)。
+func annotateResolve(r *Resolve, dns any) {
+	d, ok := dns.(*dnsdecide.Decision)
+	if r == nil || !ok || d.ViaProxy == nil || !*d.ViaProxy {
+		return
+	}
+	switch {
+	case r.FakeIP && !r.FakeIPLocal:
+		r.FakeIPFrom = d.RuntimeLeaf
+	case r.OK && !r.FakeIP && r.MS <= cachedMaxMS:
+		r.Cached = true
+	}
+}
+
 // predictDNS 给响应里的 dns:IP 目标不需要 DNS 判定;域名目标按预测器算,没接预测器或算不出就如实写 error。
 func (s *Service) predictDNS(ctx context.Context, target string) any {
 	if isIP(target) {

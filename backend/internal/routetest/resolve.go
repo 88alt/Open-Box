@@ -20,11 +20,14 @@ import (
 // 「此刻线路真的问出来的结果」。自己的设计,依据前端 OpenboxRouteTest.resolve 的类型和注释、
 // RFC 1035 / 3596 的报文格式,没有参照上游。报文的构造和解析用标准库自己写(只认 A / AAAA 记录)。
 //
-// 这一部分没有做:cached(分辨答案是不是内核缓存里的)、fakeIpFrom(代理侧解析时哪个节点应的占位地址),
-// 它们要先有 DNS 判定(哪台服务器答的),见 STATUS.md。
+// cached / fakeIpFrom 要先知道是哪台 DNS 服务器答的,所以不在这里算,由 annotateResolve(dns.go)按 DNS 判定补上。
 
 // 内核的 fake-ip 地址池,必须与 core 的 routing.FakeIPV4 / FakeIPV6 保持一致。
 var fakeIPPools = []netip.Prefix{netip.MustParsePrefix("198.19.0.0/16"), netip.MustParsePrefix("fc00::/18")}
+
+// 别处的 fake-ip 池:代理节点那一侧的 DNS(常见是 mihomo / sing-box 的 fake-ip,默认 198.18.0.0/15)直接回的占位地址。
+// 内核自己的池 198.19.0.0/16 在这个段的上半,所以这里只列 198.18.0.0/16,两边不重叠。
+var foreignFakePools = []netip.Prefix{netip.MustParsePrefix("198.18.0.0/16")}
 
 const (
 	qtypeA     = 1
@@ -46,7 +49,11 @@ type Resolve struct {
 	Error       string   `json:"error,omitempty"`
 	FakeIP      bool     `json:"fakeIp,omitempty"`
 	FakeIPLocal bool     `json:"fakeIpLocal,omitempty"`
-	TTL         *int     `json:"ttl,omitempty"` // A 答案里最小的剩余 TTL(秒)
+	// FakeIPFrom 是代理侧解析时截下查询、回了占位地址的那个节点(detour 此刻落到的节点);直连解析回 fake-ip 时没有。
+	FakeIPFrom string `json:"fakeIpFrom,omitempty"`
+	// Cached 为真:代理侧解析几毫秒就回来了,多半是内核缓存里的答案,这次没有经线路去问。
+	Cached bool `json:"cached,omitempty"`
+	TTL    *int `json:"ttl,omitempty"` // A 答案里最小的剩余 TTL(秒)
 }
 
 type dnsAnswer struct {
@@ -68,9 +75,7 @@ func (s *Service) resolve(ctx context.Context, name string, ipv6 bool) *Resolve 
 		r.Status = &st
 		for _, ad := range a.addrs {
 			r.Answers = append(r.Answers, ad.String())
-			if inFakePool(ad) {
-				r.FakeIP, r.FakeIPLocal = true, true
-			}
+			r.markFake(ad)
 		}
 		if a.ttl >= 0 {
 			t := a.ttl
@@ -96,9 +101,7 @@ func (s *Service) resolve(ctx context.Context, name string, ipv6 bool) *Resolve 
 			r.Status6 = &st
 			for _, ad := range a6.addrs {
 				r.Answers6 = append(r.Answers6, ad.String())
-				if inFakePool(ad) {
-					r.FakeIP, r.FakeIPLocal = true, true
-				}
+				r.markFake(ad)
 			}
 			switch {
 			case a6.rcode != 0:
@@ -112,6 +115,25 @@ func (s *Service) resolve(ctx context.Context, name string, ipv6 bool) *Resolve 
 		r.OK6 = &ok6
 	}
 	return r
+}
+
+// markFake 认出占位地址:内核自己的池 = fakeIp + fakeIpLocal;别处的池 = 只有 fakeIp(不是内核发的)。
+func (r *Resolve) markFake(a netip.Addr) {
+	switch {
+	case inFakePool(a):
+		r.FakeIP, r.FakeIPLocal = true, true
+	case inPools(foreignFakePools, a):
+		r.FakeIP = true
+	}
+}
+
+func inPools(pools []netip.Prefix, a netip.Addr) bool {
+	for _, p := range pools {
+		if p.Contains(a.Unmap()) {
+			return true
+		}
+	}
+	return false
 }
 
 func inFakePool(a netip.Addr) bool {

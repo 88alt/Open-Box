@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsdecide"
 	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
@@ -164,5 +165,64 @@ func TestRunWithDNSPredictor(t *testing.T) {
 	s.DNS = nil
 	if res, _ = s.Run(context.Background(), Input{Target: "a.test", Method: "TCP"}); !strings.Contains(asMap(res.DNS)["error"].(string), "没有接入") {
 		t.Errorf("没接: %#v", res.DNS)
+	}
+}
+
+func TestAnnotateResolve(t *testing.T) {
+	yes, no := true, false
+	viaProxy := func(v *bool) *dnsdecide.Decision { return &dnsdecide.Decision{ViaProxy: v, RuntimeLeaf: "hk-01"} }
+	cases := []struct {
+		name       string
+		r          Resolve
+		dns        any
+		wantFrom   string
+		wantCached bool
+	}{
+		{"代理侧回了别处的 fake-ip:标出应答的节点", Resolve{OK: true, FakeIP: true, MS: 80}, viaProxy(&yes), "hk-01", false},
+		{"内核自己的 fake-ip 不是节点发的", Resolve{OK: true, FakeIP: true, FakeIPLocal: true, MS: 1}, viaProxy(&yes), "", false},
+		{"直连解析回了 fake-ip:没有 fakeIpFrom", Resolve{OK: true, FakeIP: true, MS: 80}, viaProxy(&no), "", false},
+		{"代理侧几毫秒就回来:缓存", Resolve{OK: true, MS: 2}, viaProxy(&yes), "", true},
+		{"刚好在阈值上也算", Resolve{OK: true, MS: cachedMaxMS}, viaProxy(&yes), "", true},
+		{"代理侧正常耗时:不是缓存", Resolve{OK: true, MS: cachedMaxMS + 1}, viaProxy(&yes), "", false},
+		{"直连很快是正常的,不标缓存", Resolve{OK: true, MS: 1}, viaProxy(&no), "", false},
+		{"没查到(失败)很快也不标缓存", Resolve{OK: false, MS: 1, Error: "NXDOMAIN"}, viaProxy(&yes), "", false},
+		{"是否走代理判断不了:不猜", Resolve{OK: true, MS: 1}, viaProxy(nil), "", false},
+		{"判定失败({error}):不补", Resolve{OK: true, MS: 1}, map[string]any{"error": "x"}, "", false},
+		{"判定没接入:不补", Resolve{OK: true, MS: 1}, nil, "", false},
+	}
+	for _, c := range cases {
+		r := c.r
+		annotateResolve(&r, c.dns)
+		if r.FakeIPFrom != c.wantFrom || r.Cached != c.wantCached {
+			t.Errorf("%s: fakeIpFrom=%q cached=%v,想要 %q %v", c.name, r.FakeIPFrom, r.Cached, c.wantFrom, c.wantCached)
+		}
+	}
+	annotateResolve(nil, viaProxy(&yes)) // 没有 resolve(目标是 IP)不能 panic
+}
+
+func TestRunAnnotatesResolveWithDecision(t *testing.T) {
+	dir := t.TempDir()
+	cfg := writeConfig(t, dir, map[string]string{"geosite-cn": `{"rules":[]}`, "obflip-fallback": `{"rules":[{"domain_suffix":["g.test"]}]}`})
+	proxies := []singbox.KernelProxy{{Name: "其他", Type: "Selector", Now: "hk-01"}, {Name: "hk-01", Type: "Trojan"}}
+	f := newFakeDNS(t, false, func(req []byte, _ bool) []byte { return reply(req, 0, false, a4("198.18.3.4", 30)) })
+	s := &Service{
+		ProxyAddr: "127.0.0.1:1", DNSAddr: f.addr, Timeout: 300 * time.Millisecond, // 面板入站连不上:只看 resolve
+		DNS: &DNSPredictor{ConfigFile: cfg, Proxies: func(context.Context) ([]singbox.KernelProxy, error) { return proxies, nil }},
+	}
+	res, err := s.Run(context.Background(), Input{Target: "a.g.test"})
+	if err != nil || res.Resolve == nil {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !res.Resolve.FakeIP || res.Resolve.FakeIPLocal || res.Resolve.FakeIPFrom != "hk-01" {
+		t.Fatalf("应标出是 hk-01 应的占位地址: %+v", res.Resolve)
+	}
+	b, _ := json.Marshal(res.Resolve)
+	for _, want := range []string{`"fakeIp":true`, `"fakeIpFrom":"hk-01"`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("JSON 里没有 %s: %s", want, b)
+		}
+	}
+	if strings.Contains(string(b), "fakeIpLocal") || strings.Contains(string(b), "cached") {
+		t.Errorf("不该带 fakeIpLocal / cached: %s", b)
 	}
 }
