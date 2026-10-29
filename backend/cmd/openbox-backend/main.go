@@ -42,6 +42,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/dnstest"
 	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
 	"github.com/timeflysoon/Open-Box/backend/internal/latencyhistory"
+	"github.com/timeflysoon/Open-Box/backend/internal/nodeexit"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodeinfo"
 	"github.com/timeflysoon/Open-Box/backend/internal/policyentries"
@@ -231,14 +232,14 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	})
 
 	latencyapi.Register(srv.Mux(), latencyapi.Deps{Gen: gen, Subs: subsSvc, Profiles: profileSvc, Runner: probeRunner})
-	// 节点信息:类型 / 协议层 / 服务器 / 链式上游 / 入口地址解析 / 入口国家(出口归属是后续条目)
+	// 节点信息:类型 / 协议层 / 服务器 / 链式上游 / 入口地址解析 / 入口国家 / 出口归属和风控值
 	entryDetector := &regiondetect.Detector{} // 只用它的按 IP 查国家,不占用其它两处的「判断中」状态
 	nodeinfoapi.Register(srv.Mux(), nodeinfoapi.Deps{Service: &nodeinfo.Service{
 		Pool:     subsSvc.PoolNodes,
 		Profile:  profileSvc.Get,
 		Country:  entryDetector.LookupCountry,
 		IsPublic: regiondetect.Public,
-	}})
+	}, Exit: &nodeexit.Service{Probe: nodeexit.ProbeVia(gen, probeRunner, 8*time.Second)}})
 
 	// 规则集链接服务共用一份(含 60 秒内存缓存):规则集预览和「域名穿透」都会拉同一批链接
 	lists := rulelist.NewService(nil)

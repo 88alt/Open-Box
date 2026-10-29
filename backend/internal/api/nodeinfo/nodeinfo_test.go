@@ -10,7 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/nodeexit"
 	ni "github.com/timeflysoon/Open-Box/backend/internal/nodeinfo"
+	"github.com/timeflysoon/Open-Box/backend/internal/probe"
+	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
 )
 
 type fake struct {
@@ -108,5 +111,97 @@ func TestEntryCountryErrors(t *testing.T) {
 	}
 	if rec := do(&fake{}, http.MethodPost, "/api/openbox/node-info/x/entry-country"); rec.Code != 405 {
 		t.Errorf("POST 应 405: %d", rec.Code)
+	}
+}
+
+type fakeExit struct {
+	res     *nodeexit.Result
+	err     error
+	tag     string
+	refresh bool
+	calls   int
+}
+
+func (f *fakeExit) Query(_ context.Context, tag string, refresh bool) (*nodeexit.Result, error) {
+	f.calls++
+	f.tag, f.refresh = tag, refresh
+	return f.res, f.err
+}
+
+func doExit(x *fakeExit, method, path, body string) *httptest.ResponseRecorder {
+	mux := http.NewServeMux()
+	Register(mux, Deps{Service: &fake{}, Exit: x})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	if body == "" {
+		req = httptest.NewRequest(method, path, nil)
+	}
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestExitOKAndRefreshFlag(t *testing.T) {
+	risk := 7
+	x := &fakeExit{res: &nodeexit.Result{OK: true, At: 1, IP: "203.0.113.2", Country: "JP", Risk: &risk, Errors: &nodeexit.Errors{RDAP: "超时"}}}
+	rec := doExit(x, http.MethodPost, "/api/openbox/node-info/"+url.PathEscape("HK 01/备用")+"/exit", `{"refresh":true}`)
+	if rec.Code != 200 || x.tag != "HK 01/备用" || !x.refresh {
+		t.Fatalf("%d tag=%q refresh=%v %s", rec.Code, x.tag, x.refresh, rec.Body)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["ok"] != true || got["risk"] != float64(7) || got["devices"] != nil || got["native"] != nil || got["errors"].(map[string]any)["rdap"] != "超时" {
+		t.Errorf("形状(没查到的项是 null,errors 只带出错的一路): %s", rec.Body)
+	}
+	if _, has := got["cached"]; has {
+		t.Error("不是缓存时不带 cached")
+	}
+	// 没有请求体、空对象都按不刷新
+	x2 := &fakeExit{res: &nodeexit.Result{OK: true}}
+	if rec := doExit(x2, http.MethodPost, "/api/openbox/node-info/x/exit", ""); rec.Code != 200 || x2.refresh {
+		t.Errorf("无请求体: %d refresh=%v", rec.Code, x2.refresh)
+	}
+	if rec := doExit(x2, http.MethodPost, "/api/openbox/node-info/x/exit", `{}`); rec.Code != 200 || x2.refresh {
+		t.Errorf("空对象: %d", rec.Code)
+	}
+	if rec := doExit(x2, http.MethodPost, "/api/openbox/node-info/x/exit", `{nope`); rec.Code != 400 {
+		t.Errorf("坏 JSON 应 400: %d", rec.Code)
+	}
+}
+
+func TestExitErrorMapping(t *testing.T) {
+	cases := []struct {
+		err  error
+		code int
+		has  string
+	}{
+		{nodeexit.ErrNoOutbound, 404, "没有可用的出站"},
+		{ni.ErrNotFound, 404, "没有这个节点"},
+		{singbox.ErrCoreUnavailable, 503, "openbox-core"},
+		{probe.ErrNoSingBox, 503, "sing-box"},
+		{&nodeexit.ProbeError{Msg: "api.ip.sb: 超时"}, 502, "经这个节点没有查到出口地址:api.ip.sb: 超时"},
+		{context.DeadlineExceeded, 504, "超时"},
+		{errors.New("坏了"), 500, "坏了"},
+	}
+	for _, c := range cases {
+		rec := doExit(&fakeExit{err: c.err}, http.MethodPost, "/api/openbox/node-info/x/exit", "")
+		if rec.Code != c.code || !strings.Contains(rec.Body.String(), c.has) {
+			t.Errorf("%v: %d %s", c.err, rec.Code, rec.Body)
+		}
+	}
+}
+
+func TestExitMethodAndNotMounted(t *testing.T) {
+	if rec := doExit(&fakeExit{}, http.MethodGet, "/api/openbox/node-info/x/exit", ""); rec.Code != 405 {
+		t.Errorf("GET 应 405: %d", rec.Code)
+	}
+	// 没配 Exit 时不挂这条路由(交给上层的 404)
+	mux := http.NewServeMux()
+	Register(mux, Deps{Service: &fake{}})
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/openbox/node-info/x/exit", nil))
+	if rec.Code != 404 {
+		t.Errorf("没挂应 404: %d", rec.Code)
 	}
 }

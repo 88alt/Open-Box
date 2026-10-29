@@ -60,3 +60,7 @@ func (d *Detector) LookupCountry(ctx context.Context, ip netip.Addr) (string, er
 	}
 	return "", errors.New("查归属失败:" + strings.Join(fails, ";"))
 }
+
+// ParseBody 解析三家 IP 接口之一的答话正文,取出 IP 和两位大写国家代码。
+// 给「经某条线路看出口 IP」用:正文是 internal/probe 经那条线路取回来的。
+func ParseBody(b []byte) (ip, countryCode string, err error) { return parse(b) }

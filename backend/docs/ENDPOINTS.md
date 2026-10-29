@@ -247,6 +247,8 @@
 | GET | `/api/openbox/node-info/{x}/entry-country` | `fetchNodeEntryCountry` (api/openbox.ts:1874) | { ip: string; country: string } | (tag: string) |
 | POST | `/api/openbox/node-info/{x}/exit` | `fetchNodeExit` (api/openbox.ts:1877) | OpenboxNodeExit | (tag: string, refresh = false) |
 
+实现约定(M3,`POST node-info/{x}/exit`):请求体可以没有,`{"refresh":true}` 跳过缓存重查,但 15 秒内刚查过的仍按缓存答;缓存 6 小时(按节点 tag,最多 256 个),响应带 `cached:true` 表示来自缓存。先经这个节点(起临时 sing-box,和节点测速同一套)问 api.ip.sb / ipwho.is / api.ipapi.is,得到出口 IP 和国家(`country`);再由本进程直接(不经节点)并行问 proxycheck.io 的 v3 接口(`network.type` → `ipType`:residential / mobile(Wireless)/ business / hosting;`detections` 里的 TOR / VPN / Proxy / Scraper / Compromised → `proxyType`;`detections.risk` → `risk`;`device_estimate.subnet` → `devices`;`network.asn` / `organisation` → `asn` / `asnOwner`;`location` 的城市、地区、国家 → `location`,用「, 」连接)和 RDAP(rdap.org 跳转到各大洲的 RIR,只认顶层两位 `country` → `registeredCountry`)。`native` = 登记国家和 `country` 一致,任何一边不知道是 null。两路各自成败:没查到的那一路在 `errors`(`proxycheck` / `rdap`)里写原因,对应项为空串或 null,另一路照常给;出口不是公网地址时不问第三方,两路都记「出口不是公网地址,不查归属」。`ipv6` 只在出口本身是 IPv6 时有值(另一个协议族的出口地址不单独查)。节点在当前配置里没有可探测的出站(没启用、是节点组)404;openbox-core 或 sing-box 不可用 503;经节点连不上或三家接口都没答 502;其余 500。同时最多 2 个经节点的探测,同一个节点的并发请求合并成一次。
+
 ## `/api/openbox/nodes`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
