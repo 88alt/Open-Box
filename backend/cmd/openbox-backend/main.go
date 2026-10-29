@@ -18,6 +18,7 @@ import (
 	clientappapi "github.com/timeflysoon/Open-Box/backend/internal/api/clientapp"
 	clientsapi "github.com/timeflysoon/Open-Box/backend/internal/api/clients"
 	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
+	deployapi "github.com/timeflysoon/Open-Box/backend/internal/api/deploy"
 	dnsapi "github.com/timeflysoon/Open-Box/backend/internal/api/dns"
 	dnsfilterapi "github.com/timeflysoon/Open-Box/backend/internal/api/dnsfilter"
 	groupsapi "github.com/timeflysoon/Open-Box/backend/internal/api/groups"
@@ -38,6 +39,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
+	"github.com/timeflysoon/Open-Box/backend/internal/deploystate"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsfilter"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnstest"
@@ -171,12 +173,13 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 服务控制:只通过系统自带的服务管理器(OpenWrt init.d / systemd)操作 sing-box
 	initKind := system.DetectInitHere()
 	svcCtl := &system.Services{Kind: initKind, Run: system.ExecRunner, ProcUptime: system.ReadProcUptime}
+	conflictDetector := &system.ConflictDetector{
+		Svc: svcCtl, Exclude: []string{cfg.CoreService, cfg.PanelService},
+		Exists: func(p string) bool { _, err := os.Stat(p); return err == nil },
+	}
 	serviceapi.Register(srv.Mux(), serviceapi.Deps{
-		Services: svcCtl,
-		Conflicts: &system.ConflictDetector{
-			Svc: svcCtl, Exclude: []string{cfg.CoreService, cfg.PanelService},
-			Exists: func(p string) bool { _, err := os.Stat(p); return err == nil },
-		},
+		Services:    svcCtl,
+		Conflicts:   conflictDetector,
 		Kind:        initKind,
 		CoreService: cfg.CoreService, PanelName: cfg.PanelService, SingBox: cfg.SingBox,
 	})
@@ -270,7 +273,21 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Files:   singbox.Files{SingBox: cfg.SingBox, GeoDir: cfg.GeoDir},
 		SingBox: cfg.SingBox, ConfigDir: cfg.ConfigDir,
 		Service: svcCtl, ServiceName: cfg.CoreService,
+		// 内核没在运行时,别的代理服务正在跑就不启动(同时跑会抢端口、DNS 和防火墙);只认正在运行的
+		Conflicts: func(ctx context.Context) ([]string, error) {
+			found, err := conflictDetector.Find(ctx)
+			var names []string
+			for _, c := range found {
+				if c.Running {
+					names = append(names, c.Label)
+				}
+			}
+			return names, err
+		},
 	}
+	// 每次部署(面板的「部署」按钮、DNS 过滤的应用)都经这里记下最近一次的结果,GET /deploy/state 读它
+	deploySvc := &deploystate.Service{Store: st, Deploy: deployer.Deploy}
+	deployapi.Register(srv.Mux(), deployapi.Deps{Service: deploySvc})
 	filterFiles := singbox.FilterFiles{SingBox: cfg.SingBox}
 	filterSvc := &dnsfilter.Service{
 		Profiles: profileSvc, Store: st,
@@ -283,7 +300,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			return info.Running, err
 		},
 		Deploy: func(ctx context.Context) error {
-			if r := deployer.Deploy(ctx); !r.OK {
+			if r := deploySvc.Run(ctx); !r.OK {
 				return &dnsfilter.ApplyError{Msg: r.Message}
 			}
 			return nil

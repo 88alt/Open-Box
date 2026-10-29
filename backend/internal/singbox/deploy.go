@@ -6,7 +6,7 @@ package singbox
 //
 // 自己的设计。阶段名沿用前端 OpenboxDeployResult.stage:
 //   validate = 生成 / 规则集 / 校验没过(还没碰正式配置); start = 重启命令失败; verify = 重启了但健康检查没过;
-//   running = 成功; error = 其它(已有部署在进行、读不到服务状态等)。conflict(与其它代理服务冲突)暂未实现。
+//   running = 成功; error = 其它(已有部署在进行、读不到服务状态等); conflict = 内核没在运行、而别的代理服务正在运行(见 Conflicts)。
 
 import (
 	"context"
@@ -31,6 +31,7 @@ import (
 // 阶段。
 const (
 	StageRunning  = "running"
+	StageConflict = "conflict"
 	StageValidate = "validate"
 	StageStart    = "start"
 	StageVerify   = "verify"
@@ -45,6 +46,8 @@ type DeployResult struct {
 	BadTags []string `json:"badTags"`
 	// RolledBack:新配置没能跑起来,已经换回旧配置。Message 里写着回滚后的状态。
 	RolledBack bool `json:"rolledBack,omitempty"`
+	// Busy:已有一次部署在进行,这次什么都没做(不进响应;HTTP 层据此回 409,也不记成「最近一次部署」)。
+	Busy bool `json:"-"`
 }
 
 // Builder 生成配置(*Generator 满足)。
@@ -71,6 +74,11 @@ type Deployer struct {
 	Service     ServiceControl
 	ServiceName string
 	Health      Health
+	// Conflicts 返回此刻正在运行的其它代理服务的名字(OpenClash、PassWall 等)。只在内核当前没在运行、
+	// 这次部署要把它从停止状态启动时才问:有冲突就不动手(同时跑会抢端口、DNS 和防火墙,可能弄断联网),
+	// 返回 conflict 阶段。内核已经在运行时的重启不拦(本来就并存着,重启不会更糟)。nil 或返回 error = 当作没有
+	// (与服务状态里的 conflicts 一样,检测失败不拦路)。
+	Conflicts func(ctx context.Context) ([]string, error)
 
 	HealthTimeout time.Duration
 	StableFor     time.Duration
@@ -103,7 +111,9 @@ func fail(stage, msg string, bad []string) DeployResult {
 // 替换正式配置之后的所有步骤(重启、检查、回滚)不受 ctx 取消影响:请求断开不能把系统留在半截状态。
 func (d *Deployer) Deploy(ctx context.Context) DeployResult {
 	if !d.mu.TryLock() {
-		return fail(StageError, "已有一次部署正在进行,请稍后再试", nil)
+		r := fail(StageError, "已有一次部署正在进行,请稍后再试", nil)
+		r.Busy = true
+		return r
 	}
 	defer d.mu.Unlock()
 
@@ -115,6 +125,11 @@ func (d *Deployer) Deploy(ctx context.Context) DeployResult {
 	before, err := d.Service.Status(ctx, d.ServiceName)
 	if err != nil {
 		return fail(StageError, "读不到内核服务的状态,为安全起见没有改动:"+err.Error(), nil)
+	}
+	if !before.Running && d.Conflicts != nil {
+		if names, err := d.Conflicts(ctx); err == nil && len(names) > 0 {
+			return fail(StageConflict, "检测到其它代理服务正在运行:"+strings.Join(names, "、")+"。同时运行会抢占端口、DNS 和防火墙,为安全起见没有启动内核,请先停掉它们", nil)
+		}
 	}
 	prev, err := os.ReadFile(d.configPath())
 	if err != nil && !errors.Is(err, os.ErrNotExist) {

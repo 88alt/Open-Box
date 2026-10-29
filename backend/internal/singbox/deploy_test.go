@@ -349,7 +349,7 @@ func TestDeployConcurrentRejected(t *testing.T) {
 	done := make(chan DeployResult)
 	go func() { done <- d.Deploy(context.Background()) }()
 	time.Sleep(30 * time.Millisecond)
-	if res := d.Deploy(context.Background()); res.OK || res.Stage != StageError || !strings.Contains(res.Message, "正在进行") {
+	if res := d.Deploy(context.Background()); res.OK || res.Stage != StageError || !res.Busy || !strings.Contains(res.Message, "正在进行") {
 		t.Fatalf("%+v", res)
 	}
 	close(gate)
@@ -571,5 +571,51 @@ func TestDeployRealSingBox(t *testing.T) {
 	}
 	if err := DefaultHealth(context.Background(), next); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// ---------- 冲突 ----------
+
+func TestDeployConflictBlocksStartFromStopped(t *testing.T) {
+	svc := &fakeSvc{}
+	d := newDP(t, map[string]any{"marker": "new"}, svc)
+	d.Conflicts = func(context.Context) ([]string, error) { return []string{"OpenClash", "PassWall"}, nil }
+	res := d.Deploy(context.Background())
+	if res.OK || res.Stage != StageConflict || res.Busy || res.BadTags == nil ||
+		!strings.Contains(res.Message, "OpenClash、PassWall") {
+		t.Fatalf("%+v", res)
+	}
+	if svc.callList() != "" {
+		t.Fatalf("冲突时不能碰服务: %s", svc.callList())
+	}
+	if _, err := os.Stat(d.configPath()); !os.IsNotExist(err) {
+		t.Fatalf("冲突时不能写配置: %v", err)
+	}
+}
+
+func TestDeployConflictDoesNotBlockRestartOfRunning(t *testing.T) {
+	svc := &fakeSvc{running: true}
+	d := newDP(t, map[string]any{"marker": "new"}, svc)
+	called := false
+	d.Conflicts = func(context.Context) ([]string, error) { called = true; return []string{"OpenClash"}, nil }
+	if res := d.Deploy(context.Background()); !res.OK || svc.callList() != "restart" {
+		t.Fatalf("内核已在运行时不拦: %+v %s", res, svc.callList())
+	}
+	if called {
+		t.Fatal("内核已在运行时没必要问冲突")
+	}
+}
+
+func TestDeployConflictCheckFailureOrNoneDoesNotBlock(t *testing.T) {
+	for name, fn := range map[string]func(context.Context) ([]string, error){
+		"检测失败": func(context.Context) ([]string, error) { return nil, errors.New("读不到") },
+		"没有冲突": func(context.Context) ([]string, error) { return nil, nil },
+	} {
+		svc := &fakeSvc{}
+		d := newDP(t, map[string]any{"marker": "new"}, svc)
+		d.Conflicts = fn
+		if res := d.Deploy(context.Background()); !res.OK || svc.callList() != "start" {
+			t.Errorf("%s 不该拦: %+v %s", name, res, svc.callList())
+		}
 	}
 }

@@ -158,6 +158,8 @@
 | POST | `/api/openbox/deploy` | `deployNow` (api/openbox.ts:926) | — | () |
 | GET | `/api/openbox/deploy/state` | `fetchDeployState` (api/openbox.ts:942) | { state: OpenboxDeployState } | () |
 
+实现约定(M5):`POST /deploy` 做一次完整部署(生成配置 → 落盘本地规则集 → `sing-box check` → 备份并原子替换 → 重启 / 启动 → 健康检查 → 失败回滚,详见 `internal/singbox/deploy.go`),同一时刻只允许一次。响应体恒为 `{ok, stage, message, badTags}`(回滚过另带 `rolledBack: true`),`stage` 取 `running` / `conflict` / `validate` / `start` / `verify` / `error`;状态码:成功 200,`conflict`(内核没在运行、而别的代理服务正在运行,所以没启动)和「已有部署在进行」409,`validate` 422,`start` / `verify` 502,其它 500——前端 `deployNow` 不看状态码,只读响应体。`GET /deploy/state` 回 `{state: {stage, message, at, badTags}}`,是最近一次部署的结果(毫秒时间戳 `at`),存在数据目录的 `deploy-state.json`、重启后仍在,从没部署过是 `stage:"idle"`、`at:0`;「已有部署在进行」的拒绝不记。面板的「部署」和 DNS 过滤的应用都会记。
+
 ## `/api/openbox/diagnostics`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
