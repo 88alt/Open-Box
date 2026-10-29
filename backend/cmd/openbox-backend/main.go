@@ -42,6 +42,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/deploystate"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsfilter"
+	"github.com/timeflysoon/Open-Box/backend/internal/dnssync"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnstest"
 	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
 	"github.com/timeflysoon/Open-Box/backend/internal/latencyhistory"
@@ -120,7 +121,7 @@ func run(args []string) int {
 }
 
 // newApp 组装存储、各接口分组和中间件。返回的 background 在进程启动后调用(传入随退出信号结束的 ctx),
-// 启动后台任务(现在只有每日流量的采样)并返回等它们收尾的函数;没有后台任务时为 nil。
+// 启动后台任务(每日流量的采样、启动时清 DNS 接管的遗留)并返回等它们收尾的函数。
 func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx context.Context) (wait func()), error) {
 	st, err := store.Open(cfg.StateDir())
 	if err != nil {
@@ -179,10 +180,18 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Svc: svcCtl, Exclude: []string{cfg.CoreService, cfg.PanelService},
 		Exists: func(p string) bool { _, err := os.Stat(p); return err == nil },
 	}
+	// DNS 接管(档案 dns.mode = dnsmasq):停 / 重启 / 替换内核之前先撤销,内核起来后按 dns.mode 对齐,进程启动时清遗留。
+	// 状态文件放在状态目录;dnsmasq 的配置目录只从它自己的主配置里读,读不到就不动(见 system/dnstakeover.go)
+	dnsSync := &dnssync.Coordinator{
+		Taker: &system.DNSTakeover{StateFile: filepath.Join(cfg.StateDir(), "dns-takeover.json"), Services: svcCtl},
+		Mode:  dnssync.ModeFromProfile(profileSvc.Get),
+		Log:   log,
+	}
 	serviceapi.Register(srv.Mux(), serviceapi.Deps{
 		Services:    svcCtl,
 		Conflicts:   conflictDetector,
 		Pending:     applied,
+		DNS:         dnsSync,
 		Kind:        initKind,
 		CoreService: cfg.CoreService, PanelName: cfg.PanelService, SingBox: cfg.SingBox,
 	})
@@ -277,6 +286,12 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		SingBox: cfg.SingBox, ConfigDir: cfg.ConfigDir,
 		Service: svcCtl, ServiceName: cfg.CoreService,
 		Track: applied,
+		// 替换配置、重启内核之前撤销 DNS 接管;内核健康之后(含回滚后旧配置又健康)按 dns.mode 对齐
+		BeforeApply: dnsSync.BeforeKernelStop,
+		AfterRunning: func(ctx context.Context) string {
+			res, err := dnsSync.AfterKernelStart(ctx)
+			return dnssync.Note(res, err)
+		},
 		// 内核没在运行时,别的代理服务正在跑就不启动(同时跑会抢端口、DNS 和防火墙);只认正在运行的
 		Conflicts: func(ctx context.Context) ([]string, error) {
 			found, err := conflictDetector.Find(ctx)
@@ -470,6 +485,24 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 
 	// 前端静态文件与前端路由回落;最后挂,/api 下的路径由各接口分组优先处理
 	srv.Mux().Handle("/", server.StaticHandler(cfg.WebDir))
+
+	// 启动后台任务之外再加一项:先清上次异常退出遗留的 DNS 接管(内核正常就保留,内核不在了就撤销)。
+	// 放在后台做:它要探测内核、必要时重启 dnsmasq,不拖慢面板的启动;退出时等它做完,别把 dnsmasq 留在半截
+	traffic := background
+	background = func(ctx context.Context) func() {
+		wait := func() {}
+		if traffic != nil {
+			wait = traffic(ctx)
+		}
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+			defer cancel()
+			dnsSync.Recover(rctx)
+		}()
+		return func() { wait(); <-done }
+	}
 	return srv, background, nil
 }
 

@@ -82,6 +82,14 @@ type Deployer struct {
 	// Track 非 nil:生成配置之前取一份输入指纹,部署成功后存下来,服务状态的 pendingRestart 靠它判断
 	// 「配置改了、内核还没用上」(见 pending.go)。回滚和校验失败不更新记录。
 	Track Tracker
+	// BeforeApply 在校验通过、替换正式配置(也就是要重启内核)之前调用,用来撤销 DNS 接管:内核重启的这几秒里
+	// dnsmasq 不能还指着它。返回 error = 没撤销成功,为安全起见不动手(StageError,正式配置和服务都没碰)。
+	// 校验没过的部署到不了这一步,所以不会白白撤销。nil = 不处理 DNS。
+	BeforeApply func(ctx context.Context) error
+	// AfterRunning 在内核起来并通过健康检查之后调用(部署成功;或失败回滚后旧配置又健康了),用来按 dns.mode
+	// 重新对齐 DNS 接管。返回的一句话附在 Message 后面(空串不附)。它的失败不改变 OK:内核是好的,
+	// 接管那边出错时已自动恢复到接管之前的状态,并在这句话里说明。nil = 不处理 DNS。
+	AfterRunning func(ctx context.Context) string
 
 	HealthTimeout time.Duration
 	StableFor     time.Duration
@@ -183,6 +191,11 @@ func (d *Deployer) Deploy(ctx context.Context) DeployResult {
 	actx, cancel := context.WithTimeout(context.WithoutCancel(ctx), d.applyBudget())
 	defer cancel()
 
+	if d.BeforeApply != nil {
+		if err := d.BeforeApply(actx); err != nil {
+			return fail(StageError, "为安全起见没有改动内核和配置:"+err.Error(), nil)
+		}
+	}
 	if hadPrev {
 		if err := store.WriteFileAtomic(d.PrevPath(), prev, 0o600); err != nil {
 			return fail(StageError, "备份旧配置失败,未应用:"+err.Error(), nil)
@@ -204,7 +217,21 @@ func (d *Deployer) Deploy(ctx context.Context) DeployResult {
 		return d.rollback(actx, StageVerify, "内核已"+actionName(action)+",但健康检查没通过:"+err.Error(), before.Running, hadPrev, prev)
 	}
 	d.recordApplied(fp)
-	return DeployResult{OK: true, Stage: StageRunning, Message: "已应用并正常运行", BadTags: []string{}}
+	return DeployResult{OK: true, Stage: StageRunning, Message: joinNote("已应用并正常运行", d.afterRunning(actx)), BadTags: []string{}}
+}
+
+func (d *Deployer) afterRunning(ctx context.Context) string {
+	if d.AfterRunning == nil {
+		return ""
+	}
+	return d.AfterRunning(ctx)
+}
+
+func joinNote(msg, note string) string {
+	if note == "" {
+		return msg
+	}
+	return msg + ";" + note
 }
 
 func actionName(a string) string {
@@ -344,7 +371,12 @@ func (d *Deployer) rollback(ctx context.Context, stage, reason string, wasRunnin
 		return DeployResult{Stage: stage, BadTags: []string{}, RolledBack: true,
 			Message: reason + ";" + restored + ",但" + strings.Join(problems, ";") + ",请检查内核服务"}
 	}
-	return DeployResult{Stage: stage, BadTags: []string{}, RolledBack: true, Message: reason + ";" + restored + "," + tail}
+	msg := reason + ";" + restored + "," + tail
+	if wasRunning && hadPrev {
+		// 旧配置的内核又健康了:BeforeApply 撤销过的 DNS 接管要接回去(没接回去也只是说明,不改回滚结果)
+		msg = joinNote(msg, d.afterRunning(ctx))
+	}
+	return DeployResult{Stage: stage, BadTags: []string{}, RolledBack: true, Message: msg}
 }
 
 // waitHealthyPrev 用旧配置的内容做健康检查(旧配置是原样的 JSON 字节,解析一下取控制接口和入站)。

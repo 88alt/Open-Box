@@ -9,7 +9,9 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime"
+	"time"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/dnssync"
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
 	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
@@ -31,11 +33,18 @@ type PendingFinder interface {
 	Pending(ctx context.Context) (singbox.PendingRestart, error)
 }
 
+// DNSSync 把 DNS 接管接进内核的启停(*dnssync.Coordinator 满足),测试里换假的。
+type DNSSync interface {
+	BeforeKernelStop(ctx context.Context) error
+	AfterKernelStart(ctx context.Context) (dnssync.Result, error)
+}
+
 // Deps 是本分组的依赖。
 type Deps struct {
 	Services    Controller
 	Conflicts   ConflictFinder // 为空 = 不检测,conflicts 恒为空数组
 	Pending     PendingFinder  // 为空 = 不判断,pendingRestart 恒为「没有」
+	DNS         DNSSync        // 为空 = 不管 DNS 接管;非空 = 停 / 重启内核前先撤销接管,起 / 重启后按 dns.mode 对齐
 	Kind        system.InitKind
 	CoreService string // sing-box 的服务名
 	PanelName   string // 后端自己的服务名(只查开机自启)
@@ -121,13 +130,33 @@ func (d Deps) status(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, resp)
 }
 
+// actionResponse 是 ActionResult 加一句可选的 DNS 说明(前端按 ok / stderr 显示,多出的字段会被忽略)。
+type actionResponse struct {
+	system.ActionResult
+	DNSNote string `json:"dnsNote,omitempty"`
+}
+
+// dnsBudget 是 DNS 接管那一步的总时限(撤销 / 对齐各自还有更细的超时)。
+const dnsBudget = 2 * time.Minute
+
 func (d Deps) action(w http.ResponseWriter, r *http.Request) {
 	httpx.NoStore(w)
 	if d.Kind == system.InitNone || d.Services == nil {
 		httpx.Error(w, http.StatusServiceUnavailable, system.ErrNoInit.Error())
 		return
 	}
-	res, err := d.Services.Do(r.Context(), d.CoreService, r.PathValue("action"))
+	action := r.PathValue("action")
+	// DNS 接管的撤销和对齐一旦开始就要做完:请求断开不能把 dnsmasq 留在指着一个停了的内核的状态
+	dctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), dnsBudget)
+	defer cancel()
+	// 停 / 重启之前先撤销接管:内核停了而 dnsmasq 还指着它,整个局域网就没有 DNS。撤销不成功就不动内核
+	if d.DNS != nil && (action == "stop" || action == "restart") {
+		if err := d.DNS.BeforeKernelStop(dctx); err != nil {
+			httpx.Error(w, http.StatusInternalServerError, "为安全起见没有"+actionVerb(action)+"内核: "+err.Error())
+			return
+		}
+	}
+	res, err := d.Services.Do(r.Context(), d.CoreService, action)
 	if err != nil {
 		switch {
 		case errors.Is(err, system.ErrBadAction):
@@ -139,6 +168,23 @@ func (d Deps) action(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	resp := actionResponse{ActionResult: res}
+	// 起 / 重启成功之后按 dns.mode 对齐(等内核的 DNS 入站应答)。对齐失败不改变服务操作本身的结果:
+	// 内核已经起来了,接管那边出错时已自动恢复原状,只在 dnsNote 里说明
+	if d.DNS != nil && res.OK && (action == "start" || action == "restart") {
+		got, derr := d.DNS.AfterKernelStart(dctx)
+		resp.DNSNote = dnssync.Note(got, derr)
+		if derr != nil {
+			slog.Warn("内核启动后对齐 DNS 接管失败", "action", action, "error", derr)
+		}
+	}
 	// 命令本身失败(退出码非 0)仍是 200:前端按 ok / stderr 显示
-	httpx.JSON(w, http.StatusOK, res)
+	httpx.JSON(w, http.StatusOK, resp)
+}
+
+func actionVerb(action string) string {
+	if action == "restart" {
+		return "重启"
+	}
+	return "停止"
 }

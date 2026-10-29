@@ -58,6 +58,17 @@ var DefaultDnsmasqConfigs = []string{"/var/etc/dnsmasq.conf.*", "/etc/dnsmasq.co
 // DefaultDnsmasqDefaults 是 Debian 的 dnsmasq 默认值文件,里面的 CONFIG_DIR 是服务脚本传给 dnsmasq 的 --conf-dir。
 const DefaultDnsmasqDefaults = "/etc/default/dnsmasq"
 
+// ErrKernelDNSDown:内核的 DNS 入站(还)没有应答。Apply 在这种情况下一个字都没改;调用方可以等内核起来后重试
+// (用 errors.Is 判断)。
+var ErrKernelDNSDown = errors.New("内核的 DNS 入站没有应答")
+
+// kernelDNSDownError 保留探测的原始错误文字,同时让 errors.Is(err, ErrKernelDNSDown) 成立。
+type kernelDNSDownError struct{ cause error }
+
+func (e *kernelDNSDownError) Error() string        { return e.cause.Error() }
+func (e *kernelDNSDownError) Unwrap() error        { return e.cause }
+func (e *kernelDNSDownError) Is(target error) bool { return target == ErrKernelDNSDown }
+
 // ErrTakeoverUnsupported:这台机器上做不了接管(没找到 dnsmasq 的配置目录、dnsmasq 没在运行……)。出现时系统没被改动。
 var ErrTakeoverUnsupported = errors.New("这台机器上没法接管 DNS")
 
@@ -499,7 +510,7 @@ func (t *DNSTakeover) Apply(ctx context.Context) (changed bool, err error) {
 	}
 	// 内核的 DNS 入站不答,就别把 dnsmasq 指过去——那会让整个局域网没有 DNS
 	if err := t.probe(ctx, t.kernelAddr()); err != nil {
-		return false, fmt.Errorf("内核的 DNS 入站(%s)没有应答,先让内核跑起来再接管 DNS,没有改任何设置: %w", t.kernelAddr(), err)
+		return false, fmt.Errorf("内核的 DNS 入站(%s)没有应答,先让内核跑起来再接管 DNS,没有改任何设置: %w", t.kernelAddr(), &kernelDNSDownError{cause: err})
 	}
 	if st, ok := t.loadState(); ok && st.Phase == phaseApplied && t.inSync(d.Files, content) && t.probe(ctx, t.dnsmasqAddr()) == nil {
 		return false, nil
@@ -587,7 +598,7 @@ func (t *DNSTakeover) revertLocked(ctx context.Context) error {
 }
 
 // Sync 按档案的 dns.mode 对齐系统:dnsmasq → Apply;off / hijack → Revert;别的值当作错误,不动系统。
-// 部署成功之后调用它(随 M5 的 deploy* 接入)。
+// 部署成功之后、内核启动之后由 internal/dnssync 调用它;停止 / 重启内核前先 Revert。
 func (t *DNSTakeover) Sync(ctx context.Context, mode string) (changed bool, err error) {
 	switch mode {
 	case "dnsmasq":

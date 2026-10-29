@@ -209,6 +209,9 @@ func TestApplyKernelNotAnswering(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "没有改任何设置") {
 		t.Fatalf("err=%v", err)
 	}
+	if !errors.Is(err, ErrKernelDNSDown) {
+		t.Fatalf("内核没应答要能用 errors.Is(ErrKernelDNSDown) 认出来,好让调用方等内核起来再试: %v", err)
+	}
 	e.wantNoFile(t)
 	e.wantNoState(t)
 	if e.svc.count() != 0 {
