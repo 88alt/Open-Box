@@ -378,6 +378,8 @@
 | GET | `/api/openbox/system/timezone` | `fetchTimezone` (api/openbox.ts:1680) | OpenboxTimezoneState | () |
 | PUT | `/api/openbox/system/timezone` | `saveTimezone` (api/openbox.ts:1683) | OpenboxTimezoneState | (zone: string) |
 
+实现约定(M5,仅时区):`zones` / `countries` 来自内置的 IANA 时区表(419 个时区,国家代码取自 `zone.tab`,UTC 没有);`zone` 读不到(没有服务管理器、命令失败)是空串,名单照给,不报错;`offset`(+08:00)和 `local`(路由器本地时间)问系统的 `date`,读不到也是空串;`platform` 是 `openwrt` / `systemd` / `none`。`PUT` 请求体 `{ zone }`:别名先换成名单里的名字(如 `Asia/Chongqing` → `Asia/Shanghai`,`Etc/UTC` / `GMT` → `UTC`),不认识 400;OpenWrt 上 system 配置里有别人暂存的修改时拒绝(500,说明原因),改失败会恢复原值;没有受支持的服务管理器 501;改完读回来与请求不一致 500。
+
 ## `/api/openbox/terminal-test`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |

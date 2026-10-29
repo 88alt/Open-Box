@@ -36,6 +36,7 @@ import (
 	storageapi "github.com/timeflysoon/Open-Box/backend/internal/api/storage"
 	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
 	subsharesapi "github.com/timeflysoon/Open-Box/backend/internal/api/subshares"
+	timezoneapi "github.com/timeflysoon/Open-Box/backend/internal/api/timezone"
 	trafficapi "github.com/timeflysoon/Open-Box/backend/internal/api/traffic"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
@@ -66,6 +67,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/subs"
 	"github.com/timeflysoon/Open-Box/backend/internal/subshare"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
+	"github.com/timeflysoon/Open-Box/backend/internal/timezone"
 	"github.com/timeflysoon/Open-Box/backend/internal/traffic"
 )
 
@@ -450,6 +452,9 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		ServiceStatus: svcCtl.Status,
 		Profile:       profileSvc.Get,
 	}})
+
+	// 系统时区:OpenWrt 走 uci + system reload,systemd 走 timedatectl;时区名单和 POSIX 时区串是内置的 IANA 数据
+	timezoneapi.Register(srv.Mux(), timezoneapi.Deps{Service: &timezone.Service{Init: system.DetectInitHere()}})
 
 	// 激活和教程视频:没有对应概念,只回固定内容(DESIGN D9 和第 8 节),不保存任何东西
 	activationapi.Register(srv.Mux(), activationapi.Deps{
