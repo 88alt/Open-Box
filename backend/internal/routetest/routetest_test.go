@@ -198,7 +198,7 @@ func TestRunGETFindsRoute(t *testing.T) {
 	if flushed != 1 {
 		t.Errorf("探测前应该清一次 DNS 缓存,清了 %d 次", flushed)
 	}
-	if res.Target != "127.0.0.1" || res.DNS["skipped"] != true {
+	if res.Target != "127.0.0.1" || asMap(res.DNS)["skipped"] != true {
 		t.Errorf("IP 目标的 dns 应该是 skipped: %+v", res.DNS)
 	}
 }
@@ -222,7 +222,7 @@ func TestRunViaDirectAndDNSForDomain(t *testing.T) {
 
 	// 域名目标:dns 如实回 error(还没做),不能是 skipped
 	res, _ = (&Service{ProxyAddr: newFakeProxy(t, 403, "").addr(), DNSAddr: closedAddr(t), Timeout: time.Second}).Run(context.Background(), Input{Target: "example.com"})
-	if _, ok := res.DNS["error"].(string); !ok || res.DNS["skipped"] != nil {
+	if _, ok := asMap(res.DNS)["error"].(string); !ok || asMap(res.DNS)["skipped"] != nil {
 		t.Errorf("域名目标的 dns 应该是 error: %+v", res.DNS)
 	}
 }
@@ -373,4 +373,10 @@ func TestRunRejectsBadInputAndCancel(t *testing.T) {
 	if _, err := (&Service{ProxyAddr: "127.0.0.1:1"}).Run(ctx, Input{Target: "1.1.1.1"}); !errors.Is(err, context.Canceled) {
 		t.Errorf("已取消应该返回 context.Canceled: %v", err)
 	}
+}
+
+// asMap 取响应里 dns 的 {skipped} / {error} 形态;别的形态返回 nil。
+func asMap(v any) map[string]any {
+	m, _ := v.(map[string]any)
+	return m
 }

@@ -368,7 +368,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		},
 	}})
 
-	// 真实路由测试(做了真实访问、线路和经内核 DNS 入站的解析;DNS 判定见 STATUS.md):经内核的面板入站访问一次,从连接列表认出命中的规则和线路;
+	// 真实路由测试(做了 DNS 判定、经内核 DNS 入站的解析、真实访问和线路;还没做的见 STATUS.md):经内核的面板入站访问一次,从连接列表认出命中的规则和线路;
 	// 探测前让内核丢掉 DNS 缓存(只是让缓存失效)
 	routetestapi.Register(srv.Mux(), routetestapi.Deps{Service: &routetest.Service{
 		Snapshot: func(ctx context.Context) (singbox.KernelSnapshot, error) {
@@ -382,6 +382,14 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			p, err := profileSvc.Get(ctx)
 			on, _ := p["ipv6"].(bool)
 			return err == nil && on
+		},
+		// DNS 判定:读已部署的 config.json,按它的 DNS 规则预测这个域名问哪台服务器;规则集文件读不到、
+		// 二进制规则集需要 sing-box 解码,判断不了的如实记成前提;代理侧的实际线路读内核的代理列表补上
+		DNS: &routetest.DNSPredictor{
+			ConfigFile: filepath.Join(cfg.ConfigDir, "config.json"), SingBox: cfg.SingBox, TmpDir: probeDir,
+			Proxies: func(ctx context.Context) ([]singbox.KernelProxy, error) {
+				return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
+			},
 		},
 	}})
 

@@ -78,10 +78,10 @@ type Exit struct {
 
 // Result 对应前端 OpenboxRouteTest。DNS 是 {skipped:true} 或 {error:"..."},见包注释。
 type Result struct {
-	Target  string         `json:"target"`
-	DNS     map[string]any `json:"dns"`
-	Resolve *Resolve       `json:"resolve,omitempty"` // 目标是域名时才有
-	Exit    Exit           `json:"exit"`
+	Target  string   `json:"target"`
+	DNS     any      `json:"dns"`               // {skipped:true} / {error} / *dnsdecide.Decision
+	Resolve *Resolve `json:"resolve,omitempty"` // 目标是域名时才有
+	Exit    Exit     `json:"exit"`
 }
 
 // Service 做一次真实路由探测。
@@ -92,6 +92,8 @@ type Service struct {
 	FlushDNS func(ctx context.Context) error
 	// ProxyAddr 是面板入站地址,空 = sitelatency.PanelProxyAddr。
 	ProxyAddr string
+	// DNS 预测响应里的 dns(按已部署配置里的 DNS 规则判断这个域名问哪台服务器);nil = 不预测,回「未接入」。
+	DNS *DNSPredictor
 	// DNSAddr 是内核的 DNS 入站地址,空 = system.DefaultKernelDNSAddr。
 	DNSAddr string
 	// IPv6 返回档案是否开了 IPv6(开了才再查一次 AAAA);nil 当作没开。
@@ -184,7 +186,7 @@ func (s *Service) Run(ctx context.Context, in Input) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	res := &Result{Target: in.Target, DNS: dnsPlaceholder(in.Target)}
+	res := &Result{Target: in.Target, DNS: s.predictDNS(ctx, in.Target)}
 	res.Exit = Exit{URL: ProbeURL(in.Target, in.Port), Method: in.Method}
 
 	if in.Method == MethodTCP {
