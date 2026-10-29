@@ -26,6 +26,7 @@ import (
 	nodeinfoapi "github.com/timeflysoon/Open-Box/backend/internal/api/nodeinfo"
 	policiesapi "github.com/timeflysoon/Open-Box/backend/internal/api/policies"
 	profileapi "github.com/timeflysoon/Open-Box/backend/internal/api/profile"
+	routetestapi "github.com/timeflysoon/Open-Box/backend/internal/api/routetest"
 	rulesetsapi "github.com/timeflysoon/Open-Box/backend/internal/api/rulesets"
 	serversapi "github.com/timeflysoon/Open-Box/backend/internal/api/servers"
 	serviceapi "github.com/timeflysoon/Open-Box/backend/internal/api/service"
@@ -50,6 +51,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/probe"
 	"github.com/timeflysoon/Open-Box/backend/internal/profile"
 	"github.com/timeflysoon/Open-Box/backend/internal/regiondetect"
+	"github.com/timeflysoon/Open-Box/backend/internal/routetest"
 	"github.com/timeflysoon/Open-Box/backend/internal/rulelist"
 	"github.com/timeflysoon/Open-Box/backend/internal/server"
 	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
@@ -307,6 +309,17 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Hist: &latencyhistory.Service{Store: st, File: "site-latency-history"},
 		Snapshot: func(ctx context.Context) (singbox.KernelSnapshot, error) {
 			return singbox.KernelConnections(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
+		},
+	}})
+
+	// 真实路由测试(只做了真实访问和线路这一部分):经内核的面板入站访问一次,从连接列表认出命中的规则和线路;
+	// 探测前让内核丢掉 DNS 缓存(只是让缓存失效)
+	routetestapi.Register(srv.Mux(), routetestapi.Deps{Service: &routetest.Service{
+		Snapshot: func(ctx context.Context) (singbox.KernelSnapshot, error) {
+			return singbox.KernelConnections(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
+		},
+		FlushDNS: func(ctx context.Context) error {
+			return singbox.KernelFlushDNS(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
 		},
 	}})
 

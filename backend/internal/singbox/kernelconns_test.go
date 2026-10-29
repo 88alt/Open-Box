@@ -90,3 +90,20 @@ func TestParseKernelConnectionsSourcePort(t *testing.T) {
 		}
 	}
 }
+
+// route-test 要用连接命中的规则:Clash API 的 rule / rulePayload 原样取出,没有时为空。
+func TestParseKernelConnectionsRule(t *testing.T) {
+	body := `{"connections":[
+ {"id":"a","chains":["hk-01","海外"],"rule":"rule_set=geosite-cn","rulePayload":"geosite-cn","metadata":{"sourceIP":"127.0.0.1","sourcePort":"5555","destinationIP":"1.2.3.4"}},
+ {"id":"b","chains":["direct"],"metadata":{"sourceIP":"127.0.0.1","sourcePort":"5556"}}]}`
+	s, err := parseKernelConnections(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Conns) != 2 || s.Conns[0].Rule != "rule_set=geosite-cn" || s.Conns[0].RulePayload != "geosite-cn" || s.Conns[0].SourcePort != "5555" {
+		t.Errorf("%+v", s.Conns[0])
+	}
+	if s.Conns[1].Rule != "" || s.Conns[1].RulePayload != "" {
+		t.Errorf("没有 rule 时应该为空: %+v", s.Conns[1])
+	}
+}

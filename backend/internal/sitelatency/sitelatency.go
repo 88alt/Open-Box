@@ -337,7 +337,11 @@ func ms(d time.Duration) int {
 }
 
 // describe 把请求错误翻成给人看的中文;不带网址(网址里可能有 token)。
-func (s *Service) describe(err error) string {
+func (s *Service) describe(err error) string { return DescribeError(err, s.timeout()) }
+
+// DescribeError 把请求错误翻成给人看的中文;不带网址(网址里可能有 token)。timeout 是这次请求的超时,
+// 只用来写进「超时」的提示。route-test 等同样经面板入站发请求的功能共用它。
+func DescribeError(err error, timeout time.Duration) string {
 	var pe *proxyError
 	if errors.As(err, &pe) {
 		return pe.msg
@@ -349,7 +353,7 @@ func (s *Service) describe(err error) string {
 	var ne net.Error
 	switch {
 	case errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ne) && ne.Timeout()):
-		return "超时(" + strconv.FormatFloat(s.timeout().Seconds(), 'f', -1, 64) + " 秒内没有响应)"
+		return "超时(" + strconv.FormatFloat(timeout.Seconds(), 'f', -1, 64) + " 秒内没有响应)"
 	case errors.Is(err, context.Canceled):
 		return "已取消"
 	}
@@ -382,8 +386,14 @@ func (e *proxyError) Error() string { return e.msg }
 
 // dialTunnel 连到面板入站,发 CONNECT addr,收到 200 后把这条连接交出去;同时返回本地端口(用来认线路)。
 func (s *Service) dialTunnel(ctx context.Context, addr string) (net.Conn, string, error) {
-	d := &net.Dialer{Timeout: s.timeout()}
-	c, err := d.DialContext(ctx, "tcp", s.proxyAddr())
+	return DialTunnel(ctx, s.proxyAddr(), s.timeout(), addr)
+}
+
+// DialTunnel 连到面板入站 proxyAddr,发 CONNECT addr,收到 200 后把这条连接交出去;同时返回本地端口(用来认线路)。
+// 注意:200 只说明内核接了这个请求,不说明它已经连上了目标——目标连不上时内核之后才关连接。
+func DialTunnel(ctx context.Context, proxyAddr string, timeout time.Duration, addr string) (net.Conn, string, error) {
+	d := &net.Dialer{Timeout: timeout}
+	c, err := d.DialContext(ctx, "tcp", proxyAddr)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, "", err

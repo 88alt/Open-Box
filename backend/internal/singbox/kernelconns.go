@@ -23,6 +23,10 @@ type KernelConn struct {
 	DestIP   string   // 访问目标的 IP,没有时为空
 	// SourcePort 是来源端口(十进制字符串),没有时为空。站点延迟靠「来源 IP + 端口」认出自己发的那条连接。
 	SourcePort string
+	// Rule / RulePayload 是内核说这条连接命中了哪条路由规则(Clash API 的 rule / rulePayload,例如
+	// 规则类型和它的内容);没有时为空。route-test 靠它告诉用户是哪条规则管的。
+	Rule        string
+	RulePayload string
 }
 
 // KernelSnapshot 是某一刻的连接快照。UploadTotal / DownloadTotal 是内核自启动以来的累计总量
@@ -80,11 +84,13 @@ func parseKernelConnections(r io.Reader) (KernelSnapshot, error) {
 		UploadTotal   int64 `json:"uploadTotal"`
 		DownloadTotal int64 `json:"downloadTotal"`
 		Connections   []struct {
-			ID       string   `json:"id"`
-			Upload   int64    `json:"upload"`
-			Download int64    `json:"download"`
-			Chains   []string `json:"chains"`
-			Metadata struct {
+			ID          string   `json:"id"`
+			Upload      int64    `json:"upload"`
+			Download    int64    `json:"download"`
+			Chains      []string `json:"chains"`
+			Rule        string   `json:"rule"`
+			RulePayload string   `json:"rulePayload"`
+			Metadata    struct {
 				SourceIP      string `json:"sourceIP"`
 				SourcePort    any    `json:"sourcePort"`
 				Host          string `json:"host"`
@@ -104,6 +110,7 @@ func parseKernelConnections(r io.Reader) (KernelSnapshot, error) {
 			ID: c.ID, Upload: c.Upload, Download: c.Download, Chains: c.Chains,
 			Source: c.Metadata.SourceIP, Host: c.Metadata.Host, DestIP: c.Metadata.DestinationIP,
 			SourcePort: portString(c.Metadata.SourcePort),
+			Rule:       c.Rule, RulePayload: c.RulePayload,
 		})
 	}
 	return snap, nil
