@@ -73,6 +73,11 @@ func TestAppWiring(t *testing.T) {
 		t.Fatalf("dns/region-detect: %d %s", code, body)
 	}
 
+	// 服务状态已装配:带 pendingRestart(从没部署过 / 内核没在运行时恒为没有,reasons 是空数组而不是 null)
+	if code, body := get(c, ts.URL+"/api/openbox/service/status"); code != 200 || !strings.Contains(body, `"pendingRestart":{"pending":false,"reasons":[]}`) {
+		t.Fatalf("service/status: %d %s", code, body)
+	}
+
 	// 清 DNS 缓存已装配:POST 才有;测试机上没有可清的层时是 503 + error,而不是 404 / 405
 	if code, _ := get(c, ts.URL+"/api/openbox/dns/flush-cache"); code != 405 {
 		t.Fatalf("dns/flush-cache GET: %d", code)

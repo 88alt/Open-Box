@@ -79,6 +79,9 @@ type Deployer struct {
 	// 返回 conflict 阶段。内核已经在运行时的重启不拦(本来就并存着,重启不会更糟)。nil 或返回 error = 当作没有
 	// (与服务状态里的 conflicts 一样,检测失败不拦路)。
 	Conflicts func(ctx context.Context) ([]string, error)
+	// Track 非 nil:生成配置之前取一份输入指纹,部署成功后存下来,服务状态的 pendingRestart 靠它判断
+	// 「配置改了、内核还没用上」(见 pending.go)。回滚和校验失败不更新记录。
+	Track Tracker
 
 	HealthTimeout time.Duration
 	StableFor     time.Duration
@@ -138,6 +141,8 @@ func (d *Deployer) Deploy(ctx context.Context) DeployResult {
 	hadPrev := err == nil
 
 	// 2. 生成、落盘规则集、校验。到这里为止都没碰正式配置
+	// 输入指纹必须在生成之前取:取完之后用户又改了东西,记录就比实际部署的旧,最多多报一次「待重启」,不会漏报
+	fp := d.snapshot(ctx)
 	built, err := d.Build.Build(ctx)
 	if err != nil {
 		return fail(StageValidate, "生成配置失败:"+err.Error(), nil)
@@ -198,6 +203,7 @@ func (d *Deployer) Deploy(ctx context.Context) DeployResult {
 	if err := d.waitHealthy(actx, built.Config); err != nil {
 		return d.rollback(actx, StageVerify, "内核已"+actionName(action)+",但健康检查没通过:"+err.Error(), before.Running, hadPrev, prev)
 	}
+	d.recordApplied(fp)
 	return DeployResult{OK: true, Stage: StageRunning, Message: "已应用并正常运行", BadTags: []string{}}
 }
 

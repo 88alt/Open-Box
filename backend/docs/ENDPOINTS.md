@@ -328,7 +328,7 @@
 | POST | `/api/openbox/service/core/{x}` | `runServiceAction` (api/openbox.ts:1030) | OpenboxServiceActionResult | (action: OpenboxServiceAction) |
 | GET | `/api/openbox/service/status` | `fetchServiceStatus` (api/openbox.ts:1022) | OpenboxServiceStatus | () |
 
-实现约定(M1):`status` 的 `conflicts` 是正在运行的其它代理服务 `[{ id, label, running: true }]`,只读检测(OpenWrt 查 `/etc/init.d/<名> running`,systemd 用 `systemctl is-active`),名单见 `internal/system/conflicts.go` 的 `KnownConflicts`,自己的 sing-box 和后端服务名不算;检测失败当作没有,接口不报错。`pendingRestart` 暂恒为「没有」(随部署接 HTTP 再做),没有 `container` / `conflictAutoStopped`(后端不自动停别的服务)。
+实现约定(M1):`status` 的 `conflicts` 是正在运行的其它代理服务 `[{ id, label, running: true }]`,只读检测(OpenWrt 查 `/etc/init.d/<名> running`,systemd 用 `systemctl is-active`),名单见 `internal/system/conflicts.go` 的 `KnownConflicts`,自己的 sing-box 和后端服务名不算;检测失败当作没有,接口不报错。`pendingRestart` 是 `{pending, reasons}`:**内核在运行**、且生成配置用到的输入和**上次成功部署**时不一样才为真,`reasons` 取 `nodes` / `dns` / `route` / `inbounds` / `system`(按这个顺序,永远是数组)。做法见 `internal/singbox/pending.go`:每次部署成功(`POST /deploy`、DNS 过滤的应用)在生成配置之前取一份按原因分组的输入指纹存进数据目录的 `applied-config.json`,状态接口现算一份来比;只读已存的数据,不调 core、不联网。从没通过本后端部署成功过(没有记录)时不判断,恒为「没有」;内核没在运行、算不出指纹时也是「没有」,接口不报错。不进指纹的:订阅的用量 / 更新时间 / 节点数、档案里的 `updates` / `traffic` / `shareRegions` / `serverInfo`、`dns.filter` 里的名单名字和自动更新计划(过滤是否按当前设置应用过才算)、本机的 resolv.conf 和局域网网段、规则集链接的远端内容。清掉它要再**部署**一次;`POST /service/core/restart` 只是让内核重读磁盘上的旧配置,不会清。没有 `container` / `conflictAutoStopped`(后端不自动停别的服务)。
 
 ## `/api/openbox/site-latency`
 

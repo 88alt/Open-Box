@@ -169,6 +169,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			KeyPath:    filepath.Join(cfg.ConfigDir, "certs", "server.key"),
 		})
 	configpreviewapi.Register(srv.Mux(), configpreviewapi.Deps{Gen: gen})
+	// 「上次成功部署用的输入指纹」:部署成功时记,服务状态的 pendingRestart 用它判断配置改了、内核还没用上
+	applied := &singbox.Applied{Store: st, Source: gen}
 
 	// 服务控制:只通过系统自带的服务管理器(OpenWrt init.d / systemd)操作 sing-box
 	initKind := system.DetectInitHere()
@@ -180,6 +182,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	serviceapi.Register(srv.Mux(), serviceapi.Deps{
 		Services:    svcCtl,
 		Conflicts:   conflictDetector,
+		Pending:     applied,
 		Kind:        initKind,
 		CoreService: cfg.CoreService, PanelName: cfg.PanelService, SingBox: cfg.SingBox,
 	})
@@ -273,6 +276,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Files:   singbox.Files{SingBox: cfg.SingBox, GeoDir: cfg.GeoDir},
 		SingBox: cfg.SingBox, ConfigDir: cfg.ConfigDir,
 		Service: svcCtl, ServiceName: cfg.CoreService,
+		Track: applied,
 		// 内核没在运行时,别的代理服务正在跑就不启动(同时跑会抢端口、DNS 和防火墙);只认正在运行的
 		Conflicts: func(ctx context.Context) ([]string, error) {
 			found, err := conflictDetector.Find(ctx)

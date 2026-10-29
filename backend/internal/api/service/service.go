@@ -6,6 +6,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"runtime"
 
@@ -25,10 +26,16 @@ type ConflictFinder interface {
 	Find(ctx context.Context) ([]system.Conflict, error)
 }
 
+// PendingFinder 判断「配置改了、内核还没用上」(*singbox.Applied 实现它),测试里换假的。
+type PendingFinder interface {
+	Pending(ctx context.Context) (singbox.PendingRestart, error)
+}
+
 // Deps 是本分组的依赖。
 type Deps struct {
 	Services    Controller
 	Conflicts   ConflictFinder // 为空 = 不检测,conflicts 恒为空数组
+	Pending     PendingFinder  // 为空 = 不判断,pendingRestart 恒为「没有」
 	Kind        system.InitKind
 	CoreService string // sing-box 的服务名
 	PanelName   string // 后端自己的服务名(只查开机自启)
@@ -61,7 +68,8 @@ type statusResponse struct {
 	Conflicts []system.Conflict  `json:"conflicts"`
 	Platform  string             `json:"platform"`
 	Arch      string             `json:"arch"`
-	// 还没重启生效的改动。部署流程接进来之前恒为「没有」。
+	// 配置改了、内核还没用上的部分:内核在运行、且和上次成功部署时的输入不一样才有。
+	// 要部署一次(POST /api/openbox/deploy)才会清掉;单纯的重启只是让内核重读磁盘上的旧配置,不会。
 	PendingRestart pending `json:"pendingRestart"`
 }
 
@@ -96,6 +104,14 @@ func (d Deps) status(w http.ResponseWriter, r *http.Request) {
 	if d.Conflicts != nil {
 		if found, _ := d.Conflicts.Find(r.Context()); len(found) > 0 {
 			resp.Conflicts = found
+		}
+	}
+	// 待重启:内核没在运行就没有「还没生效」一说,不算;判断失败当作没有(与 conflicts 一样,不让它拖垮状态接口)
+	if d.Pending != nil && core.Running {
+		if p, err := d.Pending.Pending(r.Context()); err != nil {
+			slog.Debug("判断待重启失败", "error", err)
+		} else if p.Pending {
+			resp.PendingRestart = pending{Pending: true, Reasons: append([]string{}, p.Reasons...)}
 		}
 	}
 	// 后端自己的开机自启:查不到就不带这个字段

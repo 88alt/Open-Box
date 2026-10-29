@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
 )
 
@@ -199,5 +200,88 @@ func TestStatusConflicts(t *testing.T) {
 	got = statusWith(t, nil, f)
 	if c, ok := got["conflicts"].([]any); !ok || len(c) != 0 {
 		t.Fatalf("%v", got["conflicts"])
+	}
+}
+
+// ---------- pendingRestart ----------
+
+type fakePending struct {
+	res   singbox.PendingRestart
+	err   error
+	calls int
+}
+
+func (f *fakePending) Pending(context.Context) (singbox.PendingRestart, error) {
+	f.calls++
+	return f.res, f.err
+}
+
+func statusWithPending(t *testing.T, running bool, p PendingFinder) map[string]any {
+	t.Helper()
+	f := &fake{statuses: map[string]system.ServiceInfo{"sing-box": {Running: running, Raw: "x"}}}
+	mux := http.NewServeMux()
+	Register(mux, Deps{Services: f, Pending: p, Kind: system.InitOpenWrt, CoreService: "sing-box", PanelName: "openbox-backend", Arch: "arm64"})
+	rec := do(mux, http.MethodGet, "/api/openbox/service/status")
+	if rec.Code != 200 {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func pendingOf(t *testing.T, got map[string]any) (bool, []any) {
+	t.Helper()
+	pr, ok := got["pendingRestart"].(map[string]any)
+	if !ok {
+		t.Fatalf("pendingRestart 必须是对象: %v", got["pendingRestart"])
+	}
+	reasons, ok := pr["reasons"].([]any)
+	if !ok {
+		t.Fatalf("reasons 必须是数组而不是 null: %v", pr["reasons"])
+	}
+	return pr["pending"] == true, reasons
+}
+
+func TestStatusPendingRestartWhenRunning(t *testing.T) {
+	p := &fakePending{res: singbox.PendingRestart{Pending: true, Reasons: []string{"nodes", "dns"}}}
+	pending, reasons := pendingOf(t, statusWithPending(t, true, p))
+	if !pending || len(reasons) != 2 || reasons[0] != "nodes" || reasons[1] != "dns" || p.calls != 1 {
+		t.Fatalf("pending=%v reasons=%v calls=%d", pending, reasons, p.calls)
+	}
+}
+
+func TestStatusPendingRestartNotAskedWhenStopped(t *testing.T) {
+	p := &fakePending{res: singbox.PendingRestart{Pending: true, Reasons: []string{"nodes"}}}
+	pending, reasons := pendingOf(t, statusWithPending(t, false, p))
+	if pending || len(reasons) != 0 || p.calls != 0 {
+		t.Fatalf("内核没在运行就没有「还没生效」,也不必去算: pending=%v reasons=%v calls=%d", pending, reasons, p.calls)
+	}
+}
+
+func TestStatusPendingRestartNoChangeAndFailureAndNotWired(t *testing.T) {
+	for name, p := range map[string]PendingFinder{
+		"没有改动":   &fakePending{res: singbox.PendingRestart{Reasons: []string{}}},
+		"判断失败":   &fakePending{err: errors.New("读不到档案"), res: singbox.PendingRestart{Pending: true, Reasons: []string{"dns"}}},
+		"没接判断":   nil,
+		"没有原因的真": &fakePending{res: singbox.PendingRestart{Pending: false, Reasons: []string{"dns"}}},
+	} {
+		pending, reasons := pendingOf(t, statusWithPending(t, true, p))
+		if pending || len(reasons) != 0 {
+			t.Errorf("%s: 状态接口不能因此报错或误报: pending=%v reasons=%v", name, pending, reasons)
+		}
+	}
+}
+
+func TestStatusPendingRestartReasonsAreCopied(t *testing.T) {
+	// 响应里的 reasons 不能和判断结果共用底层数组:后续谁改了它都不该影响已发出的响应
+	src := []string{"route"}
+	p := &fakePending{res: singbox.PendingRestart{Pending: true, Reasons: src}}
+	got := statusWithPending(t, true, p)
+	src[0] = "changed"
+	if _, reasons := pendingOf(t, got); reasons[0] != "route" {
+		t.Fatalf("%v", reasons)
 	}
 }
