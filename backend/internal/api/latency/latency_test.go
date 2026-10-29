@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
+	"github.com/timeflysoon/Open-Box/backend/internal/latencyhistory"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/probe"
 	"github.com/timeflysoon/Open-Box/backend/internal/profile"
@@ -93,6 +94,7 @@ type env struct {
 	mux  *http.ServeMux
 	subs *subs.Service
 	prof *profile.Service
+	hist *latencyhistory.Service
 }
 
 func newEnv(t *testing.T, singbox_ string) *env {
@@ -108,7 +110,8 @@ func newEnv(t *testing.T, singbox_ string) *env {
 	gen := singbox.NewGenerator(cc, st, e.prof, groups, e.subs, singbox.System{}, singbox.Options{
 		RulesetDir: "/data/rules", CacheFile: "/data/cache.db", CertPath: "/etc/c.crt", KeyPath: "/etc/c.key",
 	})
-	Register(e.mux, Deps{Gen: gen, Subs: e.subs, Profiles: e.prof, Runner: &probe.Runner{Bin: singbox_, Dir: t.TempDir()}})
+	e.hist = &latencyhistory.Service{Store: st}
+	Register(e.mux, Deps{Gen: gen, Subs: e.subs, Profiles: e.prof, Runner: &probe.Runner{Bin: singbox_, Dir: t.TempDir()}, History: e.hist})
 	return e
 }
 
@@ -187,6 +190,41 @@ func TestStoredJobs(t *testing.T) {
 			t.Fatalf("jobs[%d] 应为 not-found: %+v", i, res[i])
 		}
 	}
+	// 通了的节点记进历史并随响应带回整份;没测的(not-found)不记
+	var body struct {
+		History latencyhistory.History `json:"history"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if got := body.History["PX 01"]; len(got) != 1 || got[0].Delay < 1 {
+		t.Fatalf("响应的 history 里应有 PX 01 的一条样本: %+v", body.History)
+	}
+	if _, has := body.History["已删除的节点"]; has {
+		t.Errorf("not-found 不该记: %+v", body.History)
+	}
+	if h, _, _ := e.hist.Get(context.Background()); len(h["PX 01"]) != 1 {
+		t.Errorf("应已写进服务端的延迟历史: %+v", h)
+	}
+}
+
+func TestStoredJobsRecordFalse(t *testing.T) {
+	bin := needSingBox(t)
+	port, _ := fwdProxy(t)
+	e := newEnv(t, bin)
+	e.addSub(t, "A", fmt.Sprintf("http://u:p@127.0.0.1:%d#PX 01\n", port))
+	w := e.post(t, "/api/openbox/nodes/latency", map[string]any{"jobs": []any{
+		map[string]any{"tag": "PX 01", "url": target, "record": false},
+	}, "timeoutMs": 3000})
+	if res := decodeResults(t, w); len(res) != 1 || !res[0].OK {
+		t.Fatalf("应通: %+v", res)
+	}
+	if strings.Contains(w.Body.String(), `"history"`) {
+		t.Errorf("全都 record=false 时响应不该带 history: %s", w.Body)
+	}
+	if h, _, _ := e.hist.Get(context.Background()); len(h) != 0 {
+		t.Errorf("record=false 不该记: %+v", h)
+	}
 }
 
 func TestStoredJobsStream(t *testing.T) {
@@ -203,15 +241,20 @@ func TestStoredJobsStream(t *testing.T) {
 	}
 	done := map[int]bool{}
 	var final []result
+	var finalHist latencyhistory.History
 	sc := bufio.NewScanner(w.Body)
 	for sc.Scan() {
 		var msg struct {
-			Done    []int    `json:"done"`
-			Results []result `json:"results"`
-			Error   string   `json:"error"`
+			Done    []int                  `json:"done"`
+			Results []result               `json:"results"`
+			History latencyhistory.History `json:"history"`
+			Error   string                 `json:"error"`
 		}
 		if err := json.Unmarshal(sc.Bytes(), &msg); err != nil {
 			t.Fatalf("不是 JSON 行: %q", sc.Text())
+		}
+		if msg.History != nil {
+			finalHist = msg.History
 		}
 		if msg.Error != "" {
 			t.Fatal(msg.Error)
@@ -225,6 +268,13 @@ func TestStoredJobsStream(t *testing.T) {
 	}
 	if len(done) != 3 || len(final) != 3 || !final[0].OK || !final[1].OK || final[2].Reason != "not-found" {
 		t.Fatalf("done=%v final=%+v", done, final)
+	}
+	// 带进度的返回:最后一行除了 results 还带整份 history,没测的 nope 不记
+	if len(finalHist["PX 01"]) != 1 || len(finalHist["PX 02"]) != 1 {
+		t.Fatalf("最后一行应带 history: %+v", finalHist)
+	}
+	if _, has := finalHist["nope"]; has {
+		t.Errorf("not-found 不该记: %+v", finalHist)
 	}
 }
 

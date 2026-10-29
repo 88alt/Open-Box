@@ -2,7 +2,7 @@
 //
 // 测速由 internal/probe 完成:起一个只含被测出站的临时 sing-box,经本机 http 入站发请求并计时。
 // 链式代理测速可带 ipUrls:经同一条线路再请求 IP 信息接口,把正文原样交回(前端按答话那一家的格式解析)。
-// 没做的:延迟历史(请求里的 record、响应里的 history,见 STATUS 的 M3 条目)。
+// 已保存节点的测速会按请求里的 record(默认记)把结果写进延迟历史,响应里带回整份 history;预览和链式代理测速不记。
 package latency
 
 import (
@@ -17,6 +17,7 @@ import (
 
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
+	"github.com/timeflysoon/Open-Box/backend/internal/latencyhistory"
 	"github.com/timeflysoon/Open-Box/backend/internal/probe"
 	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
 	"github.com/timeflysoon/Open-Box/backend/internal/sub"
@@ -34,12 +35,18 @@ type Profiles interface {
 	Get(ctx context.Context) (map[string]any, error)
 }
 
+// HistoryRecorder 记延迟历史(*latencyhistory.Service 满足);为 nil 时不记、响应也不带 history。
+type HistoryRecorder interface {
+	Record(ctx context.Context, entries []latencyhistory.Item) (latencyhistory.History, error)
+}
+
 // Deps 是本分组的依赖。
 type Deps struct {
 	Gen      *singbox.Generator
 	Subs     *subs.Service
 	Profiles Profiles
 	Runner   *probe.Runner
+	History  HistoryRecorder
 }
 
 type handlers struct{ Deps }
@@ -190,8 +197,12 @@ func (h *handlers) nodes(w http.ResponseWriter, r *http.Request) {
 	m := probe.Subset(built.Config, tags)
 	opt := probe.Options{Timeout: timeoutOf(req.TimeoutMs)}
 
+	stored := req.Jobs
+	if req.isPreview() {
+		stored = nil // 预览的节点还没保存,不进历史
+	}
 	if req.Progress && !req.isPreview() {
-		h.stream(w, r, m, jobs, opt)
+		h.stream(w, r, m, jobs, opt, stored)
 		return
 	}
 	res, err := h.Runner.Run(ctx, m, jobs, opt)
@@ -199,11 +210,56 @@ func (h *handlers) nodes(w http.ResponseWriter, r *http.Request) {
 		fail(w, err, "测速失败")
 		return
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"results": res})
+	out := map[string]any{"results": res}
+	if hist := h.record(ctx, stored, res); hist != nil {
+		out["history"] = hist
+	}
+	httpx.JSON(w, http.StatusOK, out)
+}
+
+// record 把已保存节点的测速结果记进延迟历史,返回整份最新的历史;不记(没接历史 / 全都 record=false / 写盘失败)返回 nil。
+// 测速本身已经成功,记历史失败不该让它整体失败。
+// 只记真测过的:通了记耗时(至少 1),超时 / 被拒 / 失败记 0;invalid / not-found 这类「根本没测」的不记。
+// 节点组经临时实例测出来的结果不知道当时选中了哪个节点,所以这里的样本不带 node(内核同步来的带)。
+func (h *handlers) record(ctx context.Context, jobs []storedJob, res []probe.Result) latencyhistory.History {
+	if h.History == nil || len(jobs) == 0 || len(res) != len(jobs) {
+		return nil
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var entries []latencyhistory.Item
+	for i, j := range jobs {
+		if j.Record != nil && !*j.Record {
+			continue
+		}
+		r := res[i]
+		delay := 0
+		switch {
+		case r.OK:
+			delay = r.Ms
+			if delay < 1 {
+				delay = 1
+			}
+		case r.Reason == "timeout" || r.Reason == "refused" || r.Reason == "failed":
+		default:
+			continue
+		}
+		entries = append(entries, latencyhistory.Item{Name: j.Tag, Sample: latencyhistory.Sample{Time: now, Delay: delay}})
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+	hist, err := h.History.Record(ctx, entries)
+	if err != nil {
+		return nil
+	}
+	if hist == nil {
+		hist = latencyhistory.History{}
+	}
+	return hist
 }
 
 // stream 回 NDJSON:每测完一个任务一行 {"done":[下标]},最后一行是 {"results":[...]}(出错则 {"error":"..."})。
-func (h *handlers) stream(w http.ResponseWriter, r *http.Request, m *probe.Material, jobs []probe.Job, opt probe.Options) {
+func (h *handlers) stream(w http.ResponseWriter, r *http.Request, m *probe.Material, jobs []probe.Job, opt probe.Options, stored []storedJob) {
 	var mu sync.Mutex
 	wrote := false
 	fl, _ := w.(http.Flusher)
@@ -239,7 +295,11 @@ func (h *handlers) stream(w http.ResponseWriter, r *http.Request, m *probe.Mater
 		line(map[string]any{"error": msg})
 		return
 	}
-	line(map[string]any{"results": res})
+	out := map[string]any{"results": res}
+	if hist := h.record(r.Context(), stored, res); hist != nil {
+		out["history"] = hist
+	}
+	line(out)
 }
 
 type chainReq struct {

@@ -252,7 +252,14 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		}.Flush,
 	})
 
-	latencyapi.Register(srv.Mux(), latencyapi.Deps{Gen: gen, Subs: subsSvc, Profiles: profileSvc, Runner: probeRunner})
+	// 节点 / 组的延迟历史:测速接口(已保存节点)和 latency-history* 共用这一份
+	nodeHistory := &latencyhistory.Service{
+		Store: st,
+		Kernel: func(ctx context.Context) ([]singbox.KernelProxy, error) {
+			return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
+		},
+	}
+	latencyapi.Register(srv.Mux(), latencyapi.Deps{Gen: gen, Subs: subsSvc, Profiles: profileSvc, Runner: probeRunner, History: nodeHistory})
 	// 节点信息:类型 / 协议层 / 服务器 / 链式上游 / 入口地址解析 / 入口国家 / 出口归属和风控值
 	entryDetector := &regiondetect.Detector{} // 只用它的按 IP 查国家,不占用其它两处的「判断中」状态
 	nodeinfoapi.Register(srv.Mux(), nodeinfoapi.Deps{Service: &nodeinfo.Service{
@@ -347,12 +354,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	})
 
 	// 延迟历史:每个节点 / 组最近 10 次测速,后端记、各浏览器共享;sync 读一次内核的 /proxies 把成功的结果记下来
-	latencyhistoryapi.Register(srv.Mux(), latencyhistoryapi.Deps{Service: &latencyhistory.Service{
-		Store: st,
-		Kernel: func(ctx context.Context) ([]singbox.KernelProxy, error) {
-			return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
-		},
-	}})
+	latencyhistoryapi.Register(srv.Mux(), latencyhistoryapi.Deps{Service: nodeHistory})
 
 	// 站点延迟(概览页):请求经内核的面板入站走一遍路由,从内核连接列表认出线路;历史单独存 site-latency-history,不和节点历史混
 	sitelatencyapi.Register(srv.Mux(), sitelatencyapi.Deps{Service: &sitelatency.Service{
