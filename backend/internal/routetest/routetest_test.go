@@ -221,7 +221,7 @@ func TestRunViaDirectAndDNSForDomain(t *testing.T) {
 	}
 
 	// 域名目标:dns 如实回 error(还没做),不能是 skipped
-	res, _ = (&Service{ProxyAddr: newFakeProxy(t, 403, "").addr(), Timeout: time.Second}).Run(context.Background(), Input{Target: "example.com"})
+	res, _ = (&Service{ProxyAddr: newFakeProxy(t, 403, "").addr(), DNSAddr: closedAddr(t), Timeout: time.Second}).Run(context.Background(), Input{Target: "example.com"})
 	if _, ok := res.DNS["error"].(string); !ok || res.DNS["skipped"] != nil {
 		t.Errorf("域名目标的 dns 应该是 error: %+v", res.DNS)
 	}
@@ -284,7 +284,7 @@ func TestRunFailures(t *testing.T) {
 		t.Errorf("入口连不上应该提示内核没运行: %+v %v", res.Exit, err)
 	}
 	// 内核拒绝建隧道
-	res, _ = (&Service{ProxyAddr: newFakeProxy(t, 403, "").addr(), Timeout: time.Second}).Run(context.Background(), Input{Target: "1.1.1.1"})
+	res, _ = (&Service{ProxyAddr: newFakeProxy(t, 403, "").addr(), DNSAddr: closedAddr(t), Timeout: time.Second}).Run(context.Background(), Input{Target: "1.1.1.1"})
 	if res.Exit.OK || !strings.Contains(res.Exit.Error, "403") {
 		t.Errorf("拒绝应该带状态码: %+v", res.Exit)
 	}

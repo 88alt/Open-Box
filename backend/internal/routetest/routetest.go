@@ -6,7 +6,8 @@
 //
 // 这一部分没有做、响应里如实标出的:
 //   - dns(按配置里的 DNS 规则预测这个域名会问哪台服务器):域名目标现在回 {error},IP 目标回 {skipped:true}
-//   - resolve / exit6 / context(经内核解析的结果、AAAA 再访问、按终端预测),以及 exit.connectTo / noDomain / debug
+//   - exit6 / context(AAAA 再访问、按终端预测),以及 exit.connectTo / noDomain / debug
+//     (resolve 做了:见 resolve.go,只是 cached / fakeIpFrom 两项没有)
 //   - TCP 探测方式:面板入站回 200 只说明内核接了请求,不说明它连上了目标,单凭隧道没法确认,所以如实报「暂不支持」
 //
 // 做法与 sitelatency 相同(复用它的 DialTunnel):先向面板入站发 CONNECT 建隧道,连接开着的时候读一次 /connections,
@@ -77,9 +78,10 @@ type Exit struct {
 
 // Result 对应前端 OpenboxRouteTest。DNS 是 {skipped:true} 或 {error:"..."},见包注释。
 type Result struct {
-	Target string         `json:"target"`
-	DNS    map[string]any `json:"dns"`
-	Exit   Exit           `json:"exit"`
+	Target  string         `json:"target"`
+	DNS     map[string]any `json:"dns"`
+	Resolve *Resolve       `json:"resolve,omitempty"` // 目标是域名时才有
+	Exit    Exit           `json:"exit"`
 }
 
 // Service 做一次真实路由探测。
@@ -90,6 +92,10 @@ type Service struct {
 	FlushDNS func(ctx context.Context) error
 	// ProxyAddr 是面板入站地址,空 = sitelatency.PanelProxyAddr。
 	ProxyAddr string
+	// DNSAddr 是内核的 DNS 入站地址,空 = system.DefaultKernelDNSAddr。
+	DNSAddr string
+	// IPv6 返回档案是否开了 IPv6(开了才再查一次 AAAA);nil 当作没开。
+	IPv6 func(ctx context.Context) bool
 	// Timeout 是整次探测的超时,0 = DefaultTimeout。
 	Timeout time.Duration
 	// TLSConfig 给 GET / HEAD / TLS 用,nil = 系统默认(只有测试会设)。
@@ -190,6 +196,15 @@ func (s *Service) Run(ctx context.Context, in Input) (*Result, error) {
 		fctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		_ = s.FlushDNS(fctx)
 		cancel()
+	}
+
+	// 目标是域名时,先经内核的 DNS 入站真问一次(AAAA 只在档案开了 IPv6 时才问)
+	if !isIP(in.Target) {
+		ipv6 := s.IPv6 != nil && s.IPv6(ctx)
+		res.Resolve = s.resolve(ctx, in.Target, ipv6)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 	}
 
 	pctx, cancel := context.WithTimeout(ctx, s.timeout())

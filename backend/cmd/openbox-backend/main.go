@@ -362,7 +362,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		},
 	}})
 
-	// 真实路由测试(只做了真实访问和线路这一部分):经内核的面板入站访问一次,从连接列表认出命中的规则和线路;
+	// 真实路由测试(做了真实访问、线路和经内核 DNS 入站的解析;DNS 判定见 STATUS.md):经内核的面板入站访问一次,从连接列表认出命中的规则和线路;
 	// 探测前让内核丢掉 DNS 缓存(只是让缓存失效)
 	routetestapi.Register(srv.Mux(), routetestapi.Deps{Service: &routetest.Service{
 		Snapshot: func(ctx context.Context) (singbox.KernelSnapshot, error) {
@@ -370,6 +370,12 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		},
 		FlushDNS: func(ctx context.Context) error {
 			return singbox.KernelFlushDNS(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
+		},
+		// 域名目标先经内核的 DNS 入站真问一次(档案开了 IPv6 才再问 AAAA)
+		IPv6: func(ctx context.Context) bool {
+			p, err := profileSvc.Get(ctx)
+			on, _ := p["ipv6"].(bool)
+			return err == nil && on
 		},
 	}})
 

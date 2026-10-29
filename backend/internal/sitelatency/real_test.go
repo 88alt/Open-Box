@@ -71,7 +71,7 @@ func TestRealSingBoxRoute(t *testing.T) {
 			c.Close()
 			break
 		}
-		if i > 50 {
+		if i > 200 { // 最多等 20 秒:机器忙时 sing-box 起得慢
 			t.Fatalf("sing-box 没起来:%s", out.String())
 		}
 		time.Sleep(100 * time.Millisecond)
