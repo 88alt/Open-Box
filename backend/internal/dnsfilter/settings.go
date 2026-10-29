@@ -208,6 +208,16 @@ type Status struct {
 	Applied   *Applied            `json:"applied"`
 	Busy      bool                `json:"busy"`
 	Connected bool                `json:"connected"`
+	// QueryLog 说明查询日志为什么没按预期接上:没有原因(正常,或根本没接管)就不带这个字段。
+	QueryLog *QueryLog `json:"queryLog,omitempty"`
+}
+
+// QueryLog 对应前端 DnsFilterQueryLog:Reason 为 user 表示日志去向被用户另行设置(后端不覆盖),
+// failed 表示加日志后 dnsmasq 起不来、已自动去掉。Syslog 前端用来表示「用户的日志去了系统日志、后端读得到」,
+// 后端目前不读系统日志,所以恒不带。
+type QueryLog struct {
+	Reason string `json:"reason,omitempty"`
+	Syslog bool   `json:"syslog,omitempty"`
 }
 
 // BuildStatus 拼出状态。名单还不会下载(lists 恒为空)、还没有应用过(applied 为 null)、

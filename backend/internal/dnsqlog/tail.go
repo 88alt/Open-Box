@@ -14,6 +14,10 @@ import (
 // DefaultPollInterval 是跟读日志文件的轮询间隔。
 const DefaultPollInterval = 500 * time.Millisecond
 
+// DefaultTrimAbove 是日志文件的大小上限:读完之后文件超过它就清空(见 Log.TrimAbove)。
+// 日志是边写边读的,清掉的都是已经读进记录的部分;4 MiB 大约是一万几千次查询。
+const DefaultTrimAbove int64 = 4 << 20
+
 // StateFile 是落盘文件名(存在 store 的目录里)。
 const StateFile = "dns-query-log"
 
@@ -131,6 +135,10 @@ func readUntilRotated(ctx context.Context, l *Log, f *os.File, path string, inte
 			if rotated(f, path, off) {
 				return
 			}
+			if len(partial) == 0 && l.trim(f, path, off) {
+				off = 0
+				r.Reset(f)
+			}
 			if !sleep(ctx, interval) {
 				return
 			}
@@ -140,9 +148,33 @@ func readUntilRotated(ctx context.Context, l *Log, f *os.File, path string, inte
 	}
 }
 
-// rotated 判断 path 现在是不是另一个文件,或者比已读的位置还短(被截断)。读不到 path 当作「还没换」,下一轮再看。
+// trim 在文件超过上限、而且我们已经读到最后一个字节时把它清空,并把 f 的读位置挪回开头。
+// 清空前再看一眼大小:这一刻有新写入的就先不清,读完下一轮再说,不丢那几行。
+func (l *Log) trim(f *os.File, path string, off int64) bool {
+	if l.TrimAbove <= 0 || off <= l.TrimAbove || l.Owned == nil || !l.Owned() {
+		return false
+	}
+	fi, err := f.Stat()
+	if err != nil || fi.Size() != off {
+		return false
+	}
+	if err := os.Truncate(path, 0); err != nil {
+		slog.Warn("清空 DNS 查询日志失败", "path", path, "error", err)
+		return false
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return false
+	}
+	return true
+}
+
+// rotated 判断 path 现在是不是另一个文件、已经不存在(被删了,比如撤销接管时),或者比已读的位置还短(被截断)。
+// 其它读不到 path 的情况当作「还没换」,下一轮再看。
 func rotated(f *os.File, path string, off int64) bool {
 	cur, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return true
+	}
 	if err != nil {
 		return false
 	}

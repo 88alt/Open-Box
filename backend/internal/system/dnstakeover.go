@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"path"
@@ -36,6 +37,16 @@ import (
 //   - 重启后探测 dnsmasq 是否还会答 DNS,不会就自动撤销并重启回去;
 //   - 撤销只删带标记的文件,同名的别人的文件不碰;撤销可重复执行;
 //   - Recover 给进程启动时用:清掉上次异常退出遗留的接管。
+//
+// 查询日志(DNS 过滤页的「查询记录」要读它):QueryLog 不为空时,接管文件里再放两行
+//
+//	log-queries
+//	log-facility=<QueryLog>
+//
+// 让 dnsmasq 把查询日志写进这个文件(默认放内存盘,见 DefaultDNSQueryLog)。同样可回滚、撤销时一起撤掉,另外:
+//   - 用户自己已经在 dnsmasq 配置里设了 log-queries / log-facility 就不加,也不覆盖(记为 user);
+//   - 日志文件所在目录不存在、或加了日志之后 dnsmasq 起不来:去掉日志那两行再来一次,接管本身照做(记为 failed);
+//     failed 记在状态文件里,直到下一次撤销前不再重试,免得每次部署都重启一遍 dnsmasq。
 
 const (
 	// TakeoverFileName 是放进 dnsmasq 配置目录的文件名(以 .conf 结尾,通得过常见的 *.conf 过滤)。
@@ -87,6 +98,8 @@ type DNSTakeover struct {
 	DnsmasqAddr  string   // dnsmasq 监听,默认 DefaultDnsmasqAddr
 	MainConfigs  []string // 主配置 glob,默认 DefaultDnsmasqConfigs
 	DefaultsFile string   // 默认 DefaultDnsmasqDefaults
+	// QueryLog 是让 dnsmasq 写查询日志的文件(绝对路径);空 = 不开查询日志。
+	QueryLog string
 
 	Probe      func(ctx context.Context, addr string) error           // 默认 ProbeDNS
 	WriteFile  func(path string, data []byte, perm os.FileMode) error // 默认 store.WriteFileAtomic
@@ -111,7 +124,16 @@ type takeoverState struct {
 	Files   []string `json:"files"`
 	Kernel  string   `json:"kernel"`
 	At      int64    `json:"at"`
+	// Log 是这次让 dnsmasq 写查询日志的文件(空 = 没加);LogSkip 是没加的原因:user / failed(空 = 没有原因)。
+	Log     string `json:"log,omitempty"`
+	LogSkip string `json:"logSkip,omitempty"`
 }
+
+// 没加查询日志的原因,对应前端 DnsFilterQueryLog.reason。
+const (
+	LogSkipUser   = "user"   // 用户自己在 dnsmasq 里设了日志去向 / log-queries
+	LogSkipFailed = "failed" // 目录不存在,或加了日志后 dnsmasq 起不来,已去掉
+)
 
 const (
 	phaseApplying = "applying"
@@ -158,13 +180,114 @@ func orDefault(v, d string) string {
 	return v
 }
 
-// content 是写进接管文件的内容。内核地址拆成 host#port 是 dnsmasq 的 server= 写法。
-func (t *DNSTakeover) content() (string, error) {
+// content 是写进接管文件的内容(不带查询日志)。内核地址拆成 host#port 是 dnsmasq 的 server= 写法。
+func (t *DNSTakeover) content() (string, error) { return t.contentFor("") }
+
+// contentFor 是 content 加上查询日志:logPath 不为空时多两行 log-queries 和 log-facility=<文件>(带 / 的是文件名)。
+func (t *DNSTakeover) contentFor(logPath string) (string, error) {
 	host, port, err := net.SplitHostPort(t.kernelAddr())
 	if err != nil {
 		return "", fmt.Errorf("内核 DNS 地址不合法: %w", err)
 	}
-	return takeoverMarker + "\nno-resolv\nserver=" + host + "#" + port + "\n", nil
+	out := takeoverMarker + "\nno-resolv\nserver=" + host + "#" + port + "\n"
+	if logPath != "" {
+		out += "log-queries\nlog-facility=" + logPath + "\n"
+	}
+	return out, nil
+}
+
+// validLogPath 检查查询日志路径能不能安全写进 dnsmasq 配置的一行:绝对路径、指向文件、没有空白 / 引号 / # / 逗号 / 反斜杠。
+func validLogPath(p string) error {
+	switch {
+	case !strings.HasPrefix(p, "/"):
+		return errors.New("要写成绝对路径")
+	case len(p) > 240:
+		return errors.New("太长")
+	case strings.HasSuffix(p, "/"):
+		return errors.New("要指向文件,不是目录")
+	}
+	for _, c := range p {
+		if c <= ' ' || c == 0x7f || strings.ContainsRune("#\"'\\,", c) {
+			return errors.New("含有不能写进 dnsmasq 配置的字符")
+		}
+	}
+	return nil
+}
+
+// hasLogOption 判断一段 dnsmasq 配置文本有没有设日志选项(log-queries 可以不带值)。注释行不算。
+func hasLogOption(text string) bool {
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, _, _ := strings.Cut(line, "=")
+		switch strings.TrimSpace(k) {
+		case "log-queries", "log-facility":
+			return true
+		}
+	}
+	return false
+}
+
+// userSetsLogging 只读:dnsmasq 会读的配置(主配置、conf-file= 引进来的文件、配置目录里除接管文件以外的文件)里,
+// 用户自己有没有设 log-queries / log-facility。OpenWrt 的 UCI 选项 logqueries / logfacility 会写进生成的主配置,所以也认得出。
+// 看不到的:dnsmasq 命令行参数(例如 Debian 的 DNSMASQ_OPTS)。
+func (t *DNSTakeover) userSetsLogging(d discovery) bool {
+	for _, text := range d.mainTexts {
+		if hasLogOption(text) {
+			return true
+		}
+		for _, line := range strings.Split(text, "\n") {
+			line = strings.TrimSpace(line)
+			if k, v, ok := strings.Cut(line, "="); ok && strings.TrimSpace(k) == "conf-file" {
+				if inc := strings.TrimSpace(v); filepath.IsAbs(inc) {
+					if b, err := readCapped(inc); err == nil && hasLogOption(b) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	for _, cd := range d.dirs {
+		entries, err := os.ReadDir(cd.Dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() || e.Name() == TakeoverFileName || !cd.allows(e.Name()) {
+				continue
+			}
+			if b, err := readCapped(filepath.Join(cd.Dir, e.Name())); err == nil && hasLogOption(b) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// planLog 决定这次要不要加查询日志:返回要写的日志文件(空 = 不加)和不加的原因(空 = 没有原因,比如没配 QueryLog)。
+// prev 是上次接管留下的状态(hasPrev 为假表示没有):上次因为 failed 去掉过,在撤销之前就不再试。
+func (t *DNSTakeover) planLog(d discovery, prev takeoverState, hasPrev bool) (logPath, skip string) {
+	p := strings.TrimSpace(t.QueryLog)
+	if p == "" {
+		return "", ""
+	}
+	if hasPrev && prev.LogSkip == LogSkipFailed {
+		return "", LogSkipFailed
+	}
+	if err := validLogPath(p); err != nil {
+		slog.Warn("查询日志路径不能用,接管时不开查询日志", "path", p, "error", err)
+		return "", LogSkipFailed
+	}
+	if st, err := os.Stat(filepath.Dir(p)); err != nil || !st.IsDir() {
+		slog.Warn("查询日志所在目录不存在,接管时不开查询日志", "path", p)
+		return "", LogSkipFailed
+	}
+	if t.userSetsLogging(d) {
+		return "", LogSkipUser
+	}
+	return p, ""
 }
 
 // ---- 找 dnsmasq 的配置目录 ----
@@ -253,6 +376,9 @@ type discovery struct {
 	Files    []string // 要放接管文件的完整路径(已去重、排序)
 	Warnings []string
 	Reason   string // Files 为空时的原因
+
+	mainTexts []string  // 读到的主配置文本(找用户自己的日志设置用)
+	dirs      []confDir // 全部配置目录(去重前的原样,含过滤规则)
 }
 
 func readCapped(p string) (string, error) {
@@ -270,6 +396,7 @@ func (t *DNSTakeover) discover() discovery {
 	var dirs []confDir
 	var warns []string
 	var skipped []string
+	var mainTexts []string
 	seenMain := map[string]bool{}
 	readable := 0
 	for _, g := range t.mainConfigs() {
@@ -285,6 +412,7 @@ func (t *DNSTakeover) discover() discovery {
 				continue
 			}
 			readable++
+			mainTexts = append(mainTexts, text)
 			dirs = append(dirs, parseConfDirs(text)...)
 			for _, line := range strings.Split(text, "\n") {
 				line = strings.TrimSpace(line)
@@ -326,7 +454,7 @@ func (t *DNSTakeover) discover() discovery {
 			r = "dnsmasq 的主配置里没有 conf-dir,不知道往哪放接管文件"
 		}
 	}
-	return discovery{Files: files, Warnings: dedup(warns), Reason: r}
+	return discovery{Files: files, Warnings: dedup(warns), Reason: r, mainTexts: mainTexts, dirs: dirs}
 }
 
 func dedup(in []string) []string {
@@ -471,8 +599,9 @@ func (t *DNSTakeover) Status(ctx context.Context) TakeoverStatus {
 	default:
 		st.Supported = true
 	}
-	if c, err := t.content(); err == nil {
-		if s, ok := t.loadState(); ok && s.Phase == phaseApplied && t.inSync(d.Files, c) {
+	// 接管文件里带不带查询日志两行,以状态里记的为准
+	if s, ok := t.loadState(); ok && s.Phase == phaseApplied {
+		if c, err := t.contentFor(s.Log); err == nil && t.inSync(d.Files, c) {
 			st.Applied = true
 		}
 	}
@@ -487,14 +616,14 @@ func dirsOf(files []string) []string {
 	return out
 }
 
-// Apply 让 dnsmasq 把全部查询交给内核的 DNS 入站。changed 为假表示早已是这个状态、什么都没动。
+// Apply 让 dnsmasq 把全部查询交给内核的 DNS 入站(配了 QueryLog 还会顺带打开查询日志,见文件头)。
+// changed 为假表示早已是这个状态、什么都没动。
 // 出错时系统保持(或已恢复到)接管之前的状态;恢复不了会在错误里说明,并保留状态文件供 Recover 重试。
 func (t *DNSTakeover) Apply(ctx context.Context) (changed bool, err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	content, err := t.content()
-	if err != nil {
+	if _, err := t.content(); err != nil {
 		return false, err
 	}
 	d := t.discover()
@@ -512,30 +641,91 @@ func (t *DNSTakeover) Apply(ctx context.Context) (changed bool, err error) {
 	if err := t.probe(ctx, t.kernelAddr()); err != nil {
 		return false, fmt.Errorf("内核的 DNS 入站(%s)没有应答,先让内核跑起来再接管 DNS,没有改任何设置: %w", t.kernelAddr(), &kernelDNSDownError{cause: err})
 	}
-	if st, ok := t.loadState(); ok && st.Phase == phaseApplied && t.inSync(d.Files, content) && t.probe(ctx, t.dnsmasqAddr()) == nil {
+	prev, hasPrev := t.loadState()
+	logPath, skip := t.planLog(d, prev, hasPrev)
+	content, err := t.contentFor(logPath)
+	if err != nil {
+		return false, err
+	}
+	if hasPrev && prev.Phase == phaseApplied && t.inSync(d.Files, content) && t.probe(ctx, t.dnsmasqAddr()) == nil {
+		// 文件已经是对的:只有状态里记的日志情况变了(例如 failed 变成 user)才更新记录,不动 dnsmasq
+		if prev.LogSkip != skip || prev.Log != logPath {
+			_ = t.saveState(takeoverState{Phase: phaseApplied, Files: d.Files, Kernel: t.kernelAddr(), Log: logPath, LogSkip: skip})
+		}
 		return false, nil
 	}
 
 	// 先记下要动哪些文件,再动
-	if err := t.saveState(takeoverState{Phase: phaseApplying, Files: d.Files, Kernel: t.kernelAddr()}); err != nil {
+	if err := t.saveState(takeoverState{Phase: phaseApplying, Files: d.Files, Kernel: t.kernelAddr(), Log: logPath, LogSkip: skip}); err != nil {
 		return false, fmt.Errorf("写状态文件失败,没有改 DNS: %w", err)
 	}
-	for _, p := range d.Files {
-		if err := t.writeFile(p, []byte(content), 0o644); err != nil {
-			return false, t.rollback(ctx, d.Files, false, fmt.Errorf("写 %s 失败: %w", p, err))
+	restarted, err := t.install(ctx, d.Files, content)
+	if err != nil && logPath != "" {
+		// 带着查询日志没成:去掉日志那两行再来一次,接管本身还是要的
+		slog.Warn("加了查询日志后 dnsmasq 没起来,去掉查询日志再试一次", "error", err)
+		first := err
+		logPath, skip = "", LogSkipFailed
+		plain, cerr := t.contentFor("")
+		if cerr != nil {
+			return false, t.rollback(ctx, d.Files, restarted, cerr)
+		}
+		if serr := t.saveState(takeoverState{Phase: phaseApplying, Files: d.Files, Kernel: t.kernelAddr(), LogSkip: skip}); serr != nil {
+			return false, t.rollback(ctx, d.Files, restarted, fmt.Errorf("写状态文件失败: %w", serr))
+		}
+		var again bool
+		again, err = t.install(ctx, d.Files, plain)
+		restarted = restarted || again
+		if err != nil {
+			err = fmt.Errorf("%w(带查询日志的那一次:%v)", err, first)
 		}
 	}
-	if err := t.restart(ctx); err != nil {
-		return false, t.rollback(ctx, d.Files, true, err)
+	if err != nil {
+		return false, t.rollback(ctx, d.Files, restarted, err)
 	}
-	if err := t.waitHealthy(ctx); err != nil {
-		return false, t.rollback(ctx, d.Files, true, fmt.Errorf("接管后 dnsmasq 不再应答 DNS: %w", err))
-	}
-	if err := t.saveState(takeoverState{Phase: phaseApplied, Files: d.Files, Kernel: t.kernelAddr()}); err != nil {
+	if err := t.saveState(takeoverState{Phase: phaseApplied, Files: d.Files, Kernel: t.kernelAddr(), Log: logPath, LogSkip: skip}); err != nil {
 		// 已经生效,只是没记上:撤销时扫描目录也能找到带标记的文件,不算失败
 		return true, nil
 	}
 	return true, nil
+}
+
+// install 把 content 写进每个接管文件、重启 dnsmasq、等它应答。出错时不撤销(由调用方决定);
+// restarted 为真表示 dnsmasq 已经被重启过(可能读过新文件),撤销后要再重启一次。
+func (t *DNSTakeover) install(ctx context.Context, files []string, content string) (restarted bool, err error) {
+	for _, p := range files {
+		if err := t.writeFile(p, []byte(content), 0o644); err != nil {
+			return false, fmt.Errorf("写 %s 失败: %w", p, err)
+		}
+	}
+	if err := t.restart(ctx); err != nil {
+		return true, err
+	}
+	if err := t.waitHealthy(ctx); err != nil {
+		return true, fmt.Errorf("接管后 dnsmasq 不再应答 DNS: %w", err)
+	}
+	return true, nil
+}
+
+// QueryLogState 读上次接管留下的状态:path 是让 dnsmasq 写查询日志的文件(空 = 没加),
+// skip 是没加的原因(LogSkipUser / LogSkipFailed,空 = 没有原因)。没有接管状态时都是空。
+func (t *DNSTakeover) QueryLogState() (path, skip string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	st, ok := t.loadState()
+	if !ok || st.Phase != phaseApplied {
+		return "", ""
+	}
+	return st.Log, st.LogSkip
+}
+
+// LogOwned 报告 p 是不是我们让 dnsmasq 写的查询日志(接管已生效、状态里记的就是它):
+// 只有这时后端才可以把它清空限大小,用户自己指定的日志文件不碰。
+func (t *DNSTakeover) LogOwned(p string) bool {
+	if strings.TrimSpace(p) == "" {
+		return false
+	}
+	path, _ := t.QueryLogState()
+	return path != "" && path == strings.TrimSpace(p)
 }
 
 // rollback 撤销一次没成功的 Apply。restarted 为真表示 dnsmasq 已经读过新文件,撤销后要再重启一次。
@@ -589,12 +779,24 @@ func (t *DNSTakeover) revertLocked(ctx context.Context) error {
 			}
 		}
 	}
+	// 日志不再有人写了:把我们让 dnsmasq 写的那个文件删掉(只删状态里记的、普通的 .log 文件,别的不碰)
+	removeOurLog(st.Log)
 	if hasState || removed > 0 {
 		if err := t.clearState(); err != nil {
 			return fmt.Errorf("清理状态文件失败: %w", err)
 		}
 	}
 	return nil
+}
+
+// removeOurLog 尽力删掉接管时让 dnsmasq 写的查询日志。状态文件是 root 才写得了的,但仍然只删普通文件、名字以 .log 结尾的。
+func removeOurLog(p string) {
+	if p == "" || validLogPath(p) != nil || !strings.HasSuffix(p, ".log") {
+		return
+	}
+	if fi, err := os.Lstat(p); err == nil && fi.Mode().IsRegular() {
+		_ = os.Remove(p)
+	}
 }
 
 // Sync 按档案的 dns.mode 对齐系统:dnsmasq → Apply;off / hijack → Revert;别的值当作错误,不动系统。

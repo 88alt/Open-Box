@@ -79,6 +79,8 @@ type Service struct {
 	Now    func() time.Time
 	// Connected 报告 dnsmasq 查询日志是否接上了(状态里的 connected);为空当作没接。
 	Connected func() bool
+	// QueryLogReason 报告查询日志没按预期接上的原因(user / failed,见 QueryLog);为空或返回空串就是没有原因。
+	QueryLogReason func() string
 
 	busy atomic.Bool
 	mc   matcherCache // Classify 用的名单匹配器(match.go)
@@ -150,6 +152,11 @@ func (sv *Service) Status(ctx context.Context) (Status, error) {
 	out.Applied = st.Applied
 	out.Busy = sv.busy.Load()
 	out.Connected = sv.Connected != nil && sv.Connected()
+	if sv.QueryLogReason != nil {
+		if r := sv.QueryLogReason(); r != "" {
+			out.QueryLog = &QueryLog{Reason: r}
+		}
+	}
 	return out, nil
 }
 

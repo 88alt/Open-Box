@@ -28,13 +28,18 @@ const (
 	EnvGeoDir    = "OPENBOX_GEO_DIR"
 	EnvSingBox   = "OPENBOX_SINGBOX"
 	EnvCore      = "OPENBOX_CORE"
-	// EnvDNSQueryLog 是 dnsmasq 查询日志文件的路径;不设就不读查询日志(DNS 过滤的「查询记录」没有数据)。
+	// EnvDNSQueryLog 是 dnsmasq 查询日志文件的路径,默认 DefaultDNSQueryLog;写 off 就既不让 dnsmasq 写、后端也不读
+	// (DNS 过滤的「查询记录」没有数据)。
 	EnvDNSQueryLog = "OPENBOX_DNS_QUERY_LOG"
 
 	// 服务名:交给系统服务管理器(OpenWrt init.d / systemd)的名字
 	EnvCoreService  = "OPENBOX_CORE_SERVICE"
 	EnvPanelService = "OPENBOX_PANEL_SERVICE"
 )
+
+// DefaultDNSQueryLog 是 dnsmasq 查询日志的默认位置:/var/run 在 OpenWrt(指向 /tmp)和 Debian(指向 /run)上都是内存盘,
+// 查询日志写得频繁,不能落在路由器的闪存或 SD 卡上。位置依据 OpenWrt 和 Debian 的目录约定,没有在真机上见过,需真机确认(见 STATUS.md)。
+const DefaultDNSQueryLog = "/var/run/openbox-dnsmasq.log"
 
 // 服务名默认值。M6 打包时再和安装脚本对齐。
 const (
@@ -50,19 +55,21 @@ type Paths struct {
 	GeoDir    string // 随包规则库(只读):<分类名>.srs,如 geosite-cn.srs、geoip-cn.srs
 	SingBox   string // sing-box 可执行文件(可以只写名字,从 PATH 找)
 	Core      string // openbox-core 可执行文件
-	// DNSQueryLog 是 dnsmasq 查询日志(log-queries 的输出)的文件路径,后端只读它;空表示不读。
+	// DNSQueryLog 是 dnsmasq 查询日志(log-queries 的输出)的文件路径:DNS 接管时让 dnsmasq 写到这里(system.DNSTakeover.QueryLog),
+	// 后端跟读它;空表示不开、不读。
 	DNSQueryLog string
 }
 
 // DefaultPaths 返回通用位置的默认值。
 func DefaultPaths() Paths {
 	return Paths{
-		DataDir:   "/var/lib/openbox-backend",
-		ConfigDir: "/etc/openbox-backend",
-		WebDir:    "/usr/share/openbox-backend/panel",
-		GeoDir:    "/usr/share/openbox-backend/geodata",
-		SingBox:   "sing-box",
-		Core:      "openbox-core",
+		DataDir:     "/var/lib/openbox-backend",
+		ConfigDir:   "/etc/openbox-backend",
+		WebDir:      "/usr/share/openbox-backend/panel",
+		GeoDir:      "/usr/share/openbox-backend/geodata",
+		SingBox:     "sing-box",
+		Core:        "openbox-core",
+		DNSQueryLog: DefaultDNSQueryLog,
 	}
 }
 
@@ -108,7 +115,7 @@ func LoadConfig(args []string, getenv func(string) string, out io.Writer) (Confi
 	geoDir := fs.String("geo-dir", env(EnvGeoDir, def.GeoDir), "随包规则库目录,里面是 geosite-*.srs / geoip-*.srs(环境变量 "+EnvGeoDir+")")
 	singBox := fs.String("sing-box", env(EnvSingBox, def.SingBox), "sing-box 可执行文件(环境变量 "+EnvSingBox+")")
 	core := fs.String("core", env(EnvCore, def.Core), "openbox-core 可执行文件(环境变量 "+EnvCore+")")
-	dnsQueryLog := fs.String("dns-query-log", env(EnvDNSQueryLog, ""), "dnsmasq 查询日志文件(只读;空 = 不读)(环境变量 "+EnvDNSQueryLog+")")
+	dnsQueryLog := fs.String("dns-query-log", env(EnvDNSQueryLog, def.DNSQueryLog), "dnsmasq 查询日志文件:DNS 接管时让 dnsmasq 写到这里,后端跟读;off = 不开不读(环境变量 "+EnvDNSQueryLog+")")
 	coreSvc := fs.String("core-service", env(EnvCoreService, DefaultCoreService), "sing-box 的服务名(环境变量 "+EnvCoreService+")")
 	panelSvc := fs.String("panel-service", env(EnvPanelService, DefaultPanelService), "后端自己的服务名(环境变量 "+EnvPanelService+")")
 	if err := fs.Parse(args); err != nil {
@@ -144,7 +151,7 @@ func LoadConfig(args []string, getenv func(string) string, out io.Writer) (Confi
 			Core:      strings.TrimSpace(*core),
 		},
 	}
-	if v := strings.TrimSpace(*dnsQueryLog); v != "" {
+	if v := strings.TrimSpace(*dnsQueryLog); v != "" && !strings.EqualFold(v, "off") {
 		cfg.DNSQueryLog = filepath.Clean(v)
 	}
 	for name, v := range map[string]string{"data-dir": *dataDir, "config-dir": *configDir, "web-dir": *webDir, "geo-dir": *geoDir, "sing-box": *singBox, "core": *core} {

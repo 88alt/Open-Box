@@ -67,6 +67,12 @@ type Log struct {
 	// Classify 为空时所有 NXDOMAIN 都按 allowed 记(没有名单可对)。创建后、开始 Feed 之前设置。
 	Classify Classifier
 
+	// TrimAbove 大于 0 时,跟读到文件末尾、文件已超过这么多字节,并且 Owned 返回真,就把文件清空(dnsmasq 以追加方式写,
+	// 清空后接着从头写),免得内存盘上的日志越写越大。Owned 为空当作假:不是我们让 dnsmasq 写的文件(用户自己指定的)不碰。
+	// 创建后、开始跟读之前设置。
+	TrimAbove int64
+	Owned     func() bool
+
 	connected atomic.Bool
 
 	mu      sync.Mutex

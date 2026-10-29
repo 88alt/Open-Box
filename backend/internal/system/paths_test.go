@@ -22,7 +22,14 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.CoreService != DefaultCoreService || cfg.PanelService != DefaultPanelService {
 		t.Fatalf("默认服务名不对: %+v", cfg)
 	}
-	if cfg.Paths != func() Paths { p := DefaultPaths(); p.DataDir = filepath.Clean(p.DataDir); return p }() {
+	if cfg.DNSQueryLog != filepath.Clean(DefaultDNSQueryLog) {
+		t.Fatalf("查询日志默认路径不对: %q", cfg.DNSQueryLog)
+	}
+	if cfg.Paths != func() Paths {
+		p := DefaultPaths()
+		p.DataDir, p.DNSQueryLog = filepath.Clean(p.DataDir), filepath.Clean(p.DNSQueryLog)
+		return p
+	}() {
 		t.Fatalf("默认路径不对: %+v", cfg.Paths)
 	}
 }
@@ -134,8 +141,8 @@ func TestEnsureCreatesPrivateDirs(t *testing.T) {
 
 func TestLoadConfigDNSQueryLog(t *testing.T) {
 	cfg, err := LoadConfig(nil, noEnv, io.Discard)
-	if err != nil || cfg.DNSQueryLog != "" {
-		t.Fatalf("默认不读查询日志: %q %v", cfg.DNSQueryLog, err)
+	if err != nil || cfg.DNSQueryLog != filepath.Clean(DefaultDNSQueryLog) {
+		t.Fatalf("默认用内存盘上的查询日志: %q %v", cfg.DNSQueryLog, err)
 	}
 	cfg, err = LoadConfig(nil, func(k string) string {
 		if k == EnvDNSQueryLog {
@@ -154,5 +161,20 @@ func TestLoadConfigDNSQueryLog(t *testing.T) {
 	}, io.Discard)
 	if err != nil || cfg.DNSQueryLog != filepath.Clean("/var/log/dnsmasq.log") {
 		t.Fatalf("命令行优先: %q %v", cfg.DNSQueryLog, err)
+	}
+	// off 关掉(命令行和环境变量都认,大小写不论);这时既不让 dnsmasq 写也不读
+	for _, c := range []struct {
+		args []string
+		env  string
+	}{{[]string{"-dns-query-log", "off"}, ""}, {nil, " OFF "}} {
+		cfg, err = LoadConfig(c.args, func(k string) string {
+			if k == EnvDNSQueryLog {
+				return c.env
+			}
+			return ""
+		}, io.Discard)
+		if err != nil || cfg.DNSQueryLog != "" {
+			t.Fatalf("off 没关掉: %q %v", cfg.DNSQueryLog, err)
+		}
 	}
 }

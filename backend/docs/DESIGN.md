@@ -81,3 +81,4 @@
 | DNS 重写默认项(`dnsRewriteDefaults`) | 空数组:没有可靠依据的规则不预置,「恢复默认」= 清空;以后有依据再补 |
 | 客户端 App 的默认地区分流(`client-app/info` 的 `defaultShareRegions`,「恢复默认」= 存空数组) | 三组:「中国大陆」(`CN`;geosite cn、geoip cn 本地直连,其余经路由器;DNS 直连系统 DNS、代理 TCP 1.1.1.1)、「港澳」(`HK`、`MO`)、「其他地区」(默认组,`CN` / `HK` / `MO` 之外);后两组本地直连、只把 geosite cn、geoip cn 送回路由器,DNS 两侧都是系统 DNS(与前端 `regionDnsDefaults` 一致)。自研定的起点,没有参照上游;用户可随时改 |
 | 档案默认值 | `region` 默认 `cn`;DNS 上游按前端 `regionDefaultsPatch`;`testUrl` 用 gstatic 204,`directTestUrl` 用华为 connectivitycheck 204;流量保留 12 个月 |
+| DNS 查询日志位置(`-dns-query-log`) | 默认 `/var/run/openbox-dnsmasq.log`(内存盘,不写闪存 / SD 卡),DNS 接管时让 dnsmasq 写到这里;`off` = 不开不读;用户自己设了日志去向就不覆盖 |

@@ -183,8 +183,11 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	}
 	// DNS 接管(档案 dns.mode = dnsmasq):停 / 重启 / 替换内核之前先撤销,内核起来后按 dns.mode 对齐,进程启动时清遗留。
 	// 状态文件放在状态目录;dnsmasq 的配置目录只从它自己的主配置里读,读不到就不动(见 system/dnstakeover.go)
+	// 接管时顺带让 dnsmasq 把查询日志写进 cfg.DNSQueryLog(默认在内存盘;-dns-query-log off 不写),DNS 过滤页的「查询记录」读它;
+	// 用户自己已经设了日志去向、或加了日志 dnsmasq 起不来时不加(见 system/dnstakeover.go),原因由 dns-filter 状态的 queryLog 告诉前端
+	takeover := &system.DNSTakeover{StateFile: filepath.Join(cfg.StateDir(), "dns-takeover.json"), Services: svcCtl, QueryLog: cfg.DNSQueryLog}
 	dnsSync := &dnssync.Coordinator{
-		Taker: &system.DNSTakeover{StateFile: filepath.Join(cfg.StateDir(), "dns-takeover.json"), Services: svcCtl},
+		Taker: takeover,
 		Mode:  dnssync.ModeFromProfile(profileSvc.Get),
 		Log:   log,
 	}
@@ -327,11 +330,15 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		},
 	}
 	gen.WithFilter(filterSvc)
-	// 查询记录与统计:读 dnsmasq 的查询日志(路径由 -dns-query-log / OPENBOX_DNS_QUERY_LOG 给,不给就不读);
+	// 查询记录与统计:读 dnsmasq 的查询日志(路径由 -dns-query-log / OPENBOX_DNS_QUERY_LOG 给,默认在内存盘,写 off 就不读);
 	// 应答是 NXDOMAIN 的域名拿已应用的名单对一遍,对上了才标「被拦截」
 	qlog := dnsqlog.New()
 	qlog.Classify = filterSvc.Classify
+	// 日志文件放内存盘,写得多:读完超过上限就清空,但只清我们让 dnsmasq 写的那个文件,用户自己指定的日志不碰
+	qlog.TrimAbove = dnsqlog.DefaultTrimAbove
+	qlog.Owned = func() bool { return takeover.LogOwned(cfg.DNSQueryLog) }
 	filterSvc.Connected = qlog.Connected
+	filterSvc.QueryLogReason = func() string { _, skip := takeover.QueryLogState(); return skip }
 	dnsfilterapi.Register(srv.Mux(), dnsfilterapi.Deps{
 		Profiles: profileSvc,
 		Filter:   filterSvc,
