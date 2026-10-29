@@ -6,8 +6,8 @@
 //
 // 这一部分没有做、响应里如实标出的:
 //   - dns(按配置里的 DNS 规则预测这个域名会问哪台服务器):域名目标现在回 {error},IP 目标回 {skipped:true}
-//   - exit6 / context(AAAA 再访问、按终端预测),以及 exit.connectTo / noDomain / debug
-//     (resolve 做了:见 resolve.go,只是 cached / fakeIpFrom 两项没有)
+//   - context(按终端预测),以及 exit.connectTo / noDomain / debug
+//     (resolve 做了:见 resolve.go,只是 cached / fakeIpFrom 两项没有;exit6 做了:见 exit6.go)
 //   - TCP 探测方式:面板入站回 200 只说明内核接了请求,不说明它连上了目标,单凭隧道没法确认,所以如实报「暂不支持」
 //
 // 做法与 sitelatency 相同(复用它的 DialTunnel):先向面板入站发 CONNECT 建隧道,连接开着的时候读一次 /connections,
@@ -81,6 +81,7 @@ type Result struct {
 	Target  string   `json:"target"`
 	DNS     any      `json:"dns"`               // {skipped:true} / {error} / *dnsdecide.Decision
 	Resolve *Resolve `json:"resolve,omitempty"` // 目标是域名时才有
+	Exit6   *Exit6   `json:"exit6,omitempty"`   // 有 AAAA 答案时才有,见 exit6.go
 	Exit    Exit     `json:"exit"`
 }
 
@@ -213,9 +214,9 @@ func (s *Service) Run(ctx context.Context, in Input) (*Result, error) {
 	defer cancel()
 	var probed *probed
 	if in.Method == MethodTLS {
-		probed = s.probeTLS(pctx, in)
+		probed = s.probeTLS(pctx, in, "")
 	} else {
-		probed = s.probeHTTP(pctx, in)
+		probed = s.probeHTTP(pctx, in, "")
 	}
 	defer probed.close()
 	if ctx.Err() != nil {
@@ -225,9 +226,14 @@ func (s *Service) Run(ctx context.Context, in Input) (*Result, error) {
 	res.Exit.OK, res.Exit.Status, res.Exit.MS, res.Exit.Challenge = probed.ok, probed.status, probed.ms, probed.challenge
 	if probed.err != nil {
 		res.Exit.Error = sitelatency.DescribeError(probed.err, s.timeout())
-		return res, nil
+	} else {
+		s.fillRoute(ctx, &res.Exit, probed.port)
 	}
-	s.fillRoute(ctx, &res.Exit, probed.port)
+	// AAAA 再访问与上面主探测的成败无关:v4 不通时 v6 的结果恰恰是用户想看的
+	res.Exit6 = s.probeExit6(ctx, in, res.Resolve)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	return res, nil
 }
 
@@ -260,11 +266,12 @@ func millis(d time.Duration) *int {
 }
 
 // probeHTTP 发一次 GET 或 HEAD。证书校验照常(校验失败就是失败);3xx 不跟随,拿到什么状态码报什么。
-func (s *Service) probeHTTP(ctx context.Context, in Input) *probed {
+// connectTo 非空时,隧道连的是这个 IP(端口不变),请求的 Host、TLS 的 SNI 和证书校验仍然用域名,像终端拿到 DNS 答案后那样。
+func (s *Service) probeHTTP(ctx context.Context, in Input, connectTo string) *probed {
 	p := &probed{}
 	tr := &http.Transport{
 		DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
-			c, port, err := sitelatency.DialTunnel(ctx, s.proxyAddr(), s.timeout(), addr)
+			c, port, err := sitelatency.DialTunnel(ctx, s.proxyAddr(), s.timeout(), withConnectTo(addr, connectTo))
 			if err == nil {
 				p.port = port
 			}
@@ -308,13 +315,14 @@ func (s *Service) probeHTTP(ctx context.Context, in Input) *probed {
 
 // probeTLS 建隧道后做一次 TLS 握手,耗时是「建隧道 + 握手」。目标是 IP 时证书通常对不上,所以不校验证书
 // (只测连通与握手);目标是域名时照常校验。
-func (s *Service) probeTLS(ctx context.Context, in Input) *probed {
+// connectTo 的含义同 probeHTTP:只换连接的地址,SNI 和证书校验仍用域名。
+func (s *Service) probeTLS(ctx context.Context, in Input, connectTo string) *probed {
 	p := &probed{}
 	port := in.Port
 	if port == 0 {
 		port = 443
 	}
-	addr := net.JoinHostPort(in.Target, strconv.Itoa(port))
+	addr := withConnectTo(net.JoinHostPort(in.Target, strconv.Itoa(port)), connectTo)
 	start := time.Now()
 	c, lport, err := sitelatency.DialTunnel(ctx, s.proxyAddr(), s.timeout(), addr)
 	if err != nil {
@@ -377,6 +385,18 @@ func (s *Service) fillRoute(ctx context.Context, ex *Exit, port string) {
 	leaf := chains[len(chains)-1]
 	via := !contains(snap.DirectTags, leaf)
 	ex.ViaProxy = &via
+}
+
+// withConnectTo 把 host:port 里的主机换成 ip(端口不变);ip 为空原样返回。
+func withConnectTo(addr, ip string) string {
+	if ip == "" {
+		return addr
+	}
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	return net.JoinHostPort(ip, port)
 }
 
 func contains(list []string, v string) bool {
