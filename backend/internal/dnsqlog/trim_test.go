@@ -84,6 +84,9 @@ func TestTrimLeavesFileAloneUnlessOwned(t *testing.T) {
 }
 
 func TestFollowNoticesRemovedFileAndReopens(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 上删不掉正被读的文件;后端只跑在 OpenWrt / Debian 上")
+	}
 	path := filepath.Join(t.TempDir(), "dnsmasq.log")
 	appendTo(t, path, "")
 	l := New()

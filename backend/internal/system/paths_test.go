@@ -27,7 +27,10 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 	if cfg.Paths != func() Paths {
 		p := DefaultPaths()
-		p.DataDir, p.DNSQueryLog = filepath.Clean(p.DataDir), filepath.Clean(p.DNSQueryLog)
+		// LoadConfig 对每个路径都做 filepath.Clean(Windows 上 / 会变成 \),期望值也按平台清理
+		for _, f := range []*string{&p.DataDir, &p.ConfigDir, &p.WebDir, &p.GeoDir, &p.SingBox, &p.Core, &p.DNSQueryLog} {
+			*f = filepath.Clean(*f)
+		}
 		return p
 	}() {
 		t.Fatalf("默认路径不对: %+v", cfg.Paths)
