@@ -152,7 +152,7 @@ func TestLoadConfigDNSQueryLog(t *testing.T) {
 		}
 		return ""
 	}, io.Discard)
-	if err != nil || cfg.DNSQueryLog != "/var/log/dnsmasq.log" {
+	if err != nil || cfg.DNSQueryLog != filepath.Clean("/var/log/dnsmasq.log") {
 		t.Fatalf("命令行优先: %q %v", cfg.DNSQueryLog, err)
 	}
 }

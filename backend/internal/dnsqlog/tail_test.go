@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -61,6 +62,9 @@ func TestFollowReadsNewLinesOnly(t *testing.T) {
 }
 
 func TestFollowSurvivesRotationAndTruncation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 不允许给正被打开的文件改名;后端只跑在 OpenWrt / Debian 上")
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dnsmasq.log")
 	appendTo(t, path, "")
