@@ -23,6 +23,9 @@ type DNSPredictor struct {
 	// Proxies 读内核的代理列表(节点组当前选中的节点);nil 或返回 error = 不补运行时线路。
 	Proxies func(ctx context.Context) ([]singbox.KernelProxy, error)
 
+	// Rewrites 读档案里已启用的 DNS 重写规则,预测命中重写服务器时补上 rewrite;nil = 不补。
+	Rewrites func(ctx context.Context) ([]RewriteRule, error)
+
 	sets dnsdecide.FileSets // 只用它的解码缓存
 }
 
@@ -59,6 +62,7 @@ func (p *DNSPredictor) Predict(ctx context.Context, domain string) (*dnsdecide.D
 	}
 	p.sets.SingBox, p.sets.TmpDir = p.SingBox, p.TmpDir
 	d := dnsdecide.Decide(ctx, v, p.sets.Bind(dnsdecide.SetDefsFromConfig(cfg)), domain, "A")
+	p.annotateRewrite(ctx, d, domain)
 	if d.Server != nil && d.Server.Detour != "" && p.Proxies != nil {
 		if proxies, err := p.Proxies(ctx); err == nil {
 			p.fillRuntime(d, v, proxies)

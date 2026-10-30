@@ -377,6 +377,14 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 真实路由测试(做了 DNS 判定、经内核 DNS 入站的解析、真实访问和线路;还没做的见 STATUS.md):经内核的面板入站访问一次,从连接列表认出命中的规则和线路;
 	// 探测前让内核丢掉 DNS 缓存(只是让缓存失效)
 	dnsPredictor := &routetest.DNSPredictor{
+		// 命中 DNS 重写时,从档案里找出是哪条规则
+		Rewrites: func(ctx context.Context) ([]routetest.RewriteRule, error) {
+			p, err := profileSvc.Get(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return routetest.RewriteRulesFromProfile(p), nil
+		},
 		ConfigFile: filepath.Join(cfg.ConfigDir, "config.json"), SingBox: cfg.SingBox, TmpDir: probeDir,
 		Proxies: func(ctx context.Context) ([]singbox.KernelProxy, error) {
 			return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))

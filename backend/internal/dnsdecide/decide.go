@@ -44,6 +44,13 @@ type Server struct {
 	Detour string `json:"detour,omitempty"`
 }
 
+// RewriteHit 对应前端 OpenboxDnsRewriteHit:命中的那条重写规则的原样内容(Domain 和 Addresses 二选一,另一个是空)。
+type RewriteHit struct {
+	Source    string   `json:"source"`
+	Domain    string   `json:"domain"`
+	Addresses []string `json:"addresses"`
+}
+
 // Assumption 对应前端 OpenboxDnsAssumption:一条「其余条件满足、只差判断不了的条件」的规则。
 type Assumption struct {
 	RuleIndex    int      `json:"ruleIndex"`
@@ -57,12 +64,14 @@ type Assumption struct {
 
 // Decision 是预测结果。RuleIndex 为 nil 表示没有规则命中、走了 dns.final。
 type Decision struct {
-	RuleIndex  *int         `json:"ruleIndex"`
-	Rejected   bool         `json:"rejected,omitempty"`
-	Server     *Server      `json:"server,omitempty"`
-	ViaProxy   *bool        `json:"viaProxy,omitempty"`
-	FakeIPRule *int         `json:"fakeIpRule,omitempty"`
-	Assumed    []Assumption `json:"assumed,omitempty"`
+	RuleIndex  *int    `json:"ruleIndex"`
+	Rejected   bool    `json:"rejected,omitempty"`
+	Server     *Server `json:"server,omitempty"`
+	ViaProxy   *bool   `json:"viaProxy,omitempty"`
+	FakeIPRule *int    `json:"fakeIpRule,omitempty"`
+	// Rewrite:命中了 DNS 重写(查询交给了 dns-rewrite 服务器)时,是档案里哪条重写规则;由调用方补,预测本身不知道档案。
+	Rewrite *RewriteHit  `json:"rewrite,omitempty"`
+	Assumed []Assumption `json:"assumed,omitempty"`
 	// RuntimeChain / RuntimeLeaf:服务器走代理(detour)时,内核此刻实际的线路——detour 的站点集 → 节点组 → 节点,
 	// 末尾是 RuntimeLeaf。预测本身不填,调用方读了内核的代理列表后补上。
 	RuntimeLeaf  string   `json:"runtimeLeaf,omitempty"`
