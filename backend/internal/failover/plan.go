@@ -9,7 +9,8 @@
 //   - 部署成功后把运行计划存成文件(SavePlan),状态接口按「已部署的那份」计划说话;
 //   - 只读状态(Status):计划 + 内核此刻的选择(GET /proxies),推出每个组现在用的是哪个页签、是主用还是备用。
 //
-// 还没有的:定时检测节点、按检测结果切换父 selector(manager),所以状态里 running 恒为 false、各页签 health 恒为 unknown。
+// 检测与切换的状态机在 manager.go(第二步,纯逻辑,对内核的动作和时钟都是注入的);还没接进 main.go、状态接口
+// 也还没带上它的数据(第三步),所以 GET /failover/status 里 running 现在仍恒为 false、各页签 health 仍恒为 unknown。
 package failover
 
 import (
