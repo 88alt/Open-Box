@@ -657,6 +657,18 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		go func() { defer close(done); subs.NewScheduler(subsSvc).Run(ctx) }()
 		return func() { wait(); <-done }
 	}
+
+	// 再加一项:定时读内核把自动择优组测出的新结果记进延迟历史(只读内核、只在有新结果时写盘)
+	withSubs := background
+	background = func(ctx context.Context) func() {
+		wait := func() {}
+		if withSubs != nil {
+			wait = withSubs(ctx)
+		}
+		done := make(chan struct{})
+		go func() { defer close(done); nodeHistory.Collect(ctx, 0) }()
+		return func() { wait(); <-done }
+	}
 	return srv, background, nil
 }
 
