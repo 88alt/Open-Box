@@ -619,3 +619,34 @@ func TestDeployConflictCheckFailureOrNoneDoesNotBlock(t *testing.T) {
 		}
 	}
 }
+
+// ---------- 故障转移计划 ----------
+
+func TestDeploySavesFailoverPlanOnlyOnSuccess(t *testing.T) {
+	var saved []any
+	d := newDP(t, map[string]any{"marker": "new"}, &fakeSvc{})
+	d.Build = &fakeBuild{built: &Built{Config: map[string]any{"marker": "new"}, Failover: []any{"plan-1"}}}
+	d.SavePlan = func(v any) error { saved = append(saved, v); return nil }
+	if res := d.Deploy(context.Background()); !res.OK || len(saved) != 1 {
+		t.Fatalf("成功的部署应存一次计划: %+v saved=%v", res, saved)
+	}
+
+	// 健康检查没过 → 回滚,旧配置对应的旧计划还在,不能存新的
+	saved = nil
+	d2 := newDP(t, map[string]any{"marker": "bad"}, &fakeSvc{running: true})
+	d2.Build = &fakeBuild{built: &Built{Config: map[string]any{"marker": "bad"}, Failover: []any{"plan-2"}}}
+	d2.SavePlan = func(v any) error { saved = append(saved, v); return nil }
+	writeCfg(t, d2, "old")
+	if res := d2.Deploy(context.Background()); res.OK || len(saved) != 0 {
+		t.Fatalf("回滚的部署不该存计划: %+v saved=%v", res, saved)
+	}
+}
+
+func TestDeploySavePlanFailureKeepsOKAndSaysSo(t *testing.T) {
+	d := newDP(t, map[string]any{"marker": "new"}, &fakeSvc{})
+	d.SavePlan = func(any) error { return errors.New("磁盘满了") }
+	res := d.Deploy(context.Background())
+	if !res.OK || !strings.Contains(res.Message, "故障转移计划没保存成功") || !strings.Contains(res.Message, "磁盘满了") {
+		t.Fatalf("内核是好的,部署仍算成功,但要把计划没存上说出来: %+v", res)
+	}
+}

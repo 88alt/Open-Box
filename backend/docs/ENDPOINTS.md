@@ -220,6 +220,8 @@
 | POST | `/api/openbox/failover/refresh` | `refreshFailover` (api/openbox.ts:811) | { ok: boolean } | () |
 | GET | `/api/openbox/failover/status` | `fetchFailoverStatus` (api/openbox.ts:809) | OpenboxFailoverStatus | (signal?: AbortSignal) |
 
+实现约定(M4,第一部分):部署成功后后端把故障转移计划存成配置目录里的 `failover.json`,`GET /status` 用这份计划加内核此刻的选择(`GET /proxies`)算出每个组的 `status`(主用 `ok` / 备用 `backup` / 拒绝 `reject` / 读不到或对不上 `unknown`)、`currentLaneId`、`kernelNow` 和各页签的状态;检测管理器还没做,所以 `running` 恒为 `false`、页签 `health` 恒为 `unknown`、节点检测结果为 `null`、`lastSwitch` 等为 `null`。`POST /refresh` 与 `POST /recheck` 现在回 501(`recheck` 对不存在的组先回 404)。
+
 ## `/api/openbox/groups`
 
 实现约定(M1):组存 `groups.json`(经 core `normalizeGroups` 补全,含内置直连 / 拒绝),没存过时 GET 返回默认节点组(不落盘)。PUT 整份覆盖:名字留空由核心补「分组-N」;组与组重名、与节点(含启用的链式代理)重名返回 400;按 id 对比旧档,改名的组在 `renamed` 里返回,其它组(含故障转移页签)对它的引用自动迁移;`dangling` 是既不是节点也不是组的成员;`dropped` 是核心 `emitGroups` 判定要丢弃的组(成环,`reason: "cycle"`)。`availableNodes` = 已启用订阅的节点(带订阅名 / id、改名识别出的地区名)+ 启用的链式代理(`chain: true`、`upstream`);`subscriptions` 含停用的订阅;`availableGroups` = 已启用的组名(含内置直连 / 拒绝)。核心不可用返回 503。

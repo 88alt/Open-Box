@@ -24,6 +24,7 @@ import (
 	diagnosticsapi "github.com/timeflysoon/Open-Box/backend/internal/api/diagnostics"
 	dnsapi "github.com/timeflysoon/Open-Box/backend/internal/api/dns"
 	dnsfilterapi "github.com/timeflysoon/Open-Box/backend/internal/api/dnsfilter"
+	failoverapi "github.com/timeflysoon/Open-Box/backend/internal/api/failover"
 	groupsapi "github.com/timeflysoon/Open-Box/backend/internal/api/groups"
 	latencyapi "github.com/timeflysoon/Open-Box/backend/internal/api/latency"
 	latencyhistoryapi "github.com/timeflysoon/Open-Box/backend/internal/api/latencyhistory"
@@ -54,6 +55,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsrewrite"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnssync"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnstest"
+	"github.com/timeflysoon/Open-Box/backend/internal/failover"
 	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
 	"github.com/timeflysoon/Open-Box/backend/internal/latencyhistory"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodeexit"
@@ -303,12 +305,21 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 内核没在运行时只更新名单、不部署,不会为了应用名单把代理启动起来。
 	rulesDir := filepath.Join(cfg.DataDir, "rules")
 	fetchList := func(ctx context.Context, u string) ([]byte, error) { return rulelist.Fetch(ctx, nil, u) }
+	failoverPlanPath := filepath.Join(cfg.ConfigDir, failover.PlanFileName)
 	deployer := &singbox.Deployer{
 		Build:   singbox.ListedBuilder{Gen: gen, Lists: singbox.ListFiles{Rules: lists, SingBox: cfg.SingBox, Dir: rulesDir}},
 		Files:   singbox.Files{SingBox: cfg.SingBox, GeoDir: cfg.GeoDir},
 		SingBox: cfg.SingBox, ConfigDir: cfg.ConfigDir,
 		Service: svcCtl, ServiceName: cfg.CoreService,
 		Track: applied,
+		// 部署成功后把故障转移计划存到配置目录,状态接口按已部署的那份说话
+		SavePlan: func(v any) error {
+			p, err := failover.ParsePlan(v)
+			if err != nil {
+				return err
+			}
+			return failover.SavePlan(failoverPlanPath, p)
+		},
 		// 替换配置、重启内核之前撤销 DNS 接管;内核健康之后(含回滚后旧配置又健康)按 dns.mode 对齐
 		BeforeApply: dnsSync.BeforeKernelStop,
 		AfterRunning: func(ctx context.Context) string {
@@ -367,6 +378,12 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 
 	// 延迟历史:每个节点 / 组最近 10 次测速,后端记、各浏览器共享;sync 读一次内核的 /proxies 把成功的结果记下来
 	latencyhistoryapi.Register(srv.Mux(), latencyhistoryapi.Deps{Service: nodeHistory})
+	failoverapi.Register(srv.Mux(), failoverapi.Deps{
+		Plan: func() (failover.Plan, error) { return failover.LoadPlan(failoverPlanPath) },
+		Kernel: func(ctx context.Context) ([]singbox.KernelProxy, error) {
+			return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
+		},
+	})
 
 	// 站点延迟(概览页):请求经内核的面板入站走一遍路由,从内核连接列表认出线路;历史单独存 site-latency-history,不和节点历史混
 	sitelatencyapi.Register(srv.Mux(), sitelatencyapi.Deps{Service: &sitelatency.Service{

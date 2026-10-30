@@ -90,6 +90,10 @@ type Deployer struct {
 	// 重新对齐 DNS 接管。返回的一句话附在 Message 后面(空串不附)。它的失败不改变 OK:内核是好的,
 	// 接管那边出错时已自动恢复到接管之前的状态,并在这句话里说明。nil = 不处理 DNS。
 	AfterRunning func(ctx context.Context) string
+	// SavePlan 非 nil:部署成功(内核健康)后调用,把这份配置对应的故障转移计划(Built.Failover)存下来,
+	// 状态接口按已部署的那份计划说话。回滚和校验失败不调(旧配置对应的旧计划还在)。它的失败不改变 OK
+	// (内核是好的),错误作为一句话附在 Message 后面。
+	SavePlan func(failover any) error
 
 	HealthTimeout time.Duration
 	StableFor     time.Duration
@@ -217,7 +221,18 @@ func (d *Deployer) Deploy(ctx context.Context) DeployResult {
 		return d.rollback(actx, StageVerify, "内核已"+actionName(action)+",但健康检查没通过:"+err.Error(), before.Running, hadPrev, prev)
 	}
 	d.recordApplied(fp)
-	return DeployResult{OK: true, Stage: StageRunning, Message: joinNote("已应用并正常运行", d.afterRunning(actx)), BadTags: []string{}}
+	note := d.afterRunning(actx)
+	if d.SavePlan != nil {
+		if err := d.SavePlan(built.Failover); err != nil {
+			msg := "故障转移计划没保存成功,故障转移状态可能不准:" + err.Error()
+			if note == "" {
+				note = msg
+			} else {
+				note += ";" + msg
+			}
+		}
+	}
+	return DeployResult{OK: true, Stage: StageRunning, Message: joinNote("已应用并正常运行", note), BadTags: []string{}}
 }
 
 func (d *Deployer) afterRunning(ctx context.Context) string {
