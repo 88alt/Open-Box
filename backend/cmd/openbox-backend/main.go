@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/netip"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -50,6 +51,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsdecide"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsfilter"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsqlog"
+	"github.com/timeflysoon/Open-Box/backend/internal/dnsrewrite"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnssync"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnstest"
 	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
@@ -378,12 +380,12 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 探测前让内核丢掉 DNS 缓存(只是让缓存失效)
 	dnsPredictor := &routetest.DNSPredictor{
 		// 命中 DNS 重写时,从档案里找出是哪条规则
-		Rewrites: func(ctx context.Context) ([]routetest.RewriteRule, error) {
+		Rewrites: func(ctx context.Context) ([]dnsrewrite.Rule, error) {
 			p, err := profileSvc.Get(ctx)
 			if err != nil {
 				return nil, err
 			}
-			return routetest.RewriteRulesFromProfile(p), nil
+			return dnsrewrite.RulesFromProfile(p), nil
 		},
 		ConfigFile: filepath.Join(cfg.ConfigDir, "config.json"), SingBox: cfg.SingBox, TmpDir: probeDir,
 		Proxies: func(ctx context.Context) ([]singbox.KernelProxy, error) {
@@ -523,7 +525,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			}
 			return portcheck.ServersFromProfile(p), nil
 		},
-		Reserved:   []int{clientapp.PortOf(cfg.Listen)},
+		Reserved:   []int{clientapp.PortOf(cfg.Listen), 7854}, // 7854 是面板自己的 DNS 重写服务
 		ConfigPath: filepath.Join(cfg.ConfigDir, "config.json"),
 	}})
 
@@ -587,6 +589,44 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
 			defer cancel()
 			dnsSync.Recover(rctx)
+		}()
+		return func() { wait(); <-done }
+	}
+
+	// 再加一项:DNS 重写服务(配置里 dns-rewrite 服务器 127.0.0.1:7854 指向的就是它)。规则现取自档案;
+	// 域名型规则的目标域名经内核的 DNS 入站(127.0.0.1:7853)解析,这样目标域名也走完整的 DNS 规则。端口被占用只记警告,不影响面板
+	withRewrite := background
+	background = func(ctx context.Context) func() {
+		wait := func() {}
+		if withRewrite != nil {
+			wait = withRewrite(ctx)
+		}
+		kernelDNS := &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "udp", system.DefaultKernelDNSAddr)
+		}}
+		rw := &dnsrewrite.Server{
+			Log: log,
+			Rules: func(ctx context.Context) ([]dnsrewrite.Rule, error) {
+				p, err := profileSvc.Get(ctx)
+				if err != nil {
+					return nil, err
+				}
+				return dnsrewrite.RulesFromProfile(p), nil
+			},
+			Resolve: func(ctx context.Context, host string, ipv6 bool) ([]netip.Addr, error) {
+				network := "ip4"
+				if ipv6 {
+					network = "ip6"
+				}
+				return kernelDNS.LookupNetIP(ctx, network, host)
+			},
+		}
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			if err := rw.Run(ctx); err != nil {
+				log.Warn("DNS 重写服务没能监听,配置里有重写规则时这些域名会解析失败", "addr", dnsrewrite.DefaultAddr, "error", err)
+			}
 		}()
 		return func() { wait(); <-done }
 	}
