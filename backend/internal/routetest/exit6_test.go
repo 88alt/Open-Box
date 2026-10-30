@@ -53,17 +53,18 @@ func TestExit6ProbesFirstV6WithDomainHostAndCert(t *testing.T) {
 	if e6 == nil || e6.ConnectTo != "2001:db8::1" || !e6.OK || e6.Status == nil || *e6.Status != 204 || e6.MS == nil || e6.Error != "" {
 		t.Fatalf("exit6 应按第一个 v6 地址探测成功: %+v", e6)
 	}
-	// 隧道连的是 v6 地址;主探测连的仍是域名
+	// 隧道连的是 v6 地址;主探测像终端一样连第一个真实的 v4 答案(见 connect_test.go)
 	want6 := "[2001:db8::1]:" + strconv.Itoa(port)
-	var saw6, sawDomain bool
+	want4 := "93.184.216.34:" + strconv.Itoa(port)
+	var saw6, saw4 bool
 	p.mu.Lock()
 	for _, c := range p.connects {
 		saw6 = saw6 || c == want6
-		sawDomain = sawDomain || c == "example.com:"+strconv.Itoa(port)
+		saw4 = saw4 || c == want4
 	}
 	p.mu.Unlock()
-	if !saw6 || !sawDomain {
-		t.Fatalf("CONNECT 目标应有 %s 和域名那条: %v", want6, p.connects)
+	if !saw6 || !saw4 {
+		t.Fatalf("CONNECT 目标应有 %s 和 %s: %v", want6, want4, p.connects)
 	}
 	// 请求的 Host 仍是域名;而且证书是按域名校验通过的(服务器证书里没有 2001:db8::1)
 	mu.Lock()

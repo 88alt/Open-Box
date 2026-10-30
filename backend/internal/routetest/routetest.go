@@ -68,6 +68,7 @@ type Exit struct {
 	Rule             string   `json:"rule,omitempty"`
 	RulePayload      string   `json:"rulePayload,omitempty"`
 	DestinationIP    string   `json:"destinationIP,omitempty"`
+	ConnectTo        string   `json:"connectTo,omitempty"` // 像终端一样按解析出的第一个真实 IPv4 去连时,这个 IP;目标是 IP / 没有可用答案时没有
 	ViaProxy         *bool    `json:"viaProxy,omitempty"`
 	Method           string   `json:"method,omitempty"`
 	Challenge        string   `json:"challenge,omitempty"`
@@ -212,11 +213,18 @@ func (s *Service) Run(ctx context.Context, in Input) (*Result, error) {
 
 	pctx, cancel := context.WithTimeout(ctx, s.timeout())
 	defer cancel()
+	// 像终端那样:DNS 给了真实的 IPv4 就按第一个去连(Host / SNI / 证书校验仍用域名),
+	// 没有可用答案(查不到、第一个是内核的占位地址)才让内核按域名去连
+	connectTo := ""
+	if ad, ok := firstV4(res.Resolve); ok {
+		connectTo = ad.String()
+	}
+	res.Exit.ConnectTo = connectTo
 	var probed *probed
 	if in.Method == MethodTLS {
-		probed = s.probeTLS(pctx, in, "")
+		probed = s.probeTLS(pctx, in, connectTo)
 	} else {
-		probed = s.probeHTTP(pctx, in, "")
+		probed = s.probeHTTP(pctx, in, connectTo)
 	}
 	defer probed.close()
 	if ctx.Err() != nil {

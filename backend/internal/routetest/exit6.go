@@ -49,6 +49,25 @@ func firstV6(r *Resolve) (netip.Addr, bool) {
 	return netip.Addr{}, false
 }
 
+// firstV4 取 resolve 里第一个 IPv4 答案;它落在内核 fake-ip 池里(占位地址)就不算,返回 false。
+// 与 firstV6 对应,给主探测的 exit.connectTo 用:终端拿到真实地址就直接连它。
+func firstV4(r *Resolve) (netip.Addr, bool) {
+	if r == nil || !r.OK {
+		return netip.Addr{}, false
+	}
+	for _, a := range r.Answers {
+		ad, err := netip.ParseAddr(a)
+		if err != nil || !ad.Is4() {
+			continue
+		}
+		if inFakePool(ad) {
+			return netip.Addr{}, false
+		}
+		return ad, true
+	}
+	return netip.Addr{}, false
+}
+
 // probeExit6 做 exit6;不适用时返回 nil。探测用独立的超时,不挤占主探测的时间。
 func (s *Service) probeExit6(ctx context.Context, in Input, rs *Resolve) *Exit6 {
 	if in.Method == MethodTCP {
