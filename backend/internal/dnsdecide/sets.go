@@ -270,6 +270,68 @@ type setMatcher struct {
 	ipPartial bool
 }
 
+// Entry 是规则集(或一条规则)里具体命中的一个条目。Type 取 domain / domain_suffix / domain_keyword / domain_regex / ip_cidr,
+// Value 是条目原文(域名小写)。
+type Entry struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
+}
+
+// Entries 返回规则集里命中这个目标的具体条目(域名目标比域名条目,IP 目标比 ip_cidr 条目),按「精确、后缀、关键词、正则、网段」排。
+// 读不出规则集返回 error;只返回确实命中的条目,判断不了的规则不影响这里(是否命中由 Match / MatchIP 说了算)。
+func (b *Bound) Entries(ctx context.Context, tag, domain string, ip netip.Addr) ([]Entry, error) {
+	def, ok := b.defs[tag]
+	if !ok {
+		return nil, fmt.Errorf("%w: 配置里没有规则集 %s", ErrUnknownSet, tag)
+	}
+	m, err := b.f.load(ctx, tag, def)
+	if err != nil {
+		return nil, err
+	}
+	return m.entries(domain, ip), nil
+}
+
+func (m *setMatcher) entries(d string, ip netip.Addr) []Entry {
+	var out []Entry
+	if ip.IsValid() {
+		for _, p := range m.cidrs {
+			if p.Contains(ip.Unmap()) {
+				out = append(out, Entry{"ip_cidr", p.String()})
+			}
+		}
+		return out
+	}
+	if _, ok := m.exact[d]; ok {
+		out = append(out, Entry{"domain", d})
+	}
+	for _, s := range m.suffix {
+		if SuffixMatch(s, d) {
+			out = append(out, Entry{"domain_suffix", s})
+		}
+	}
+	for _, k := range m.keyword {
+		if strings.Contains(d, k) {
+			out = append(out, Entry{"domain_keyword", k})
+		}
+	}
+	for _, re := range m.regex {
+		if re.MatchString(d) {
+			out = append(out, Entry{"domain_regex", re.String()})
+		}
+	}
+	return out
+}
+
+// RuleEntries 返回一条规则自己写的条件里命中这个目标的条目(只看 domain / domain_suffix / domain_keyword / domain_regex / ip_cidr,
+// 不展开规则集)。
+func RuleEntries(rule map[string]any, domain string, ip netip.Addr) []Entry {
+	m := compile([]any{
+		map[string]any{"domain": rule["domain"], "domain_suffix": rule["domain_suffix"], "domain_keyword": rule["domain_keyword"], "domain_regex": rule["domain_regex"]},
+		map[string]any{"ip_cidr": rule["ip_cidr"]},
+	})
+	return m.entries(domain, ip)
+}
+
 // 规则集规则里属于「域名这一组」的键;其余键(ip_cidr、port、process_name 等)出现就判断不了。
 var addrKeys = map[string]bool{"domain": true, "domain_suffix": true, "domain_keyword": true, "domain_regex": true}
 

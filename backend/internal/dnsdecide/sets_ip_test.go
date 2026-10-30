@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"reflect"
 	"testing"
 )
 
@@ -87,5 +88,41 @@ func TestMatchDomainPartialIsErrSetPartial(t *testing.T) {
 	b = inlineSets(map[string]any{"ip_cidr": []any{"10.0.0.0/8"}}, map[string]any{"domain": []any{"a.com"}})
 	if got, err := b.Match(context.Background(), "s", "a.com"); !got || err != nil {
 		t.Fatalf("%v %v", got, err)
+	}
+}
+
+func TestEntriesDomainAndIP(t *testing.T) {
+	b := inlineSets(
+		map[string]any{"domain": []any{"Chat.OpenAI.com."}, "domain_suffix": []any{"openai.com", "oaistatic.com"}, "domain_keyword": []any{"openai", "zzz"}},
+		map[string]any{"domain_regex": []any{`^chat\..*\.com$`, `^nope$`}},
+		map[string]any{"ip_cidr": []any{"10.0.0.0/8", "192.0.2.7"}},
+	)
+	got, err := b.Entries(context.Background(), "s", "chat.openai.com", netip.Addr{})
+	want := []Entry{{"domain", "chat.openai.com"}, {"domain_suffix", "openai.com"}, {"domain_keyword", "openai"}, {"domain_regex", `^chat\..*\.com$`}}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("%+v %v", got, err)
+	}
+	got, _ = b.Entries(context.Background(), "s", "", netip.MustParseAddr("10.1.1.1"))
+	if !reflect.DeepEqual(got, []Entry{{"ip_cidr", "10.0.0.0/8"}}) {
+		t.Fatalf("IP 目标只比网段: %+v", got)
+	}
+	if got, _ = b.Entries(context.Background(), "s", "other.org", netip.Addr{}); len(got) != 0 {
+		t.Fatalf("%+v", got)
+	}
+	if _, err = b.Entries(context.Background(), "nope", "a.com", netip.Addr{}); !errors.Is(err, ErrUnknownSet) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestRuleEntries(t *testing.T) {
+	rule := map[string]any{"domain_suffix": []any{"a.com"}, "ip_cidr": []any{"10.0.0.0/8"}, "outbound": "x"}
+	if got := RuleEntries(rule, "www.a.com", netip.Addr{}); !reflect.DeepEqual(got, []Entry{{"domain_suffix", "a.com"}}) {
+		t.Fatalf("%+v", got)
+	}
+	if got := RuleEntries(rule, "", netip.MustParseAddr("10.2.3.4")); !reflect.DeepEqual(got, []Entry{{"ip_cidr", "10.0.0.0/8"}}) {
+		t.Fatalf("域名和 IP 条件混在一条里也要分别能比: %+v", got)
+	}
+	if got := RuleEntries(map[string]any{"rule_set": "x"}, "a.com", netip.Addr{}); len(got) != 0 {
+		t.Fatalf("%+v", got)
 	}
 }

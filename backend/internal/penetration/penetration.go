@@ -50,6 +50,23 @@ type Matched struct {
 	Rule     map[string]any `json:"rule"`
 	Outbound string         `json:"outbound,omitempty"`
 	Action   string         `json:"action,omitempty"`
+	// Entries 是具体命中的条目(最多 maxEntries 条),EntriesTotal 是命中的总数;Source 是规则集名,规则自己写的条件是 "custom"。
+	Entries      []Entry `json:"entries,omitempty"`
+	EntriesTotal int     `json:"entriesTotal,omitempty"`
+}
+
+// Entry 对应前端 matched.entries 的一项。
+type Entry struct {
+	Type   string `json:"type"`
+	Value  string `json:"value"`
+	Source string `json:"source"`
+}
+
+const maxEntries = 20
+
+// EntrySets 是可选能力:规则集能说出具体命中了哪些条目(*dnsdecide.Bound 满足);Sets 不满足时就不给 entries。
+type EntrySets interface {
+	Entries(ctx context.Context, tag, domain string, ip netip.Addr) ([]dnsdecide.Entry, error)
 }
 
 type Owner struct {
@@ -108,7 +125,8 @@ func (s *Service) Query(ctx context.Context, raw string) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	d := routedecide.Decide(ctx, v, s.Sets(cfg), t)
+	sets := s.Sets(cfg)
+	d := routedecide.Decide(ctx, v, sets, t)
 
 	res := &Result{Chain: []string{}, Assumed: d.Assumed, PreResolve: d.PreResolve}
 	if s.Stale != nil {
@@ -135,6 +153,14 @@ func (s *Service) Query(ctx context.Context, raw string) (*Result, error) {
 
 	if d.Index != nil {
 		res.Matched = &Matched{Index: *d.Index, Rule: d.Rule, Outbound: d.Outbound, Action: d.Action}
+		if es, ok := sets.(EntrySets); ok {
+			all := collectEntries(ctx, es, d.Rule, t)
+			res.Matched.EntriesTotal = len(all)
+			if len(all) > maxEntries {
+				all = all[:maxEntries]
+			}
+			res.Matched.Entries = all
+		}
 	}
 	res.Owner = ownerOf(d, v)
 
@@ -254,4 +280,54 @@ func usesNodeSet(r map[string]any) bool {
 		}
 	}
 	return false
+}
+
+// collectEntries 收集命中的规则里具体命中了哪些条目:规则自己写的条件(来源 custom)在前,再按规则集在规则里出现的顺序展开。
+// 逻辑规则只看里面没有取反的子规则;规则集读不出来就跳过(命中与否已经由推算判过了,这里只是补充说明)。同一条目只记一次。
+func collectEntries(ctx context.Context, es EntrySets, rule map[string]any, t routedecide.Target) []Entry {
+	var out []Entry
+	seen := map[Entry]bool{}
+	add := func(e Entry) {
+		if !seen[e] {
+			seen[e] = true
+			out = append(out, e)
+		}
+	}
+	var tags []string
+	var walk func(r map[string]any)
+	walk = func(r map[string]any) {
+		if inv, _ := r["invert"].(bool); inv {
+			return
+		}
+		for _, e := range dnsdecide.RuleEntries(r, t.Domain, t.IP) {
+			add(Entry{Type: e.Type, Value: e.Value, Source: "custom"})
+		}
+		switch x := r["rule_set"].(type) {
+		case string:
+			tags = append(tags, x)
+		case []any:
+			for _, v := range x {
+				if s, ok := v.(string); ok {
+					tags = append(tags, s)
+				}
+			}
+		}
+		subs, _ := r["rules"].([]any)
+		for _, sub := range subs {
+			if m, ok := sub.(map[string]any); ok {
+				walk(m)
+			}
+		}
+	}
+	walk(rule)
+	for _, tag := range tags {
+		es2, err := es.Entries(ctx, tag, t.Domain, t.IP)
+		if err != nil {
+			continue
+		}
+		for _, e := range es2 {
+			add(Entry{Type: e.Type, Value: e.Value, Source: tag})
+		}
+	}
+	return out
 }

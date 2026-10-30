@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/netip"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -213,5 +214,87 @@ func TestDrillStopsOnLoops(t *testing.T) {
 	// 选中的叶子不在代理列表里:记进去、停下
 	if got := drill("g", map[string]string{"g": "direct"}, map[string]bool{"g": true}); strings.Join(got, ">") != "g>direct" {
 		t.Fatalf("%v", got)
+	}
+}
+
+// entrySets 在 sets 之外还能说出具体命中的条目。
+type entrySets struct {
+	sets
+	entries map[string][]dnsdecide.Entry
+}
+
+func (e entrySets) Entries(_ context.Context, tag, _ string, _ netip.Addr) ([]dnsdecide.Entry, error) {
+	if tag == "broken" {
+		return nil, errors.New("读不到")
+	}
+	return e.entries[tag], nil
+}
+
+func TestQueryEntries(t *testing.T) {
+	s := svc(t, proxies, nil)
+	s.Config = func() (map[string]any, error) {
+		var m map[string]any
+		return m, json.Unmarshal([]byte(`{"route":{"final":"其他","rules":[
+		  {"domain_suffix":["openai.com"],"rule_set":["geosite-openai","broken","geosite-openai"],"outbound":"AI","invert":false},
+		  {"type":"logical","mode":"and","rules":[{"domain_suffix":["skip.com"],"invert":true},{"rule_set":["geosite-cn"]}],"outbound":"国内"}]},
+		 "outbounds":[{"tag":"AI","type":"selector"},{"tag":"国内","type":"selector"},{"tag":"其他","type":"selector"}]}`), &m)
+	}
+	s.Sets = func(map[string]any) routedecide.Sets {
+		return entrySets{
+			sets: sets{"geosite-openai": {"openai.com"}, "geosite-cn": {"baidu.com"}, "broken": {"openai.com"}},
+			entries: map[string][]dnsdecide.Entry{
+				"geosite-openai": {{Type: "domain_suffix", Value: "openai.com"}, {Type: "domain_keyword", Value: "openai"}},
+				"geosite-cn":     {{Type: "domain_suffix", Value: "baidu.com"}},
+			},
+		}
+	}
+	r, err := s.Query(context.Background(), "chat.openai.com")
+	if err != nil || r.Matched == nil {
+		t.Fatalf("%+v %v", r, err)
+	}
+	want := []Entry{
+		{"domain_suffix", "openai.com", "custom"},
+		{"domain_suffix", "openai.com", "geosite-openai"},
+		{"domain_keyword", "openai", "geosite-openai"},
+	}
+	if !reflect.DeepEqual(r.Matched.Entries, want) || r.Matched.EntriesTotal != 3 {
+		t.Fatalf("规则自己的条件在前、读不出的规则集跳过、重复的规则集只记一次: %+v", r.Matched)
+	}
+	// 逻辑规则:取反的子规则不展开,规则集的条目来源写规则集名
+	r, _ = s.Query(context.Background(), "www.baidu.com")
+	if !reflect.DeepEqual(r.Matched.Entries, []Entry{{"domain_suffix", "baidu.com", "geosite-cn"}}) || r.Matched.EntriesTotal != 1 {
+		t.Fatalf("%+v", r.Matched)
+	}
+	// 没命中规则:没有 entries;Sets 不支持条目:也没有
+	if r, _ = s.Query(context.Background(), "unknown.org"); r.Matched != nil {
+		t.Fatalf("%+v", r.Matched)
+	}
+	s.Sets = func(map[string]any) routedecide.Sets { return sets{"geosite-openai": {"openai.com"}} }
+	if r, _ = s.Query(context.Background(), "chat.openai.com"); r.Matched.Entries != nil || r.Matched.EntriesTotal != 0 {
+		t.Fatalf("%+v", r.Matched)
+	}
+}
+
+func TestEntriesCappedAtTwenty(t *testing.T) {
+	var many []dnsdecide.Entry
+	for i := 0; i < 45; i++ {
+		many = append(many, dnsdecide.Entry{Type: "domain_keyword", Value: strings.Repeat("k", i+1)})
+	}
+	es := entrySets{entries: map[string][]dnsdecide.Entry{"big": many}}
+	all := collectEntries(context.Background(), es, map[string]any{"rule_set": "big"}, routedecide.Target{Domain: "a.com"})
+	if len(all) != 45 {
+		t.Fatalf("collectEntries 给全量(截断在 Query 里): %d", len(all))
+	}
+	s := svc(t, proxies, nil)
+	s.Config = func() (map[string]any, error) {
+		return map[string]any{"route": map[string]any{"final": "其他", "rules": []any{map[string]any{"rule_set": "big", "outbound": "AI"}}},
+			"outbounds": []any{map[string]any{"tag": "AI", "type": "selector"}}}, nil
+	}
+	s.Sets = func(map[string]any) routedecide.Sets {
+		return entrySets{sets: sets{"big": {"a.com"}}, entries: es.entries}
+	}
+	r, err := s.Query(context.Background(), "a.com")
+	if err != nil || len(r.Matched.Entries) != maxEntries || r.Matched.EntriesTotal != 45 {
+		t.Fatalf("%v %+v", err, r.Matched)
 	}
 }
