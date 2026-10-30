@@ -279,7 +279,7 @@
 |---|---|---|---|---|
 | POST | `/api/openbox/penetration` | `queryPenetration` (api/openbox.ts:1174) | OpenboxPenetrationResult | (target: string) |
 
-> 实现约定(M3,第一部分):请求 `{"target":"域名或 IP"}`,目标不合法 400,读不到已部署配置 500。按已部署 `config.json` 的 `route.rules` 推算(`internal/routedecide`)。已给:`matched`(`index` / `rule` / `outbound` / `action`)、`owner`(只认得出的)、`assumed`(`needs` / `leaf` / `sameOutcome`)、`preResolve`、`dns`、`chain`(永远是数组,reject 时为空)、`finalOutbound`(拿不到为 null)、`chainError`、`matchError`(规则集没能检查:`matched` 为 null、不给线路)、`routingStale`。`matched.entries`(最多 20 条,来源是规则集名或 `custom`)/ `entriesTotal` 已做。**未做**:`viaIp`、`resolved`、`preMatch`、`firstLayer`、前置自定义分流的 `ownerName`。
+> 实现约定(M3,第一部分):请求 `{"target":"域名或 IP"}`,目标不合法 400,读不到已部署配置 500。按已部署 `config.json` 的 `route.rules` 推算(`internal/routedecide`)。已给:`matched`(`index` / `rule` / `outbound` / `action`)、`owner`(只认得出的)、`assumed`(`needs` / `leaf` / `sameOutcome`)、`preResolve`、`dns`、`chain`(永远是数组,reject 时为空)、`finalOutbound`(拿不到为 null)、`chainError`、`matchError`(规则集没能检查:`matched` 为 null、不给线路)、`routingStale`。`matched.entries`(最多 20 条,来源是规则集名或 `custom`)/ `entriesTotal` 已做。`resolved` 和 `matched.viaIp` 已做:域名目标先经内核的 DNS 入站解析(档案开了 IPv6 才再问 AAAA),响应里 `resolved` 是 `{fakeIp?, addresses, error?}`(`addresses` 永远是数组;解析失败不算接口错误,原因写在 `error`;IP 目标不解析、没有这个字段)。推算时把「第一个真实 IPv4(没有就第一个 IPv6)」当终端会连的目的 IP:终端自己解析后按真实地址连进内核、内核再嗅探出域名,连接同时带域名和目的 IP,所以 `ip_is_private`、`ip_cidr`、`ip_version` 和规则集里的 IP 条目按这个地址判;core 给「看 IP 的规则」带了「连接没有域名」的前提(`domain_regex` 取反),有域名的连接不会被它们命中,这一点推算里照样成立。靠地址命中的规则,`matched.viaIp` 是那个地址,`entries` 也把规则集里命中它的 IP 条目列出来。解析到的是占位地址(`fakeIp: true`,连接进内核后按域名找回目标)或解析失败时没有目的 IP,IP 条件仍记成 `assumed` 的前提(与原来一致)。**未做**:`preMatch`、`firstLayer`、前置自定义分流的 `ownerName`。
 
 ## `/api/openbox/policies`
 

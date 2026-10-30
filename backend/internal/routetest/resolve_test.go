@@ -378,3 +378,35 @@ func TestResolveMarksForeignFakeIP(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveNameForPenetration(t *testing.T) {
+	// A 和 AAAA 都有:合并,档案开了 IPv6 才问 AAAA
+	f := newFakeDNS(t, false, func(req []byte, _ bool) []byte {
+		if qtypeOf(req) == qtypeAAAA {
+			return reply(req, 0, false, a6("2001:db8::5", 60))
+		}
+		return reply(req, 0, false, a4("93.184.216.34", 60))
+	})
+	s := &Service{DNSAddr: f.addr, Timeout: 2 * time.Second, IPv6: func(context.Context) bool { return true }}
+	fake, addrs, errText := s.ResolveName(context.Background(), "example.com")
+	if fake || errText != "" || strings.Join(addrs, ",") != "93.184.216.34,2001:db8::5" {
+		t.Fatalf("%v %v %q", fake, addrs, errText)
+	}
+	s.IPv6 = nil
+	if _, addrs, _ := s.ResolveName(context.Background(), "example.com"); strings.Join(addrs, ",") != "93.184.216.34" {
+		t.Fatalf("没开 IPv6 不该有 AAAA 地址: %v", addrs)
+	}
+
+	// 占位地址要标出来
+	f = newFakeDNS(t, false, func(req []byte, _ bool) []byte { return reply(req, 0, false, a4("198.19.0.7", 1)) })
+	if fake, addrs, _ := (&Service{DNSAddr: f.addr, Timeout: 2 * time.Second}).ResolveName(context.Background(), "example.com"); !fake || len(addrs) != 1 {
+		t.Fatalf("%v %v", fake, addrs)
+	}
+
+	// 解析失败:没有地址,原因写进 errText;addrs 不是 nil 也不含脏数据
+	f = newFakeDNS(t, false, func(req []byte, _ bool) []byte { return reply(req, 3, false) })
+	fake, addrs, errText = (&Service{DNSAddr: f.addr, Timeout: 2 * time.Second}).ResolveName(context.Background(), "nx.example.com")
+	if fake || len(addrs) != 0 || errText == "" {
+		t.Fatalf("%v %v %q", fake, addrs, errText)
+	}
+}

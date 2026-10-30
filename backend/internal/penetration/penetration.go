@@ -4,8 +4,11 @@
 //
 // 这一版做了:matched(规则下标和内容、出站 / 动作)、owner(内置规则的类别、站点集)、assumed(带 leaf / sameOutcome)、
 // preResolve、dns(复用真实路由测试的 DNS 判定)、chain / finalOutbound / chainError、matchError、routingStale。
-// 还没做:entries / entriesTotal(命中的具体条目)、viaIp 和 resolved(域名解析出的地址落进 IP 规则)、
-// preMatch、firstLayer(这些要内核侧的部署元数据),前置自定义分流的 ownerName(要知道它的名字);见 STATUS.md。
+// entries / entriesTotal(命中的具体条目)、resolved(域名经内核 DNS 解析的结果)、viaIp(规则是按解析出的地址命中的)也做了。
+// 域名目标:终端自己解析后按真实地址连进内核、内核再嗅探出域名,所以连接同时带域名和目的 IP;推算按「第一个真实 IPv4(没有就第一个 IPv6)」
+// 当目的 IP,去比不带「连接没有域名」前提的 IP 规则(私网直连、节点服务器直连、内核占位段等)。解析到的是占位地址(fake-ip)、
+// 解析失败时没有目的 IP,IP 条件仍记成前提。
+// 还没做:preMatch、firstLayer(这些要内核侧的部署元数据),前置自定义分流的 ownerName(要知道它的名字);见 STATUS.md。
 package penetration
 
 import (
@@ -32,6 +35,12 @@ type DNSPredictor interface {
 	Predict(ctx context.Context, domain string) (*dnsdecide.Decision, error)
 }
 
+// Resolver 向内核的 DNS 入站解析一个域名(*routetest.Service 满足):返回答案里有没有占位地址(fake-ip)、
+// 所有 A / AAAA 地址;没有任何地址时 errText 是原因。
+type Resolver interface {
+	ResolveName(ctx context.Context, name string) (fakeIP bool, addrs []string, errText string)
+}
+
 // Service 的依赖都是函数 / 接口,测试里换假的。
 type Service struct {
 	// Config 读已部署的配置;规则集的解码缓存跟着 Sets 走。
@@ -39,6 +48,8 @@ type Service struct {
 	// Sets 按配置里的规则集定义回答「规则集是否包含」。
 	Sets func(cfg map[string]any) routedecide.Sets
 	DNS  DNSPredictor // 可为空
+	// Resolver 解析域名目标,给 resolved 字段和目的 IP 用;nil = 不解析(没有 resolved,IP 条件记成前提)。
+	Resolver Resolver
 	// Proxies 读内核的代理列表;nil 或返回 error 时线路写 chainError。
 	Proxies func(ctx context.Context) ([]singbox.KernelProxy, error)
 	// Stale 报告「内核还在跑旧的分流配置」;nil = 否。
@@ -50,6 +61,8 @@ type Matched struct {
 	Rule     map[string]any `json:"rule"`
 	Outbound string         `json:"outbound,omitempty"`
 	Action   string         `json:"action,omitempty"`
+	// ViaIP:这条规则是按目的 IP 命中的(域名解析出来的地址落进了规则里的 IP 条件),就是那个地址。
+	ViaIP string `json:"viaIp,omitempty"`
 	// Entries 是具体命中的条目(最多 maxEntries 条),EntriesTotal 是命中的总数;Source 是规则集名,规则自己写的条件是 "custom"。
 	Entries      []Entry `json:"entries,omitempty"`
 	EntriesTotal int     `json:"entriesTotal,omitempty"`
@@ -74,12 +87,20 @@ type Owner struct {
 	Name string `json:"name"`
 }
 
+// Resolved 对应前端 resolved:推算时向内核 DNS 解析这个域名的结果。
+type Resolved struct {
+	FakeIP    bool     `json:"fakeIp,omitempty"` // 内核返回的是占位地址(连接进内核后按域名找回目标)
+	Addresses []string `json:"addresses"`
+	Error     string   `json:"error,omitempty"`
+}
+
 type Result struct {
 	Matched       *Matched                 `json:"matched"`
 	Owner         *Owner                   `json:"owner,omitempty"`
 	Assumed       []routedecide.Assumption `json:"assumed,omitempty"`
 	PreResolve    bool                     `json:"preResolve,omitempty"`
 	DNS           any                      `json:"dns,omitempty"`
+	Resolved      *Resolved                `json:"resolved,omitempty"`
 	Chain         []string                 `json:"chain"`
 	FinalOutbound *string                  `json:"finalOutbound"`
 	ChainError    string                   `json:"chainError,omitempty"`
@@ -126,9 +147,16 @@ func (s *Service) Query(ctx context.Context, raw string) (*Result, error) {
 		return nil, err
 	}
 	sets := s.Sets(cfg)
+	var resolved *Resolved
+	if !t.IsIP() && s.Resolver != nil {
+		resolved = s.resolve(ctx, t.Domain)
+		if !resolved.FakeIP {
+			t.DestIP = pickDest(resolved.Addresses)
+		}
+	}
 	d := routedecide.Decide(ctx, v, sets, t)
 
-	res := &Result{Chain: []string{}, Assumed: d.Assumed, PreResolve: d.PreResolve}
+	res := &Result{Chain: []string{}, Assumed: d.Assumed, PreResolve: d.PreResolve, Resolved: resolved}
 	if s.Stale != nil {
 		res.RoutingStale = s.Stale(ctx)
 	}
@@ -153,8 +181,13 @@ func (s *Service) Query(ctx context.Context, raw string) (*Result, error) {
 
 	if d.Index != nil {
 		res.Matched = &Matched{Index: *d.Index, Rule: d.Rule, Outbound: d.Outbound, Action: d.Action}
+		et := t
+		if d.ViaIP.IsValid() {
+			res.Matched.ViaIP = d.ViaIP.String()
+			et.IP = d.ViaIP // 靠地址命中的:条目里把 IP 条目也列出来
+		}
 		if es, ok := sets.(EntrySets); ok {
-			all := collectEntries(ctx, es, d.Rule, t)
+			all := collectEntries(ctx, es, d.Rule, et)
 			res.Matched.EntriesTotal = len(all)
 			if len(all) > maxEntries {
 				all = all[:maxEntries]
@@ -188,6 +221,34 @@ func (s *Service) Query(ctx context.Context, raw string) (*Result, error) {
 		a.SameOutcome = &same
 	}
 	return res, nil
+}
+
+// resolve 经内核 DNS 解析域名。解析失败不算接口错误,写在 error 里;地址总是个数组(没有时为空)。
+func (s *Service) resolve(ctx context.Context, name string) *Resolved {
+	fake, addrs, errText := s.Resolver.ResolveName(ctx, name)
+	if addrs == nil {
+		addrs = []string{}
+	}
+	return &Resolved{FakeIP: fake, Addresses: addrs, Error: errText}
+}
+
+// pickDest 选终端会连的那个地址:第一个 IPv4,没有就第一个 IPv6;解析不出来的条目跳过;一个都没有返回无效地址。
+func pickDest(addrs []string) netip.Addr {
+	var v6 netip.Addr
+	for _, s := range addrs {
+		a, err := netip.ParseAddr(s)
+		if err != nil {
+			continue
+		}
+		a = a.Unmap()
+		if a.Is4() {
+			return a
+		}
+		if !v6.IsValid() {
+			v6 = a
+		}
+	}
+	return v6
 }
 
 func (s *Service) proxyState(ctx context.Context) (now map[string]string, known map[string]bool, err error) {

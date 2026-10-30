@@ -392,7 +392,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
 		},
 	}
-	routetestapi.Register(srv.Mux(), routetestapi.Deps{Service: &routetest.Service{
+	routeSvc := &routetest.Service{
 		Snapshot: func(ctx context.Context) (singbox.KernelSnapshot, error) {
 			return singbox.KernelConnections(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
 		},
@@ -408,7 +408,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		// DNS 判定:读已部署的 config.json,按它的 DNS 规则预测这个域名问哪台服务器;规则集文件读不到、
 		// 二进制规则集需要 sing-box 解码,判断不了的如实记成前提;代理侧的实际线路读内核的代理列表补上
 		DNS: dnsPredictor,
-	}})
+	}
+	routetestapi.Register(srv.Mux(), routetestapi.Deps{Service: routeSvc})
 
 	// 域名穿透:按已部署配置里的路由规则推算一个域名 / IP 会命中哪条规则、走哪条线路(DNS 判定和真实路由测试共用一个预测器)
 	penetrationSets := &dnsdecide.FileSets{SingBox: cfg.SingBox, TmpDir: probeDir}
@@ -418,6 +419,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		},
 		Sets: func(c map[string]any) routedecide.Sets { return penetrationSets.Bind(dnsdecide.SetDefsFromConfig(c)) },
 		DNS:  dnsPredictor,
+		// 域名目标先经内核的 DNS 入站解析:给 resolved 字段用,真实地址当作终端会连的目的 IP 去比 IP 规则
+		Resolver: routeSvc,
 		Proxies: func(ctx context.Context) ([]singbox.KernelProxy, error) {
 			return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
 		},

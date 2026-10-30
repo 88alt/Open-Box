@@ -62,6 +62,19 @@ type dnsAnswer struct {
 	ttl   int // 没有答案时是 -1
 }
 
+// ResolveName 经内核的 DNS 入站解析一个域名,给域名穿透用(penetration.Resolver):档案开了 IPv6 才再查 AAAA。
+// 返回答案里有没有占位地址(fake-ip)、所有 A / AAAA 地址;没有任何地址时 errText 是原因(A 的原因优先)。
+func (s *Service) ResolveName(ctx context.Context, name string) (fakeIP bool, addrs []string, errText string) {
+	r := s.resolve(ctx, name, s.IPv6 != nil && s.IPv6(ctx))
+	addrs = append(append([]string{}, r.Answers...), r.Answers6...)
+	if len(addrs) == 0 {
+		if errText = r.Error; errText == "" {
+			errText = r.Error6
+		}
+	}
+	return r.FakeIP, addrs, errText
+}
+
 // resolve 查 A,ipv6 为真时再查 AAAA。域名查不到不算接口错误,写在 error / error6 里。
 func (s *Service) resolve(ctx context.Context, name string, ipv6 bool) *Resolve {
 	r := &Resolve{Answers: []string{}}

@@ -9,6 +9,11 @@
 //     这次没有解析出 IP——记成「前提」(needs 含 destIp),预测按「不满足它」往下走;
 //   - IP:连接没有域名,域名条件恒不命中;ip_cidr、ip_is_private、规则集里的 ip_cidr 都能判断。
 //
+// 域名目标可以带一个 DestIP:终端自己解析出域名后按这个真实地址连进内核,内核再嗅探出域名,所以连接同时带域名和目的 IP
+// (core 生成的「看 IP 的规则」都带「连接没有域名」的前提,有域名的连接不会被它们命中;私网直连、节点服务器直连、
+// 内核占位段这类不带这个前提的规则则按目的 IP 判)。带了 DestIP,IP 条件(ip_cidr、ip_is_private、ip_version、
+// 规则集里的 IP 条目)按它判并在命中时记下(Decision.ViaIP);没带(没解析到、只拿到 fake-ip 占位地址)仍记成前提。
+//
 // 判断不了的条件不猜:来源(source_ip_cidr / source_mac_address)、端口和网络类型(port / port_range / network)、
 // 地址族(域名目标的 ip_version)这些前端预留了「前提」的位置,记进 Assumed(needs 取 sourceIp / sourceMac / port / destIp / ipVersion);
 // 规则集读不出来、或里面有这次判断不了的规则,没法确定这条规则命不命中,整个预测停下,MatchError 写原因,
@@ -36,6 +41,8 @@ import (
 type Target struct {
 	Domain string
 	IP     netip.Addr
+	// DestIP 只给域名目标用:终端按解析结果连的那个真实地址;没解析到、或拿到的是占位地址(fake-ip)时留空。
+	DestIP netip.Addr
 }
 
 // IsIP 目标是不是 IP 字面量。
@@ -110,6 +117,8 @@ type Decision struct {
 	Assumed  []Assumption
 	// PreResolve:规则表里有 resolve 动作(以域名进内核的连接先解析成 IP 再判 IP 规则)。
 	PreResolve bool
+	// ViaIP 是命中这条规则靠的目的地址:域名目标带了 DestIP、并且是 IP 条件命中了才有,否则无效。
+	ViaIP netip.Addr
 	// MatchError 非空:有规则的规则集没能检查,预测停在那里,不给结论(Index / Outbound 都没有意义)。
 	MatchError string
 }
@@ -129,6 +138,23 @@ type evalCtx struct {
 	t     Target
 	needs map[string]bool
 	err   string // 第一个没能检查的原因
+	via   bool   // 有 IP 条件靠 DestIP 命中过
+}
+
+// dest 返回 IP 条件该用的目的地址:IP 目标是它自己,域名目标是 DestIP(可能无效)。
+func (e *evalCtx) dest() netip.Addr {
+	if e.t.IsIP() {
+		return e.t.IP.Unmap()
+	}
+	return e.t.DestIP.Unmap()
+}
+
+// viaDest 在判断是靠域名目标的 DestIP 做出的时候记一笔。
+func (e *evalCtx) viaDest(r tri) tri {
+	if r == yes && !e.t.IsIP() {
+		e.via = true
+	}
+	return r
 }
 
 func (e *evalCtx) need(n string) { e.needs[n] = true }
@@ -193,6 +219,9 @@ func Decide(ctx context.Context, v *View, sets Sets, t Target) *Decision {
 		case yes:
 			idx := i
 			d.Index, d.Rule = &idx, rule
+			if ec.via {
+				d.ViaIP = t.DestIP.Unmap()
+			}
 			if action == "reject" {
 				d.Action = "reject"
 			} else {
@@ -291,15 +320,15 @@ func (e *evalCtx) evalDefault(rule map[string]any) tri {
 			add(e.evalCIDR(val))
 		case "ip_is_private":
 			want, _ := val.(bool)
-			if e.t.IsIP() {
-				add(boolTri(nonPublic(e.t.IP) == want))
+			if a := e.dest(); a.IsValid() {
+				add(e.viaDest(boolTri(nonPublic(a) == want)))
 			} else {
 				e.need(NeedDestIP)
 				add(unknown)
 			}
 		case "ip_version":
-			if e.t.IsIP() {
-				add(boolTri(matchIPVersion(val, e.t.IP)))
+			if a := e.dest(); a.IsValid() {
+				add(e.viaDest(boolTri(matchIPVersion(val, a))))
 			} else {
 				e.need(NeedIPVersion)
 				add(unknown)
@@ -331,14 +360,14 @@ func (e *evalCtx) evalDefault(rule map[string]any) tri {
 }
 
 func (e *evalCtx) evalCIDR(val any) tri {
-	if !e.t.IsIP() {
+	ip := e.dest()
+	if !ip.IsValid() {
 		e.need(NeedDestIP)
 		return unknown
 	}
-	ip := e.t.IP.Unmap()
 	for _, s := range strs(val) {
 		if pf, err := parseCIDROrAddr(s); err == nil && pf.Contains(ip) {
-			return yes
+			return e.viaDest(yes)
 		}
 	}
 	return no
@@ -353,12 +382,19 @@ func (e *evalCtx) evalRuleSets(val any) tri {
 			m, err = e.sets.MatchIP(e.ctx, tag, e.t.IP)
 		} else {
 			m, err = e.sets.Match(e.ctx, tag, e.t.Domain)
+			if !m && e.t.DestIP.IsValid() && (err == nil || errors.Is(err, dnsdecide.ErrSetPartial)) {
+				// 域名没中(规则集里只能按 IP 判的那部分也读得出来):再按终端会连的那个地址比一遍,判法和 IP 目标一样
+				// (读不出来 / 判断不了就是没能检查)
+				if m, err = e.sets.MatchIP(e.ctx, tag, e.t.DestIP.Unmap()); m {
+					e.viaDest(yes)
+				}
+			}
 		}
 		switch {
 		case m:
 			return yes
 		case err == nil:
-		case !e.t.IsIP() && errors.Is(err, dnsdecide.ErrSetPartial):
+		case !e.t.IsIP() && !e.t.DestIP.IsValid() && errors.Is(err, dnsdecide.ErrSetPartial):
 			// 规则集读得出来,但里面有只能按 IP 判的规则:缺的是目标 IP
 			e.need(NeedDestIP)
 			if out == no {
