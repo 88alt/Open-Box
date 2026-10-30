@@ -24,6 +24,13 @@ import (
 // ErrUnknownSet 表示这个规则集此刻判断不了(文件没有、解码失败、含有只看域名判断不了的规则等)。
 var ErrUnknownSet = errors.New("规则集判断不了")
 
+// ErrSetPartial 表示规则集本身读得出来,但里面有对这次查询判断不了的规则(例如按域名查、规则集里有 ip_cidr 规则)。
+// 总是和 ErrUnknownSet 一起出现(errors.Is 两个都成立)。调用方可据此区分「缺一个条件(这次没给 IP)」和「规则集读不出来」。
+var ErrSetPartial = errors.New("规则集里有这次判断不了的规则")
+
+// MatchAddr 是 domain / domain_suffix / domain_keyword / domain_regex 这一组条件:任意一个命中即可(d 要已转小写)。
+func MatchAddr(rule map[string]any, d string) bool { return matchAddr(rule, d) }
+
 // Sets 回答「这个规则集包含不包含这个域名」。判断不了返回 ErrUnknownSet(或包着它的错误)。
 type Sets interface {
 	Match(ctx context.Context, tag, domain string) (bool, error)

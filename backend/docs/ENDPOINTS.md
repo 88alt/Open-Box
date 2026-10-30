@@ -279,6 +279,8 @@
 |---|---|---|---|---|
 | POST | `/api/openbox/penetration` | `queryPenetration` (api/openbox.ts:1174) | OpenboxPenetrationResult | (target: string) |
 
+> 实现约定(M3,第一部分):请求 `{"target":"域名或 IP"}`,目标不合法 400,读不到已部署配置 500。按已部署 `config.json` 的 `route.rules` 推算(`internal/routedecide`)。已给:`matched`(`index` / `rule` / `outbound` / `action`)、`owner`(只认得出的)、`assumed`(`needs` / `leaf` / `sameOutcome`)、`preResolve`、`dns`、`chain`(永远是数组,reject 时为空)、`finalOutbound`(拿不到为 null)、`chainError`、`matchError`(规则集没能检查:`matched` 为 null、不给线路)、`routingStale`。**未做**:`entries` / `entriesTotal`、`viaIp`、`resolved`、`preMatch`、`firstLayer`、前置自定义分流的 `ownerName`。
+
 ## `/api/openbox/policies`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |

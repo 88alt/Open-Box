@@ -27,6 +27,7 @@ import (
 	latencyapi "github.com/timeflysoon/Open-Box/backend/internal/api/latency"
 	latencyhistoryapi "github.com/timeflysoon/Open-Box/backend/internal/api/latencyhistory"
 	nodeinfoapi "github.com/timeflysoon/Open-Box/backend/internal/api/nodeinfo"
+	penetrationapi "github.com/timeflysoon/Open-Box/backend/internal/api/penetration"
 	policiesapi "github.com/timeflysoon/Open-Box/backend/internal/api/policies"
 	profileapi "github.com/timeflysoon/Open-Box/backend/internal/api/profile"
 	routetestapi "github.com/timeflysoon/Open-Box/backend/internal/api/routetest"
@@ -46,6 +47,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/deploystate"
 	"github.com/timeflysoon/Open-Box/backend/internal/diagnostics"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
+	"github.com/timeflysoon/Open-Box/backend/internal/dnsdecide"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsfilter"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsqlog"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnssync"
@@ -55,11 +57,13 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/nodeexit"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodeinfo"
+	"github.com/timeflysoon/Open-Box/backend/internal/penetration"
 	"github.com/timeflysoon/Open-Box/backend/internal/policyentries"
 	"github.com/timeflysoon/Open-Box/backend/internal/portcheck"
 	"github.com/timeflysoon/Open-Box/backend/internal/probe"
 	"github.com/timeflysoon/Open-Box/backend/internal/profile"
 	"github.com/timeflysoon/Open-Box/backend/internal/regiondetect"
+	"github.com/timeflysoon/Open-Box/backend/internal/routedecide"
 	"github.com/timeflysoon/Open-Box/backend/internal/routetest"
 	"github.com/timeflysoon/Open-Box/backend/internal/rulelist"
 	"github.com/timeflysoon/Open-Box/backend/internal/server"
@@ -372,6 +376,12 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 
 	// 真实路由测试(做了 DNS 判定、经内核 DNS 入站的解析、真实访问和线路;还没做的见 STATUS.md):经内核的面板入站访问一次,从连接列表认出命中的规则和线路;
 	// 探测前让内核丢掉 DNS 缓存(只是让缓存失效)
+	dnsPredictor := &routetest.DNSPredictor{
+		ConfigFile: filepath.Join(cfg.ConfigDir, "config.json"), SingBox: cfg.SingBox, TmpDir: probeDir,
+		Proxies: func(ctx context.Context) ([]singbox.KernelProxy, error) {
+			return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
+		},
+	}
 	routetestapi.Register(srv.Mux(), routetestapi.Deps{Service: &routetest.Service{
 		Snapshot: func(ctx context.Context) (singbox.KernelSnapshot, error) {
 			return singbox.KernelConnections(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
@@ -387,11 +397,28 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		},
 		// DNS 判定:读已部署的 config.json,按它的 DNS 规则预测这个域名问哪台服务器;规则集文件读不到、
 		// 二进制规则集需要 sing-box 解码,判断不了的如实记成前提;代理侧的实际线路读内核的代理列表补上
-		DNS: &routetest.DNSPredictor{
-			ConfigFile: filepath.Join(cfg.ConfigDir, "config.json"), SingBox: cfg.SingBox, TmpDir: probeDir,
-			Proxies: func(ctx context.Context) ([]singbox.KernelProxy, error) {
-				return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
-			},
+		DNS: dnsPredictor,
+	}})
+
+	// 域名穿透:按已部署配置里的路由规则推算一个域名 / IP 会命中哪条规则、走哪条线路(DNS 判定和真实路由测试共用一个预测器)
+	penetrationSets := &dnsdecide.FileSets{SingBox: cfg.SingBox, TmpDir: probeDir}
+	penetrationapi.Register(srv.Mux(), penetrationapi.Deps{Service: &penetration.Service{
+		Config: func() (map[string]any, error) {
+			return routetest.ReadConfig(filepath.Join(cfg.ConfigDir, "config.json"))
+		},
+		Sets: func(c map[string]any) routedecide.Sets { return penetrationSets.Bind(dnsdecide.SetDefsFromConfig(c)) },
+		DNS:  dnsPredictor,
+		Proxies: func(ctx context.Context) ([]singbox.KernelProxy, error) {
+			return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
+		},
+		// 配置改了、内核还没重启:界面上「规则路由」和「真实路由」对不上是正常的
+		Stale: func(ctx context.Context) bool {
+			info, err := svcCtl.Status(ctx, cfg.CoreService)
+			if err != nil || !info.Running {
+				return false
+			}
+			p, err := applied.Pending(ctx)
+			return err == nil && p.Pending
 		},
 	}})
 

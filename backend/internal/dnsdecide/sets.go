@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -79,15 +80,38 @@ func (f *FileSets) Match(ctx context.Context, tag, domain string) (bool, error) 
 
 // Bind 返回一个用 defs 登记规则集的 Sets,和 f 共用解码缓存。每次预测都重读配置、规则集登记可能变,
 // 但缓存按「文件路径 + 大小 + 修改时间」认,所以可以共用,也不用改 f.Defs(并发预测时不会互相踩)。
-func (f *FileSets) Bind(defs map[string]SetDef) Sets { return bound{f, defs} }
+func (f *FileSets) Bind(defs map[string]SetDef) *Bound { return &Bound{f, defs} }
 
-type bound struct {
+// Bound 是绑定了一份规则集登记的 FileSets:Match 按域名判断(实现 Sets),MatchIP 按目标 IP 判断。
+type Bound struct {
 	f    *FileSets
 	defs map[string]SetDef
 }
 
-func (b bound) Match(ctx context.Context, tag, domain string) (bool, error) {
+// Match 回答「这个规则集包含不包含这个域名」,见 FileSets。
+func (b *Bound) Match(ctx context.Context, tag, domain string) (bool, error) {
 	return b.f.match(ctx, b.defs, tag, domain)
+}
+
+// MatchIP 回答「这个规则集包含不包含这个 IP」。规则集里只含域名条件的规则对 IP(没有域名的连接)恒不命中;
+// 只含 ip_cidr 的规则按网段判断;其余形状(logical、invert、域名和 IP 混在一条里、端口等)判断不了,
+// 没有别的规则命中时返回 ErrUnknownSet,不猜。
+func (b *Bound) MatchIP(ctx context.Context, tag string, ip netip.Addr) (bool, error) {
+	def, ok := b.defs[tag]
+	if !ok {
+		return false, fmt.Errorf("%w: 配置里没有规则集 %s", ErrUnknownSet, tag)
+	}
+	m, err := b.f.load(ctx, tag, def)
+	if err != nil {
+		return false, err
+	}
+	if m.hasIP(ip) {
+		return true, nil
+	}
+	if m.ipPartial {
+		return false, fmt.Errorf("%w: %w: 规则集 %s 里有只看 IP 判断不了的规则", ErrUnknownSet, ErrSetPartial, tag)
+	}
+	return false, nil
 }
 
 func (f *FileSets) match(ctx context.Context, defs map[string]SetDef, tag, domain string) (bool, error) {
@@ -103,7 +127,7 @@ func (f *FileSets) match(ctx context.Context, defs map[string]SetDef, tag, domai
 		return true, nil
 	}
 	if m.partial {
-		return false, fmt.Errorf("%w: 规则集 %s 里有只看域名判断不了的规则", ErrUnknownSet, tag)
+		return false, fmt.Errorf("%w: %w: 规则集 %s 里有只看域名判断不了的规则", ErrUnknownSet, ErrSetPartial, tag)
 	}
 	return false, nil
 }
@@ -241,6 +265,9 @@ type setMatcher struct {
 	keyword []string
 	regex   []*regexp.Regexp
 	partial bool
+	// 按 IP 判断用:只含 ip_cidr 的规则合在一起;ipPartial 为真表示还有对 IP 判断不了的规则
+	cidrs     []netip.Prefix
+	ipPartial bool
 }
 
 // 规则集规则里属于「域名这一组」的键;其余键(ip_cidr、port、process_name 等)出现就判断不了。
@@ -254,23 +281,40 @@ func compile(rules []any) *setMatcher {
 			continue
 		}
 		if t, _ := rule["type"].(string); t == "logical" {
-			m.partial = true
+			m.partial, m.ipPartial = true, true
 			continue
 		}
 		if inv, _ := rule["invert"].(bool); inv {
-			m.partial = true
+			m.partial, m.ipPartial = true, true
 			continue
 		}
-		pure, hasAddr := true, false
+		pure, hasAddr, ipOnly, hasKey := true, false, true, false
 		for k, v := range rule {
 			if k == "type" || empty(v) {
 				continue
+			}
+			hasKey = true
+			if k != "ip_cidr" {
+				ipOnly = false
 			}
 			if addrKeys[k] {
 				hasAddr = true
 			} else {
 				pure = false
 			}
+		}
+		// 对 IP(没有域名的连接)判断:只含 ip_cidr 的按网段;只含域名条件的恒不命中;其余形状判断不了
+		switch {
+		case hasKey && ipOnly:
+			for _, c := range strs(rule["ip_cidr"]) {
+				if pf, err := parseCIDROrAddr(c); err == nil {
+					m.cidrs = append(m.cidrs, pf)
+				} else {
+					m.ipPartial = true // 写不对的网段:不知道它会不会命中
+				}
+			}
+		case hasKey && !(pure && hasAddr):
+			m.ipPartial = true
 		}
 		if !pure {
 			m.partial = true // 同时带 IP 等条件(或只有 IP 条件):对只有域名的查询判断不了
@@ -301,6 +345,28 @@ func compile(rules []any) *setMatcher {
 		}
 	}
 	return m
+}
+
+// parseCIDROrAddr 接受 192.0.2.0/24 和单个地址(规则集源码里 ip_cidr 允许写单个 IP)。
+func parseCIDROrAddr(s string) (netip.Prefix, error) {
+	if pf, err := netip.ParsePrefix(s); err == nil {
+		return pf.Masked(), nil
+	}
+	a, err := netip.ParseAddr(s)
+	if err != nil {
+		return netip.Prefix{}, err
+	}
+	return netip.PrefixFrom(a, a.BitLen()), nil
+}
+
+func (m *setMatcher) hasIP(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	for _, p := range m.cidrs {
+		if p.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *setMatcher) has(d string) bool {
