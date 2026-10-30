@@ -1,11 +1,11 @@
 {
   "protocol": 1,
   "implementation": "go-native",
-  "buildID": "b3d60b34db8670ec8b503e823462909097d663c81d0fd5cb66ccba89f873c578",
+  "buildID": "03588ce3dc2eefc433130d1537de62a46ee7e9538b2c36f496169e59b5850733",
   "goVersion": "1.25.12",
   "os": "linux",
   "arch": "amd64",
-  "sha256": "59b3f35a7516f8573490f82bb901a7795cdee666fc5ed1155ca8603eef140116",
+  "sha256": "efc797d1e7f625d1d480a45b5ca1bbbbb62d8859ec4279ba7634d6ad75b86610",
   "size": 3694740,
-  "bindingSha256": "0fd2b210a6b6ca0c68e6d6bf8549a68388a0857370cc3dae1121a55c2633bdda"
+  "bindingSha256": "d04ca1cb3c41c9847c735c887db2ee010914b69d14f675a8edab7414640c12d2"
 }
