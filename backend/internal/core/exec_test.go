@@ -92,6 +92,9 @@ func TestExecOutputTooLarge(t *testing.T) {
 }
 
 func TestExecDoesNotInheritEnvironment(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 的子进程会被系统补上 SYSTEMROOT 等环境变量,个数对不上")
+	}
 	t.Setenv("SOME_SECRET", "hunter2")
 	exe, _ := os.Executable()
 	c := New(exe)

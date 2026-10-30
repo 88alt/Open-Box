@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -252,6 +253,9 @@ func TestSyncDropsInvalidRegex(t *testing.T) {
 
 // 编译失败(这里用一个必失败的假 sing-box):如实记成问题,不影响别的处理,不留临时文件。
 func TestSyncCompileFailureReported(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("假 sing-box 是 /bin/sh 脚本,Windows 上跑不了")
+	}
 	dir := t.TempDir()
 	fake := filepath.Join(t.TempDir(), "sing-box")
 	if err := os.WriteFile(fake, []byte("#!/bin/sh\necho boom >&2\nexit 1\n"), 0o755); err != nil {

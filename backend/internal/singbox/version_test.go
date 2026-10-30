@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -18,6 +19,9 @@ func fakeBin(t *testing.T, script string) string {
 }
 
 func TestReadKernelVersion(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("假 sing-box 是 /bin/sh 脚本,Windows 上跑不了")
+	}
 	v := ReadKernelVersion(context.Background(), fakeBin(t, `printf 'sing-box version 1.14.0-openbox-tcp5\n\nEnvironment: go1.25 linux/arm64\n'`))
 	if !v.OK || v.Version != "1.14.0-openbox-tcp5" || v.Raw == "" {
 		t.Fatalf("%+v", v)

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -227,7 +228,7 @@ func TestMonthAndPersistence(t *testing.T) {
 	if m2, _ := s2.Month("2026-10", true); len(m2.Days) != 2 {
 		t.Errorf("索引没落盘: %+v", m2)
 	}
-	if fi, err := os.Stat(filepath.Join(dir, "2026-10-28.json")); err != nil || fi.Mode().Perm() != 0o600 {
+	if fi, err := os.Stat(filepath.Join(dir, "2026-10-28.json")); err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) { // Windows 没有 Unix 权限位
 		t.Errorf("权限: %v %v", fi, err)
 	}
 	// 重开后接着记当天(不覆盖已有的)

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -134,6 +135,9 @@ func TestActionErrors(t *testing.T) {
 }
 
 func TestKernelVersion(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("假 sing-box 是 /bin/sh 脚本,Windows 上跑不了")
+	}
 	bin := filepath.Join(t.TempDir(), "sing-box")
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\necho 'sing-box version 1.14.4'\n"), 0o755); err != nil {
 		t.Fatal(err)

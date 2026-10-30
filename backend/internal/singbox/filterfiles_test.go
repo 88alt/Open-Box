@@ -109,6 +109,9 @@ func TestFilterFilesPruneOnlyTouchesStaleFilterFiles(t *testing.T) {
 }
 
 func TestFilterFilesSyncCompileFailureLeavesNoFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("假 sing-box 是 /bin/sh 脚本,Windows 上跑不了")
+	}
 	fake := filepath.Join(t.TempDir(), "sing-box")
 	if err := os.WriteFile(fake, []byte("#!/bin/sh\necho boom >&2\nexit 1\n"), 0o755); err != nil {
 		t.Fatal(err)

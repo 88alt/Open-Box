@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -173,6 +174,9 @@ func TestRefreshNoSingBox(t *testing.T) {
 
 // 编译失败:报 RefreshBuildError(带 sing-box 的原因),已有的文件不动,不沿用旧文件冒充成功。
 func TestRefreshCompileFailureKeepsOldFiles(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("假 sing-box 是 /bin/sh 脚本,Windows 上跑不了")
+	}
 	const u = "https://e.com/a.list"
 	dir := t.TempDir()
 	tag := policyentries.ListTagForURL(u)

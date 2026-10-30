@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 
@@ -34,6 +35,9 @@ func realCore(t *testing.T) string {
 			return
 		}
 		path = filepath.Join(dir, "openbox-core")
+		if runtime.GOOS == "windows" {
+			path += ".exe" // Windows 上没有扩展名的文件运行不了
+		}
 		cmd := exec.Command("go", "build", "-o", path, "./cmd/openbox-core")
 		cmd.Dir = filepath.Join("..", "..", "..", "..", "core")
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -128,7 +129,7 @@ func TestWriteLocalSetsNodeDirectAndMissing(t *testing.T) {
 	if !strings.Contains(string(ip), placeholderCIDR4) {
 		t.Fatalf("空 cidrs 应写占位: %s", ip)
 	}
-	if st, err := os.Stat(filepath.Join(dir, "rules", "obnode-direct.json")); err != nil || st.Mode().Perm() != 0o600 {
+	if st, err := os.Stat(filepath.Join(dir, "rules", "obnode-direct.json")); err != nil || (runtime.GOOS != "windows" && st.Mode().Perm() != 0o600) { // Windows 没有 Unix 权限位
 		t.Fatalf("权限应为 0600: %v %v", st, err)
 	}
 	if rep.OK() || len(rep.Missing) != 2 {
@@ -292,7 +293,7 @@ func TestWriteLocalSetsCopiesGeoFromLibrary(t *testing.T) {
 	if string(got) != string(fakeSRS("v1")) {
 		t.Fatalf("内容 %q", got)
 	}
-	if st, _ := os.Stat(filepath.Join(dst, "geosite-cn.srs")); st.Mode().Perm() != 0o600 {
+	if st, _ := os.Stat(filepath.Join(dst, "geosite-cn.srs")); runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 { // Windows 没有 Unix 权限位
 		t.Fatalf("权限应为 0600: %v", st.Mode())
 	}
 	// 第二次:内容相同,不改写
