@@ -142,6 +142,7 @@ const zhTW: LANG_MESSAGE = {
   proxies: '代理',
   rules: '規則',
   connections: '連接',
+  connectionRoutingTab: '路由',
   logs: '日誌',
   host: '主機',
   port: '端口',

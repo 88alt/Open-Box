@@ -1,6 +1,5 @@
 <template>
   <div class="flex size-full min-h-0 flex-col overflow-hidden">
-    <LogsCtrl />
     <VirtualScroller
       class="min-h-0 flex-1"
       :style="virtualScrollerStyle"
@@ -17,7 +16,6 @@
 <script setup lang="ts">
 import VirtualScroller from '@/components/common/VirtualScroller.vue'
 import LogsCard from '@/components/logs/LogsCard.vue'
-import LogsCtrl from '@/components/sidebar/LogsCtrl.tsx'
 import { usePaddingForViews } from '@/composables/paddingViews'
 import { isMiddleScreen } from '@/helper/utils'
 import { logFilter, logTypeFilter, logs } from '@/store/logs'

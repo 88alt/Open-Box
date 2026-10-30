@@ -43,7 +43,9 @@
       <div
         id="settings-header-actions"
         class="ml-auto flex shrink-0 items-center gap-2"
-      />
+      >
+        <slot />
+      </div>
     </div>
   </div>
 </template>
@@ -62,10 +64,16 @@ type MenuItem = {
   icon: Component
 }
 
-const props = defineProps<{
-  menuItems: MenuItem[]
-  activeMenuKey: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    menuItems: MenuItem[]
+    activeMenuKey: string
+    // 页面内容的上边距要跟着谁走:默认跟着这条页签栏;页签栏里嵌了控制栏(连接页)时,
+    // 由控制栏自己去量,这里就别再量一遍
+    trackControls?: boolean
+  }>(),
+  { trackControls: true },
+)
 
 const emit = defineEmits<{
   (e: 'menu-click', key: string): void
@@ -74,7 +82,9 @@ const emit = defineEmits<{
 const menuRef = ref<HTMLDivElement>()
 const menuItemRefs = ref(new Map<string, HTMLButtonElement>())
 
-useCtrlsBar()
+if (props.trackControls) {
+  useCtrlsBar()
+}
 
 const setMenuItemRef = (el: HTMLButtonElement | null, key: string) => {
   if (!el) {

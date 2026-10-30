@@ -1,46 +1,152 @@
 <template>
+  <!-- 「连接」页:顶栏左边是 路由 / 连接 / 日志 三个页签(原来的「规则」「日志」两个侧边栏入口并进来了),
+       右边是当前页签自己的搜索和按钮;下面是当前页签的内容。和上游 v0.1.376 一致。 -->
   <div
-    class="relative flex size-full min-h-0 flex-col overflow-hidden"
-    :style="!useConnectionCard && padding"
+    class="connection-workspace relative flex h-full min-h-0 flex-col overflow-hidden"
+    :style="{ '--connection-controls-min-width': CONTROLS_MIN_WIDTH[activeTab] }"
   >
-    <template v-if="useConnectionCard">
-      <ConnectionCardList />
-    </template>
-    <template v-else>
-      <ConnectionCtrl />
-      <ConnectionTable />
-    </template>
-    <ConnectionDetails />
+    <SettingsMenu
+      :menu-items="tabItems"
+      :active-menu-key="activeTab"
+      :track-controls="false"
+      @menu-click="handleTabClick"
+    >
+      <div class="connection-workspace-controls">
+        <component :is="CONTROLS[activeTab]" />
+      </div>
+    </SettingsMenu>
+    <div class="min-h-0 flex-1 overflow-hidden">
+      <component :is="CONTENTS[activeTab]" />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import ConnectionCardList from '@/components/connections/ConnectionCardList.vue'
-import ConnectionDetails from '@/components/connections/ConnectionDetails.vue'
-import ConnectionTable from '@/components/connections/ConnectionTable.vue'
+import ConnectionsContent from '@/components/connections/ConnectionsContent.vue'
+import LogsContent from '@/components/logs/LogsContent.vue'
+import RulesContent from '@/components/rules/RulesContent.vue'
+import SettingsMenu from '@/components/settings/SettingsMenu.vue'
 import ConnectionCtrl from '@/components/sidebar/ConnectionCtrl.tsx'
-import { usePaddingForViews } from '@/composables/paddingViews'
-import { useConnectionCard } from '@/store/settings'
-// 表格外面已经包了一层 8px(ConnectionTable 的 app-card-padding),把公共逻辑给的
-// 8px 安全边距抵掉,表格离工具栏 / 底部导航正好 8px,和其它页面一致
-const { padding } = usePaddingForViews({
-  offsetTop: -8,
-  offsetBottom: -8,
-})
+import LogsCtrl from '@/components/sidebar/LogsCtrl.tsx'
+import RulesCtrl from '@/components/sidebar/RulesCtrl.tsx'
+import { CONNECTION_WORKSPACE_TAB, ROUTE_NAME } from '@/constant'
+import { ArrowsRightLeftIcon, DocumentTextIcon, MapIcon } from '@heroicons/vue/24/outline'
+import { useStorage } from '@vueuse/core'
+import type { Component } from 'vue'
+import { computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+
+const route = useRoute()
+const router = useRouter()
+
+const tabItems: { key: CONNECTION_WORKSPACE_TAB; label: string; icon: Component }[] = [
+  { key: CONNECTION_WORKSPACE_TAB.routing, label: 'connectionRoutingTab', icon: MapIcon },
+  { key: CONNECTION_WORKSPACE_TAB.connections, label: 'connections', icon: ArrowsRightLeftIcon },
+  { key: CONNECTION_WORKSPACE_TAB.logs, label: 'logs', icon: DocumentTextIcon },
+]
+// 每个页签的控制栏(搜索、按钮)和内容。控制栏放进顶栏右侧,内容占下面剩余的高度
+const CONTROLS: Record<CONNECTION_WORKSPACE_TAB, Component> = {
+  [CONNECTION_WORKSPACE_TAB.routing]: RulesCtrl,
+  [CONNECTION_WORKSPACE_TAB.connections]: ConnectionCtrl,
+  [CONNECTION_WORKSPACE_TAB.logs]: LogsCtrl,
+}
+const CONTENTS: Record<CONNECTION_WORKSPACE_TAB, Component> = {
+  [CONNECTION_WORKSPACE_TAB.routing]: RulesContent,
+  [CONNECTION_WORKSPACE_TAB.connections]: ConnectionsContent,
+  [CONNECTION_WORKSPACE_TAB.logs]: LogsContent,
+}
+// 控制栏放不下时的最小宽度:低于它就换到页签下面一行
+const CONTROLS_MIN_WIDTH: Record<CONNECTION_WORKSPACE_TAB, string> = {
+  [CONNECTION_WORKSPACE_TAB.routing]: '30rem',
+  [CONNECTION_WORKSPACE_TAB.connections]: '56rem',
+  [CONNECTION_WORKSPACE_TAB.logs]: '46rem',
+}
+
+const isTab = (v: unknown): v is CONNECTION_WORKSPACE_TAB => tabItems.some((item) => item.key === v)
+
+// 上次停留的页签记在本机;地址里带 ?tab= 时(老的 #/logs、#/rules 链接会被路由改写成这样)以地址为准
+const storedTab = useStorage<CONNECTION_WORKSPACE_TAB>(
+  'cache/connection-workspace-tab',
+  CONNECTION_WORKSPACE_TAB.routing,
+)
+if (!isTab(storedTab.value)) {
+  storedTab.value = CONNECTION_WORKSPACE_TAB.routing
+}
+
+const activeTab = computed(() => (isTab(route.query.tab) ? route.query.tab : storedTab.value))
+
+watch(
+  () => route.query.tab,
+  (tab) => {
+    if (route.name === ROUTE_NAME.connections && isTab(tab)) {
+      storedTab.value = tab
+    }
+  },
+  { immediate: true },
+)
+
+const handleTabClick = (key: string) => {
+  if (!isTab(key) || key === activeTab.value) return
+
+  router.push({ name: ROUTE_NAME.connections, query: { ...route.query, tab: key } })
+}
 </script>
 
-<style>
-.vjs-tree {
-  font-family:
-    NotoEmoji,
-    Monaco,
-    Menlo,
-    Consolas,
-    Bitstream Vera Sans Mono,
-    monospace;
+<style scoped>
+/* 页签靠左不拉伸,右边那块(#settings-header-actions)让给控制栏,放不下时控制栏自己横向滚动 */
+.connection-workspace :deep(.settings-menu-list) {
+  flex: 0 0 auto;
 }
-.vjs-tree-node.is-highlight,
-.vjs-tree-node:hover {
-  background-color: var(--color-base-200);
+.connection-workspace :deep(#settings-header-actions) {
+  flex: 1 1 0%;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.connection-workspace-controls {
+  width: 100%;
+  min-width: var(--connection-controls-min-width);
+}
+/* 控制栏原本是贴顶的整条栏(有自己的背景和内边距);嵌进页签栏以后跟着页签栏走 */
+.connection-workspace :deep(.connection-workspace-controls > .ctrls-bar) {
+  position: static;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+#app-content
+  .connection-workspace
+  :deep(.connection-workspace-controls > .ctrls-bar > .app-card-padding) {
+  padding: 0 !important;
+}
+
+/* 窄屏:控制栏换到页签下面单独一行,页签只留文字 */
+@media (max-width: 767px) {
+  .connection-workspace :deep(.settings-menu > div) {
+    flex-wrap: wrap;
+  }
+  .connection-workspace :deep(.settings-menu-list) {
+    flex: 0 1 auto;
+    gap: 0.25rem;
+    max-width: 100%;
+  }
+  .connection-workspace :deep(.settings-menu-list .settings-menu-btn) {
+    padding-inline: 0.5rem;
+  }
+  .connection-workspace :deep(.settings-menu-list .settings-menu-btn > svg) {
+    display: none;
+  }
+  .connection-workspace :deep(.settings-menu-list .settings-menu-btn > span) {
+    display: block;
+    white-space: nowrap;
+  }
+  .connection-workspace :deep(#settings-header-actions) {
+    flex: 0 0 100%;
+    margin-left: 0;
+    overflow: visible;
+  }
+  .connection-workspace-controls {
+    min-width: 0;
+  }
 }
 </style>

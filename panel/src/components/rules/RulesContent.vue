@@ -1,6 +1,5 @@
 <template>
   <div class="relative flex size-full min-h-0 flex-col overflow-hidden">
-    <RulesCtrl />
     <template v-if="!isVirtualScroller">
       <div
         class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
@@ -61,7 +60,6 @@
 <script setup lang="ts">
 import VirtualScroller from '@/components/common/VirtualScroller.vue'
 import RuleCard from '@/components/rules/RuleCard.vue'
-import RulesCtrl from '@/components/sidebar/RulesCtrl.tsx'
 import { usePaddingForViews } from '@/composables/paddingViews'
 import { fetchProxies } from '@/store/proxies'
 import RouteComparison from '@/components/rules/RouteComparison.vue'

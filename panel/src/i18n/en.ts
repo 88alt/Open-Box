@@ -145,6 +145,7 @@ const en = {
   proxies: 'Proxies',
   rules: 'Rules',
   connections: 'Connections',
+  connectionRoutingTab: 'Routing',
   logs: 'Logs',
   host: 'Host',
   port: 'Port',

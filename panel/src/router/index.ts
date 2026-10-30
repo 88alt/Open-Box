@@ -1,4 +1,4 @@
-import { ROUTE_NAME, SETTINGS_TAB } from '@/constant'
+import { CONNECTION_WORKSPACE_TAB, ROUTE_NAME, SETTINGS_TAB } from '@/constant'
 import { renderRoutes } from '@/helper'
 import { i18n } from '@/i18n'
 import {
@@ -11,15 +11,13 @@ import { language } from '@/store/settings'
 import ConnectionsPage from '@/views/ConnectionsPage.vue'
 import HomePage from '@/views/HomePage.vue'
 import LoginPage from '@/views/LoginPage.vue'
-import LogsPage from '@/views/LogsPage.vue'
 import OverviewPage from '@/views/OverviewPage.vue'
 import ProxiesPage from '@/views/ProxiesPage.vue'
-import RulesPage from '@/views/RulesPage.vue'
 import SettingsPage from '@/views/SettingsPage.vue'
 import SetupPasswordPage from '@/views/SetupPasswordPage.vue'
 import { useTitle } from '@vueuse/core'
 import { watch } from 'vue'
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHashHistory, type LocationQuery } from 'vue-router'
 
 const LAST_ROUTE_NAME_KEY = 'cache/last-route-name'
 
@@ -49,15 +47,23 @@ const childrenRouter = [
     name: ROUTE_NAME.connections,
     component: ConnectionsPage,
   },
+  // 日志、规则已并入「连接」页顶栏的页签,老书签和「上次所在页面」仍会指到这两条路由,所以保留为跳转。
+  // 它们带着 name 是为了让 ROUTE_NAME 里的值还能解析;侧边栏靠 renderRoutes 把它们摘掉(见 helper)
   {
     path: 'logs',
     name: ROUTE_NAME.logs,
-    component: LogsPage,
+    redirect: (to: { query: LocationQuery }) => ({
+      name: ROUTE_NAME.connections,
+      query: { ...to.query, tab: CONNECTION_WORKSPACE_TAB.logs },
+    }),
   },
   {
     path: 'rules',
     name: ROUTE_NAME.rules,
-    component: RulesPage,
+    redirect: (to: { query: LocationQuery }) => ({
+      name: ROUTE_NAME.connections,
+      query: { ...to.query, tab: CONNECTION_WORKSPACE_TAB.routing },
+    }),
   },
   // 订阅/分流/内核已并入「设置」页的一级页签。这里保留三条重定向而不是直接删掉:
   // 老书签、以及升级前存在 localStorage 里的"上次所在页面",都还会指过来,落到

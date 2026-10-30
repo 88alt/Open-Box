@@ -142,6 +142,7 @@ const zh: LANG_MESSAGE = {
   proxies: '代理',
   rules: '规则',
   connections: '连接',
+  connectionRoutingTab: '路由',
   logs: '日志',
   host: '主机',
   port: '端口',

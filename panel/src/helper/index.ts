@@ -162,6 +162,9 @@ export const renderRoutes = computed(() => {
       ROUTE_NAME.subscriptions,
       ROUTE_NAME.routing,
       ROUTE_NAME.kernel,
+      // 规则、日志并进了「连接」页顶栏的页签(见 views/ConnectionsPage.vue)
+      ROUTE_NAME.rules,
+      ROUTE_NAME.logs,
     ].includes(r)
   })
 })

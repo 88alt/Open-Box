@@ -1,6 +1,5 @@
 <template>
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-    <ConnectionCtrl />
     <VirtualScroller
       class="min-h-0 flex-1"
       :style="virtualScrollerStyle"
@@ -22,7 +21,6 @@ import { connectionCardLines } from '@/store/settings'
 import type { Connection } from '@/types'
 import { computed } from 'vue'
 import VirtualScroller from '../common/VirtualScroller.vue'
-import ConnectionCtrl from '../sidebar/ConnectionCtrl.tsx'
 import ConnectionCard from './ConnectionCard'
 
 const { paddingTop } = usePaddingForViews({
