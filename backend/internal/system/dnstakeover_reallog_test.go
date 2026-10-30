@@ -51,9 +51,7 @@ func newRealLogEnv(t *testing.T) *realLogEnv {
 		t.Skip("没有 dnsmasq 可执行文件,跳过端到端验证")
 	}
 	e := &realLogEnv{dir: t.TempDir(), kernel: startFakeDNS(t)}
-	probe := startFakeDNS(t) // 只为拿一个空闲的 UDP 端口号
-	e.dmAddr = probe.addr
-	probe.conn.Close()
+	e.dmAddr = freeDualAddr(t)
 	e.conf = filepath.Join(e.dir, "dnsmasq.d")
 	e.run = filepath.Join(e.dir, "run")
 	for _, d := range []string{e.conf, e.run} {
@@ -183,4 +181,25 @@ func TestTakeoverQueryLogFallsBackWhenLogCannotBeOpened(t *testing.T) {
 	if changed, err := e.tk.Apply(ctx); err != nil || changed {
 		t.Fatalf("不该重试: changed=%v err=%v", changed, err)
 	}
+}
+
+// freeDualAddr 挑一个 TCP 和 UDP 都空闲的本机地址:dnsmasq 两个都会占,只查 UDP 的话,
+// 和别的包并发跑测试时 TCP 那边可能撞车("Address already in use")。
+func freeDualAddr(t *testing.T) string {
+	t.Helper()
+	for i := 0; i < 50; i++ {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Skipf("开不了本机 TCP: %v", err)
+		}
+		addr := l.Addr().String()
+		pc, err := net.ListenPacket("udp", addr)
+		l.Close()
+		if err == nil {
+			pc.Close()
+			return addr
+		}
+	}
+	t.Fatal("挑不到 TCP 和 UDP 都空闲的端口")
+	return ""
 }

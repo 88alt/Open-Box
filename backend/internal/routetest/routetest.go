@@ -70,6 +70,7 @@ type Exit struct {
 	DestinationIP    string   `json:"destinationIP,omitempty"`
 	ConnectTo        string   `json:"connectTo,omitempty"` // 像终端一样按解析出的第一个真实 IPv4 去连时,这个 IP;目标是 IP / 没有可用答案时没有
 	ViaProxy         *bool    `json:"viaProxy,omitempty"`
+	NoDomain         bool     `json:"noDomain,omitempty"` // 命中的是只管没有域名的连接的 IP 规则,见 noDomainRule
 	Method           string   `json:"method,omitempty"`
 	Challenge        string   `json:"challenge,omitempty"`
 	NotSeen          bool     `json:"notSeen,omitempty"`
@@ -390,6 +391,7 @@ func (s *Service) fillRoute(ctx context.Context, ex *Exit, port string) {
 		chains = append(chains, found.Chains[i])
 	}
 	ex.Chains, ex.Rule, ex.RulePayload, ex.DestinationIP = chains, found.Rule, found.RulePayload, found.DestIP
+	ex.NoDomain = noDomainRule(found.Rule, found.Host)
 	leaf := chains[len(chains)-1]
 	via := !contains(snap.DirectTags, leaf)
 	ex.ViaProxy = &via

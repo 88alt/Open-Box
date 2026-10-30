@@ -702,9 +702,7 @@ func TestTakeoverWithRealDnsmasq(t *testing.T) {
 	// 模拟 OpenWrt 的布局:上游来自 resolv-file(「运营商 DNS」在 127.0.0.2:53),dnsmasq 监听另一个端口
 	isp := startFakeDNSAt(t, "127.0.0.2:53") // 绑不了(没有 root)就跳过
 	kernel := startFakeDNS(t)
-	probe := startFakeDNS(t) // 只为拿一个空闲的 UDP 端口号
-	dmAddr := probe.addr
-	probe.conn.Close()
+	dmAddr := freeDualAddr(t)
 
 	dir := t.TempDir()
 	conf := filepath.Join(dir, "dnsmasq.d")
