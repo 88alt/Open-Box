@@ -645,6 +645,18 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		go func() { defer close(done); dnsqlog.Run(ctx, qlog, cfg.DNSQueryLog, st, 0, nil) }()
 		return func() { wait(); <-done }
 	}
+
+	// 再加一项:订阅定时更新(只更新节点,不自动部署、不重启内核;退出时等它停下)
+	withLogged := background
+	background = func(ctx context.Context) func() {
+		wait := func() {}
+		if withLogged != nil {
+			wait = withLogged(ctx)
+		}
+		done := make(chan struct{})
+		go func() { defer close(done); subs.NewScheduler(subsSvc).Run(ctx) }()
+		return func() { wait(); <-done }
+	}
 	return srv, background, nil
 }
 

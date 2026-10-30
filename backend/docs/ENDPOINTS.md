@@ -380,6 +380,8 @@
 | PATCH | `/api/openbox/subscriptions/{x}` | `updateSubscription` (api/openbox.ts:637) | — | ( id: string, payload: { name?: string; url?: string; urls?: string[]; content?: |
 | POST | `/api/openbox/subscriptions/{x}/refresh` | `refreshSubscription` (api/openbox.ts:915) | — | ( id: string, renameOptions?: OpenboxRenameOptions, ) |
 
+实现约定(M4,订阅定时更新):订阅的 `autoUpdate` 由后端调度器执行(没有对应的 HTTP 接口)。`mode` 为 `hours` 时是上次更新后每隔 `hours` 小时;否则是上次更新那天起每隔 `days` 天的 `hour` 点(进程本地时区)。只更新订阅里的节点,不自动部署、不重启内核;节点变了以后 `service/status` 的 `pendingRestart`(原因 `nodes`)会提示。停用的订阅、没开定时的订阅、只有粘贴内容没有地址的订阅不更新。失败后 10 分钟 / 30 分钟 / 1 小时退避重试。
+
 ## `/api/openbox/system`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
