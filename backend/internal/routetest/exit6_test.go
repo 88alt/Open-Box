@@ -122,7 +122,6 @@ func TestExit6NotApplicable(t *testing.T) {
 	run("没有 AAAA 记录", base(v6DNS(t), ipv6On), Input{Target: "example.com"})
 	run("第一个就是 fake-ip", base(v6DNS(t, "fc00::1", "2001:db8::1"), ipv6On), Input{Target: "example.com"})
 	run("IP 目标", base(v6DNS(t, "2001:db8::1"), ipv6On), Input{Target: "127.0.0.1"})
-	run("TCP 方式", base(v6DNS(t, "2001:db8::1"), ipv6On), Input{Target: "example.com", Method: "TCP"})
 	servfail := newFakeDNS(t, false, func(req []byte, _ bool) []byte {
 		if qtypeOf(req) == qtypeAAAA {
 			return reply(req, 2, false)

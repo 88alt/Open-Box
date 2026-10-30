@@ -139,8 +139,8 @@ func TestPredictFailures(t *testing.T) {
 func TestRunWithDNSPredictor(t *testing.T) {
 	dir := t.TempDir()
 	cfg := writeConfig(t, dir, map[string]string{"geosite-cn": `{"rules":[{"domain_suffix":["cn.test"]}]}`, "obflip-fallback": `{"rules":[]}`})
-	s := &Service{ProxyAddr: "127.0.0.1:1", Timeout: 200 * 1e6, DNS: &DNSPredictor{ConfigFile: cfg}}
-	res, err := s.Run(context.Background(), Input{Target: "a.cn.test", Method: "TCP"}) // TCP 提前返回,dns 也要有
+	s := &Service{ProxyAddr: "127.0.0.1:1", DNSAddr: "127.0.0.1:1", Timeout: 200 * 1e6, DNS: &DNSPredictor{ConfigFile: cfg}}
+	res, err := s.Run(context.Background(), Input{Target: "a.cn.test", Method: "GET"}) // 探测失败(入口连不上)也要有 dns
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,15 +155,15 @@ func TestRunWithDNSPredictor(t *testing.T) {
 		}
 	}
 	// IP 目标不预测;预测失败写 error;没接预测器写「没有接入」
-	if res, _ = s.Run(context.Background(), Input{Target: "1.1.1.1", Method: "TCP"}); asMap(res.DNS)["skipped"] != true {
+	if res, _ = s.Run(context.Background(), Input{Target: "1.1.1.1", Method: "GET"}); asMap(res.DNS)["skipped"] != true {
 		t.Errorf("IP: %#v", res.DNS)
 	}
 	s.DNS.ConfigFile = filepath.Join(dir, "none.json")
-	if res, _ = s.Run(context.Background(), Input{Target: "a.test", Method: "TCP"}); !strings.Contains(asMap(res.DNS)["error"].(string), "DNS 判定失败") {
+	if res, _ = s.Run(context.Background(), Input{Target: "a.test", Method: "GET"}); !strings.Contains(asMap(res.DNS)["error"].(string), "DNS 判定失败") {
 		t.Errorf("失败: %#v", res.DNS)
 	}
 	s.DNS = nil
-	if res, _ = s.Run(context.Background(), Input{Target: "a.test", Method: "TCP"}); !strings.Contains(asMap(res.DNS)["error"].(string), "没有接入") {
+	if res, _ = s.Run(context.Background(), Input{Target: "a.test", Method: "GET"}); !strings.Contains(asMap(res.DNS)["error"].(string), "没有接入") {
 		t.Errorf("没接: %#v", res.DNS)
 	}
 }

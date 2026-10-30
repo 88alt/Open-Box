@@ -259,21 +259,6 @@ func TestRunTLS(t *testing.T) {
 	}
 }
 
-func TestRunTCPNotSupported(t *testing.T) {
-	flushed := false
-	s := &Service{ProxyAddr: "127.0.0.1:1", FlushDNS: func(context.Context) error { flushed = true; return nil }}
-	res, err := s.Run(context.Background(), Input{Target: "example.com", Port: 22, Method: "TCP"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.Exit.OK || !strings.Contains(res.Exit.Error, "TCP") || res.Exit.Method != "TCP" {
-		t.Errorf("TCP 应该如实报暂不支持: %+v", res.Exit)
-	}
-	if flushed {
-		t.Errorf("没有探测就不该清 DNS 缓存")
-	}
-}
-
 func TestRunFailures(t *testing.T) {
 	// 内核入口连不上
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")
