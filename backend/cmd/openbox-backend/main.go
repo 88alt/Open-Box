@@ -306,6 +306,14 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	rulesDir := filepath.Join(cfg.DataDir, "rules")
 	fetchList := func(ctx context.Context, u string) ([]byte, error) { return rulelist.Fetch(ctx, nil, u) }
 	failoverPlanPath := filepath.Join(cfg.ConfigDir, failover.PlanFileName)
+	// 故障转移检测管理器:按已部署的计划定时测各页签、确认后切换主备。对内核的动作经控制接口(内核没在运行就读不到,
+	// 管理器据此不测不切、稍后重试);启动时先载入已存的计划,每次部署成功后换上新计划
+	failoverMgr := failover.NewManager(failover.Options{Kernel: failover.ClashKernel{ConfigFile: filepath.Join(cfg.ConfigDir, "config.json")}})
+	if p, err := failover.LoadPlan(failoverPlanPath); err != nil {
+		log.Warn("读不到故障转移计划,检测管理器先不管任何组", "error", err)
+	} else {
+		failoverMgr.SetPlan(p)
+	}
 	deployer := &singbox.Deployer{
 		Build:   singbox.ListedBuilder{Gen: gen, Lists: singbox.ListFiles{Rules: lists, SingBox: cfg.SingBox, Dir: rulesDir}},
 		Files:   singbox.Files{SingBox: cfg.SingBox, GeoDir: cfg.GeoDir},
@@ -318,7 +326,11 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			if err != nil {
 				return err
 			}
-			return failover.SavePlan(failoverPlanPath, p)
+			if err := failover.SavePlan(failoverPlanPath, p); err != nil {
+				return err
+			}
+			failoverMgr.SetPlan(p) // 部署成功:管理器换上新计划(没变的组保留数据),并按它对齐内核当前的选择
+			return nil
 		},
 		// 替换配置、重启内核之前撤销 DNS 接管;内核健康之后(含回滚后旧配置又健康)按 dns.mode 对齐
 		BeforeApply: dnsSync.BeforeKernelStop,
@@ -379,7 +391,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 延迟历史:每个节点 / 组最近 10 次测速,后端记、各浏览器共享;sync 读一次内核的 /proxies 把成功的结果记下来
 	latencyhistoryapi.Register(srv.Mux(), latencyhistoryapi.Deps{Service: nodeHistory})
 	failoverapi.Register(srv.Mux(), failoverapi.Deps{
-		Plan: func() (failover.Plan, error) { return failover.LoadPlan(failoverPlanPath) },
+		Manager: failoverMgr,
+		Plan:    func() (failover.Plan, error) { return failover.LoadPlan(failoverPlanPath) },
 		Kernel: func(ctx context.Context) ([]singbox.KernelProxy, error) {
 			return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
 		},
@@ -609,6 +622,31 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
 			defer cancel()
 			dnsSync.Recover(rctx)
+		}()
+		return func() { wait(); <-done }
+	}
+
+	// 再加一项:故障转移检测循环,每秒让管理器看一遍各组(到时间的就开一轮检测);退出时等进行中的检测收尾
+	withFailover := background
+	background = func(ctx context.Context) func() {
+		wait := func() {}
+		if withFailover != nil {
+			wait = withFailover(ctx)
+		}
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			tick := time.NewTicker(time.Second)
+			defer tick.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					failoverMgr.Wait()
+					return
+				case <-tick.C:
+					failoverMgr.Step(ctx)
+				}
+			}
 		}()
 		return func() { wait(); <-done }
 	}

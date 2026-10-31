@@ -31,24 +31,44 @@ type LaneStatus struct {
 
 // GroupStatus 是一个故障转移组的运行状态。
 type GroupStatus struct {
-	ID            string       `json:"id"`
-	Tag           string       `json:"tag"`
-	Status        string       `json:"status"` // pending / ok / backup / failing / reject / unknown
-	Paused        string       `json:"paused"`
-	LastError     string       `json:"lastError"`
-	RejectTag     string       `json:"rejectTag"`
-	CurrentLaneID *string      `json:"currentLaneId"`
-	CurrentSince  *int64       `json:"currentSince"`
-	KernelNow     *string      `json:"kernelNow"`
-	LastSwitch    any          `json:"lastSwitch"`
-	LastRoundAt   *int64       `json:"lastRoundAt"`
-	NextRoundAt   *int64       `json:"nextRoundAt"`
-	LaneOrder     []string     `json:"laneOrder"`
-	Reorder       any          `json:"reorder"`
-	InFlight      bool         `json:"inFlight"`
-	Round         any          `json:"round"`
-	Settings      Settings     `json:"settings"`
-	Lanes         []LaneStatus `json:"lanes"`
+	ID            string   `json:"id"`
+	Tag           string   `json:"tag"`
+	Status        string   `json:"status"` // pending / ok / backup / failing / reject / unknown
+	Paused        string   `json:"paused"`
+	LastError     string   `json:"lastError"`
+	RejectTag     string   `json:"rejectTag"`
+	CurrentLaneID *string  `json:"currentLaneId"`
+	CurrentSince  *int64   `json:"currentSince"`
+	KernelNow     *string  `json:"kernelNow"`
+	LastSwitch    any      `json:"lastSwitch"`
+	LastRoundAt   *int64   `json:"lastRoundAt"`
+	NextRoundAt   *int64   `json:"nextRoundAt"`
+	LaneOrder     []string `json:"laneOrder"`
+	Reorder       any      `json:"reorder"`
+	InFlight      bool     `json:"inFlight"`
+	Round         any      `json:"round"`
+	// ManualRecheck:点了「重新检测」还没做完;RecheckPending:已受理、还没轮到测
+	ManualRecheck  bool         `json:"manualRecheck"`
+	RecheckPending bool         `json:"recheckPending"`
+	Settings       Settings     `json:"settings"`
+	Lanes          []LaneStatus `json:"lanes"`
+}
+
+// ProbeStats 对应前端 OpenboxProbeStats:面板全局测速名额此刻的情况。
+// 后端没有「用户点出来的测速」和「后台测速」的分别排队,Interactive 恒为 0;吞吐没有统计,为 null。
+type ProbeStats struct {
+	Interactive    int      `json:"interactive"`
+	Background     int      `json:"background"` // 此刻在测的节点数
+	Limit          int      `json:"limit"`
+	ThroughputPerS *float64 `json:"throughputPerSec"`
+	DemandPerSec   *float64 `json:"demandPerSec"` // 按各组间隔,每秒要测几个(上限:每个页签的有效节点都测)
+}
+
+// Runtime 是检测管理器给状态接口的数据(*Manager 满足)。
+type Runtime interface {
+	Running() bool
+	Snapshot() []GroupRuntime
+	Probes() (inUse, limit int)
 }
 
 // Status 是 GET /api/openbox/failover/status 的响应。
@@ -63,9 +83,16 @@ type Status struct {
 // KernelFunc 读内核当前的代理列表(*singbox.KernelProxy 的名字、类型、当前选择)。读不到返回 error。
 type KernelFunc func(ctx context.Context) ([]singbox.KernelProxy, error)
 
-// BuildStatus 用计划加内核此刻的选择算出状态。kernel 为空或读不到时,各组 status 是 unknown、kernelNow 为 null,
-// 其余照计划如实给。没有检测管理器,所以 running 恒为 false、页签 health 恒为 unknown、没有节点检测结果。
+// BuildStatus 是没有检测管理器的状态:running 为 false、页签 health 恒为 unknown、没有节点检测结果。
 func BuildStatus(ctx context.Context, plan Plan, kernel KernelFunc) Status {
+	return BuildStatusWith(ctx, plan, kernel, nil)
+}
+
+// BuildStatusWith 用计划加内核此刻的选择,再叠上检测管理器的运行数据算出状态(rt 为空 = 没有管理器)。
+// kernel 为空或读不到时,各组 status 是 unknown(管理器有数据时用管理器的)、kernelNow 为 null,其余照计划如实给。
+// 「当前用的是哪个页签」以这次读到的内核选择为准(比管理器上一轮记的新);读不到内核时才退回管理器记的。
+// 状态以管理器的为准(它多了 pending / failing 两种),管理器说 unknown 而这次读到了内核时用按内核选择算出的那个。
+func BuildStatusWith(ctx context.Context, plan Plan, kernel KernelFunc, rt Runtime) Status {
 	now := map[string]string{} // 代理名 → 它当前选中的
 	haveKernel := false
 	if kernel != nil {
@@ -77,6 +104,25 @@ func BuildStatus(ctx context.Context, plan Plan, kernel KernelFunc) Status {
 		}
 	}
 	out := Status{Groups: make([]GroupStatus, 0, len(plan)), Paused: ""}
+	runtime := map[string]GroupRuntime{}
+	if rt != nil {
+		out.Running = rt.Running()
+		for _, r := range rt.Snapshot() {
+			runtime[r.ID] = r
+		}
+		inUse, limit := rt.Probes()
+		ps := ProbeStats{Background: inUse, Limit: limit}
+		demand := 0.0
+		for _, g := range plan {
+			nodes := 0
+			for _, l := range g.Lanes {
+				nodes += len(l.Valid)
+			}
+			demand += float64(nodes) / intervalOf(g.Settings).Seconds()
+		}
+		ps.DemandPerSec = &demand
+		out.Probes = ps
+	}
 	for _, g := range plan {
 		gs := GroupStatus{
 			ID: g.ID, Tag: g.Tag, Status: "unknown", RejectTag: g.RejectTag, Settings: g.Settings,
@@ -122,7 +168,48 @@ func BuildStatus(ctx context.Context, plan Plan, kernel KernelFunc) Status {
 		if cur != "" && cur == g.RejectTag {
 			gs.Status = "reject"
 		}
+		if r, ok := runtime[g.ID]; ok {
+			overlay(&gs, r, haveKernel)
+		}
 		out.Groups = append(out.Groups, gs)
 	}
 	return out
+}
+
+// overlay 把管理器的一个组的运行数据叠到按计划和内核算出的状态上。
+func overlay(gs *GroupStatus, r GroupRuntime, haveKernel bool) {
+	if r.Status != "" && r.Status != "unknown" {
+		gs.Status = r.Status
+	}
+	gs.LastError = r.LastError
+	gs.CurrentSince = r.CurrentSince
+	if r.LastSwitch != nil {
+		gs.LastSwitch = r.LastSwitch
+	}
+	gs.LastRoundAt, gs.NextRoundAt = r.LastRoundAt, r.NextRoundAt
+	gs.InFlight, gs.ManualRecheck, gs.RecheckPending = r.InFlight, r.ManualRecheck, r.RecheckPending
+	if r.Round != nil {
+		gs.Round = r.Round
+	}
+	if !haveKernel { // 这次读不到内核:用管理器上一轮记下的
+		gs.CurrentLaneID, gs.KernelNow = r.CurrentLaneID, r.KernelNow
+	}
+	for i := range gs.Lanes {
+		ls := &gs.Lanes[i]
+		lr, ok := r.Lanes[ls.ID]
+		if !ok {
+			continue
+		}
+		ls.Health, ls.FailStreak, ls.UpSince, ls.Confirmed = lr.Health, lr.FailStreak, lr.UpSince, lr.Confirmed
+		if ls.KernelNow == nil {
+			ls.KernelNow = lr.KernelNow
+		}
+		for _, m := range ls.Valid {
+			if nr, ok := lr.Nodes[m]; ok {
+				if b, err := json.Marshal(nr); err == nil {
+					ls.Nodes[m] = b
+				}
+			}
+		}
+	}
 }

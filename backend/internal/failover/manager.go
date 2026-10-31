@@ -274,6 +274,9 @@ func (m *Manager) invalidate(gr *groupRT) {
 // Wait 等所有已经开始的检测轮结束(测试和优雅退出用)。
 func (m *Manager) Wait() { m.wg.Wait() }
 
+// Probes 返回全局测速名额此刻在用几个、一共几个(所有组共用)。
+func (m *Manager) Probes() (inUse, limit int) { return len(m.sem), cap(m.sem) }
+
 // Running 说明管理器此刻有没有组在管(有计划)。
 func (m *Manager) Running() bool {
 	m.mu.Lock()
