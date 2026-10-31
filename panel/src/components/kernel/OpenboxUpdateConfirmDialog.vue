@@ -31,7 +31,7 @@
         </div>
         <div
           v-else-if="blocks.length"
-          class="bg-base-200/60 flex flex-col gap-1 rounded-lg p-3"
+          class="flex flex-col gap-1"
         >
           <template
             v-for="(block, index) in blocks"
