@@ -164,7 +164,7 @@
             v-model="draft.domain"
             type="text"
             class="input input-sm w-full font-mono"
-            placeholder="services.googleapis.com"
+            placeholder="services.googleapis.com / *.googleapis.com"
           />
           <textarea
             v-else
