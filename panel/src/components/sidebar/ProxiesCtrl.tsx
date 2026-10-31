@@ -20,7 +20,7 @@ import {
   minProxyCardWidth,
   providerProxyCategoryCollapseMap,
   proxyCardSize,
-  proxyGroupColumns,
+  proxyGroupColumnsCurrent,
   proxySortType,
   useSmartGroupSort,
 } from '@/store/settings'
@@ -211,7 +211,7 @@ export default defineComponent({
         <button
           class={[
             'btn btn-circle btn-sm',
-            proxyGroupColumns.value > 1 &&
+            proxyGroupColumnsCurrent.value > 1 &&
               proxiesTabShow.value !== PROXY_TAB_TYPE.PROVIDER &&
               'max-sm:hidden',
           ]}

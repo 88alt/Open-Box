@@ -73,21 +73,46 @@
       </div>
     </template>
     <!-- 布局:代理组分几列(GitHub #10) -->
-    <template v-if="isVisibleProxyGroupColumns">
+    <template v-if="isVisibleProxyGroupColumnsPC || isVisibleProxyGroupColumnsMobile">
       <div class="settings-title">
         {{ $t('proxyGroupLayout') }}
       </div>
       <div class="settings-grid">
-        <div class="setting-item">
+        <div
+          v-if="isVisibleProxyGroupColumnsPC"
+          class="setting-item"
+        >
           <div class="setting-item-label">
-            {{ $t('proxyGroupColumns') }}
+            {{ $t('proxyGroupColumnsPC') }}
           </div>
           <select
             class="select select-sm w-28"
-            v-model.number="proxyGroupColumns"
+            :aria-label="$t('proxyGroupColumnsPC')"
+            v-model.number="proxyGroupColumnsPC"
           >
             <option
               v-for="n in [1, 2, 3]"
+              :key="n"
+              :value="n"
+            >
+              {{ $t(`proxyGroupColumns${n}`) }}
+            </option>
+          </select>
+        </div>
+        <div
+          v-if="isVisibleProxyGroupColumnsMobile"
+          class="setting-item"
+        >
+          <div class="setting-item-label">
+            {{ $t('proxyGroupColumnsMobile') }}
+          </div>
+          <select
+            class="select select-sm w-28"
+            :aria-label="$t('proxyGroupColumnsMobile')"
+            v-model.number="proxyGroupColumnsMobile"
+          >
+            <option
+              v-for="n in [1, 2]"
               :key="n"
               :value="n"
             >
@@ -108,7 +133,8 @@ import {
   IPv6test,
   lowLatency,
   mediumLatency,
-  proxyGroupColumns,
+  proxyGroupColumnsMobile,
+  proxyGroupColumnsPC,
   speedtestTimeout,
 } from '@/store/settings'
 import { computed } from 'vue'
@@ -118,7 +144,8 @@ const isVisibleSpeedtestTimeout = useIsSettingVisible(k.speedtestTimeout)
 const isVisibleLowLatency = useIsSettingVisible(k.lowLatencyDesc)
 const isVisibleMediumLatency = useIsSettingVisible(k.mediumLatencyDesc)
 const isVisibleIpv6Test = useIsSettingVisible(k.ipv6Test)
-const isVisibleProxyGroupColumns = useIsSettingVisible(k.proxyGroupColumns)
+const isVisibleProxyGroupColumnsPC = useIsSettingVisible(k.proxyGroupColumnsPC)
+const isVisibleProxyGroupColumnsMobile = useIsSettingVisible(k.proxyGroupColumnsMobile)
 
 const hasVisibleLatencyItems = computed(() => {
   return (

@@ -136,12 +136,31 @@ if (missingCards.length > 0) {
 
 // proxies
 export const collapseGroupMap = useStorage<Record<string, boolean>>('config/collapse-group-map', {})
-// 代理组分几列(1 / 2 / 3,GitHub #10:策略组多了单列要翻很久)。老设置 config/two-columns 是个
-// 开关,第一次读到时按它换算,老用户的布局不会突然变
-const legacyTwoColumnProxyGroup = useStorage('config/two-columns', true)
-export const proxyGroupColumns = useStorage<number>(
+// 代理组分几列(GitHub #10:策略组多了单列要翻很久)。PC 端最多 3 列、手机端最多 2 列,各存一份,
+// 按当前设备取用(对齐上游 v0.1.378)。老设置 config/two-columns 是个开关,第一次读到时按它换算,
+// 老用户的 PC 布局不会突然变
+const legacyTwoColumnProxyGroup = useStorage('config/two-columns', false)
+const clampColumns = (value: number, max: number) => Math.min(max, Math.max(1, Math.trunc(value) || 1))
+const proxyGroupColumnsPCRaw = useStorage<number>(
   'config/proxy-group-columns',
   legacyTwoColumnProxyGroup.value ? 2 : 1,
+)
+const proxyGroupColumnsMobileRaw = useStorage<number>('config/proxy-group-columns-mobile', 1)
+export const proxyGroupColumnsPC = computed({
+  get: () => clampColumns(proxyGroupColumnsPCRaw.value, 3),
+  set: (value: number) => {
+    proxyGroupColumnsPCRaw.value = clampColumns(value, 3)
+  },
+})
+export const proxyGroupColumnsMobile = computed({
+  get: () => clampColumns(proxyGroupColumnsMobileRaw.value, 2),
+  set: (value: number) => {
+    proxyGroupColumnsMobileRaw.value = clampColumns(value, 2)
+  },
+})
+// 当前设备实际用哪个设置:窄屏(手机)用手机的列数,否则用 PC 的
+export const proxyGroupColumnsCurrent = computed(() =>
+  isMiddleScreen.value ? proxyGroupColumnsMobile.value : proxyGroupColumnsPC.value,
 )
 export const speedtestUrl = useStorage<string>('config/speedtest-url', TEST_URL)
 // 内置直连出站用的测速地址(见 constant/index.ts 的说明)

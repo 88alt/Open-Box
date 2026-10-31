@@ -140,7 +140,7 @@ import {
   getProxyAutoRefreshSchedule,
   proxiesTabShow,
 } from '@/store/proxies'
-import { proxyGroupColumns } from '@/store/settings'
+import { proxyGroupColumnsCurrent } from '@/store/settings'
 import { useDocumentVisibility, useIntervalFn, useSessionStorage } from '@vueuse/core'
 import { pollLatencyHistoryVersion } from '@/store/latencyHistory'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -373,7 +373,7 @@ const renderComponent = computed(() => {
   return ProxyGroup
 })
 
-// 实际摆几列:设置里的列数,三个页签(策略 / 节点 / 订阅)共用;窄屏最多两列(三列摆不下),
+// 实际摆几列:设置里的列数,三个页签(策略 / 节点 / 订阅)共用;手机端单独一份设置(最多两列),
 // 条目不够多也不硬拆。以前只有策略页签分列,节点页签选了双列也是单列(GitHub #33)
 const columnItemCount = computed(() => {
   if (proxiesTabShow.value === PROXY_TAB_TYPE.NODE) return nodeGroups.value.length
@@ -382,8 +382,8 @@ const columnItemCount = computed(() => {
 })
 const displayColumns = computed(() => {
   if (columnItemCount.value < 2) return 1
-  const wanted = Math.min(Math.max(Math.trunc(proxyGroupColumns.value) || 1, 1), 3)
-  return Math.min(wanted, isMiddleScreen.value ? 2 : 3, columnItemCount.value)
+  // 列数设置 PC / 手机各一份,已按设备取好并限制在各自上限内;条目不够多也不硬拆
+  return Math.min(proxyGroupColumnsCurrent.value, columnItemCount.value)
 })
 
 const filterContent: <T>(all: T[], target: number) => T[] = (all, target) => {
