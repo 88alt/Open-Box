@@ -22,6 +22,8 @@
                 class="shrink-0 text-base"
                 :class="subscription.enabled === false && 'text-base-content/50'"
               >{{ subscription.name }}</span>
+              <!-- 来源徽标:登录账号 / 订阅链接 / 手动节点,与 v0.1.378 一致 -->
+              <span class="badge badge-ghost badge-sm shrink-0 whitespace-nowrap">{{ $t(sourceKindKey) }}</span>
               <span class="text-base-content/60 truncate text-xs">({{ countText }})</span>
               <span
                 v-if="subscription.enabled === false"
@@ -205,6 +207,14 @@ const allProxies = computed(() =>
     .map(([tag]) => tag),
 )
 const { renderProxies, proxiesCount } = useRenderProxies(allProxies)
+
+// 名字后面的来源徽标:有登录账号 → 登录;有订阅链接 → 订阅;否则是手动添加的节点
+const sourceKindKey = computed(() => {
+  const sub = props.subscription
+  if (sub.account) return 'subscriptionTabLogin'
+  if (sub.url || sub.urls?.length) return 'subscriptionTabSource'
+  return 'subscriptionTabNodes'
+})
 
 // 空了的原因:没有节点 / 没测速或都测不通被「隐藏不可用节点」藏光了(没写过滤词时只可能是这个) / 过滤词没匹配上
 const emptyHintKey = computed(() => {
