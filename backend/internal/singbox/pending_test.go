@@ -100,6 +100,9 @@ func TestFingerprintReasonsAreIsolated(t *testing.T) {
 		{"终端分流", func(in *FingerprintInput) { in.Profile["clientRoutes"] = []any{map[string]any{"id": "c1"}} }, []string{ReasonRoute}},
 		{"共享网络服务器", func(in *FingerprintInput) { in.Profile["servers"].([]any)[0].(map[string]any)["port"] = float64(9443) }, []string{ReasonInbounds}},
 		{"tun 参数", func(in *FingerprintInput) { in.Profile["tun"] = map[string]any{"stack": "gvisor"} }, []string{ReasonInbounds}},
+		{"进内核前放行的端口(黑名单)", func(in *FingerprintInput) { in.Profile["bypassPorts"] = "21114-21119, 2233" }, []string{ReasonSystem}},
+		{"进内核前放行的端口(白名单)", func(in *FingerprintInput) { in.Profile["bypassPortsWhitelist"] = "443" }, []string{ReasonSystem}},
+		{"进内核前放行的端口(切换模式)", func(in *FingerprintInput) { in.Profile["bypassPortsMode"] = "whitelist" }, []string{ReasonSystem}},
 		{"没见过的档案键", func(in *FingerprintInput) { in.Profile["someFutureKey"] = true }, []string{ReasonSystem}},
 		{"规则集目录", func(in *FingerprintInput) { in.Profile["rulesetDir"] = "/x" }, []string{ReasonSystem}},
 		{"同时改两处", func(in *FingerprintInput) {

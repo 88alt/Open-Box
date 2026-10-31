@@ -43,14 +43,15 @@ const (
 var reasonOrder = []string{ReasonNodes, ReasonDNS, ReasonRoute, ReasonInbounds, ReasonSystem}
 
 // profileKeyReason:档案键 → 原因。依据是 core 实际读取的键(core/internal/config 里 jsx.Get(profile, …))
-// 加上后端自己读的 chainProxies;前端档案里有、但 core 目前还没读的(bypassPorts 等)也按字面含义归类,
-// 免得 core 以后读它们时漏报。没列出的键一律归「系统」(见 profileReason)。
+// 加上后端自己读的 chainProxies。没列出的键一律归「系统」(见 profileReason)。
+// 进内核前放行的端口(bypassPorts / bypassPortsWhitelist / bypassPortsMode)故意不列:上游的提示里它们
+// 显示为「系统设置」,这里保持一致,走默认的「系统」归类。
 var profileKeyReason = map[string]string{
 	"testUrl": ReasonNodes, "directTestUrl": ReasonNodes, "testExpectedStatus": ReasonNodes, "chainProxies": ReasonNodes,
 	"dns": ReasonDNS, "region": ReasonDNS, "ipv6": ReasonDNS, "ipv6Proxy": ReasonDNS,
 	"routing": ReasonRoute, "clientRoutes": ReasonRoute, "directBypass": ReasonRoute, "directForNodes": ReasonRoute,
-	"rejectQuic": ReasonRoute, "bypassPorts": ReasonRoute, "bypassPortsWhitelist": ReasonRoute, "bypassPortsMode": ReasonRoute,
-	"servers": ReasonInbounds, "tun": ReasonInbounds,
+	"rejectQuic": ReasonRoute,
+	"servers":    ReasonInbounds, "tun": ReasonInbounds,
 }
 
 // profileKeyIgnored:确定不会进 sing-box 配置的档案键。改它们不该提示重启。

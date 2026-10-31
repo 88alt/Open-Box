@@ -41,6 +41,7 @@
 
 <script setup lang="ts">
 import type { OpenboxProfile } from '@/api/openbox'
+import { refreshServiceStatus } from '@/composables/kernelService'
 import { showNotification } from '@/helper/notification'
 import { computed, ref, watch } from 'vue'
 
@@ -92,6 +93,7 @@ const switchMode = async (next: Mode) => {
   mode.value = next
   try {
     await props.patchProfile({ bypassPortsMode: next })
+    void refreshServiceStatus()
     showNotification({ content: 'routingPolicySaved', type: 'alert-success' })
   } catch (err) {
     mode.value = prev
@@ -107,6 +109,7 @@ const savePorts = async () => {
   }
   try {
     await props.patchProfile({ [FIELD[mode.value]]: text })
+    void refreshServiceStatus()
     showNotification({ content: 'routingPolicySaved', type: 'alert-success' })
   } catch (err) {
     showNotification({ content: 'routingSaveFailed', params: { message: err instanceof Error ? err.message : String(err) }, type: 'alert-error' })
