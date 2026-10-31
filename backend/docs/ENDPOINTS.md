@@ -87,6 +87,8 @@
 |---|---|---|---|---|
 | GET | `/api/openbox/backup?subscriptions={x}&chainProxies={x}&clientRoutes={x}&servers={x}` | `fetchBackup` (api/openbox.ts:1560) | OpenboxBackup | (opts: OpenboxBackupOptions) |
 
+实现约定(M5,导出部分):文件格式 `{format:"open-box-backup", version:1, exportedAt, openboxVersion, includes, profile, groups, subscriptions?, nodes?, panelSettings, backgroundImage}`;没勾的可选部分整个键不在文件里(档案的 `chainProxies` / `clientRoutes` / `servers`,以及 `subscriptions` / `nodes`),「没有这个键」表示导入时保持现状;`nodes` 是各订阅的节点摊平成一个数组、每项带 `subscription`(订阅 id);面板设置只含 `config/` 开头且名字不带 password 的键。没传的参数:`chainProxies` 按 1,其它按 0。`POST /backup/import` 现在回 501。
+
 ## `/api/openbox/chain-proxies`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |

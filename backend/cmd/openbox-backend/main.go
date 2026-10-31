@@ -16,6 +16,7 @@ import (
 
 	activationapi "github.com/timeflysoon/Open-Box/backend/internal/api/activation"
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
+	backupapi "github.com/timeflysoon/Open-Box/backend/internal/api/backup"
 	clientappapi "github.com/timeflysoon/Open-Box/backend/internal/api/clientapp"
 	clientsapi "github.com/timeflysoon/Open-Box/backend/internal/api/clients"
 	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
@@ -43,6 +44,7 @@ import (
 	timezoneapi "github.com/timeflysoon/Open-Box/backend/internal/api/timezone"
 	trafficapi "github.com/timeflysoon/Open-Box/backend/internal/api/traffic"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
+	"github.com/timeflysoon/Open-Box/backend/internal/backup"
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
 	"github.com/timeflysoon/Open-Box/backend/internal/controllerproxy"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
@@ -172,6 +174,11 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	subsapi.Register(srv.Mux(), subsapi.Deps{Subs: subsSvc})
 	groupsSvc := nodegroups.New(st, groupsCore, subsSvc, nodegroups.ChainsFromProfile(profileSvc))
 	groupsapi.Register(srv.Mux(), groupsapi.Deps{Groups: groupsSvc})
+
+	// 备份:目前只有导出(档案 + 节点组,可选订阅和节点,外加面板设置和背景图);导入见 STATUS.md
+	backupapi.Register(srv.Mux(), backupapi.Deps{Exporter: &backup.Service{
+		Profiles: profileSvc, Groups: groupsSvc, Subs: subsSvc, Panel: storageapi.Panel{Store: st}, Version: version,
+	}})
 	var genCore singbox.Caller
 	if core.Available(cfg.Core) {
 		genCore = core.New(cfg.Core)
