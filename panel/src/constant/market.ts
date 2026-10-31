@@ -3,6 +3,7 @@
 export const MARKET_URL = 'https://blog.angeworld.cc/market'
 export const SUPERDOOR_URL = 'https://ai.superdoor.top'
 export const OPENDOOR_URL = 'https://ai.opendoor.sbs/'
+export const DOWNMAN_URL = 'https://downman.sbs'
 
 // 纯 link-primary 在浅色主题下太淡,和正文挤在一起看不出是链接。往正文色方向混三成:
 // 混 base-content 而不是混黑色,深色主题下同样是"更贴近正文色",不会糊成一团。
