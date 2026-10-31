@@ -252,7 +252,12 @@ export const groupTestUrls = useStorage<
 >('config/group-test-urls', [])
 
 // connections
-export const useConnectionCard = useStorage('config/use-connection-card', true)
+// PC 端默认表格、手机端默认卡片,各存各的;连接页和排序只读下面按屏幕宽度取值的 useConnectionCard
+export const useConnectionCardPC = useStorage('config/use-connection-card', false)
+export const useConnectionCardMobile = useStorage('config/use-connection-card-mobile', true)
+export const useConnectionCard = computed(() =>
+  isMiddleScreen.value ? useConnectionCardMobile.value : useConnectionCardPC.value,
+)
 export const proxyChainDirection = useStorage(
   'config/proxy-chain-direction',
   PROXY_CHAIN_DIRECTION.NORMAL,

@@ -13,7 +13,7 @@ import {
   quickFilterEnabled,
   renderConnections,
 } from '@/store/connections'
-import { useConnectionCard } from '@/store/settings'
+import { useConnectionCard, useConnectionCardMobile, useConnectionCardPC } from '@/store/settings'
 import {
   ArrowDownCircleIcon,
   ArrowUpCircleIcon,
@@ -111,16 +111,29 @@ export default defineComponent({
                 正则固定用默认那条;「完整显示代理链」恒开。跳去设置页的入口也去掉了——
                 这里能改的东西本来就都在眼前。 */}
             <div class="flex flex-col gap-4 text-sm">
-              <div class="flex items-center justify-between gap-3">
-                <span>{t('connectionStyle')}</span>
-                <select
-                  class="select select-sm min-w-24"
-                  value={useConnectionCard.value ? 'card' : 'table'}
-                  onChange={(e) => (useConnectionCard.value = (e.target as HTMLSelectElement).value === 'card')}
-                >
-                  <option value="card">{t('card')}</option>
-                  <option value="table">{t('table')}</option>
-                </select>
+              <div class="connection-style-selectors grid grid-cols-2 gap-4">
+                {(
+                  [
+                    ['connectionStylePC', useConnectionCardPC],
+                    ['connectionStyleMobile', useConnectionCardMobile],
+                  ] as const
+                ).map(([labelKey, style]) => (
+                  <label
+                    key={labelKey}
+                    class="flex min-w-0 items-center justify-between gap-2"
+                  >
+                    <span class="shrink-0 text-xs whitespace-nowrap sm:text-sm">{t(labelKey)}</span>
+                    <select
+                      class="select select-sm w-20 max-w-28 min-w-0 flex-1"
+                      aria-label={t(labelKey)}
+                      value={style.value ? 'card' : 'table'}
+                      onChange={(e) => (style.value = (e.target as HTMLSelectElement).value === 'card')}
+                    >
+                      <option value="card">{t('card')}</option>
+                      <option value="table">{t('table')}</option>
+                    </select>
+                  </label>
+                ))}
               </div>
               <label class="flex cursor-pointer items-center gap-3">
                 <input
@@ -134,7 +147,8 @@ export default defineComponent({
                   <span class="text-base-content/60 text-xs">{t('hideDnsConnectionsHint')}</span>
                 </span>
               </label>
-              {useConnectionCard.value ? <ConnectionCardSettings /> : <TableSettings />}
+              {(useConnectionCardPC.value || useConnectionCardMobile.value) && <ConnectionCardSettings />}
+              {(!useConnectionCardPC.value || !useConnectionCardMobile.value) && <TableSettings />}
               <div class="flex flex-col gap-2">
                 <SourceIPLabels />
               </div>
