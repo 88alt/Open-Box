@@ -3,6 +3,7 @@ package singbox
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -50,8 +51,10 @@ func TestBuildPassesFilterArtifactToCore(t *testing.T) {
 			t.Errorf("配置里没有过滤规则集 %s", g.Tag)
 		}
 	}
-	if !strings.Contains(string(raw), "/data/rules/"+art.Groups[0].Tag+".srs") {
-		t.Error("规则集路径不对")
+	// 路径由 filepath.Join 拼出,Windows 上分隔符是反斜杠;JSON 里再转义一次,所以拿同样的方式生成期望值
+	wantPath, _ := json.Marshal(filepath.Join("/data/rules", art.Groups[0].Tag+".srs"))
+	if !strings.Contains(string(raw), strings.Trim(string(wantPath), `"`)) {
+		t.Errorf("规则集路径不对,想要含 %s", wantPath)
 	}
 }
 
