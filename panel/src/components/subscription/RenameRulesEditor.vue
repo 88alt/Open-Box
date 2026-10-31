@@ -1,205 +1,220 @@
 <template>
-  <div class="flex flex-col gap-4">
-    <!-- 前缀存的是开关而不是文本:存文本的话,用户改了订阅名,前缀还留着旧名字。
-         它和重命名规则无关(关了重命名也能加前缀),所以放在规则标题前面 -->
-    <label class="flex cursor-pointer items-center gap-2 text-xs">
-      <input
-        v-model="usePrefix"
-        type="checkbox"
-        class="checkbox checkbox-xs"
-      />
-      {{ $t('subscriptionRenamePrefixLabel', { sep: '|' }) }}
-    </label>
-
-    <!-- 重命名规则:标题后面是总开关,关掉时下面的规则整块收起、节点保留机场原始名字 -->
-    <div class="flex items-center justify-between gap-2">
-      <label class="flex cursor-pointer items-center gap-2">
-        <h3 class="text-sm font-semibold">{{ $t('subscriptionRenameEditorTitle') }}</h3>
+  <!-- 两行网格:上面是固定的控制区(前缀、总开关、命名模板、地区关键词标题),下面是地区列表等
+       内容的独立滚动区。列表再长,上面的开关和模板也一直在眼前,滚动条只出现在列表那一块,
+       与上游 v0.1.382 一致。第一行 minmax(0,max-content):控制区矮时按内容高度,太高时自己也能滚;
+       第二行至少留 4rem,不会被挤没。 -->
+  <div class="grid min-h-0 flex-1 grid-rows-[minmax(0,max-content)_minmax(4rem,1fr)] gap-4">
+    <div class="rename-controls flex min-h-0 flex-col gap-4 overflow-y-auto overscroll-contain [&>*]:shrink-0">
+      <!-- 前缀存的是开关而不是文本:存文本的话,用户改了订阅名,前缀还留着旧名字。
+           它和重命名规则无关(关了重命名也能加前缀),所以放在规则标题前面 -->
+      <label class="flex cursor-pointer items-center gap-2 text-xs">
         <input
-          v-model="enabled"
+          v-model="usePrefix"
           type="checkbox"
-          class="toggle toggle-xs toggle-primary"
+          class="checkbox checkbox-xs"
         />
+        {{ $t('subscriptionRenamePrefixLabel', { sep: '|' }) }}
       </label>
-      <button
-        v-if="enabled"
-        type="button"
-        class="btn btn-ghost btn-xs"
-        @click="resetToDefaults"
-      >
-        <ArrowUturnLeftIcon class="h-3.5 w-3.5" />
-        {{ $t('reset') }}
-      </button>
-    </div>
-    <p
-      v-if="!enabled"
-      class="text-base-content/60 -mt-2 text-xs"
-    >{{ $t('subscriptionRenameDisabledHint') }}</p>
 
-    <!-- Template + unknown label + seq padding -->
-    <div
-      v-if="enabled"
-      class="flex flex-col gap-2"
-    >
-      <!-- 命名模板不再是一个要手写 {region}-{feature}-{seq} 的文本框:那对小白等于
-           没说。改成三块可拖拽的牌子,拖出来的先后顺序就是节点名的组成顺序,分隔符
-           固定用 "-"。下面那行实时显示算出来的样子。
-           代价:自定义分隔符和模板里夹带的固定文字不再可编辑(旧配置若有,会在下次
-           保存时按当前顺序规范化)。换来的是这一屏不用再解释什么叫占位符。 -->
-      <div class="flex flex-wrap items-center gap-2">
-        <span class="text-base-content/50 text-xs">{{ $t('subscriptionRenameTokensHint') }}</span>
-        <!-- force-fallback:走 Sortable 自己的指针实现,不用浏览器原生 HTML5 拖放。
-             原生拖放会拖出一张浏览器自绘的半透明快照(小徽章上尤其难看),而且在触屏
-             上行为不一致;fallback 模式拖的是 Sortable 复制出来的真实元素。 -->
-        <Draggable
-          v-model="tokenOrder"
-          :animation="150"
-          :force-fallback="true"
-          :fallback-on-body="true"
-          class="flex flex-wrap items-center gap-1.5"
-          ghost-class="opacity-40"
-          :item-key="(item: string) => item"
-        >
-          <template #item="{ element: token }">
-            <span
-              class="badge badge-outline badge-sm cursor-move select-none"
-              :title="token"
-            >
-              <Bars3Icon class="mr-1 h-3 w-3 opacity-50" />
-              {{ $t(TOKEN_LABELS[token]) }}
-            </span>
-          </template>
-        </Draggable>
-
-        <!-- 序号位数收成一行、推到最右:它是给序号补零的位数(不补零时 美国-10 会
-             排在 美国-2 前面,因为节点名到处都按文本排序)。原先它和「无法识别地区
-             时的标签」并排各占半格,一个只填 1 位数字的框占那么大一块并不划算。 -->
-        <label class="ml-auto flex items-center gap-1.5 text-xs">
-          <span class="text-base-content/50">{{ $t('subscriptionRenameSeqPadLabel') }}:</span>
+      <!-- 重命名规则:标题后面是总开关,关掉时下面的规则整块收起、节点保留机场原始名字 -->
+      <div class="flex items-center justify-between gap-2">
+        <label class="flex cursor-pointer items-center gap-2">
+          <h3 class="text-sm font-semibold">{{ $t('subscriptionRenameEditorTitle') }}</h3>
           <input
-            v-model.number="seqPad"
-            type="number"
-            min="1"
-            max="4"
-            class="input input-xs w-14"
-            :title="$t('subscriptionRenameSeqPadHint')"
+            v-model="enabled"
+            type="checkbox"
+            class="toggle toggle-xs toggle-primary"
           />
         </label>
-      </div>
-      <p class="text-base-content/60 text-xs">
-        {{ $t('subscriptionRenameTemplateExample', { example: templateExample }) }}
-      </p>
-    </div>
-
-    <!-- Region dictionary:关了重命名也要留着——地区识别给国旗和按地区选成员的节点组用 -->
-    <div class="flex flex-col gap-2">
-      <div class="flex items-center justify-between">
-        <label class="text-xs font-medium">{{ $t('subscriptionRenameRegionDictLabel') }}</label>
         <button
+          v-if="enabled"
           type="button"
           class="btn btn-ghost btn-xs"
-          @click="addRegionRow"
+          @click="resetToDefaults"
         >
-          <PlusIcon class="h-3.5 w-3.5" />
-          {{ $t('subscriptionRenameAddRow') }}
+          <ArrowUturnLeftIcon class="h-3.5 w-3.5" />
+          {{ $t('reset') }}
         </button>
       </div>
-      <p class="text-base-content/50 text-xs">{{ $t('subscriptionRenameRegionDictHint') }}</p>
-      <!-- 顺序即优先级:matchRegion 返回第一个命中的地区,所以排在前面的先生效。
-           比如「香港」排在「中国」前面,节点名「中国香港 01」才会被认成香港。
-           handle 限定成那个图标:不限定的话按住输入框拖会变成拖行,连字都选不了。 -->
-      <Draggable
-        v-model="regionRows"
-        :animation="150"
-        :force-fallback="true"
-        :fallback-on-body="true"
-        handle=".drag-handle"
-        ghost-class="opacity-40"
-        item-key="id"
-        class="flex flex-col gap-1.5"
+      <p
+        v-if="!enabled"
+        class="text-base-content/60 -mt-2 text-xs"
+      >{{ $t('subscriptionRenameDisabledHint') }}</p>
+
+      <!-- Template + unknown label + seq padding -->
+      <div
+        v-if="enabled"
+        class="flex flex-col gap-2"
       >
-        <template #item="{ element: row }">
-          <div class="flex items-center gap-1.5">
-            <Bars3Icon class="drag-handle text-base-content/40 h-4 w-4 shrink-0 cursor-move" />
-            <!-- 一行 = 一个国家/地区。绑到具体国家(而不是随手写的名字)之后,才谈得上
-                 配一面对应的国旗,匹配出来的节点也才有国别可言。还没绑上的(老档案里
-                 手写的名字)在按钮上显示它原来的名字,不会被悄悄清掉。 -->
-            <div class="w-32 shrink-0">
-              <CountrySelect
-                :model-value="row.code"
-                :placeholder="row.name || $t('subscriptionRenameRegionNamePlaceholder')"
-                @update:model-value="pickCountry(row, $event)"
-              />
-            </div>
+        <!-- 命名模板不再是一个要手写 {region}-{feature}-{seq} 的文本框:那对小白等于
+             没说。改成三块可拖拽的牌子,拖出来的先后顺序就是节点名的组成顺序,分隔符
+             固定用 "-"。下面那行实时显示算出来的样子。
+             代价:自定义分隔符和模板里夹带的固定文字不再可编辑(旧配置若有,会在下次
+             保存时按当前顺序规范化)。换来的是这一屏不用再解释什么叫占位符。 -->
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-base-content/50 text-xs">{{ $t('subscriptionRenameTokensHint') }}</span>
+          <!-- force-fallback:走 Sortable 自己的指针实现,不用浏览器原生 HTML5 拖放。
+               原生拖放会拖出一张浏览器自绘的半透明快照(小徽章上尤其难看),而且在触屏
+               上行为不一致;fallback 模式拖的是 Sortable 复制出来的真实元素。 -->
+          <Draggable
+            v-model="tokenOrder"
+            :animation="150"
+            :force-fallback="true"
+            :fallback-tolerance="5"
+            :fallback-on-body="true"
+            class="flex flex-wrap items-center gap-1.5"
+            ghost-class="opacity-40"
+            :item-key="(item: string) => item"
+          >
+            <template #item="{ element: token }">
+              <span
+                class="badge badge-outline badge-sm cursor-move select-none"
+                :title="token"
+              >
+                <Bars3Icon class="mr-1 h-3 w-3 opacity-50" />
+                {{ $t(TOKEN_LABELS[token]) }}
+              </span>
+            </template>
+          </Draggable>
+
+          <!-- 序号位数收成一行、推到最右:它是给序号补零的位数(不补零时 美国-10 会
+               排在 美国-2 前面,因为节点名到处都按文本排序)。原先它和「无法识别地区
+               时的标签」并排各占半格,一个只填 1 位数字的框占那么大一块并不划算。 -->
+          <label class="ml-auto flex items-center gap-1.5 text-xs">
+            <span class="text-base-content/50">{{ $t('subscriptionRenameSeqPadLabel') }}:</span>
             <input
-              v-model="row.keywordsText"
-              type="text"
-              class="input input-sm min-w-0 flex-1"
-              :placeholder="$t('subscriptionRenameKeywordsPlaceholder')"
+              v-model.number="seqPad"
+              type="number"
+              min="1"
+              max="4"
+              class="input input-xs w-14"
+              :title="$t('subscriptionRenameSeqPadHint')"
             />
-            <button
-              type="button"
-              class="btn btn-ghost btn-circle btn-xs shrink-0"
-              :aria-label="$t('subscriptionRenameRemoveRow')"
-              @click="removeRegionRow(row.id)"
-            >
-              <XMarkIcon class="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </template>
-      </Draggable>
-      <div>
-        <p
-          v-if="regionRows.length === 0"
-          class="text-base-content/50 text-xs"
-        >
-          {{ $t('subscriptionRenameNoRows') }}
+          </label>
+        </div>
+        <p class="text-base-content/60 text-xs">
+          {{ $t('subscriptionRenameTemplateExample', { example: templateExample }) }}
         </p>
+      </div>
+
+      <!-- Region dictionary:关了重命名也要留着——地区识别给国旗和按地区选成员的节点组用 -->
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-medium">{{ $t('subscriptionRenameRegionDictLabel') }}</label>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs"
+            @click="addRegionRow"
+          >
+            <PlusIcon class="h-3.5 w-3.5" />
+            {{ $t('subscriptionRenameAddRow') }}
+          </button>
+        </div>
+        <p class="text-base-content/50 text-xs">{{ $t('subscriptionRenameRegionDictHint') }}</p>
       </div>
     </div>
 
-    <!-- 「无法识别地区时的标签」紧跟在地区关键词后面:它就是这张表全都没命中时的
-         兜底值,挨着它要兜底的那份清单最好懂。原来它在最上面和序号位数并排,离得远。 -->
-    <div
-      v-if="enabled"
-      class="flex flex-col gap-1"
-    >
-      <label class="text-xs font-medium">{{ $t('subscriptionRenameUnknownLabel') }}</label>
-      <input
-        v-model="unknownLabel"
-        type="text"
-        class="input input-sm w-full"
-      />
-    </div>
+    <div class="rename-details min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div class="flex flex-col gap-4">
+        <div class="flex flex-col gap-2">
+          <!-- 顺序即优先级:matchRegion 返回第一个命中的地区,所以排在前面的先生效。
+               比如「香港」排在「中国」前面,节点名「中国香港 01」才会被认成香港。
+               handle 限定成那个图标:不限定的话按住输入框拖会变成拖行,连字都选不了。 -->
+          <Draggable
+            v-model="regionRows"
+            :animation="150"
+            :force-fallback="true"
+            :fallback-tolerance="5"
+            :fallback-on-body="true"
+            handle=".drag-handle"
+            ghost-class="opacity-40"
+            item-key="id"
+            class="flex flex-col gap-1.5"
+          >
+            <template #item="{ element: row }">
+              <div class="flex items-center gap-1.5">
+                <Bars3Icon class="drag-handle text-base-content/40 h-4 w-4 shrink-0 cursor-move" />
+                <!-- 一行 = 一个国家/地区。绑到具体国家(而不是随手写的名字)之后,才谈得上
+                     配一面对应的国旗,匹配出来的节点也才有国别可言。还没绑上的(老档案里
+                     手写的名字)在按钮上显示它原来的名字,不会被悄悄清掉。 -->
+                <div class="w-32 shrink-0">
+                  <CountrySelect
+                    :model-value="row.code"
+                    :placeholder="row.name || $t('subscriptionRenameRegionNamePlaceholder')"
+                    @update:model-value="pickCountry(row, $event)"
+                  />
+                </div>
+                <input
+                  v-model="row.keywordsText"
+                  type="text"
+                  class="input input-sm min-w-0 flex-1"
+                  :placeholder="$t('subscriptionRenameKeywordsPlaceholder')"
+                />
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-circle btn-xs shrink-0"
+                  :aria-label="$t('subscriptionRenameRemoveRow')"
+                  @click="removeRegionRow(row.id)"
+                >
+                  <XMarkIcon class="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </template>
+          </Draggable>
+          <div>
+            <p
+              v-if="regionRows.length === 0"
+              class="text-base-content/50 text-xs"
+            >
+              {{ $t('subscriptionRenameNoRows') }}
+            </p>
+          </div>
+        </div>
 
-    <!-- 特征不再是「标签 + 同义词」两层结构:命中哪个关键词就把那个词本身(转大写)
-         写进节点名。所以这里只需要一行关键词,不再有标签列,也不再有多行增删。
-         例:关键词填 iplc,ipv6,节点名 "美国 IPLC IPv6 01" → 美国-IPLC-IPV6-01。 -->
-    <div
-      v-if="enabled"
-      class="flex flex-col gap-1"
-    >
-      <label class="text-xs font-medium">{{ $t('subscriptionRenameFeatureDictLabel') }}</label>
-      <p class="text-base-content/50 text-xs">{{ $t('subscriptionRenameFeatureDictHint') }}</p>
-      <input
-        v-model="featureKeywordsText"
-        type="text"
-        class="input input-sm w-full"
-        :placeholder="$t('subscriptionRenameKeywordsPlaceholder')"
-      />
-    </div>
+        <!-- 「无法识别地区时的标签」紧跟在地区关键词后面:它就是这张表全都没命中时的
+             兜底值,挨着它要兜底的那份清单最好懂。原来它在最上面和序号位数并排,离得远。 -->
+        <div
+          v-if="enabled"
+          class="flex flex-col gap-1"
+        >
+          <label class="text-xs font-medium">{{ $t('subscriptionRenameUnknownLabel') }}</label>
+          <input
+            v-model="unknownLabel"
+            type="text"
+            class="input input-sm w-full"
+          />
+        </div>
 
-    <!-- 过滤:命中就整条不导入。机场订阅里常混着「官网｜https://xxx」「请提工单开通」
-         这类公告条目,它们不是节点,却会被当成节点参与分组、出现在策略组里。 -->
-    <div class="flex flex-col gap-1">
-      <label class="text-xs font-medium">{{ $t('subscriptionRenameExcludeLabel') }}</label>
-      <p class="text-base-content/50 text-xs">{{ $t('subscriptionRenameExcludeHint') }}</p>
-      <input
-        v-model="excludeKeywordsText"
-        type="text"
-        class="input input-sm w-full"
-        :placeholder="$t('subscriptionRenameKeywordsPlaceholder')"
-      />
+        <!-- 特征不再是「标签 + 同义词」两层结构:命中哪个关键词就把那个词本身(转大写)
+             写进节点名。所以这里只需要一行关键词,不再有标签列,也不再有多行增删。
+             例:关键词填 iplc,ipv6,节点名 "美国 IPLC IPv6 01" → 美国-IPLC-IPV6-01。 -->
+        <div
+          v-if="enabled"
+          class="flex flex-col gap-1"
+        >
+          <label class="text-xs font-medium">{{ $t('subscriptionRenameFeatureDictLabel') }}</label>
+          <p class="text-base-content/50 text-xs">{{ $t('subscriptionRenameFeatureDictHint') }}</p>
+          <input
+            v-model="featureKeywordsText"
+            type="text"
+            class="input input-sm w-full"
+            :placeholder="$t('subscriptionRenameKeywordsPlaceholder')"
+          />
+        </div>
+
+        <!-- 过滤:命中就整条不导入。机场订阅里常混着「官网｜https://xxx」「请提工单开通」
+             这类公告条目,它们不是节点,却会被当成节点参与分组、出现在策略组里。 -->
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-medium">{{ $t('subscriptionRenameExcludeLabel') }}</label>
+          <p class="text-base-content/50 text-xs">{{ $t('subscriptionRenameExcludeHint') }}</p>
+          <input
+            v-model="excludeKeywordsText"
+            type="text"
+            class="input input-sm w-full"
+            :placeholder="$t('subscriptionRenameKeywordsPlaceholder')"
+          />
+        </div>
+      </div>
     </div>
   </div>
 </template>
