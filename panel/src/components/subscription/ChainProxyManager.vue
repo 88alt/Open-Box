@@ -249,32 +249,18 @@
         <!-- 测速:结果和按钮同一行,出口信息只占一行小字 -->
         <div class="flex flex-col gap-1">
           <div class="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              class="btn btn-sm"
-              :disabled="testing"
+            <LatencyPill
+              :ms="testResult?.ok ? (testResult.ms ?? 0) : undefined"
+              :error="testResult && !testResult.ok ? $t('chainProxyTestFailed') : undefined"
+              :loading="testing"
+              :test-label="$t('chainProxyTest')"
               @click="runTest"
-            >
-              <span
-                v-if="testing"
-                class="loading loading-spinner loading-xs"
-              />
-              <BoltIcon
-                v-else
-                class="h-4 w-4"
-              />
-              {{ $t('chainProxyTest') }}
-            </button>
+            />
             <template v-if="testResult && !testing">
               <span
-                v-if="testResult.ok"
-                class="font-medium"
-                :class="latencyClass(testResult.ms ?? 0)"
-              >{{ testResult.ms ?? 0 }} ms</span>
-              <span
-                v-else
+                v-if="!testResult.ok"
                 class="text-error text-xs break-all"
-              >{{ $t('chainProxyTestFailed') }}</span>
+              >{{ testResult.error }}</span>
               <span
                 v-if="testResult.via"
                 class="text-base-content/50 text-xs"
@@ -362,6 +348,7 @@
 import { fetchNodeGroups, fetchProfile, saveProfile, testChainLatency } from '@/api/openbox'
 import type { OpenboxChainLatencyResult, OpenboxChainProxy } from '@/api/openbox'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
+import LatencyPill from '@/components/common/LatencyPill.vue'
 import OutboundPicker from '@/components/common/OutboundPicker.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import { IP_INFO_API } from '@/constant'
