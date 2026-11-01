@@ -30,7 +30,7 @@
           />
         </div>
         <input
-          class="input input-sm w-30 shrink-0"
+          class="input input-sm w-28 shrink-0"
           v-model="site.name"
           :placeholder="$t('testSiteNamePlaceholder')"
         />
