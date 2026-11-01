@@ -42,7 +42,9 @@
         "name": "Speed",
         "icon": "misc:stopwatch",
         "default": "proxy",
-        "rulesets": [],
+        "rulesets": [
+          "geosite-openspeedtest"
+        ],
         "domain": [
           "speed.cloudflare.com",
           "challenges.cloudflare.com"
