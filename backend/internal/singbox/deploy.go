@@ -122,6 +122,19 @@ func fail(stage, msg string, bad []string) DeployResult {
 	return DeployResult{Stage: stage, Message: msg, BadTags: bad}
 }
 
+// ErrDeployBusy 表示已有一次部署正在进行(Exclusive 不等它,直接返回)。
+var ErrDeployBusy = errors.New("已有一次部署正在进行")
+
+// Exclusive 在部署的锁里执行 fn:fn 执行期间不会有部署开始,已有部署在进行时不等待、不执行 fn,返回 ErrDeployBusy。
+// 给「恢复出厂设置」这类不能和部署交错的操作用。
+func (d *Deployer) Exclusive(fn func() error) error {
+	if !d.mu.TryLock() {
+		return ErrDeployBusy
+	}
+	defer d.mu.Unlock()
+	return fn()
+}
+
 // Deploy 执行一次部署。同一时刻只允许一次。
 // 替换正式配置之后的所有步骤(重启、检查、回滚)不受 ctx 取消影响:请求断开不能把系统留在半截状态。
 func (d *Deployer) Deploy(ctx context.Context) DeployResult {

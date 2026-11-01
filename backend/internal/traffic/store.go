@@ -258,6 +258,31 @@ func (s *Store) saveIndexLocked() error {
 	return store.WriteFileAtomic(filepath.Join(s.dir, indexName), b, 0o600)
 }
 
+// Reset 清空全部流量统计:删掉目录里所有 .json(每天的合计、小时明细、索引),并丢掉内存里还没落盘的数据,
+// 之后采样从空库接着记。内存先清,所以删文件失败时后台的落盘也不会把旧数据写回去;删不掉的文件合成一个 error 返回。
+// 用于恢复出厂设置。
+func (s *Store) Reset() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.idx = indexFile{Days: map[string]*DayMeta{}}
+	s.cur, s.curHours = nil, nil
+	s.dirtyDay, s.dirtyHrs = false, false
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return fmt.Errorf("读取流量目录失败: %w", err)
+	}
+	var errs []error
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		if err := os.Remove(filepath.Join(s.dir, e.Name())); err != nil && !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // Maintain 做每天一次的清理:删掉超过 keepMonths 个月的日子、超过 HourKeepDays 天的小时明细,
 // 并把超过 CollapseAfterDays 天的日子合并冷门访问目标。keepMonths <= 0 按 12 个月。
 func (s *Store) Maintain(now time.Time, keepMonths int) error {

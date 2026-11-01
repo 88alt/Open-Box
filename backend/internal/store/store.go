@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strings"
 	"sync"
 )
 
@@ -101,6 +103,35 @@ func (s *Store) Delete(name string) error {
 		return fmt.Errorf("store: 删除 %s 失败: %w", name, err)
 	}
 	return syncDir(s.dir)
+}
+
+// Clear 删除目录里所有 <name>.json,keep 里列出的名字除外;返回实际删掉的名字(按文件名排序)。
+// 每个文件都经过它自己的锁,所以和别处正在进行的读改写不会交错。只认合法文件名的 .json:
+// 临时文件、别的东西不碰。某个文件删不掉不会停,其余照删,最后把所有失败合成一个 error 返回。
+// 用于恢复出厂设置:新增的数据文件不用回来改清单就会被清掉。
+func (s *Store) Clear(keep ...string) ([]string, error) {
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return nil, fmt.Errorf("store: 读取目录失败: %w", err)
+	}
+	var removed []string
+	var errs []error
+	for _, e := range entries {
+		fn := e.Name()
+		if e.IsDir() || !strings.HasSuffix(fn, ".json") {
+			continue
+		}
+		name := strings.TrimSuffix(fn, ".json")
+		if !nameRe.MatchString(name) || slices.Contains(keep, name) {
+			continue
+		}
+		if err := s.Delete(name); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		removed = append(removed, name)
+	}
+	return removed, errors.Join(errs...)
 }
 
 func (s *Store) lock(name string) (*sync.Mutex, error) {

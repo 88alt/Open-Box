@@ -172,6 +172,22 @@ func (m *Manager) ChangePassword(current, next, clientKey string) (string, error
 	return m.newToken(nst.secret)
 }
 
+// Reset 删除已保存的密码和会话密钥,回到「尚未设置」:所有设备上的会话立刻失效,下一个打开面板的人要重新设置密码。
+// 先删文件、成功了才清内存——删不掉就报错,密码和会话照旧有效(失败时不能让面板变成没有密码)。登录失败的计数也清掉。
+// 用于恢复出厂设置,调用方要保证这是最后一步。
+func (m *Manager) Reset() error {
+	m.opMu.Lock()
+	defer m.opMu.Unlock()
+	if err := m.store.Delete(storeName); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.st = nil
+	m.mu.Unlock()
+	m.lim = newLimiter(func() time.Time { return m.now() })
+	return nil
+}
+
 // Authenticated 校验会话令牌(签名正确且未过期)。
 func (m *Manager) Authenticated(token string) bool {
 	st := m.state()

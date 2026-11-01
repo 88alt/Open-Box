@@ -25,6 +25,7 @@ import (
 	diagnosticsapi "github.com/timeflysoon/Open-Box/backend/internal/api/diagnostics"
 	dnsapi "github.com/timeflysoon/Open-Box/backend/internal/api/dns"
 	dnsfilterapi "github.com/timeflysoon/Open-Box/backend/internal/api/dnsfilter"
+	factoryresetapi "github.com/timeflysoon/Open-Box/backend/internal/api/factoryreset"
 	failoverapi "github.com/timeflysoon/Open-Box/backend/internal/api/failover"
 	groupsapi "github.com/timeflysoon/Open-Box/backend/internal/api/groups"
 	latencyapi "github.com/timeflysoon/Open-Box/backend/internal/api/latency"
@@ -57,6 +58,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsrewrite"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnssync"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnstest"
+	"github.com/timeflysoon/Open-Box/backend/internal/factoryreset"
 	"github.com/timeflysoon/Open-Box/backend/internal/failover"
 	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
 	"github.com/timeflysoon/Open-Box/backend/internal/latencyhistory"
@@ -477,10 +479,11 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 这里只读。终端名取 DHCP 租约;保留月数取档案的 traffic.keepMonths
 	var background func(ctx context.Context) func()
 	var trafficSource trafficapi.Source
+	var trafficStore *traffic.Store // 恢复出厂设置要清它;创建失败时为空
 	if ts, err := traffic.Open(filepath.Join(cfg.DataDir, "traffic"), nil); err != nil {
 		log.Warn("创建流量统计目录失败,每日流量不可用", "error", err)
 	} else {
-		trafficSource = ts
+		trafficSource, trafficStore = ts, ts
 		configFile := filepath.Join(cfg.ConfigDir, "config.json")
 		lastErr := ""
 		collector := &traffic.Collector{
@@ -547,6 +550,37 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 
 	// 系统时区:OpenWrt 走 uci + system reload,systemd 走 timedatectl;时区名单和 POSIX 时区串是内置的 IANA 数据
 	timezoneapi.Register(srv.Mux(), timezoneapi.Deps{Service: &timezone.Service{Init: system.DetectInitHere()}})
+
+	// 恢复出厂设置:先停内核(先撤销 DNS 接管,停不下来就一份数据都不删),再逐项清数据,访问密码放最后(前面有失败就不清)。
+	// 和部署互斥(部署在进行就回 409)。档案、节点组没存过就按随包默认算,删掉存的文件就是重新播种
+	factoryWipes := []factoryreset.Step{
+		{Name: "DNS 查询记录", Run: func(context.Context) error { qlog.Reset(); return nil }},
+	}
+	if trafficStore != nil {
+		factoryWipes = append(factoryWipes, factoryreset.Step{Name: "流量统计", Run: func(context.Context) error { return trafficStore.Reset() }})
+	}
+	factoryWipes = append(factoryWipes,
+		factoryreset.Step{Name: "故障转移检测", Run: func(context.Context) error { failoverMgr.SetPlan(nil); return nil }},
+		factoryreset.RemoveFiles("故障转移计划", failoverPlanPath),
+		factoryreset.RemoveFiles("生成的内核配置", filepath.Join(cfg.ConfigDir, "config.json"), deployer.PrevPath()),
+		factoryreset.ClearDirs("规则集和过滤名单缓存", rulesDir, filepath.Join(cfg.DataDir, "dns-filter")),
+		factoryreset.RemoveFiles("内核缓存", filepath.Join(cfg.DataDir, "cache.db")),
+		// 订阅、节点、节点组、档案、面板设置、背景图、各种状态……全部 .json;访问密码留到最后,DNS 接管的记录是撤销用的、不删
+		factoryreset.Step{Name: "已保存的数据", Run: func(context.Context) error { _, err := st.Clear("auth", "dns-takeover"); return err }},
+	)
+	factoryresetapi.Register(srv.Mux(), factoryresetapi.Deps{Service: &factoryreset.Service{
+		Services: svcCtl, CoreService: cfg.CoreService, DNS: dnsSync,
+		Exclusive: func(fn func() error) error {
+			err := deployer.Exclusive(fn)
+			if errors.Is(err, singbox.ErrDeployBusy) {
+				return factoryreset.ErrBusy
+			}
+			return err
+		},
+		Wipes: factoryWipes,
+		Final: factoryreset.Step{Name: "访问密码和登录会话", Run: func(context.Context) error { return authMgr.Reset() }},
+		Log:   log,
+	}})
 
 	// 激活和教程视频:没有对应概念,只回固定内容(DESIGN D9 和第 8 节),不保存任何东西
 	activationapi.Register(srv.Mux(), activationapi.Deps{

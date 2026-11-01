@@ -401,6 +401,18 @@ func (l *Log) Snapshot() (Snapshot, bool) {
 	return s, true
 }
 
+// Reset 丢掉内存里全部的记录、统计和还没配上应答的查询,并清掉「有改动」标记(这样后台的落盘不会把旧内容写回去)。
+// 之后新读到的日志行照常记。用于恢复出厂设置;落盘文件由调用方删。
+func (l *Log) Reset() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.nextID = 1
+	l.recs = nil
+	l.hours = map[int64]*hourAgg{}
+	l.pending = map[string][]pend{}
+	l.dirty = false
+}
+
 // Restore 载入落盘的内容(只在启动时、开始 Feed 之前调用)。版本不认识就当没有。
 func (l *Log) Restore(s Snapshot) {
 	if s.Version != 1 {
