@@ -686,8 +686,9 @@
                 </div>
                 <BulkPick
                   v-model:subscription="selectedSub"
-                  :subscriptions="subscriptionOptions"
-                  :nodes-only="isFailover"
+                  :subscriptions="selectedSubscriptionOptions"
+                  :nodes-only="isFailover || isLoadBalance"
+                  :kinds="selectedKinds"
                   @select-all="tickAll('selected')"
                   @invert="tickInvert('selected')"
                   @clear="tickNone('selected')"
@@ -1017,7 +1018,7 @@ import {
   TrashIcon,
   XMarkIcon,
 } from '@heroicons/vue/24/outline'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import Draggable from 'vuedraggable'
 import { useI18n } from 'vue-i18n'
@@ -1379,6 +1380,24 @@ const subscriptionOptions = computed(() => {
     if (n.subscription && !seen.includes(n.subscription)) seen.push(n.subscription)
   }
   return seen
+})
+
+// 右栏(已选)的下拉框只列已选成员涉及的订阅和类别:左边没移过来的组、订阅不出现,
+// 移过来之后才出现;已选为空时只剩「全部」。
+const selectedSubscriptionOptions = computed(() => {
+  const subOf = new Map(candidates.value.map((c) => [c.name, c.subscription]))
+  const used = new Set(members.value.map((m) => subOf.get(m)).filter(Boolean))
+  return subscriptionOptions.value.filter((sub) => used.has(sub))
+})
+const selectedKinds = computed(() => {
+  const kindOf = new Map(candidates.value.map((c) => [c.name, c.kind]))
+  return [...new Set(members.value.map((m) => kindOf.get(m)).filter(Boolean))] as ('group' | 'node')[]
+})
+// 已选里不再有的订阅 / 类别,从右栏已选中的筛选值里去掉,免得留着一个看不见的筛选把列表筛空
+watch([selectedSubscriptionOptions, selectedKinds], ([subs, kinds]) => {
+  selectedSub.value = selectedSub.value.filter((v) =>
+    v.startsWith('sub:') ? subs.includes(v.slice(4)) : v === 'kind:group' ? kinds.includes('group') : v === 'kind:node' && kinds.includes('node'),
+  )
 })
 
 // 一栏的"作用范围" = 该栏下拉框 + 过滤框共同框定的候选集。三个批量按钮就按这个
