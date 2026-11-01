@@ -181,3 +181,19 @@ func TestLoadConfigDNSQueryLog(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadConfigUpdateMirror(t *testing.T) {
+	cfg, err := LoadConfig(nil, noEnv, io.Discard)
+	if err != nil || cfg.UpdateMirror != "" {
+		t.Fatalf("默认不用镜像: %q %v", cfg.UpdateMirror, err)
+	}
+	cfg, err = LoadConfig([]string{"-update-mirror", " https://m.example/ "}, noEnv, io.Discard)
+	if err != nil || cfg.UpdateMirror != "https://m.example/" {
+		t.Fatalf("%q %v", cfg.UpdateMirror, err)
+	}
+	for _, bad := range []string{"m.example", "ftp://m.example/", "https://"} {
+		if _, err := LoadConfig([]string{"-update-mirror", bad}, noEnv, io.Discard); err == nil {
+			t.Errorf("%q 应报错", bad)
+		}
+	}
+}

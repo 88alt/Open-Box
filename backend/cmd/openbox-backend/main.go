@@ -44,6 +44,7 @@ import (
 	subsharesapi "github.com/timeflysoon/Open-Box/backend/internal/api/subshares"
 	timezoneapi "github.com/timeflysoon/Open-Box/backend/internal/api/timezone"
 	trafficapi "github.com/timeflysoon/Open-Box/backend/internal/api/traffic"
+	updateapi "github.com/timeflysoon/Open-Box/backend/internal/api/update"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/backup"
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
@@ -83,10 +84,14 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
 	"github.com/timeflysoon/Open-Box/backend/internal/timezone"
 	"github.com/timeflysoon/Open-Box/backend/internal/traffic"
+	"github.com/timeflysoon/Open-Box/backend/internal/update"
 )
 
 // version 由编译时 -ldflags "-X main.version=..." 注入。
 var version = "dev"
+
+// builtAt 由编译时 -ldflags "-X main.builtAt=..." 注入(构建时间,给「组件更新」页显示);没注入就是空串。
+var builtAt = ""
 
 func main() { os.Exit(run(os.Args[1:])) }
 
@@ -407,6 +412,13 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
 		},
 	})
+
+	// 组件更新:目前只有 status / check / notes(读发布信息);下载替换要等 M6 的发布包格式,run 回 501
+	updateapi.Register(srv.Mux(), updateapi.Deps{Service: &update.Service{
+		Checker: &update.Checker{MirrorPrefix: cfg.UpdateMirror},
+		Version: version, BuiltAt: builtAt,
+		KernelVersion: func(ctx context.Context) string { return singbox.ReadKernelVersion(ctx, cfg.SingBox).Version },
+	}})
 
 	// 站点延迟(概览页):请求经内核的面板入站走一遍路由,从内核连接列表认出线路;历史单独存 site-latency-history,不和节点历史混
 	sitelatencyapi.Register(srv.Mux(), sitelatencyapi.Deps{Service: &sitelatency.Service{

@@ -437,6 +437,8 @@
 | POST | `/api/openbox/update/run` | `runUpdate` (api/openbox.ts:1242) | { ok: boolean; output: string } | (channel: 'auto' \| 'direct' \| 'mirror') |
 | GET | `/api/openbox/update/status` | `fetchUpdateStatus` (api/openbox.ts:1238) | OpenboxUpdateStatus | () |
 
+实现约定(M5,第一部分):`status` 的 `version` 是本程序版本(编译时注入,开发构建是 `dev`),`builtAt` 是构建时间(没注入是空串),`singboxVersion` 读 sing-box 内核(读不到是空串),`channel` 是安装通道(`-update-mirror` / `OPENBOX_UPDATE_MIRROR` 配了前缀是 `{mode:"mirror",prefix}`,否则 `{mode:"direct",prefix:""}`),`status.stage` 没有在升级时是 `idle`;`geoVersion` / `geoDate` / `geoCounts` 暂不给(可选字段)。`check` 读仓库公开发布列表,`latest` 是版本号能认出来的最大的一个,`via` 是 `api`(直连 GitHub API)或镜像前缀,读不到回 502 `{error}`;`hasUpdate` 在本程序版本认不出来(开发构建)时恒为 `false`。`notes` 永远回 200,取不到时 `note:null`、`error` 写原因,`url` 是发布列表页,说明超过 2 万字截断,`latest` 要是 `vX.Y.Z` 或 `vX.Y.Z-main.N`,别的写法后端忽略、自己再探一次最新版。`run`:`channel` 不是 `auto` / `direct` / `mirror` 回 400,否则暂回 501(在线升级依赖 M6 定下的发布包格式);`cancel` 暂回 `{result:"not-running"}`。
+
 ## `/api/storage`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |

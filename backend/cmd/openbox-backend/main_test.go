@@ -79,6 +79,13 @@ func TestAppWiring(t *testing.T) {
 	}
 
 	// 清 DNS 缓存已装配:POST 才有;测试机上没有可清的层时是 503 + error,而不是 404 / 405
+	// 组件更新(只读部分):没联网也能回状态;升级(run)依赖打包,回 501
+	if code, body := get(c, ts.URL+"/api/openbox/update/status"); code != 200 || !strings.Contains(body, `"version":"dev"`) || !strings.Contains(body, `"stage":"idle"`) {
+		t.Errorf("update/status: %d %s", code, body)
+	}
+	if resp, err := c.Post(ts.URL+"/api/openbox/update/run", "application/json", strings.NewReader(`{"channel":"auto"}`)); err != nil || resp.StatusCode != 501 {
+		t.Errorf("update/run 应回 501: %v %v", err, resp)
+	}
 	if code, _ := get(c, ts.URL+"/api/openbox/dns/flush-cache"); code != 405 {
 		t.Fatalf("dns/flush-cache GET: %d", code)
 	}

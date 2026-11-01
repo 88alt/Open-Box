@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -31,6 +32,8 @@ const (
 	// EnvDNSQueryLog 是 dnsmasq 查询日志文件的路径,默认 DefaultDNSQueryLog;写 off 就既不让 dnsmasq 写、后端也不读
 	// (DNS 过滤的「查询记录」没有数据)。
 	EnvDNSQueryLog = "OPENBOX_DNS_QUERY_LOG"
+	// EnvUpdateMirror 是在线更新用的镜像加速前缀;不设就只走 GitHub 直连。
+	EnvUpdateMirror = "OPENBOX_UPDATE_MIRROR"
 
 	// 服务名:交给系统服务管理器(OpenWrt init.d / systemd)的名字
 	EnvCoreService  = "OPENBOX_CORE_SERVICE"
@@ -58,6 +61,8 @@ type Paths struct {
 	// DNSQueryLog 是 dnsmasq 查询日志(log-queries 的输出)的文件路径:DNS 接管时让 dnsmasq 写到这里(system.DNSTakeover.QueryLog),
 	// 后端跟读它;空表示不开、不读。
 	DNSQueryLog string
+	// UpdateMirror 是在线更新的镜像加速前缀(请求 <前缀><原地址>);空 = 不用镜像。
+	UpdateMirror string
 }
 
 // DefaultPaths 返回通用位置的默认值。
@@ -116,6 +121,7 @@ func LoadConfig(args []string, getenv func(string) string, out io.Writer) (Confi
 	singBox := fs.String("sing-box", env(EnvSingBox, def.SingBox), "sing-box 可执行文件(环境变量 "+EnvSingBox+")")
 	core := fs.String("core", env(EnvCore, def.Core), "openbox-core 可执行文件(环境变量 "+EnvCore+")")
 	dnsQueryLog := fs.String("dns-query-log", env(EnvDNSQueryLog, def.DNSQueryLog), "dnsmasq 查询日志文件:DNS 接管时让 dnsmasq 写到这里,后端跟读;off = 不开不读(环境变量 "+EnvDNSQueryLog+")")
+	updateMirror := fs.String("update-mirror", env(EnvUpdateMirror, ""), "在线更新的镜像加速前缀(空 = 只走 GitHub 直连)(环境变量 "+EnvUpdateMirror+")")
 	coreSvc := fs.String("core-service", env(EnvCoreService, DefaultCoreService), "sing-box 的服务名(环境变量 "+EnvCoreService+")")
 	panelSvc := fs.String("panel-service", env(EnvPanelService, DefaultPanelService), "后端自己的服务名(环境变量 "+EnvPanelService+")")
 	if err := fs.Parse(args); err != nil {
@@ -150,6 +156,12 @@ func LoadConfig(args []string, getenv func(string) string, out io.Writer) (Confi
 			SingBox:   strings.TrimSpace(*singBox),
 			Core:      strings.TrimSpace(*core),
 		},
+	}
+	if v := strings.TrimSpace(*updateMirror); v != "" {
+		if u, err := url.Parse(v); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return Config{}, fmt.Errorf("-update-mirror 要是 http(s) 地址: %q", v)
+		}
+		cfg.UpdateMirror = v
 	}
 	if v := strings.TrimSpace(*dnsQueryLog); v != "" && !strings.EqualFold(v, "off") {
 		cfg.DNSQueryLog = filepath.Clean(v)
