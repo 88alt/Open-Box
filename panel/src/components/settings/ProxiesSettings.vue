@@ -1,5 +1,5 @@
 <template>
-  <div class="settings-section flex flex-col gap-2 p-4 text-sm">
+  <div class="settings-section flex flex-col gap-2 p-4 max-md:p-3 text-sm">
     <template v-if="hasVisibleLatencyItems">
       <div class="settings-title">
         {{ $t('latency') }}

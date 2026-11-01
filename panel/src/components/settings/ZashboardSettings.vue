@@ -2,7 +2,7 @@
   <!-- dashboard -->
   <div
     v-if="hasVisibleItems"
-    class="settings-section relative flex flex-col gap-2 p-4 text-sm"
+    class="settings-section relative flex flex-col gap-2 p-4 max-md:p-3 text-sm"
   >
     <!-- 标题就是「通用」:这块(语言/圆角/背景/主题)和下面 GeneralSettings 的几行合成一组 -->
     <div class="settings-title">

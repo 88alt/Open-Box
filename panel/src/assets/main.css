@@ -779,10 +779,6 @@ div::-webkit-scrollbar-thumb:hover {
   @apply md:grid-cols-2;
 }
 
-.settings-section {
-  padding-top: 0.75rem !important;
-}
-
 .icon-settings-tabs {
   margin-left: auto;
   width: fit-content;

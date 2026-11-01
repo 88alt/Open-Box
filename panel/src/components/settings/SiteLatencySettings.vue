@@ -1,6 +1,6 @@
 <template>
   <!-- 测试站点:概览「站点延迟」按这里的站点测速。图标 / 名称 / 地址都能改,右上角恢复默认的四个。 -->
-  <div class="settings-section flex flex-col gap-2 p-4 text-sm">
+  <div class="settings-section relative flex flex-col gap-2 p-4 max-md:p-3 text-sm">
     <div class="settings-title">
       {{ $t('testSitesSettings') }}
       <QuestionMarkCircleIcon
@@ -9,7 +9,7 @@
       />
       <button
         type="button"
-        class="btn btn-ghost btn-circle btn-sm ml-auto"
+        class="btn btn-circle btn-sm absolute top-4 right-4"
         v-tip="$t('testSitesReset')"
         @click="confirmReset"
       >
