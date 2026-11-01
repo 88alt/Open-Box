@@ -1120,9 +1120,9 @@ const editing = ref<OpenboxUserGroup | null>(null)
 const draft = ref<OpenboxUserGroup | null>(null)
 const memberFilter = ref('')
 const selectedFilter = ref('')
-// 两栏各自的订阅下拉框,'' = 全部
-const memberSub = ref('')
-const selectedSub = ref('')
+// 两栏各自的订阅筛选(可多选),空数组 = 全部
+const memberSub = ref<string[]>([])
+const selectedSub = ref<string[]>([])
 // 两栏各自的勾选状态(按名字记)。勾选 ≠ 成员:勾只表示"这条要不要被箭头搬走"。
 const checkedAvailable = ref<string[]>([])
 const checkedSelected = ref<string[]>([])
@@ -1164,8 +1164,8 @@ const openEditor = (group: OpenboxUserGroup | null) => {
   activeLaneId.value = draft.value?.lanes?.[0]?.id ?? ''
   memberFilter.value = ''
   selectedFilter.value = ''
-  memberSub.value = ''
-  selectedSub.value = ''
+  memberSub.value = []
+  selectedSub.value = []
   checkedAvailable.value = []
   checkedSelected.value = []
   showEditor.value = true
@@ -1366,17 +1366,13 @@ const subscriptionOptions = computed(() => {
 // 一栏的"作用范围" = 该栏下拉框 + 过滤框共同框定的候选集。三个批量按钮就按这个
 // 范围来:下拉框选中某条订阅、再按「全选」,勾中的正好是那条订阅的节点——这也是
 // 加这个下拉框的用处。两个都不设时,范围就是整份候选集。
-// 下拉框的值:'' 全部 / 'kind:group' 全部节点组 / 'kind:node' 全部节点 /
-// 'sub:<订阅名>' 单条订阅(前缀见 BulkPick.vue 里的说明)。
-const scopeOf = (sel: string, keyword: string) => {
+// 筛选的值(多选,命中任意一项即算):[] 全部 / 'kind:group' 全部节点组 /
+// 'kind:node' 全部节点 / 'sub:<订阅名>' 单条订阅(前缀见 BulkPick.vue 里的说明)。
+const scopeOf = (sel: string[], keyword: string) => {
   const kw = keyword.trim().toLowerCase()
-  const matchKind = (item: { kind: string; subscription: string }) => {
-    if (!sel) return true
-    if (sel === 'kind:group') return item.kind === 'group'
-    if (sel === 'kind:node') return item.kind === 'node'
-    if (sel.startsWith('sub:')) return item.subscription === sel.slice(4)
-    return true
-  }
+  const matchKind = (item: { kind: string; subscription: string }) =>
+    !sel.length ||
+    sel.some((v) => v === `kind:${item.kind}` || v === `sub:${item.subscription}`)
   return candidates.value.filter(
     (item) => matchKind(item) && (!kw || item.name.toLowerCase().includes(kw)),
   )
@@ -1438,7 +1434,7 @@ const filteredSelected = computed(() => {
   const list = members.value
   const inScope = new Set(scopeOf(selectedSub.value, selectedFilter.value).map((c) => c.name))
   // 故障转移里已经失效的引用(订阅更新删掉的节点)不在候选表里,过滤 / 订阅筛选为空时照样列出来给用户看
-  if (isFailover.value && !selectedSub.value && !selectedFilter.value.trim()) return list
+  if (isFailover.value && !selectedSub.value.length && !selectedFilter.value.trim()) return list
   return list.filter((name) => inScope.has(name))
 })
 
