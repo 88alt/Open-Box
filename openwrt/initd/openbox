@@ -49,7 +49,7 @@ OPENBOX_TERM_TIMEOUT=15
 # 内核的 tun 网卡名(和 panel/server/engine/tun-options.mjs 的 TUN_INTERFACE_NAME 一致)
 OPENBOX_TUN=openbox-tun
 
-# 部署时保存的三条受管规则;关机/stop 清理后,直接 start 也必须恢复(#636)。
+# 部署时保存的受管规则;关机/stop 清理后,直接 start 也必须恢复(#636)。
 # -m 只合并这些具名段,不替换整个 firewall。没有变化时不重载 fw4。
 openbox_restore_firewall() {
 	[ -s "$DATA/firewall-startup.conf" ] || return 0
@@ -532,6 +532,7 @@ openbox_cleanup() {
 	rm -f "$DNSMASQ_QUERY_LOG"
 
 	uci -q delete firewall.openbox_tun_forward
+	uci -q delete firewall.openbox_tun_docker_forward
 	uci -q delete firewall.openbox_tun_input
 	uci -q delete firewall.openbox_v6block
 	if [ -n "$(uci -q changes firewall)" ]; then
