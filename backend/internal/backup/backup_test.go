@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/sub"
 	"github.com/timeflysoon/Open-Box/backend/internal/subs"
 )
@@ -17,7 +18,11 @@ type fakeProfiles struct {
 	err error
 }
 
-func (f fakeProfiles) Get(context.Context) (map[string]any, error) { return f.p, f.err }
+func (f fakeProfiles) Get(context.Context) (map[string]any, error)        { return f.p, f.err }
+func (f fakeProfiles) CheckReplace(context.Context, map[string]any) error { return nil }
+func (f fakeProfiles) Replace(context.Context, map[string]any) (map[string]any, error) {
+	return nil, nil
+}
 
 type fakeGroups struct {
 	g   []any
@@ -25,6 +30,10 @@ type fakeGroups struct {
 }
 
 func (f fakeGroups) Groups(context.Context) ([]any, error) { return f.g, f.err }
+func (f fakeGroups) CheckRestore(context.Context, []any, map[string]bool) ([]any, error) {
+	return nil, nil
+}
+func (f fakeGroups) Restore(context.Context, []any) (*nodegroups.SaveResult, error) { return nil, nil }
 
 type fakeSubs struct {
 	recs  []subs.Record
@@ -35,6 +44,13 @@ type fakeSubs struct {
 func (f fakeSubs) Dump(context.Context) ([]subs.Record, map[string][]sub.Node, error) {
 	return f.recs, f.nodes, f.err
 }
+func (f fakeSubs) PoolNodes(context.Context) ([]sub.Node, error) { return nil, nil }
+func (f fakeSubs) CheckRestore(context.Context, subs.RestoreInput) (*subs.RestoreResult, error) {
+	return nil, nil
+}
+func (f fakeSubs) Restore(context.Context, subs.RestoreInput) (*subs.RestoreResult, error) {
+	return nil, nil
+}
 
 type fakePanel struct {
 	set    map[string]string
@@ -43,8 +59,14 @@ type fakePanel struct {
 	imgErr error
 }
 
-func (f fakePanel) Settings(context.Context) (map[string]string, error) { return f.set, f.setErr }
-func (f fakePanel) BackgroundImage(context.Context) (string, error)     { return f.img, f.imgErr }
+func (f fakePanel) Settings(context.Context) (map[string]string, error)     { return f.set, f.setErr }
+func (f fakePanel) BackgroundImage(context.Context) (string, error)         { return f.img, f.imgErr }
+func (f fakePanel) CleanSettings(map[string]any) (map[string]string, error) { return nil, nil }
+func (f fakePanel) CheckImage(string) error                                 { return nil }
+func (f fakePanel) ReplaceSettings(context.Context, map[string]string) error {
+	return nil
+}
+func (f fakePanel) SetBackgroundImage(context.Context, string) error { return nil }
 
 func newSvc() *Service {
 	return &Service{

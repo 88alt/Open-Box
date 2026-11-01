@@ -307,30 +307,28 @@ func allMembers(m map[string]any) []string {
 	return out
 }
 
-// Save 整份覆盖节点组。流程:规范化 → 校验名字 → 迁移改名引用 → 再规范化 → 报告悬空 / 丢弃 → 落盘。
-func (s *Service) Save(ctx context.Context, in []any) (*SaveResult, error) {
+// checkedGroups 是 Save 和 Restore 共用的前半段:数量与形状 → 核心规范化 → 名字校验。
+// tags 在规范化之后才取(取不到就报错),是「已有节点名」(含启用的链式代理),组名不能与它们重名。
+// 返回规范化后的组,以及按 id 索引的组(Save 对旧档改名时用)。
+func (s *Service) checkedGroups(ctx context.Context, in []any, tags func() (map[string]bool, error)) ([]any, map[string]map[string]any, error) {
 	if s.core == nil {
-		return nil, ErrCoreUnavailable
+		return nil, nil, ErrCoreUnavailable
 	}
 	if len(in) > MaxGroups {
-		return nil, bad("节点组最多 %d 个", MaxGroups)
+		return nil, nil, bad("节点组最多 %d 个", MaxGroups)
 	}
 	for i, g := range in {
 		if _, ok := g.(map[string]any); !ok {
-			return nil, bad("第 %d 个节点组不是对象", i+1)
+			return nil, nil, bad("第 %d 个节点组不是对象", i+1)
 		}
 	}
 	norm, err := s.core.NormalizeGroups(ctx, in)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	nodes, _, err := s.nodes(ctx)
+	tagSet, err := tags()
 	if err != nil {
-		return nil, err
-	}
-	tagSet := make(map[string]bool, len(nodes))
-	for _, n := range nodes {
-		tagSet[n.Name] = true
+		return nil, nil, err
 	}
 
 	// 名字校验:非空、不超长、组与组不重名、不与节点重名(sing-box 出站 tag 全局唯一)。
@@ -339,25 +337,53 @@ func (s *Service) Save(ctx context.Context, in []any) (*SaveResult, error) {
 	for _, g := range norm {
 		m, ok := g.(map[string]any)
 		if !ok {
-			return nil, bad("节点组格式不正确")
+			return nil, nil, bad("节点组格式不正确")
 		}
 		name := str(m, "name")
 		if strings.TrimSpace(name) == "" {
-			return nil, bad("节点组名称不能为空")
+			return nil, nil, bad("节点组名称不能为空")
 		}
 		if utf8.RuneCountInString(name) > MaxNameRunes {
-			return nil, bad("节点组名称不能超过 %d 个字符:%s", MaxNameRunes, name)
+			return nil, nil, bad("节点组名称不能超过 %d 个字符:%s", MaxNameRunes, name)
 		}
 		if byName[name] {
-			return nil, bad("节点组名称重复:%s", name)
+			return nil, nil, bad("节点组名称重复:%s", name)
 		}
 		if tagSet[name] {
-			return nil, bad("节点组名称与节点重名:%s", name)
+			return nil, nil, bad("节点组名称与节点重名:%s", name)
 		}
 		byName[name] = true
 		if id := str(m, "id"); id != "" {
 			byID[id] = m
 		}
+	}
+	return norm, byID, nil
+}
+
+// nodeTags 是当前节点清单里的全部名字。
+func (s *Service) nodeTags(ctx context.Context) ([]AvailableNode, map[string]bool, error) {
+	nodes, _, err := s.nodes(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	tagSet := make(map[string]bool, len(nodes))
+	for _, n := range nodes {
+		tagSet[n.Name] = true
+	}
+	return nodes, tagSet, nil
+}
+
+// Save 整份覆盖节点组。流程:规范化 → 校验名字 → 迁移改名引用 → 再规范化 → 报告悬空 / 丢弃 → 落盘。
+func (s *Service) Save(ctx context.Context, in []any) (*SaveResult, error) {
+	var nodes []AvailableNode
+	var tagSet map[string]bool
+	norm, byID, err := s.checkedGroups(ctx, in, func() (map[string]bool, error) {
+		var err error
+		nodes, tagSet, err = s.nodeTags(ctx)
+		return tagSet, err
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// 改名:按 id 对旧档,名字变了的把其它组里的引用迁移过去。
@@ -393,6 +419,11 @@ func (s *Service) Save(ctx context.Context, in []any) (*SaveResult, error) {
 		}
 	}
 
+	return s.finish(ctx, norm, nodes, tagSet, renamed)
+}
+
+// finish 是 Save 和 Restore 共用的后半段:报告悬空成员、让核心算会被丢弃的组、落盘。
+func (s *Service) finish(ctx context.Context, norm []any, nodes []AvailableNode, tagSet map[string]bool, renamed []Renamed) (*SaveResult, error) {
 	// 悬空成员:既不是节点也不是(任何)组。
 	names := map[string]bool{}
 	for _, g := range norm {
@@ -434,4 +465,28 @@ func (s *Service) Save(ctx context.Context, in []any) (*SaveResult, error) {
 		return nil, err
 	}
 	return &SaveResult{OK: true, Groups: norm, Dropped: dropped, Dangling: dangling, Renamed: renamed}, nil
+}
+
+// CheckRestore 只校验、不写盘:in 能不能作为整份节点组导入。tags 是导入之后会存在的节点名
+// (启用订阅的节点 + 启用的链式代理),组名不能与它们重名。返回规范化后的组。
+func (s *Service) CheckRestore(ctx context.Context, in []any, tags map[string]bool) ([]any, error) {
+	norm, _, err := s.checkedGroups(ctx, in, func() (map[string]bool, error) { return tags, nil })
+	return norm, err
+}
+
+// Restore 把 in 整份写成节点组,给备份导入用。和 Save 的区别:不对旧档做「改名迁移」——
+// 备份文件里的引用本来就是自洽的,拿旧档的 id 去改写它反而会改错;其余(规范化、重名校验、
+// 悬空 / 被丢弃的报告)一样。节点名取当前存着的节点,所以要在订阅和档案恢复之后调用。
+func (s *Service) Restore(ctx context.Context, in []any) (*SaveResult, error) {
+	var nodes []AvailableNode
+	var tagSet map[string]bool
+	norm, _, err := s.checkedGroups(ctx, in, func() (map[string]bool, error) {
+		var err error
+		nodes, tagSet, err = s.nodeTags(ctx)
+		return tagSet, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.finish(ctx, norm, nodes, tagSet, nil)
 }

@@ -1,4 +1,4 @@
-// Package backup 是「导出 / 导入」。这一部分只有导出(GET /api/openbox/backup);导入见 STATUS.md。
+// Package backup 是「导出 / 导入」:导出见本文件,导入见 import.go。
 // 文件格式自己定,依据前端 api/openbox.ts 的 OpenboxBackup 类型和 BackupCard.vue 的用法,没有参照上游:
 //
 //	{ "format": "open-box-backup", "version": 1, "exportedAt": "<RFC3339>", "openboxVersion": "<后端版本>",
@@ -15,8 +15,10 @@ package backup
 
 import (
 	"context"
+	"sync"
 	"time"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/sub"
 	"github.com/timeflysoon/Open-Box/backend/internal/subs"
 )
@@ -66,26 +68,37 @@ type Backup struct {
 
 // 依赖(测试里换假的)。
 type (
-	// Profiles 读档案。
+	// Profiles 读写档案(导出读,导入整体替换)。
 	Profiles interface {
 		Get(ctx context.Context) (map[string]any, error)
+		CheckReplace(ctx context.Context, in map[string]any) error
+		Replace(ctx context.Context, in map[string]any) (map[string]any, error)
 	}
-	// Groups 读存着的节点组。
+	// Groups 读写节点组。
 	Groups interface {
 		Groups(ctx context.Context) ([]any, error)
+		CheckRestore(ctx context.Context, in []any, tags map[string]bool) ([]any, error)
+		Restore(ctx context.Context, in []any) (*nodegroups.SaveResult, error)
 	}
-	// Subs 读全部订阅和节点。
+	// Subs 读写订阅和节点。
 	Subs interface {
 		Dump(ctx context.Context) ([]subs.Record, map[string][]sub.Node, error)
+		PoolNodes(ctx context.Context) ([]sub.Node, error)
+		CheckRestore(ctx context.Context, in subs.RestoreInput) (*subs.RestoreResult, error)
+		Restore(ctx context.Context, in subs.RestoreInput) (*subs.RestoreResult, error)
 	}
-	// Panel 读面板设置和背景图。
+	// Panel 读写面板设置和背景图。
 	Panel interface {
 		Settings(ctx context.Context) (map[string]string, error)
 		BackgroundImage(ctx context.Context) (string, error)
+		CleanSettings(in map[string]any) (map[string]string, error)
+		CheckImage(img string) error
+		ReplaceSettings(ctx context.Context, clean map[string]string) error
+		SetBackgroundImage(ctx context.Context, img string) error
 	}
 )
 
-// Service 做导出。
+// Service 做导出和导入。
 type Service struct {
 	Profiles Profiles
 	Groups   Groups
@@ -94,6 +107,8 @@ type Service struct {
 	// Version 写进文件的 openboxVersion,空就不写。
 	Version string
 	Now     func() time.Time
+
+	importing sync.Mutex // 同一时刻只做一次导入
 }
 
 // Export 按 opts 导出一份备份。任何一块读不出来整个导出失败(不给一份缺东西的「备份」)。

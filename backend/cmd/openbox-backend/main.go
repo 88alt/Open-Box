@@ -175,10 +175,11 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	groupsSvc := nodegroups.New(st, groupsCore, subsSvc, nodegroups.ChainsFromProfile(profileSvc))
 	groupsapi.Register(srv.Mux(), groupsapi.Deps{Groups: groupsSvc})
 
-	// 备份:目前只有导出(档案 + 节点组,可选订阅和节点,外加面板设置和背景图);导入见 STATUS.md
-	backupapi.Register(srv.Mux(), backupapi.Deps{Exporter: &backup.Service{
+	// 备份:导出(档案 + 节点组,可选订阅和节点,外加面板设置和背景图)和导入;两者共用一个服务(导入同一时刻只做一次)
+	backupSvc := &backup.Service{
 		Profiles: profileSvc, Groups: groupsSvc, Subs: subsSvc, Panel: storageapi.Panel{Store: st}, Version: version,
-	}})
+	}
+	backupapi.Register(srv.Mux(), backupapi.Deps{Exporter: backupSvc, Importer: backupSvc})
 	var genCore singbox.Caller
 	if core.Available(cfg.Core) {
 		genCore = core.New(cfg.Core)

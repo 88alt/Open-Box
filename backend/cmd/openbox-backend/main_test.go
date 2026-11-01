@@ -108,6 +108,22 @@ func TestAppWiring(t *testing.T) {
 		t.Fatalf("client-app/info POST: %v %v", err, resp)
 	}
 
+	// 备份导出 / 导入已装配。测试机上没有 openbox-core,节点组没法读 / 规范化:导出回 500、导入在「先整份校验」
+	// 这一步回 503,都带 openbox-core 的说明(而不是 404 / 501),导入什么都没写。
+	if code, body := get(c, ts.URL+"/api/openbox/backup?subscriptions=1"); code != 500 || !strings.Contains(body, "openbox-core") {
+		t.Fatalf("backup 导出: %d %s", code, body)
+	}
+	resp, err = c.Post(ts.URL+"/api/openbox/backup/import?subscriptions=replace", "application/json",
+		strings.NewReader(`{"format":"open-box-backup","version":1,"profile":{},"groups":[]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	imported, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 503 || !strings.Contains(string(imported), "openbox-core") {
+		t.Fatalf("backup 导入应装配好并因没有核心回 503: %d %s", resp.StatusCode, imported)
+	}
+
 	// 重启:密码保留,旧 Cookie 仍有效
 	ts2, _ := start()
 	jar, _ := cookiejar.New(nil)

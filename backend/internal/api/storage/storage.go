@@ -23,6 +23,7 @@ const (
 	maxEntries      = 2000
 	maxKeyBytes     = 256
 	maxImageBody    = 12 << 20 // 12 MiB(data URL 含 base64 膨胀)
+	imagePrefix     = "data:image/"
 )
 
 // Deps 是本分组的依赖。
@@ -78,17 +79,24 @@ func (h *handlers) putSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	clean := make(map[string]string, len(body.Entries))
 	for k, v := range body.Entries {
-		s, ok := v.(string)
-		if !ok || !strings.HasPrefix(k, managedPrefix) || len(k) > maxKeyBytes || k == legacyAuthKey {
-			continue
+		if s, ok := cleanEntry(k, v); ok {
+			clean[k] = s
 		}
-		clean[k] = s
 	}
 	if err := h.st.Save(settingsName, settingsFile{Entries: clean}); err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "保存设置失败: "+err.Error())
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{"ok": true, "count": len(clean)})
+}
+
+// cleanEntry 判断一条设置能不能存:值是字符串、键以 config/ 开头且不超长、不是遗留的登录状态键。
+func cleanEntry(k string, v any) (string, bool) {
+	s, ok := v.(string)
+	if !ok || !strings.HasPrefix(k, managedPrefix) || len(k) > maxKeyBytes || k == legacyAuthKey {
+		return "", false
+	}
+	return s, true
 }
 
 type imageFile struct {
@@ -111,7 +119,7 @@ func (h *handlers) putImage(w http.ResponseWriter, r *http.Request) {
 	if !httpx.DecodeJSON(w, r, &body, maxImageBody) {
 		return
 	}
-	if !strings.HasPrefix(body.Image, "data:image/") {
+	if !strings.HasPrefix(body.Image, imagePrefix) {
 		httpx.Error(w, http.StatusBadRequest, "背景图必须是 data:image/ 开头的图片数据")
 		return
 	}
