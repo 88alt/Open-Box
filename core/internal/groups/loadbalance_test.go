@@ -1,6 +1,7 @@
 package groups
 
 import (
+	"encoding/json"
 	"reflect"
 	"strconv"
 	"strings"
@@ -154,16 +155,15 @@ func TestLoadBalanceMaxNodes(t *testing.T) {
 	}
 }
 
-func TestLoadBalanceEmptyGetsPlaceholder(t *testing.T) {
+func TestLoadBalanceEmptyKeepsEmptyOutbounds(t *testing.T) {
 	res, err := EmitUserGroups(lbGroup(map[string]any{"members": []any{}}), lbNodes(2), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 和 urltest / selector 一致:空组挂直连占位,免得内核因空出站 FATAL
-	if o := lbOutbound(t, res, "LB"); len(o.Outbounds) != 1 || o.Outbounds[0] != res.Builtin.Direct {
-		t.Errorf("空组应挂直连占位: %+v", o)
-	}
-	if !reflect.DeepEqual(res.Placeholders, []string{"LB"}) {
-		t.Errorf("placeholders=%v", res.Placeholders)
+	// 与上游一致:空成员原样写出 "outbounds":[],不挂占位
+	o := lbOutbound(t, res, "LB")
+	b, _ := json.Marshal(o)
+	if !strings.Contains(string(b), `"outbounds":[]`) || len(res.Placeholders) != 0 {
+		t.Errorf("出站 %s placeholders=%v", b, res.Placeholders)
 	}
 }

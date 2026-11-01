@@ -462,7 +462,7 @@ func (s *Service) finish(ctx context.Context, norm []any, nodes []AvailableNode,
 	}
 	dropped, err := s.core.EmitGroups(ctx, norm, emitNodes)
 	if err != nil {
-		if strings.Contains(err.Error(), "负载均衡「") { // 动态组命中太多节点这类,是用户能改的输入问题
+		if strings.Contains(err.Error(), "load balance supports at most") { // 动态组命中太多节点这类,是用户能改的输入问题
 			return nil, bad("%s", err.Error())
 		}
 		return nil, err
@@ -579,18 +579,19 @@ func checkLoadBalance(in []any, tagSet map[string]bool, prev []any) error {
 		}
 		uniq := map[string]bool{}
 		for _, v := range members {
-			ms, isStr := v.(string)
-			if !isStr || strings.TrimSpace(ms) == "" {
-				return bad("负载均衡「%s」包含无效成员", name)
+			if ms, isStr := v.(string); isStr {
+				uniq[ms] = true
 			}
-			uniq[ms] = true
 		}
 		if len(uniq) > LoadBalanceMaxNodes {
 			return bad("负载均衡「%s」最多支持 %d 个节点", name, LoadBalanceMaxNodes)
 		}
 		old := prevMembers[str(m, "id")]
 		for _, v := range members {
-			ms := v.(string)
+			ms, isStr := v.(string)
+			if !isStr || strings.TrimSpace(ms) == "" {
+				return bad("负载均衡「%s」包含无效成员", name)
+			}
 			if !tagSet[ms] && !old[ms] {
 				return bad("负载均衡「%s」只能添加真实节点：%s", name, ms)
 			}

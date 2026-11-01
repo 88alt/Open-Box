@@ -1,6 +1,7 @@
 package groups
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/timeflysoon/Open-Box/core/internal/jsx"
@@ -21,6 +22,25 @@ type Outbound struct {
 	Default                   string   `json:"default,omitempty"`
 	InterruptExistConnections bool     `json:"interrupt_exist_connections,omitempty"`
 	ExpectedStatus            string   `json:"expected_status,omitempty"` // 可接受状态码,放最后(JS 里是 { ...outbound, expected_status })
+}
+
+// MarshalJSON:负载均衡的 outbounds 即使是空的也要写出来(与上游一致,不能被 omitempty 吞掉);其它类型照旧。
+func (o Outbound) MarshalJSON() ([]byte, error) {
+	if o.Type == "loadbalance" {
+		if o.Outbounds == nil {
+			o.Outbounds = []string{}
+		}
+		return json.Marshal(struct {
+			Type           string   `json:"type"`
+			Tag            string   `json:"tag"`
+			Outbounds      []string `json:"outbounds"`
+			URL            string   `json:"url,omitempty"`
+			Interval       string   `json:"interval,omitempty"`
+			ExpectedStatus string   `json:"expected_status,omitempty"`
+		}{o.Type, o.Tag, o.Outbounds, o.URL, o.Interval, o.ExpectedStatus})
+	}
+	type plain Outbound
+	return json.Marshal(plain(o))
 }
 
 type Dropped struct {
@@ -404,10 +424,10 @@ func EmitUserGroups(groupsRaw any, nodesRaw any, options any) (*EmitResult, erro
 			}
 			members = nodesOnly
 			if len(members) > LoadBalanceMaxNodes {
-				return nil, fmt.Errorf("负载均衡「%s」最多支持 %d 个节点,现在有 %d 个", g.Name, LoadBalanceMaxNodes, len(members))
+				return nil, fmt.Errorf("load balance supports at most %d nodes", LoadBalanceMaxNodes)
 			}
 		}
-		if len(members) == 0 {
+		if len(members) == 0 && g.Type != "loadbalance" { // 负载均衡与上游一致:空成员原样写出,不挂占位
 			// 空组不能原样写进配置(内核会 FATAL),也不该整个丢掉:挂一个直连占位
 			members = []string{builtin.Direct}
 			placeholders = append(placeholders, g.Name)

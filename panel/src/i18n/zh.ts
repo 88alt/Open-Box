@@ -858,8 +858,8 @@ const zh: LANG_MESSAGE = {
   groupType_failover_short: '故障转移',
   groupType_loadbalance: '负载均衡（load balance）',
   loadBalanceHint:
-    '把新连接分配到可用节点,优先选连接数少的节点,连接数相同时轮流选用;多条并行连接可以叠加带宽,已建立的连接不会换出口。',
-  loadBalanceNodesOnly: '负载均衡只能选真实节点,最多 64 个:请移除分组或已失效的成员,或减少数量。',
+    '按连接分配到可用节点，优先选择连接较少的节点，同等负载时轮换。多个并发连接可叠加总带宽；已建立的连接保持原出口。',
+  loadBalanceNodesOnly: '负载均衡最多可选择 64 个真实节点，请移除节点组或失效成员。',
   groupUnitSecond: '秒',
   failoverSummary: '故障转移 · {lanes} 个页签 · {count} 个节点',
   failoverStaticHint:

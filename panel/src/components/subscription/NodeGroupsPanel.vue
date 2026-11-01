@@ -383,12 +383,12 @@
                   />
                 </div>
               </div>
-              <p
-                v-if="isLoadBalance"
-                class="text-base-content/60 basis-full text-xs"
-              >{{ $t('loadBalanceHint') }}</p>
             </template>
           </div>
+          <p
+            v-if="isLoadBalance"
+            class="text-base-content/60 text-xs"
+          >{{ $t('loadBalanceHint') }}</p>
           <!-- 从普通组切成故障转移时,原来引用了组的成员进不了页签(页签只放真实节点):列出来、拦住保存,
                由用户决定是移除它们还是切回原类型;不悄悄展开也不悄悄丢 -->
           <div
@@ -720,10 +720,10 @@
                 >
                   <ChevronLeftIcon class="text-base-content/30 h-4 w-4" />
                 </button>
-                <span :class="['truncate', (isFailover || isLoadBalance) && !nodeNameSet.has(name) && 'line-through opacity-60']">{{ name }}</span>
+                <span :class="['truncate', isFailover && !nodeNameSet.has(name) && 'line-through opacity-60']">{{ name }}</span>
                 <!-- 订阅更新后已经不存在的节点:留着给用户看,不算有效节点、不进配置 -->
                 <span
-                  v-if="(isFailover || isLoadBalance) && !nodeNameSet.has(name)"
+                  v-if="isFailover && !nodeNameSet.has(name)"
                   class="badge badge-ghost badge-xs shrink-0"
                 >{{ $t('failoverInvalid') }}</span>
               </label>
@@ -1340,12 +1340,8 @@ const onTypeChange = () => {
     d.interval = normalBackup?.interval && /^(\d+)(s|m|h)$/.test(normalBackup.interval) ? normalBackup.interval : '300s'
     if (typeof d.tolerance !== 'number') d.tolerance = 100
   }
-  // 负载均衡:检测间隔默认 30s;从它切回自动择优时补上容差缺省值
-  if (next === 'loadbalance') {
-    d.interval = '30s'
-  } else if (prev === 'loadbalance' && next === 'urltest' && typeof d.tolerance !== 'number') {
-    d.tolerance = 100
-  }
+  // 负载均衡:检测间隔默认 120s(与上游 v0.1.387 一致)
+  if (next === 'loadbalance') d.interval = '120s'
   checkedAvailable.value = []
   checkedSelected.value = []
 }
@@ -1456,7 +1452,7 @@ const filteredSelected = computed(() => {
   const list = members.value
   const inScope = new Set(scopeOf(selectedSub.value, selectedFilter.value).map((c) => c.name))
   // 故障转移里已经失效的引用(订阅更新删掉的节点)不在候选表里,过滤 / 订阅筛选为空时照样列出来给用户看
-  if ((isFailover.value || isLoadBalance.value) && !selectedSub.value.length && !selectedFilter.value.trim()) return list
+  if (isFailover.value && !selectedSub.value.length && !selectedFilter.value.trim()) return list
   return list.filter((name) => inScope.has(name))
 })
 

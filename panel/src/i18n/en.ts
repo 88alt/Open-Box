@@ -893,8 +893,8 @@ const en = {
   groupType_failover_short: 'failover',
   groupType_loadbalance: 'Load balance',
   loadBalanceHint:
-    'New connections go to available nodes, preferring the ones with fewer active connections and rotating on ties. Parallel connections can add up bandwidth; established connections keep their outbound.',
-  loadBalanceNodesOnly: 'Load balance only takes real proxy nodes, up to 64. Remove groups or stale members, or pick fewer.',
+    'Distribute new connections across available nodes, preferring fewer active connections and rotating ties. Parallel connections can combine throughput; established connections keep their outbound.',
+  loadBalanceNodesOnly: 'Select up to 64 real proxy nodes. Remove groups or missing members.',
   groupUnitSecond: 's',
   failoverSummary: 'Failover · {lanes} lanes · {count} nodes',
   failoverStaticHint:

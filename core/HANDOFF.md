@@ -94,8 +94,9 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
 维护者授权记录(2026-11-02,仅此一项)
 - 维护者(Ki)明确同意:为实现分组规则"负载均衡(loadbalance)",可以参照上游 v0.1.387 的**行为**——选项值、字段、默认值、上限、校验规则、生成的内核配置形状。代码一律自己写,不抄上游源码或压缩代码。
 - 实际做法:对上游发布包(未改动)里的 openbox-core 查询 normalizeGroups / emitGroups 的输出,另看了前端界面对该选项的处理(切换时的默认值、成员限制、提示);只把结论写成自己的单元测试(core/internal/groups/loadbalance_test.go、backend/internal/nodegroups/loadbalance_test.go)。上游的二进制、压缩 bundle 和它们的输出文件都没有放进仓库。
-- 结论摘要:类型值 loadbalance;只有 testUrl / expectedStatus / interval 三个专属字段(没有容差和空闲超时);interval 5s~24h 内原样保留,缺省或越界回落 120s(界面切到该类型时默认填 30s);成员只收真实节点,组和不存在的名字不写进出站;最多 64 个,超了报错;生成 {type:loadbalance, tag, outbounds, url, interval[, expected_status]}。
-- 自研与上游的有意差异:成员为空时,上游生成空 outbounds,自研和其它组一样挂一个直连占位并记入 placeholders,避免内核因空出站 FATAL。
+- 结论摘要:类型值 loadbalance;只有 testUrl / expectedStatus / interval 三个专属字段(没有容差和空闲超时);interval 5s~24h 内原样保留,缺省或越界回落 120s(界面切到该类型时默认填 120s,v0.1.387 起;此前版本是 30s);成员只收真实节点,组和不存在的名字不写进出站;最多 64 个,超了报错;生成 {type:loadbalance, tag, outbounds, url, interval[, expected_status]}。
+- 与上游的差异:没有有意保留的差异。成员为空时同样原样写出空的 outbounds(不挂占位);超过 64 个的报错文字、保存校验的提示语、界面文案都与上游一致。2026-11-02 用 1500 组随机输入(含 64/65/70 个节点、非法间隔、动态关键词、与其它组类型混排)对 normalizeGroups / emitGroups 做过差分,输出和报错文字零差异;差分脚本和上游二进制不入库。
+- 注意:成员为空的负载均衡组会让内核拿到空 outbounds,内核是否接受取决于它自己,如遇启动失败请告诉维护者再决定处理方式。
 - 这条授权只针对负载均衡这一项;其它功能仍按上面的规则做。
 
 
