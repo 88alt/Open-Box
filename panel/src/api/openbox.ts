@@ -723,7 +723,9 @@ export interface OpenboxUserGroup {
   keywords?: string[]
   // dynamic 用:关键词组合方式,缺省 = or
   keywordMode?: OpenboxKeywordMode
-  // dynamic 用:只在这条订阅(订阅 id)的节点里按关键词匹配;空 = 全部订阅
+  // dynamic 用:只在这些订阅(订阅 id,可多选)的节点里按关键词匹配;空 = 全部订阅
+  subscriptionIds?: string[]
+  // 旧版单选字段,只读兼容:载入时折进 subscriptionIds,保存时不再写
   subscriptionId?: string
   // static 用:手工挑出来的节点名/组名
   members: string[]

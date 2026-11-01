@@ -431,27 +431,12 @@
               class="ml-auto flex min-w-0 items-center gap-2"
             >
               <!-- 订阅范围:只在这条订阅的节点里按关键词匹配;存的订阅已被删掉时仍保留原值并提示 -->
-              <select
-                v-model="draft.subscriptionId"
-                :aria-label="$t('subscriptions')"
-                :title="$t('subscriptions')"
-                class="select select-xs w-32 min-w-0"
-              >
-                <option value="">{{ $t('groupFilterAllSubscriptions') }}</option>
-                <option
-                  v-if="draft.subscriptionId && !groupSubscriptions.some((sub) => sub.id === draft?.subscriptionId)"
-                  :value="draft.subscriptionId"
-                >
-                  {{ $t('groupSubscriptionMissing') }}
-                </option>
-                <option
-                  v-for="sub in groupSubscriptions"
-                  :key="sub.id"
-                  :value="sub.id"
-                >
-                  {{ sub.name }}
-                </option>
-              </select>
+              <SubscriptionFilter
+                class="w-32"
+                :model-value="draft.subscriptionIds ?? []"
+                :options="subscriptionScopeOptions"
+                @update:model-value="draft.subscriptionIds = $event"
+              />
               <div
                 role="tablist"
                 :aria-label="$t('groupKeywordsMode')"
@@ -1004,6 +989,7 @@ import type {
 } from '@/api/openbox'
 import { fetchDefaultNodeGroups, fetchNodeGroups, saveNodeGroups } from '@/api/openbox'
 import BulkPick from '@/components/subscription/BulkPick.vue'
+import SubscriptionFilter from '@/components/subscription/SubscriptionFilter.vue'
 import CountryFlag from '@/components/common/CountryFlag.vue'
 import CountrySelect from '@/components/common/CountrySelect.vue'
 import { kernelTestUrl } from '@/helper/testUrl'
@@ -1088,11 +1074,29 @@ const matchableNodes = computed(() =>
     })),
 )
 
+// 订阅范围:新字段 subscriptionIds(可多选);老记录只有单个 subscriptionId,折成数组
+const scopeIdsOf = (group: OpenboxUserGroup) => [
+  ...new Set(
+    (group.subscriptionIds ?? (group.subscriptionId ? [group.subscriptionId] : []))
+      .map((id) => id.trim())
+      .filter(Boolean),
+  ),
+]
+
+// 订阅范围筛选的选项;存的订阅已被删掉时仍保留原值并提示
+const subscriptionScopeOptions = computed(() => [
+  ...groupSubscriptions.value.map((sub) => ({ value: sub.id, label: sub.name })),
+  ...(draft.value ? scopeIdsOf(draft.value) : [])
+    .filter((id) => !groupSubscriptions.value.some((sub) => sub.id === id))
+    .map((id) => ({ value: id, label: t('groupSubscriptionMissing') })),
+])
+
 const matchedNodes = (group: OpenboxUserGroup) => {
   const keywords = group.keywords || []
-  // 选了订阅范围就只在那条订阅的节点里匹配;留空 = 全部订阅
-  const scoped = group.subscriptionId
-    ? matchableNodes.value.filter((n) => n.subscriptionId === group.subscriptionId)
+  // 选了订阅范围就只在这些订阅的节点里匹配;留空 = 全部订阅
+  const scopeIds = scopeIdsOf(group)
+  const scoped = scopeIds.length
+    ? matchableNodes.value.filter((n) => n.subscriptionId && scopeIds.includes(n.subscriptionId))
     : matchableNodes.value
   if (!keywords.length) return scoped.map((n) => n.name)
   return scoped
@@ -1152,7 +1156,8 @@ const openEditor = (group: OpenboxUserGroup | null) => {
   if (draft.value) {
     if (!draft.value.mode) draft.value.mode = 'static'
     if (!draft.value.keywords) draft.value.keywords = []
-    if (!draft.value.subscriptionId) draft.value.subscriptionId = ''
+    draft.value.subscriptionIds = scopeIdsOf(draft.value)
+    delete draft.value.subscriptionId
     if (draft.value.icon === undefined) draft.value.icon = ''
     if (draft.value.expectedStatus === undefined) draft.value.expectedStatus = ''
     if (draft.value.type === 'failover') ensureFailoverFields(draft.value)
