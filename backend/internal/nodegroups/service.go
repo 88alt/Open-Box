@@ -11,6 +11,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -28,7 +30,7 @@ const (
 )
 
 // Types 是前端可选的组类型。
-var Types = []string{"urltest", "selector", "failover"}
+var Types = []string{"urltest", "selector", "failover", "loadbalance"}
 
 // ErrCoreUnavailable:openbox-core 不可用(没装或没配置)。
 var ErrCoreUnavailable = errors.New("openbox-core 不可用,无法处理节点组")
@@ -330,6 +332,11 @@ func (s *Service) checkedGroups(ctx context.Context, in []any, tags func() (map[
 	if err != nil {
 		return nil, nil, err
 	}
+	// 负载均衡的专属校验看的是用户提交的原始内容(规范化会把越界的间隔悄悄改回默认值,用户就不知道了)。
+	prev, _ := s.stored(ctx)
+	if err := checkLoadBalance(in, tagSet, prev); err != nil {
+		return nil, nil, err
+	}
 
 	// 名字校验:非空、不超长、组与组不重名、不与节点重名(sing-box 出站 tag 全局唯一)。
 	byName := map[string]bool{}
@@ -455,6 +462,9 @@ func (s *Service) finish(ctx context.Context, norm []any, nodes []AvailableNode,
 	}
 	dropped, err := s.core.EmitGroups(ctx, norm, emitNodes)
 	if err != nil {
+		if strings.Contains(err.Error(), "负载均衡「") { // 动态组命中太多节点这类,是用户能改的输入问题
+			return nil, bad("%s", err.Error())
+		}
 		return nil, err
 	}
 	if dropped == nil {
@@ -489,4 +499,102 @@ func (s *Service) Restore(ctx context.Context, in []any) (*SaveResult, error) {
 		return nil, err
 	}
 	return s.finish(ctx, norm, nodes, tagSet, nil)
+}
+
+// 负载均衡(loadbalance)的限制:检测间隔 5s ~ 24h;成员只能是真实节点(不能放组),最多 64 个。
+const (
+	LoadBalanceMaxNodes      = 64
+	loadBalanceMinIntervalMs = 5000.0
+	loadBalanceMaxIntervalMs = 24 * 3600 * 1000.0
+)
+
+var bareNumberRe = regexp.MustCompile(`^\d+(?:\.\d+)?$`)
+var durationRe = regexp.MustCompile(`^(\d+(?:\.\d+)?(?:ms|s|m|h))+$`)
+var durationPartRe = regexp.MustCompile(`(\d+(?:\.\d+)?)(ms|s|m|h)`)
+
+// intervalMs 把 "30s" / "5m" / "1h30m" / "5000ms" / "30"(纯数字当秒)转成毫秒;写法不对返回 false。
+func intervalMs(v string) (float64, bool) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0, false
+	}
+	if bareNumberRe.MatchString(v) {
+		n, _ := strconv.ParseFloat(v, 64)
+		return n * 1000, true
+	}
+	if !durationRe.MatchString(v) {
+		return 0, false
+	}
+	total := 0.0
+	for _, m := range durationPartRe.FindAllStringSubmatch(v, -1) {
+		n, _ := strconv.ParseFloat(m[1], 64)
+		switch m[2] {
+		case "ms":
+			total += n
+		case "s":
+			total += n * 1000
+		case "m":
+			total += n * 60000
+		case "h":
+			total += n * 3600000
+		}
+	}
+	return total, true
+}
+
+// checkLoadBalance 校验用户提交的负载均衡组。prev 是已保存的组:这个组原来就有的成员即使现在不是节点了也放行,
+// 免得订阅换了一批节点之后,用户连改个间隔都存不了。
+func checkLoadBalance(in []any, tagSet map[string]bool, prev []any) error {
+	prevMembers := map[string]map[string]bool{}
+	for _, p := range prev {
+		pm, ok := p.(map[string]any)
+		if !ok || str(pm, "type") != "loadbalance" || str(pm, "id") == "" {
+			continue
+		}
+		set := map[string]bool{}
+		for _, name := range allMembers(pm) {
+			set[name] = true
+		}
+		prevMembers[str(pm, "id")] = set
+	}
+	for _, g := range in {
+		m, ok := g.(map[string]any)
+		if !ok || str(m, "type") != "loadbalance" {
+			continue
+		}
+		name := str(m, "name")
+		if iv, has := m["interval"]; has && iv != nil && iv != "" {
+			ivs, isStr := iv.(string)
+			ms, valid := intervalMs(ivs)
+			if !isStr || !valid || ms < loadBalanceMinIntervalMs || ms > loadBalanceMaxIntervalMs {
+				return bad("负载均衡「%s」的检测间隔范围为 5s 到 24h", name)
+			}
+		}
+		if str(m, "mode") == "dynamic" {
+			continue // 动态组的成员是现算的,个数在生成配置时检查
+		}
+		members, isList := m["members"].([]any)
+		if !isList {
+			return bad("负载均衡「%s」的 members 必须是节点数组", name)
+		}
+		uniq := map[string]bool{}
+		for _, v := range members {
+			ms, isStr := v.(string)
+			if !isStr || strings.TrimSpace(ms) == "" {
+				return bad("负载均衡「%s」包含无效成员", name)
+			}
+			uniq[ms] = true
+		}
+		if len(uniq) > LoadBalanceMaxNodes {
+			return bad("负载均衡「%s」最多支持 %d 个节点", name, LoadBalanceMaxNodes)
+		}
+		old := prevMembers[str(m, "id")]
+		for _, v := range members {
+			ms := v.(string)
+			if !tagSet[ms] && !old[ms] {
+				return bad("负载均衡「%s」只能添加真实节点：%s", name, ms)
+			}
+		}
+	}
+	return nil
 }

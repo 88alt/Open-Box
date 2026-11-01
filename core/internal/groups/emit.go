@@ -160,7 +160,7 @@ func dropCycles(groups []*Group) []*Group {
 		for i := 0; i < len(pending); i++ {
 			g := pending[i]
 			blocked := false
-			if g.Mode != "dynamic" && g.Type != "failover" {
+			if g.Mode != "dynamic" && g.Type != "failover" && g.Type != "loadbalance" { // 负载均衡只收真实节点,不依赖别的组
 				for _, m := range g.Members {
 					if m != g.Name && allNames[m] && !acceptedNames[m] {
 						blocked = true
@@ -394,6 +394,19 @@ func EmitUserGroups(groupsRaw any, nodesRaw any, options any) (*EmitResult, erro
 			continue
 		}
 		members := resolveMembers(g, dynamicTags, nodeTagSet, memberNames, matchText)
+		if g.Type == "loadbalance" {
+			// 负载均衡只接真实节点:引用的组、不存在的名字一律不写进出站
+			nodesOnly := make([]string, 0, len(members))
+			for _, m := range members {
+				if nodeTagSet[m] {
+					nodesOnly = append(nodesOnly, m)
+				}
+			}
+			members = nodesOnly
+			if len(members) > LoadBalanceMaxNodes {
+				return nil, fmt.Errorf("负载均衡「%s」最多支持 %d 个节点,现在有 %d 个", g.Name, LoadBalanceMaxNodes, len(members))
+			}
+		}
 		if len(members) == 0 {
 			// 空组不能原样写进配置(内核会 FATAL),也不该整个丢掉:挂一个直连占位
 			members = []string{builtin.Direct}
@@ -405,6 +418,11 @@ func EmitUserGroups(groupsRaw any, nodesRaw any, options any) (*EmitResult, erro
 			outbounds = append(outbounds, Outbound{
 				Type: "urltest", Tag: g.Name, Outbounds: members, URL: orStr(g.TestURL, testURL),
 				Interval: interval, Tolerance: &tol, IdleTimeout: idleTimeoutFor(g.IdleTimeout, interval), ExpectedStatus: expectedOf(g),
+			})
+		} else if g.Type == "loadbalance" {
+			outbounds = append(outbounds, Outbound{
+				Type: "loadbalance", Tag: g.Name, Outbounds: members, URL: orStr(g.TestURL, testURL),
+				Interval: orStr(g.Interval, DefaultLoadBalanceInterval), ExpectedStatus: expectedOf(g),
 			})
 		} else {
 			outbounds = append(outbounds, Outbound{Type: "selector", Tag: g.Name, Outbounds: members})

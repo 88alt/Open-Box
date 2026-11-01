@@ -14,7 +14,7 @@ var singBoxNodeTypes = map[string]bool{
 
 // 不是节点的内置出站类型,直接忽略(不算「没能导入」)。
 var singBoxNonNode = map[string]bool{
-	"direct": true, "block": true, "dns": true, "selector": true, "urltest": true,
+	"direct": true, "block": true, "dns": true, "selector": true, "urltest": true, "loadbalance": true,
 }
 
 // parseSingBox 读 sing-box 配置里的 outbounds(也接受直接给一个出站数组)。

@@ -248,6 +248,8 @@ func describePath(cfg map[string]any, tag string) (via string, chain []string, n
 			continue
 		case "urltest":
 			return cur, nil, fmt.Sprintf("出口是自动选择组「%s」,实际走哪个节点由内核按延迟挑,这里只能写组名", cur)
+		case "loadbalance":
+			return cur, nil, fmt.Sprintf("出口是负载均衡组「%s」,实际走哪个节点由内核按连接数分配,这里只能写组名", cur)
 		case "direct":
 			return "", nil, fmt.Sprintf("兜底出口「%s」现在是直连,所以这次是从路由器直连测的", tag)
 		}

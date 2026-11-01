@@ -302,7 +302,7 @@ func ownerOf(d *routedecide.Decision, v *routedecide.View) *Owner {
 		return &Owner{Kind: "builtin", Name: "kernel"}
 	}
 	switch v.Types[d.Outbound] {
-	case "selector", "urltest":
+	case "selector", "urltest", "loadbalance":
 		if hasKey(r, "rule_set") || hasKey(r, "domain_suffix") || hasKey(r, "domain") {
 			return &Owner{Kind: "policy", Name: d.Outbound}
 		}

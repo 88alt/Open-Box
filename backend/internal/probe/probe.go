@@ -86,7 +86,7 @@ func (m *Material) Has(tag string) bool {
 	return ok && !isGroup(kind)
 }
 
-func isGroup(t string) bool { return t == "selector" || t == "urltest" }
+func isGroup(t string) bool { return t == "selector" || t == "urltest" || t == "loadbalance" }
 
 // Subset 从完整配置 cfg 里摘出 tags 以及它们依赖的东西:detour、组成员、domain_resolver 指向的 DNS 服务器。
 // 找不到或属于组的 tag 不会出错,调用方用 Has 判断。

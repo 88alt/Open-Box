@@ -61,8 +61,8 @@
             </template>
             <template v-else>
               {{ memberSummary(group) }}
-              <template v-if="group.type === 'urltest' || group.type === 'failover'">
-                · {{ $t('groupInterval') }} {{ group.interval }} · {{ $t('groupTolerance') }} {{ group.tolerance }}ms
+              <template v-if="group.type === 'urltest' || group.type === 'failover' || group.type === 'loadbalance'">
+                · {{ $t('groupInterval') }} {{ group.interval }}<template v-if="group.type !== 'loadbalance'"> · {{ $t('groupTolerance') }} {{ group.tolerance }}ms</template>
               </template>
             </template>
           </div>
@@ -219,6 +219,7 @@
                 <option value="urltest">{{ $t('groupType_urltest') }}</option>
                 <option value="selector">{{ $t('groupType_selector') }}</option>
                 <option value="failover">{{ $t('groupType_failover') }}</option>
+                <option value="loadbalance">{{ $t('groupType_loadbalance') }}</option>
               </select>
             </div>
             <!-- 故障转移:检测间隔按秒填(按设定间隔进行健康检查,不是分钟级的择优测速);容差只给多节点页签里的
@@ -327,8 +328,8 @@
                 </div>
               </div>
             </template>
-            <!-- 检测间隔/容差只对 urltest 有意义:selector 是手动选,不会自己去测 -->
-            <template v-else-if="draft.type === 'urltest'">
+            <!-- 检测间隔/容差只对 urltest 有意义:selector 是手动选,不会自己去测;负载均衡会测速但没有容差 -->
+            <template v-else-if="draft.type === 'urltest' || isLoadBalance">
               <div class="flex flex-col gap-1">
                 <label class="text-xs font-medium">{{ $t('groupInterval') }}</label>
                 <div class="flex items-center gap-1">
@@ -343,7 +344,10 @@
                   <span class="text-base-content/60 text-xs">{{ $t('groupUnitSecond') }}</span>
                 </div>
               </div>
-              <div class="flex flex-col gap-1">
+              <div
+                v-if="draft.type === 'urltest'"
+                class="flex flex-col gap-1"
+              >
                 <label class="text-xs font-medium">{{ $t('groupTolerance') }}</label>
                 <div class="flex items-center gap-1">
                   <input
@@ -379,6 +383,10 @@
                   />
                 </div>
               </div>
+              <p
+                v-if="isLoadBalance"
+                class="text-base-content/60 basis-full text-xs"
+              >{{ $t('loadBalanceHint') }}</p>
             </template>
           </div>
           <!-- 从普通组切成故障转移时,原来引用了组的成员进不了页签(页签只放真实节点):列出来、拦住保存,
@@ -516,7 +524,7 @@
               <BulkPick
                 v-model:subscription="memberSub"
                 :subscriptions="subscriptionOptions"
-                :nodes-only="isFailover"
+                :nodes-only="isFailover || isLoadBalance"
                 @select-all="tickAll('available')"
                 @invert="tickInvert('available')"
                 @clear="tickNone('available')"
@@ -712,10 +720,10 @@
                 >
                   <ChevronLeftIcon class="text-base-content/30 h-4 w-4" />
                 </button>
-                <span :class="['truncate', isFailover && !nodeNameSet.has(name) && 'line-through opacity-60']">{{ name }}</span>
+                <span :class="['truncate', (isFailover || isLoadBalance) && !nodeNameSet.has(name) && 'line-through opacity-60']">{{ name }}</span>
                 <!-- 订阅更新后已经不存在的节点:留着给用户看,不算有效节点、不进配置 -->
                 <span
-                  v-if="isFailover && !nodeNameSet.has(name)"
+                  v-if="(isFailover || isLoadBalance) && !nodeNameSet.has(name)"
                   class="badge badge-ghost badge-xs shrink-0"
                 >{{ $t('failoverInvalid') }}</span>
               </label>
@@ -1178,6 +1186,9 @@ const openEditor = (group: OpenboxUserGroup | null) => {
 
 // ---------- 故障转移(主备页签) ----------
 const isFailover = computed(() => draft.value?.type === 'failover')
+// 负载均衡:只接真实节点(不能放组),最多 64 个;检测间隔 + 测速地址 + 可接受状态码,没有容差
+const isLoadBalance = computed(() => draft.value?.type === 'loadbalance')
+const LOADBALANCE_MAX_NODES = 64
 const FAILOVER_DEFAULTS: OpenboxFailoverSettings = { timeoutMs: 5000, failureThreshold: 2, restorePrimary: true, recoveryHoldMs: 60000 }
 // 主备页签上限,和服务端 engine/user-groups.mjs 的 FAILOVER_MAX_LANES 同一个数
 const FAILOVER_MAX_LANES = 3
@@ -1329,6 +1340,12 @@ const onTypeChange = () => {
     d.interval = normalBackup?.interval && /^(\d+)(s|m|h)$/.test(normalBackup.interval) ? normalBackup.interval : '300s'
     if (typeof d.tolerance !== 'number') d.tolerance = 100
   }
+  // 负载均衡:检测间隔默认 30s;从它切回自动择优时补上容差缺省值
+  if (next === 'loadbalance') {
+    d.interval = '30s'
+  } else if (prev === 'loadbalance' && next === 'urltest' && typeof d.tolerance !== 'number') {
+    d.tolerance = 100
+  }
   checkedAvailable.value = []
   checkedSelected.value = []
 }
@@ -1351,7 +1368,7 @@ const candidates = computed(() => {
   const nodeItems = availableNodes.value.map((n) => ({
     kind: 'node' as const, name: n.name, subscription: n.subscription,
   }))
-  if (isFailover.value) return nodeItems
+  if (isFailover.value || isLoadBalance.value) return nodeItems
   const groupItems = groups.value
     .filter((g) => g.name !== draft.value?.name)
     .map((g) => ({ kind: 'group' as const, name: g.name, subscription: '' }))
@@ -1439,7 +1456,7 @@ const filteredSelected = computed(() => {
   const list = members.value
   const inScope = new Set(scopeOf(selectedSub.value, selectedFilter.value).map((c) => c.name))
   // 故障转移里已经失效的引用(订阅更新删掉的节点)不在候选表里,过滤 / 订阅筛选为空时照样列出来给用户看
-  if (isFailover.value && !selectedSub.value.length && !selectedFilter.value.trim()) return list
+  if ((isFailover.value || isLoadBalance.value) && !selectedSub.value.length && !selectedFilter.value.trim()) return list
   return list.filter((name) => inScope.has(name))
 })
 
@@ -1549,6 +1566,7 @@ const AUTO_SUFFIX_KEY: Record<OpenboxGroupType, string> = {
   urltest: 'groupAutoSuffixUrltest',
   selector: 'groupAutoSuffixSelector',
   failover: 'groupAutoSuffixFailover',
+  loadbalance: 'groupAutoSuffixLoadBalance',
 }
 
 // 同一个国家的组要挨在一起,自动排在手动前面。分两次生成(先建一批自动,过几天
@@ -1688,7 +1706,7 @@ const showTypeChangeConfirm = ref(false)
 const saveDraft = async (typeChangeConfirmed = false) => {
   if (!draft.value || saving.value) return
   // 保存时再做一次范围校正,避免输入框尚未触发 blur 时把临时值写进配置。
-  if (draft.value.type === 'urltest' || draft.value.type === 'failover') normalizeIntervalSeconds()
+  if (draft.value.type === 'urltest' || draft.value.type === 'failover' || draft.value.type === 'loadbalance') normalizeIntervalSeconds()
   const name = draft.value.name.trim()
   if (!name) {
     showNotification({ content: 'groupNameRequired', type: 'alert-error' })
@@ -1718,9 +1736,18 @@ const saveDraft = async (typeChangeConfirmed = false) => {
     showNotification({ content: 'groupMembersRequired', type: 'alert-error' })
     return
   }
-  // 可接受状态码只对会自己测速的组(自动择优 / 故障转移)有意义,写法不对就拦住
+  // 负载均衡只接真实节点、最多 64 个:成员里有分组 / 已失效的名字,或数量超了,都拦住
+  if (isLoadBalance.value) {
+    const dynamic = draft.value.mode === 'dynamic'
+    const picked = dynamic ? matchedNodes(draft.value) : draft.value.members
+    if (picked.length > LOADBALANCE_MAX_NODES || (!dynamic && picked.some((m) => !nodeNameSet.value.has(m)))) {
+      showNotification({ content: 'loadBalanceNodesOnly', type: 'alert-error' })
+      return
+    }
+  }
+  // 可接受状态码只对会自己测速的组(自动择优 / 故障转移 / 负载均衡)有意义,写法不对就拦住
   const expectedStatus = normalizeExpectedStatus(draft.value.expectedStatus)
-  if (expectedStatus === null && (draft.value.type === 'urltest' || draft.value.type === 'failover')) {
+  if (expectedStatus === null && (draft.value.type === 'urltest' || draft.value.type === 'failover' || draft.value.type === 'loadbalance')) {
     showNotification({ content: 'expectedStatusInvalid', type: 'alert-error' })
     return
   }

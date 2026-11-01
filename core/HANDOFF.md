@@ -91,6 +91,13 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
 - 任何授权 / 激活的绕过实现。
 理由见第六节。要做新功能时,从前端需要什么、sing-box 能做什么出发,自己设计,并在 core/README.md 的方法表里记录。
 
+维护者授权记录(2026-11-02,仅此一项)
+- 维护者(Ki)明确同意:为实现分组规则"负载均衡(loadbalance)",可以参照上游 v0.1.387 的**行为**——选项值、字段、默认值、上限、校验规则、生成的内核配置形状。代码一律自己写,不抄上游源码或压缩代码。
+- 实际做法:对上游发布包(未改动)里的 openbox-core 查询 normalizeGroups / emitGroups 的输出,另看了前端界面对该选项的处理(切换时的默认值、成员限制、提示);只把结论写成自己的单元测试(core/internal/groups/loadbalance_test.go、backend/internal/nodegroups/loadbalance_test.go)。上游的二进制、压缩 bundle 和它们的输出文件都没有放进仓库。
+- 结论摘要:类型值 loadbalance;只有 testUrl / expectedStatus / interval 三个专属字段(没有容差和空闲超时);interval 5s~24h 内原样保留,缺省或越界回落 120s(界面切到该类型时默认填 30s);成员只收真实节点,组和不存在的名字不写进出站;最多 64 个,超了报错;生成 {type:loadbalance, tag, outbounds, url, interval[, expected_status]}。
+- 自研与上游的有意差异:成员为空时,上游生成空 outbounds,自研和其它组一样挂一个直连占位并记入 placeholders,避免内核因空出站 FATAL。
+- 这条授权只针对负载均衡这一项;其它功能仍按上面的规则做。
+
 
 # 六、来源与合规:现状与需要维护者处理的事
 

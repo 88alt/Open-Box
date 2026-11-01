@@ -673,7 +673,7 @@ export const testNodeLatency = async (payload: {
 // 用户自定义节点组(策略组)。内核只有 urltest / selector 两种——Clash 的 fallback 在 sing-box 里
 // 不存在(实测 1.13.14 报 unknown outbound type)。failover(故障转移)是应用层类型:内核里落成
 // 一个 selector(父组)+ 每个多节点页签一个私有 urltest 子组,主备切换由面板服务端后台做。
-export type OpenboxGroupType = 'urltest' | 'selector' | 'failover'
+export type OpenboxGroupType = 'urltest' | 'selector' | 'failover' | 'loadbalance'
 
 // 故障转移的主备页签:顺序即优先级(第一个主用,后面依次备用),id 稳定(拖拽、保存、运行状态都按它认),
 // name 可选(不决定主备顺序),members 只放真实节点名

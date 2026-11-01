@@ -12,20 +12,23 @@ import (
 // 对应旧 Node 的 engine/user-groups.mjs 里「分组归一化」的部分。
 
 const (
-	DefaultInterval    = "300s"
-	DefaultTolerance   = 100.0
-	DefaultIdleTimeout = "12h"
-	DefaultTestURL     = "http://www.gstatic.com/generate_204"
-	FailoverPrefix     = "__fo:"
-	FailoverRejectTag  = FailoverPrefix + "reject"
-	iconScaleLimit     = 20
-	failoverMaxLanes   = 3
-	builtinDirectID    = "builtin-direct"
-	builtinBlockID     = "builtin-block"
+	DefaultInterval  = "300s"
+	DefaultTolerance = 100.0
+	// 负载均衡:检测间隔缺省 / 非法时的回落值,和最多能放的节点数
+	DefaultLoadBalanceInterval = "120s"
+	LoadBalanceMaxNodes        = 64
+	DefaultIdleTimeout         = "12h"
+	DefaultTestURL             = "http://www.gstatic.com/generate_204"
+	FailoverPrefix             = "__fo:"
+	FailoverRejectTag          = FailoverPrefix + "reject"
+	iconScaleLimit             = 20
+	failoverMaxLanes           = 3
+	builtinDirectID            = "builtin-direct"
+	builtinBlockID             = "builtin-block"
 )
 
 var (
-	groupTypes = []string{"urltest", "selector", "failover"}
+	groupTypes = []string{"urltest", "selector", "failover", "loadbalance"}
 	groupModes = []string{"static", "dynamic"}
 
 	failoverIntervalMs = [2]float64{5000, 24 * 3600000}
@@ -75,7 +78,7 @@ type Group struct {
 	Kind        string // direct / block / 空
 
 	// 只有对应类型才有的字段;extras 记录它们来自哪种类型(内置出站会改写 Type,但这些字段原样保留)
-	extras  string // "" / urltest / failover
+	extras  string // "" / urltest / failover / loadbalance
 	TestURL string
 	// 可接受状态码(内核 tcp19):空 = 用档案里的全局设置
 	ExpectedStatus string
@@ -137,6 +140,10 @@ func (g *Group) MarshalJSON() ([]byte, error) {
 		put("interval", g.Interval)
 		put("tolerance", g.Tolerance)
 		put("idleTimeout", g.IdleTimeout)
+	case "loadbalance":
+		put("testUrl", g.TestURL)
+		put("expectedStatus", g.ExpectedStatus)
+		put("interval", g.Interval)
 	case "failover":
 		put("lanes", g.Lanes)
 		put("testUrl", g.TestURL)
@@ -301,6 +308,18 @@ func normalizeGroup(raw any, index int) *Group {
 		}
 		if g.IdleTimeout, ok = jsx.NonEmpty(jsx.Get(raw, "idleTimeout")); !ok {
 			g.IdleTimeout = DefaultIdleTimeout
+		}
+	case "loadbalance":
+		// 负载均衡:只有检测地址 / 可接受状态码 / 检测间隔;没有容差和空闲超时。
+		// 间隔 5s ~ 24h 以内原样保留(同故障转移),缺省或越界回落到 120s。
+		g.extras = "loadbalance"
+		g.TestURL, _ = jsx.NonEmpty(jsx.Get(raw, "testUrl"))
+		g.ExpectedStatus, _ = NormalizeExpectedStatus(jsx.Get(raw, "expectedStatus"))
+		interval, _ := jsx.NonEmpty(jsx.Get(raw, "interval"))
+		if ms := parseDuration(interval); ms >= failoverIntervalMs[0] && ms <= failoverIntervalMs[1] {
+			g.Interval = interval
+		} else {
+			g.Interval = DefaultLoadBalanceInterval
 		}
 	case "failover":
 		g.extras = "failover"
