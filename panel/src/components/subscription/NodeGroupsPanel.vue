@@ -216,8 +216,8 @@
                 class="select select-sm max-sm:w-full"
                 @change="onTypeChange"
               >
-                <option value="urltest">{{ $t('groupType_urltest') }}</option>
                 <option value="selector">{{ $t('groupType_selector') }}</option>
+                <option value="urltest">{{ $t('groupType_urltest') }}</option>
                 <option value="failover">{{ $t('groupType_failover') }}</option>
                 <option value="loadbalance">{{ $t('groupType_loadbalance') }}</option>
               </select>
