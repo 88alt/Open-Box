@@ -303,30 +303,6 @@
                   </div>
                 </div>
               </div>
-              <!-- 测速地址 + 可接受状态码:单独排一整行,不挤在规则 / 间隔 / 容差那一行里 -->
-              <div class="flex min-w-0 basis-full gap-3 max-sm:flex-col">
-                <div class="flex min-w-0 flex-1 flex-col gap-1">
-                  <label class="text-xs font-medium">{{ $t('groupTestUrl') }}</label>
-                  <input
-                    v-model="draft.testUrl"
-                    type="url"
-                    class="input input-sm w-full font-mono text-xs"
-                    :placeholder="$t('groupTestUrlPlaceholder')"
-                  />
-                </div>
-                <div class="flex shrink-0 flex-col gap-1 sm:w-40">
-                  <label
-                    class="text-xs font-medium"
-                    v-tip="$t('groupExpectedStatusHint')"
-                  >{{ $t('groupExpectedStatus') }}</label>
-                  <input
-                    v-model="draft.expectedStatus"
-                    type="text"
-                    class="input input-sm w-full font-mono text-xs"
-                    :placeholder="$t('groupExpectedStatusPlaceholder')"
-                  />
-                </div>
-              </div>
             </template>
             <!-- 检测间隔/容差只对 urltest 有意义:selector 是手动选,不会自己去测;负载均衡会测速但没有容差 -->
             <template v-else-if="draft.type === 'urltest' || isLoadBalance">
@@ -359,30 +335,6 @@
                   <span class="text-base-content/60 text-xs">{{ $t('groupUnitMs') }}</span>
                 </div>
               </div>
-              <!-- 测速地址 + 可接受状态码:单独排一整行,不挤在规则 / 间隔 / 容差那一行里 -->
-              <div class="flex min-w-0 basis-full gap-3 max-sm:flex-col">
-                <div class="flex min-w-0 flex-1 flex-col gap-1">
-                  <label class="text-xs font-medium">{{ $t('groupTestUrl') }}</label>
-                  <input
-                    v-model="draft.testUrl"
-                    type="url"
-                    class="input input-sm w-full font-mono text-xs"
-                    :placeholder="$t('groupTestUrlPlaceholder')"
-                  />
-                </div>
-                <div class="flex shrink-0 flex-col gap-1 sm:w-40">
-                  <label
-                    class="text-xs font-medium"
-                    v-tip="$t('groupExpectedStatusHint')"
-                  >{{ $t('groupExpectedStatus') }}</label>
-                  <input
-                    v-model="draft.expectedStatus"
-                    type="text"
-                    class="input input-sm w-full font-mono text-xs"
-                    :placeholder="$t('groupExpectedStatusPlaceholder')"
-                  />
-                </div>
-              </div>
             </template>
             <!-- 带宽择优:selector 是手动选,没有这项;周期是所有启用的组共用的,在「内核」页统一改 -->
             <div
@@ -406,6 +358,33 @@
                 <QuestionMarkCircleIcon class="h-4 w-4" />
               </button>
               <span class="text-base-content/60 text-xs">{{ $t('bandwidthPeriodSummary', { hours: bandwidthSettings.intervalHours }) }}</span>
+            </div>
+          </div>
+          <!-- 测速地址 + 可接受状态码:单独排一整行,不挤在规则 / 间隔 / 容差那一行里 -->
+          <div
+            v-if="draft.type !== 'selector'"
+            class="flex min-w-0 gap-3 max-sm:flex-col"
+          >
+            <div class="flex min-w-0 flex-1 flex-col gap-1">
+              <label class="text-xs font-medium">{{ $t('groupTestUrl') }}</label>
+              <input
+                v-model="draft.testUrl"
+                type="url"
+                class="input input-sm w-full font-mono text-xs"
+                :placeholder="$t('groupTestUrlPlaceholder')"
+              />
+            </div>
+            <div class="flex shrink-0 flex-col gap-1 sm:w-40">
+              <label
+                class="text-xs font-medium"
+                v-tip="$t('groupExpectedStatusHint')"
+              >{{ $t('groupExpectedStatus') }}</label>
+              <input
+                v-model="draft.expectedStatus"
+                type="text"
+                class="input input-sm w-full font-mono text-xs"
+                :placeholder="$t('groupExpectedStatusPlaceholder')"
+              />
             </div>
           </div>
           <!-- 从普通组切成故障转移时,原来引用了组的成员进不了页签(页签只放真实节点):列出来、拦住保存,
