@@ -54,6 +54,7 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
 [x] emit(节点转 sing-box 出站 / endpoint)、clientroutes、dns(含 upstream 与热切换 flip)、route
 [x] 叶子模块:dnsfilter、ipx、servers、directhosts、dnsrewrite、idna、urlx
 [x] config:configDetailed 装配(站点直连、链式节点核对、节点组 / 站点集、dns / route / tun 入站、入口旁路、共享网络、FakeIP 缓存)
+[x] 带宽择优(core 层):组的 bandwidth 开关 → urltest / loadbalance 出站和故障转移多节点自动页签的内部 urltest 写 bandwidth:true;选项 disableBandwidth(客户端配置)不写。测速调度、校验、接口在后端,见 backend/STATUS.md
 [x] 授权三个方法(checkActivationCode、activationState、authorizationState):固定的"未限制"返回
 [x] go.mod 对齐 Go 1.25.12
 [~] 真机验证:真实路由器上经后端调用 core、sing-box 启动成功(由维护者做,记录在 backend/STATUS.md 的真机条目)

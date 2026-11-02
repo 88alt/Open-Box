@@ -175,6 +175,8 @@ func BuildDetailed(args any) (map[string]any, error) {
 	emitRes, err := groups.EmitUserGroups(groupsIn, allNodes, map[string]any{
 		"testUrl":        jsx.Get(profile, "testUrl"),
 		"expectedStatus": jsx.Get(profile, "testExpectedStatus"),
+		// 客户端配置(档案里 disableBandwidth = true)不带带宽择优
+		"disableBandwidth": jsx.Get(profile, "disableBandwidth"),
 	})
 	if err != nil {
 		return nil, err

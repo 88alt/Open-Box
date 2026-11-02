@@ -22,6 +22,7 @@ type Outbound struct {
 	Default                   string   `json:"default,omitempty"`
 	InterruptExistConnections bool     `json:"interrupt_exist_connections,omitempty"`
 	ExpectedStatus            string   `json:"expected_status,omitempty"` // 可接受状态码,放最后(JS 里是 { ...outbound, expected_status })
+	Bandwidth                 bool     `json:"bandwidth,omitempty"`       // 带宽择优:只在 urltest / loadbalance 上写,内核据此把实测带宽算进选择
 }
 
 // MarshalJSON:负载均衡的 outbounds 即使是空的也要写出来(与上游一致,不能被 omitempty 吞掉);其它类型照旧。
@@ -37,7 +38,8 @@ func (o Outbound) MarshalJSON() ([]byte, error) {
 			URL            string   `json:"url,omitempty"`
 			Interval       string   `json:"interval,omitempty"`
 			ExpectedStatus string   `json:"expected_status,omitempty"`
-		}{o.Type, o.Tag, o.Outbounds, o.URL, o.Interval, o.ExpectedStatus})
+			Bandwidth      bool     `json:"bandwidth,omitempty"`
+		}{o.Type, o.Tag, o.Outbounds, o.URL, o.Interval, o.ExpectedStatus, o.Bandwidth})
 	}
 	type plain Outbound
 	return json.Marshal(plain(o))
@@ -245,6 +247,8 @@ func EmitUserGroups(groupsRaw any, nodesRaw any, options any) (*EmitResult, erro
 	// 可接受状态码:组自己的优先,没写用全局设置;都没写就不往配置里写这个字段
 	expectedDefault, _ := NormalizeExpectedStatus(jsx.Get(options, "expectedStatus"))
 	expectedOf := func(g *Group) string { return orStr(g.ExpectedStatus, expectedDefault) }
+	// 客户端配置不做带宽测试(档案里 disableBandwidth = true):组上开着也不往出站里写
+	bandwidthOf := func(g *Group) bool { return g.Bandwidth && !jsx.Truthy(jsx.Get(options, "disableBandwidth")) }
 	normalized := NormalizeGroups(groupsRaw)
 	nodes, err := parseNodes(nodesRaw)
 	if err != nil {
@@ -354,6 +358,7 @@ func EmitUserGroups(groupsRaw any, nodesRaw any, options any) (*EmitResult, erro
 					Type: "urltest", Tag: subTag, Outbounds: valid,
 					URL: orStr(g.TestURL, testURL), Interval: interval, Tolerance: &tol,
 					IdleTimeout: idleTimeoutFor(DefaultIdleTimeout, interval), ExpectedStatus: expectedOf(g),
+					Bandwidth: bandwidthOf(g),
 				})
 				st.Mode, st.Ref, st.SubTag = "urltest", &subTag, &subTag
 				refs = append(refs, subTag)
@@ -438,11 +443,13 @@ func EmitUserGroups(groupsRaw any, nodesRaw any, options any) (*EmitResult, erro
 			outbounds = append(outbounds, Outbound{
 				Type: "urltest", Tag: g.Name, Outbounds: members, URL: orStr(g.TestURL, testURL),
 				Interval: interval, Tolerance: &tol, IdleTimeout: idleTimeoutFor(g.IdleTimeout, interval), ExpectedStatus: expectedOf(g),
+				Bandwidth: bandwidthOf(g),
 			})
 		} else if g.Type == "loadbalance" {
 			outbounds = append(outbounds, Outbound{
 				Type: "loadbalance", Tag: g.Name, Outbounds: members, URL: orStr(g.TestURL, testURL),
 				Interval: orStr(g.Interval, DefaultLoadBalanceInterval), ExpectedStatus: expectedOf(g),
+				Bandwidth: bandwidthOf(g),
 			})
 		} else {
 			outbounds = append(outbounds, Outbound{Type: "selector", Tag: g.Name, Outbounds: members})

@@ -82,11 +82,13 @@ type Group struct {
 	TestURL string
 	// 可接受状态码(内核 tcp19):空 = 用档案里的全局设置
 	ExpectedStatus string
-	Interval       string
-	Tolerance      float64
-	IdleTimeout    string
-	Lanes          []Lane
-	Failover       *FailoverSettings
+	// 带宽择优(urltest / loadbalance / failover 才有):true = 自动选择时把实测带宽和延迟一起算;selector 没有这项
+	Bandwidth   bool
+	Interval    string
+	Tolerance   float64
+	IdleTimeout string
+	Lanes       []Lane
+	Failover    *FailoverSettings
 
 	// 内置出站的默认值是一份固定对象:没有 iconScale,键顺序也不同
 	pristineBuiltin bool
@@ -133,6 +135,12 @@ func (g *Group) MarshalJSON() ([]byte, error) {
 	put("keywordMode", g.KeywordMode)
 	put("keywords", g.Keywords)
 	put("members", g.Members)
+	// 只在开着时才写:关着的组和旧档案的序列化结果保持一致
+	putBandwidth := func() {
+		if g.Bandwidth {
+			put("bandwidth", true)
+		}
+	}
 	switch g.extras {
 	case "urltest":
 		put("testUrl", g.TestURL)
@@ -140,10 +148,12 @@ func (g *Group) MarshalJSON() ([]byte, error) {
 		put("interval", g.Interval)
 		put("tolerance", g.Tolerance)
 		put("idleTimeout", g.IdleTimeout)
+		putBandwidth()
 	case "loadbalance":
 		put("testUrl", g.TestURL)
 		put("expectedStatus", g.ExpectedStatus)
 		put("interval", g.Interval)
+		putBandwidth()
 	case "failover":
 		put("lanes", g.Lanes)
 		put("testUrl", g.TestURL)
@@ -151,6 +161,7 @@ func (g *Group) MarshalJSON() ([]byte, error) {
 		put("interval", g.Interval)
 		put("tolerance", g.Tolerance)
 		put("failover", g.Failover)
+		putBandwidth()
 	}
 	if g.Kind != "" {
 		put("kind", g.Kind)
@@ -292,6 +303,7 @@ func normalizeGroup(raw any, index int) *Group {
 		g.extras = "urltest"
 		g.TestURL, _ = jsx.NonEmpty(jsx.Get(raw, "testUrl"))
 		g.ExpectedStatus, _ = NormalizeExpectedStatus(jsx.Get(raw, "expectedStatus"))
+		g.Bandwidth = jsx.Get(raw, "bandwidth") == true
 		if g.Interval, ok = jsx.NonEmpty(jsx.Get(raw, "interval")); !ok {
 			g.Interval = DefaultInterval
 		}
@@ -315,6 +327,7 @@ func normalizeGroup(raw any, index int) *Group {
 		g.extras = "loadbalance"
 		g.TestURL, _ = jsx.NonEmpty(jsx.Get(raw, "testUrl"))
 		g.ExpectedStatus, _ = NormalizeExpectedStatus(jsx.Get(raw, "expectedStatus"))
+		g.Bandwidth = jsx.Get(raw, "bandwidth") == true
 		interval, _ := jsx.NonEmpty(jsx.Get(raw, "interval"))
 		if ms := parseDuration(interval); ms >= failoverIntervalMs[0] && ms <= failoverIntervalMs[1] {
 			g.Interval = interval
@@ -327,6 +340,7 @@ func normalizeGroup(raw any, index int) *Group {
 		g.Lanes = normalizeLanes(jsx.Get(raw, "lanes"))
 		g.TestURL, _ = jsx.NonEmpty(jsx.Get(raw, "testUrl"))
 		g.ExpectedStatus, _ = NormalizeExpectedStatus(jsx.Get(raw, "expectedStatus"))
+		g.Bandwidth = jsx.Get(raw, "bandwidth") == true
 		interval, _ := jsx.NonEmpty(jsx.Get(raw, "interval"))
 		ms := parseDuration(interval)
 		if ms >= failoverIntervalMs[0] && ms <= failoverIntervalMs[1] {
