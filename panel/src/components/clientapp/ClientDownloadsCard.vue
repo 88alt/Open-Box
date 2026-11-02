@@ -2,25 +2,9 @@
   <!-- 客户端下载:版本号从 GitHub Releases 读(缓存 10 分钟),点一下直接下载 -->
   <div class="card">
     <div class="app-card-inset flex flex-col gap-3">
-      <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <h2 class="text-base font-semibold">{{ $t('clientDownloadTitle') }}</h2>
-        <span class="text-base-content/70 ml-auto text-xs whitespace-nowrap sm:text-sm">
-          {{ $t('clientDownloadFastWith') }}
-          <a
-            :href="DOWNMAN_URL"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="link link-hover ml-1 inline-flex items-center gap-0.5 align-middle font-semibold"
-            :style="MARKET_LINK_STYLE"
-          >
-            DownMan
-            <ChevronRightIcon
-              class="h-3.5 w-3.5 shrink-0"
-              aria-hidden="true"
-            />
-          </a>
-        </span>
-      </div>
+      <!-- 不放第三方下载站的推广链接(上游 v0.1.388 有「极速下载用 DownMan」,main 有意不要)。
+           同步上游时不要把它加回来;clientDownloadFastWith 键保留但不引用。 -->
+      <h2 class="text-base font-semibold">{{ $t('clientDownloadTitle') }}</h2>
       <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <component
           :is="tile.available ? 'a' : 'div'"
@@ -110,8 +94,6 @@
 <script setup lang="ts">
 import CountryFlag from '@/components/common/CountryFlag.vue'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
-import { DOWNMAN_URL, MARKET_LINK_STYLE } from '@/constant/market'
-import { ChevronRightIcon } from '@heroicons/vue/24/outline'
 import QRCode from 'qrcode'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
