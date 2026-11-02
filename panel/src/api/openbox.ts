@@ -265,6 +265,8 @@ export interface OpenboxProfile {
   testExpectedStatus?: string
   // 每日流量这些分析数据留多久(月,1~36)
   traffic?: { keepMonths?: number }
+  // 带宽择优的统一测速参数:周期(小时,1~24,默认 2)、单次下载流量上限(MB,1~1024,默认 64)
+  bandwidth?: OpenboxBandwidthSettings
   rulesetDir?: string
 }
 
@@ -737,6 +739,8 @@ export interface OpenboxUserGroup {
   testUrl?: string
   // urltest / failover 用:这个组自己的可接受状态码(200-399 或 204,多段用 / 连接),空 = 用档案里的全局设置
   expectedStatus?: string
+  // urltest / failover / loadbalance 用:启用带宽择优(自动选择时把实测带宽和延迟一起算);selector 没有这项
+  bandwidth?: boolean
   // failover 用:主备页签(唯一的成员来源;members 对故障转移没有意义,服务端会清空)
   lanes?: OpenboxFailoverLane[]
   failover?: OpenboxFailoverSettings
@@ -822,8 +826,33 @@ export const recheckFailover = async (id: string, signal?: AbortSignal): Promise
   })
 }
 
+// 带宽择优:所有启用的组共用一套测速参数,设置卡片改的就是档案里的 bandwidth
+export interface OpenboxBandwidthSettings {
+  // 统一测速周期(小时,1~24)
+  intervalHours: number
+  // 单次测试最多下载多少 MB(1~1024)
+  maxDownloadMB: number
+}
+
+// GET /api/openbox/bandwidth:后端测速调度的运行情况
+export interface OpenboxBandwidthStatus {
+  settings: OpenboxBandwidthSettings
+  // 当前要测的有效节点数(已按「节点配置 + DNS + 网络」合并,同一条线路在多个组里只测一次)
+  nodes: number
+  // 按测速周期估算的每日下载量上限(字节)
+  dailyBytes: number
+  running: boolean
+  lastError: string
+  updatedAt: number
+}
+
+export const fetchBandwidthStatus = async (): Promise<OpenboxBandwidthStatus> =>
+  requestJson<OpenboxBandwidthStatus>('/api/openbox/bandwidth')
+
 export interface OpenboxGroupsPayload {
   groups: OpenboxUserGroup[]
+  // 档案里的统一测速参数,组编辑里的「启用带宽择优」旁边显示周期用
+  bandwidth?: OpenboxBandwidthSettings
   types: OpenboxGroupType[]
   // 带订阅名,供成员选择器按订阅筛选;组没有订阅归属,不在这个列表里
   // upstream:链式代理节点的前置上游节点名(没挂前置的节点没有这个字段)

@@ -58,6 +58,10 @@
                 :profile="profile"
                 :patch-profile="patchProfile"
               />
+              <BandwidthSettingsCard
+                :profile="profile"
+                :patch-profile="patchProfile"
+              />
               <TrafficRetentionCard
                 :profile="profile"
                 :patch-profile="patchProfile"
@@ -95,6 +99,7 @@ import DirectBypassCard from '@/components/kernel/DirectBypassCard.vue'
 import BlockQuicCard from '@/components/kernel/BlockQuicCard.vue'
 import BypassPortsCard from '@/components/kernel/BypassPortsCard.vue'
 import BackupCard from '@/components/kernel/BackupCard.vue'
+import BandwidthSettingsCard from '@/components/kernel/BandwidthSettingsCard.vue'
 import TrafficRetentionCard from '@/components/kernel/TrafficRetentionCard.vue'
 import TimezoneCard from '@/components/kernel/TimezoneCard.vue'
 import DiagnosticsCard from '@/components/kernel/DiagnosticsCard.vue'
