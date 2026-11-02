@@ -385,10 +385,6 @@
               </div>
             </template>
           </div>
-          <p
-            v-if="isLoadBalance"
-            class="text-base-content/60 text-xs"
-          >{{ $t('loadBalanceHint') }}</p>
           <!-- 从普通组切成故障转移时,原来引用了组的成员进不了页签(页签只放真实节点):列出来、拦住保存,
                由用户决定是移除它们还是切回原类型;不悄悄展开也不悄悄丢 -->
           <div

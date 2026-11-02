@@ -496,6 +496,8 @@ const zhTW: LANG_MESSAGE = {
   hideDnsConnectionsHint:
     '終端的 DNS 查詢被劫持進核心後交給 dnsmasq / dns-out 的那些 127.0.0.1:53 列:沒有網域,每開一個 App 就刷幾十列。藏掉不影響統計數。',
   loadBalance: '負載均衡',
+  loadBalanceActiveNodes: '{count} 個節點正在使用',
+  loadBalanceRecentConnection: '最近連線',
   label: '標籤',
   swipeInTabs: '滑動切換頁面二級標籤',
   swipeInPages: '滑動切換頁面',
@@ -2061,6 +2063,44 @@ const zhTW: LANG_MESSAGE = {
   outboundPickerTestOne: '測速',
   outboundPickerTestGroupNow: '測速該組目前選中的節點',
 
+  bandwidthEnable: '啟用帶寬擇優',
+  bandwidthHelpTitle: '帶寬擇優說明',
+  bandwidthSettingsTitle: '帶寬測試',
+  bandwidthPeriod: '統一帶寬測試周期',
+  bandwidthHours: '小時',
+  bandwidthPeriodSummary: '統一帶寬測試周期：{hours} 小時',
+  bandwidthDownloadCap: '單次下載流量上限',
+  bandwidthDaily:
+    '當前去重後 {count} 個符合條件的節點，每日 {times} 次，按當前上限預計最多消耗 {size}/天。',
+  bandwidthBudgetHint:
+    '只測試啟用帶寬擇優的組，同一實際節點跨組共用一次測試。此處估算週期性下載正文，不含首次/新增節點測試、協議開銷及機場流量倍率。客戶端不執行帶寬測試。',
+  bandwidthHealthFirst:
+    '節點健康、可用是第一前提。已確認故障及尚未確認恢復的節點繼續排除，歷史帶寬再高也不參與選擇。沒有帶寬記錄不等於節點不可用。',
+  bandwidthOff: '關閉時',
+  bandwidthOn: '開啟時',
+  bandwidthExample: '選擇例子',
+  bandwidthOff_urltest:
+    '按延時穩定選擇一個節點，保留原有延時容差，避免小幅波動導致頻繁切換。',
+  bandwidthOn_urltest:
+    '根據實測帶寬和有限的延時修正穩定選擇一個節點。初選或必須恢復重選時，分數接近的節點再參考其他業務佔用；本組自己的下載不會將當前節點擠走。正常改選需綜合分數至少高出 25%，且當前節點至少保持 60 秒；故障按原有健康確認規則處理。',
+  bandwidthExample_urltest:
+    'A 為 200 Mbps、300 ms，B 為 50 Mbps、50 ms。假設延時容差為 100 ms，關閉時按延時優先 B；開啟帶寬擇優後，A 的綜合分數更高。A 開始承載大下載，不會僅因本組連接變多就切去 B。',
+  bandwidthOff_failover:
+    '先遵守主用、備用頁籤順序，以及原有故障確認和恢復回切設置；自動頁籤內部按延時選擇，手動頁籤保持用戶指定的節點。',
+  bandwidthOn_failover:
+    '只改變自動頁籤內部的節點擇優，綜合考慮帶寬與有限的延時修正。主備優先級、故障確認、恢復後切回開關和恢復等待均不變；備用再快也不能越過健康主用，手動頁籤不會被覆蓋。',
+  bandwidthExample_failover:
+    '主用健康、帶寬 50 Mbps，備用帶寬 500 Mbps，仍使用主用。如果主用的自動頁籤內有兩個同延時的健康節點，分別為 200 Mbps 和 50 Mbps，則在這個頁籤內優先 200 Mbps 的節點。',
+  bandwidthOff_loadbalance:
+    '每個新連接優先分配給健康且連接/撥號較少的節點；佔用相同時在低延時範圍內輪換。',
+  bandwidthOn_loadbalance:
+    '每個新連接選擇“（活動連接數＋正在撥號數＋1）÷（帶寬×有限的延時修正）”最小的節點。各組共享節點佔用並同時預佔；高帶寬節點可以多承擔連接，忙起來後逐步分給其他節點。已建立連接保持原出口。',
+  bandwidthExample_loadbalance:
+    '同樣延時，A 為 200 Mbps，B 為 50 Mbps。兩者空閒時優先 A；A 已有 3 個連接、B 沒有連接時，下一個連接的成本相同：4÷200＝1÷50，可以輪換給 B。A 不可用時，無論歷史帶寬多高，都只考慮 B。',
+  bandwidthSharedHelp:
+    '路由器按統一週期 {hours} 小時測試，同一實際節點跨組去重，每次下載最多 {maxMB} MB。讀取分數不會再下載；測試失敗保留上一次有效結果；記錄缺失或過期後採用中性記錄或原有算法。下載測速失敗不會直接判節點故障。',
+  bandwidthClientDisabled:
+    'Android、iOS、Windows、macOS、Linux 客戶端不啟用帶寬擇優及下載測速；節點分流仍可由路由器執行自身策略。實測值反映當時條件，不保證總帶寬疊加比例。',
 }
 
 export default zhTW

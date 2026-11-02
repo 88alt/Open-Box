@@ -520,6 +520,8 @@ const en = {
   hideDnsConnectionsHint:
     'The 127.0.0.1:53 rows handed to dnsmasq / dns-out after a client DNS query is hijacked into the kernel: no hostname, dozens per app launch. Hiding them does not change the counters.',
   loadBalance: 'Load Balance',
+  loadBalanceActiveNodes: '{count} nodes in use',
+  loadBalanceRecentConnection: 'Recent connection',
   label: 'Label',
   swipeInTabs: 'Swipe to switch between tabs',
   swipeInPages: 'Swipe to switch between pages',
@@ -2190,6 +2192,44 @@ const en = {
   outboundPickerTestOne: 'Test latency',
   outboundPickerTestGroupNow: "Test the group's current node",
 
+  bandwidthEnable: 'Prefer bandwidth',
+  bandwidthHelpTitle: 'Bandwidth preference',
+  bandwidthSettingsTitle: 'Bandwidth testing',
+  bandwidthPeriod: 'Shared bandwidth test interval',
+  bandwidthHours: 'hours',
+  bandwidthPeriodSummary: 'Shared bandwidth test interval: {hours} h',
+  bandwidthDownloadCap: 'Download limit per test',
+  bandwidthDaily:
+    '{count} unique eligible nodes × {times} tests/day: up to {size}/day at the current limit.',
+  bandwidthBudgetHint:
+    'Only enabled groups are tested. Each effective node shares one test across groups. This estimates periodic download payload; initial/new-node tests, protocol overhead and provider multipliers are additional. Clients never run bandwidth tests.',
+  bandwidthHealthFirst:
+    'Availability comes first. Confirmed failed nodes and nodes awaiting recovery confirmation are excluded regardless of past bandwidth. Missing bandwidth data does not mean a node is unavailable.',
+  bandwidthOff: 'When disabled',
+  bandwidthOn: 'When enabled',
+  bandwidthExample: 'Example',
+  bandwidthOff_urltest:
+    'Keep one node selected by latency, with the existing latency tolerance to avoid unnecessary switches.',
+  bandwidthOn_urltest:
+    'Keep one stable selection using measured bandwidth with a bounded latency adjustment. At initial selection or required recovery, similarly scored nodes may be separated by other traffic using them. This group’s own load does not push its node out. Normal changes need at least a 25% score advantage and a 60-second minimum hold; failures follow the existing health confirmation rules.',
+  bandwidthExample_urltest:
+    'A: 200 Mbps at 300 ms. B: 50 Mbps at 50 ms. With a 100 ms tolerance, latency selection favors B. With bandwidth preference, A has the higher combined score. Starting a large download through A does not itself switch this group to B.',
+  bandwidthOff_failover:
+    'Keep primary/backup tab priority, failure confirmation and failback settings. Automatic tabs choose internally by latency; manual tabs keep the user’s selection.',
+  bandwidthOn_failover:
+    'Only automatic selection inside each tab uses bandwidth and bounded latency. Tab priority, failure confirmation, failback switch and recovery hold do not change. A faster backup cannot override a healthy primary; manual tabs are never overridden.',
+  bandwidthExample_failover:
+    'A healthy primary offers 50 Mbps and a backup offers 500 Mbps: keep the primary. Inside an automatic primary tab, two healthy nodes have the same latency and offer 200 Mbps and 50 Mbps: prefer the 200 Mbps node within that tab.',
+  bandwidthOff_loadbalance:
+    'Each new connection goes to a healthy node with fewer active connections/pending dials. Among equally loaded nodes, prefer the low-latency range and rotate ties.',
+  bandwidthOn_loadbalance:
+    'For each new connection, minimize (active connections + pending dials + 1) ÷ (bandwidth × bounded latency adjustment). Reservations are shared across groups. Faster nodes can carry more connections; occupied nodes yield to others. Existing connections keep their outbound.',
+  bandwidthExample_loadbalance:
+    'At equal latency A offers 200 Mbps and B offers 50 Mbps. Both idle: favor A. With three connections on A and none on B, next-connection costs are equal: 4/200 = 1/50; rotation may select B. If A is unavailable, only B is considered regardless of A’s past bandwidth.',
+  bandwidthSharedHelp:
+    'One shared test per effective node every {hours} hours, capped at {maxMB} MB per task. Reading scores does not download again. A failed test retains the last valid result. Missing/expired data falls back to neutral data or the original algorithm. Download-test failure is not health failure.',
+  bandwidthClientDisabled:
+    'Android, iOS, Windows, macOS and Linux clients do not enable bandwidth preference or download testing. In node mode the router can still apply its own policy. Measurements estimate current conditions; combined throughput is not guaranteed.',
 }
 
 export type LANG_MESSAGE = typeof en
