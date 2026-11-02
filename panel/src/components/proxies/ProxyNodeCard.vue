@@ -4,7 +4,7 @@
     :class="
       twMerge(
         'proxy-node-card bg-base-200 border-base-content/[0.08] flex flex-col items-start rounded-md border transition-[color,background-color,border-color,scale] duration-150 ease-out',
-        active && 'proxy-node-card-active',
+        isActive && 'proxy-node-card-active',
         selectable ? 'cursor-pointer active:scale-[0.98]' : 'cursor-default',
         hoverClass,
         isSmallCard ? 'gap-1 px-2.5 py-1.5' : 'gap-2 p-3',
@@ -25,9 +25,9 @@
         :icon="shownIcon"
         :size="16"
         :scale="icon !== undefined ? iconScale : node.iconScale"
-        :fill="active ? 'fill-primary-content' : 'fill-base-content'"
+        :fill="isActive ? 'fill-primary-content' : 'fill-base-content'"
       /><span
-        v-if="active"
+        v-if="isActive"
         class="text-primary-content"
         >{{ displayName }}</span
       ><span
@@ -39,13 +39,13 @@
 
     <div class="flex h-4 w-full items-center justify-between">
       <span
-        :class="`truncate text-xs tracking-tight ${active ? 'text-primary-content' : 'text-base-content/60'}`"
+        :class="`truncate text-xs tracking-tight ${isActive ? 'text-primary-content' : 'text-base-content/60'}`"
         @mouseenter="checkTruncation"
       >
         {{ typeDescription }}
       </span>
       <LatencyTag
-        :class="[isSmallCard && 'h-4! w-8! rounded-md!', 'shrink-0', active && 'hover:bg-base-300']"
+        :class="[isSmallCard && 'h-4! w-8! rounded-md!', 'shrink-0', isActive && 'hover:bg-base-300']"
         :name="node.name"
         :loading="isLatencyTesting"
         :group-name="groupName"
@@ -60,7 +60,15 @@ import { failoverDisplayName, isFailoverGroup } from '@/store/openboxFailover'
 import { PROXY_CARD_SIZE, PROXY_SORT_TYPE, PROXY_TYPE } from '@/constant'
 import { checkTruncation } from '@/helper/tooltip'
 import { scrollIntoCenter } from '@/helper/utils'
-import { getIPv6ByName, getTestUrl, isManualSelectable, proxyGroupLatencyTest, proxyLatencyTest, proxyMap } from '@/store/proxies'
+import {
+  getIPv6ByName,
+  getTestUrl,
+  isLoadBalanceNodeInUse,
+  isManualSelectable,
+  proxyGroupLatencyTest,
+  proxyLatencyTest,
+  proxyMap,
+} from '@/store/proxies'
 import { IPv6test, proxyCardSize, proxySortType, theme, truncateProxyName } from '@/store/settings'
 import { smartWeightsMap } from '@/store/smart'
 import { twMerge } from 'tailwind-merge'
@@ -102,6 +110,8 @@ const props = defineProps<{
 const emit = defineEmits<{ click: [event: MouseEvent] }>()
 
 const cardRef = ref()
+// 负载均衡组里「在用」的成员可能不止一个,按实际连接判断;其它组仍按父组件传来的选中状态
+const isActive = computed(() => isLoadBalanceNodeInUse(props.groupName, props.name) ?? props.active ?? false)
 // 能不能点了切换,按所在的组判(store/proxies.ts 的 isManualSelectable):站点集 / 手动组的成员可点;自动择优 /
 // 故障转移(含页签子组)的成员不可点——它们走哪个节点不由用户定。不用布尔 prop:Vue 对没传的布尔 prop 一律当
 // false,会把所有卡片都变成不可点
@@ -126,7 +136,7 @@ const typeFormatter = (type: string) => {
 }
 const isSmallCard = computed(() => proxyCardSize.value === PROXY_CARD_SIZE.SMALL)
 const hoverClass = computed(() => {
-  if (props.active) {
+  if (isActive.value) {
     return 'bg-primary border-base-content/[0.16] sm:hover:bg-primary/95 sm:hover:border-base-content/[0.24]'
   }
 
@@ -180,7 +190,7 @@ const handlerLatencyTest = async () => {
 }
 
 onMounted(() => {
-  if (props.active) {
+  if (isActive.value) {
     setTimeout(() => {
       scrollIntoCenter(cardRef.value)
     }, 300)

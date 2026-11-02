@@ -43,7 +43,7 @@ import { useStorage } from '@vueuse/core'
 import { last } from 'lodash'
 import pLimit from 'p-limit'
 import { computed, ref } from 'vue'
-import { activeConnections } from './connections'
+import { activeConnections, closedConnections } from './connections'
 import {
   automaticDisconnection,
   groupTestUrls,
@@ -785,6 +785,102 @@ const getIPv6FromExtra = (proxy: Proxy) => {
   return (last(ipv6History)?.delay ?? NOT_CONNECTED) > NOT_CONNECTED
 }
 
+// ===== 负载均衡组「当前使用节点」(对齐上游 v0.1.388)=====
+// 负载均衡组没有固定的 now:哪个成员在跑要看实际连接。先看活跃连接(chains 里同时出现该组和它的成员),
+// 同一组可能同时用着好几个成员;没有活跃连接再退回最近关闭的连接(recent);都没有就用内核给的
+// loadBalance[].active 计数。
+export type LoadBalanceUsage = {
+  node: string
+  nodes: string[]
+  activeNodes: number
+  recent: boolean
+}
+
+export const buildLoadBalanceUsage = (
+  proxies: Record<string, Proxy>,
+  active: { chains: string[]; start: string }[],
+  closed: { chains: string[]; start: string }[] = [],
+) => {
+  const members = new Map<string, Set<string>>()
+  Object.entries(proxies).forEach(([name, proxy]) => {
+    if (proxy?.type?.toLowerCase() === 'loadbalance') members.set(name, new Set(proxy.all ?? []))
+  })
+  const result = new Map<string, LoadBalanceUsage>()
+  const startedAt = new Map<string, number>()
+  const used = new Map<string, Set<string>>()
+
+  const scan = (list: { chains: string[]; start: string }[], recent: boolean) => {
+    for (const conn of list) {
+      const start = Date.parse(conn.start) || 0
+      for (const group of conn.chains) {
+        const set = members.get(group)
+        if (!set || (recent && used.has(group))) continue
+        const node = conn.chains.find((c) => set.has(c) && proxies[c])
+        if (!node) continue
+        if (!recent) {
+          const nodes = used.get(group) ?? new Set<string>()
+          nodes.add(node)
+          used.set(group, nodes)
+        }
+        if (!result.has(group) || start >= (startedAt.get(group) ?? 0)) {
+          result.set(group, { node, nodes: [node], activeNodes: 0, recent })
+          startedAt.set(group, start)
+        }
+      }
+    }
+  }
+  scan(active, false)
+  scan(closed, true)
+
+  for (const [group, nodes] of used) {
+    const entry = result.get(group)!
+    entry.nodes = [...nodes]
+    entry.activeNodes = nodes.size
+  }
+  for (const [group, set] of members) {
+    if (result.get(group)?.recent === false) continue
+    const live = (proxies[group]?.loadBalance ?? [])
+      .filter((m) => m.active > 0 && set.has(m.name) && proxies[m.name])
+      .sort((a, b) => b.active - a.active)
+    if (live.length) {
+      result.set(group, {
+        node: live[0].name,
+        nodes: live.map((m) => m.name),
+        activeNodes: live.length,
+        recent: false,
+      })
+    }
+  }
+  return result
+}
+
+export const loadBalanceUsage = computed(() =>
+  buildLoadBalanceUsage(proxyMap.value, activeConnections.value, closedConnections.value),
+)
+
+// 组当前走的下一跳:负载均衡组取正在用的成员,其余组就是内核的 now
+export const getProxyCurrentNode = (name: string) => {
+  const proxy = proxyMap.value[name]
+  const lb =
+    proxy?.type?.toLowerCase() === PROXY_TYPE.LoadBalance
+      ? loadBalanceUsage.value.get(name)?.node
+      : undefined
+  return lb || proxy?.now || ''
+}
+
+export const getLoadBalanceUsage = (name: string) =>
+  proxyMap.value[name]?.type?.toLowerCase() === PROXY_TYPE.LoadBalance
+    ? loadBalanceUsage.value.get(name)
+    : undefined
+
+// 节点是不是负载均衡组正在用的成员;不是负载均衡组返回 undefined,调用方退回自己的选中判断
+export const isLoadBalanceNodeInUse = (groupName: string | undefined, node: string) => {
+  if (!groupName || proxyMap.value[groupName]?.type?.toLowerCase() !== PROXY_TYPE.LoadBalance) {
+    return undefined
+  }
+  return loadBalanceUsage.value.get(groupName)?.nodes.includes(node) ?? false
+}
+
 export const getNowProxyNodeName = (name: string) => {
   let node = proxyMap.value[name]
 
@@ -792,13 +888,20 @@ export const getNowProxyNodeName = (name: string) => {
     return name
   }
 
-  while (node.now && node.now !== node.name) {
-    const nextNode = proxyMap.value[node.now]
+  const seen = new Set<string>([name])
+
+  for (;;) {
+    const nextName = getProxyCurrentNode(node.name)
+
+    if (!nextName || nextName === node.name || seen.has(nextName)) break
+
+    const nextNode = proxyMap.value[nextName]
 
     if (!nextNode) {
       return node.name
     }
 
+    seen.add(nextName)
     node = nextNode
   }
 
@@ -815,10 +918,10 @@ export const getProxyRouteChain = (name: string) => {
 
   const visited = new Set<string>([name])
 
-  while (node.now && node.now !== node.name) {
-    const nextName = node.now
+  for (;;) {
+    const nextName = getProxyCurrentNode(node.name)
 
-    if (visited.has(nextName)) {
+    if (!nextName || nextName === node.name || visited.has(nextName)) {
       break
     }
 

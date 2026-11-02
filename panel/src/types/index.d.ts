@@ -33,6 +33,8 @@ export type Proxy = {
     }
   >
   all?: string[]
+  // 负载均衡组:内核按成员给出的当前活跃连接数(对齐上游 v0.1.388)
+  loadBalance?: { name: string; active: number }[]
   udp: boolean
   xudp?: boolean
   now: string

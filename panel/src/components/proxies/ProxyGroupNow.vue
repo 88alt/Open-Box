@@ -1,5 +1,5 @@
 <template>
-  <template v-if="proxyGroup.now">
+  <template v-if="currentNode">
     <LockClosedIcon
       v-if="isFixed"
       class="h-4 w-4 shrink-0 outline-none"
@@ -12,6 +12,14 @@
         :chain="routeNames"
         name-class="text-base-content/80 text-xs md:text-sm"
       />
+      <span
+        v-if="lbUsage?.recent"
+        class="text-base-content/60 shrink-0 text-xs"
+      >{{ $t('loadBalanceRecentConnection') }}</span>
+      <span
+        v-else-if="lbUsage && lbUsage.activeNodes > 1"
+        class="text-base-content/60 shrink-0 text-xs"
+      >{{ $t('loadBalanceActiveNodes', { count: lbUsage.activeNodes }) }}</span>
       <ExclamationTriangleIcon
         v-if="isStale"
         class="text-warning h-4 w-4 shrink-0"
@@ -30,7 +38,13 @@
 <script setup lang="ts">
 import { PROXY_TYPE } from '@/constant'
 import { useTooltip } from '@/helper/tooltip'
-import { getProxyRouteChain, isUrlTestGroupStale, proxyMap } from '@/store/proxies'
+import {
+  getLoadBalanceUsage,
+  getProxyCurrentNode,
+  getProxyRouteChain,
+  isUrlTestGroupStale,
+  proxyMap,
+} from '@/store/proxies'
 import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
@@ -53,8 +67,12 @@ const isFixed = computed(() => {
   return proxyGroup.value.fixed === proxyGroup.value.now
 })
 
+// 负载均衡组没有固定的 now,当前用哪个成员看实际连接(见 store/proxies.ts 的 loadBalanceUsage)
+const currentNode = computed(() => getProxyCurrentNode(props.name))
+const lbUsage = computed(() => getLoadBalanceUsage(props.name))
+
 const routeNames = computed(() => {
-  const now = proxyGroup.value.now
+  const now = currentNode.value
 
   if (!now) {
     return []

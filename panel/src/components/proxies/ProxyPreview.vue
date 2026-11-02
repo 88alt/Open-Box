@@ -16,7 +16,7 @@
       >
         <div
           class="h-2 w-2 rounded-full bg-white"
-          v-if="now === node.name"
+          v-if="isCurrent(node.name)"
         ></div>
       </div>
     </template>
@@ -58,7 +58,7 @@ import { NOT_CONNECTED, PROXY_PREVIEW_TYPE } from '@/constant'
 import { getColorForLatency } from '@/helper'
 import { useTooltip } from '@/helper/tooltip'
 import { isWindowResizing } from '@/helper/windowResizeState'
-import { getLatencyByName, isManualSelectable } from '@/store/proxies'
+import { getLatencyByName, isLoadBalanceNodeInUse, isManualSelectable } from '@/store/proxies'
 import { lowLatency, mediumLatency, proxyPreviewType } from '@/store/settings'
 import { useElementSize } from '@vueuse/core'
 import { computed, nextTick, ref, watch } from 'vue'
@@ -74,6 +74,8 @@ const props = defineProps<{
 const { showTip } = useTooltip()
 // 自动择优 / 故障转移的圆点不可点(见 store/proxies.ts 的 isManualSelectable)
 const selectable = computed(() => isManualSelectable(props.groupName))
+// 负载均衡组按实际连接标出在用的成员(可能多个),其它组就是内核选中的那个
+const isCurrent = (node: string) => isLoadBalanceNodeInUse(props.groupName, node) ?? props.now === node
 const previewRef = ref<HTMLElement | null>(null)
 const { width } = useElementSize(previewRef)
 const stableWidth = ref(0)
