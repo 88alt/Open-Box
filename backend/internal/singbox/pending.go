@@ -55,9 +55,9 @@ var profileKeyReason = map[string]string{
 }
 
 // profileKeyIgnored:确定不会进 sing-box 配置的档案键。改它们不该提示重启。
-// updates 是自动更新计划,traffic 是流量保留月数,shareRegions / serverInfo 是给手机 App 的,clashApiSecret 是后端自己加的。
+// updates 是自动更新计划,traffic 是流量保留月数,bandwidth 是带宽测试参数(测速调度读,不进配置),shareRegions / serverInfo 是给手机 App 的,clashApiSecret 是后端自己加的。
 var profileKeyIgnored = map[string]bool{
-	"updates": true, "traffic": true, "shareRegions": true, "serverInfo": true, "clashApiSecret": true,
+	"updates": true, "traffic": true, "bandwidth": true, "shareRegions": true, "serverInfo": true, "clashApiSecret": true,
 }
 
 func profileReason(key string) (reason string, ignored bool) {

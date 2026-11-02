@@ -95,6 +95,7 @@ func Default() map[string]any {
 		"directTestUrl":        "https://connectivitycheck.platform.hicloud.com/generate_204",
 		"testExpectedStatus":   "",
 		"traffic":              map[string]any{"keepMonths": float64(12)},
+		"bandwidth":            map[string]any{"intervalHours": float64(2), "maxDownloadMB": float64(64)},
 		"updates":              map[string]any{"openbox": map[string]any{"auto": false, "hour": float64(4), "days": float64(1), "channel": "auto"}},
 		"servers":              []any{},
 		"clientRoutes":         []any{},

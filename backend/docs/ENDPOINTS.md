@@ -222,6 +222,14 @@
 顺序:一、同一时刻只做一次,并且和部署互斥(另一次在进行 / 部署在进行 → 409,什么都没动);二、**先停内核**:先撤销 DNS 接管,再停服务,再确认真的停了,任何一步不成功就**一份数据都不删**,回 500「为安全起见没有清除任何数据:…」,数据和密码原样,可以排查后重试(读不到服务管理器 = 没有 procd / systemd 时跳过这一步);三、逐项清:DNS 查询记录、每日流量、故障转移(检测管理器的计划和 `failover.json`)、生成的内核配置(`config.json`、`config.prev.json`)、规则集目录和 DNS 过滤名单缓存(目录本身留着)、内核缓存 `cache.db`、状态目录里全部 `.json`(订阅、节点、节点组、档案、面板设置、背景图、共享网络、客户端 App、延迟历史、部署记录……;新增的状态文件自动包含)。一项失败不拦后面的;四、**访问密码和登录会话放最后**:前面只要有一项失败就不清密码,回 500 并写明已清和失败的项(面板不能在旧数据还留着时变成没有密码,再点一次即可重试)。
 不删:`dns-takeover.json`(DNS 接管的撤销记录)、`certs/`(自签证书和密钥,是设备身份,不是用户设置)、内核服务的开机自启设置、后端自己的程序和随包规则库。重置完内核是停止状态,配置文件已删,要「部署」一次才会重新生成并启动。整个过程不随请求断开而中断(总时限 5 分钟)。
 
+## `/api/openbox/bandwidth`
+
+| 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
+|---|---|---|---|---|
+| GET | `/api/openbox/bandwidth` | `fetchBandwidthStatus` (api/openbox.ts) | OpenboxBandwidthStatus | () |
+
+实现约定(带宽择优,后端第一部分):`{settings:{intervalHours,maxDownloadMB}, nodes, dailyBytes, running, lastError, updatedAt}`。`settings` 来自档案的 `bandwidth`(缺省 2 小时 / 64 MB,取值夹进 1~24 / 1~1024);`nodes` 从**已部署的内核配置**算:`bandwidth` 为 `true` 的 `urltest` / `loadbalance` 出站,它们的真实节点成员(`selector` / 组 / `direct` / `block` / 不存在的不算),按「节点配置(含前置链)+ DNS 服务器 + 网络 + 测速地址」的指纹合并,同一条线路出现在多个组里只算一个;`dailyBytes = nodes × maxDownloadMB × 1e6 × ceil(24 / intervalHours)`(估算上限,不含握手等额外开销)。没部署过或读不到配置时 `nodes` 为 0。`running` / `lastError` / `updatedAt` 是测速调度的运行情况,**调度器还没做,目前恒为 `false` / 空串 / 0**。档案 `PUT /profile` 校验 `bandwidth.intervalHours` 1~24、`bandwidth.maxDownloadMB` 1~1024 的整数(越界报 400,不夹);`PUT /groups` 要求每个组的 `bandwidth` 若出现必须是布尔(否则 400);`GET /groups` 多回一个 `bandwidth` 字段(同 `settings`),组编辑里显示周期用。`bandwidth` 不触发「需要重启」提示(不进 sing-box 配置)。
+
 ## `/api/openbox/failover`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |

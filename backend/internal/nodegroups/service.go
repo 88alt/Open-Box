@@ -73,6 +73,14 @@ type Service struct {
 	core   Core
 	cat    Catalog
 	chains Chains
+	// 档案里的带宽测速参数,GET 时回给面板(组编辑里显示周期);nil = 不回
+	bandwidth func(ctx context.Context) any
+}
+
+// WithBandwidth 设置读取带宽测速参数的函数。
+func (s *Service) WithBandwidth(f func(ctx context.Context) any) *Service {
+	s.bandwidth = f
+	return s
 }
 
 // New 创建服务。core 为 nil 时读写都返回 ErrCoreUnavailable;chains 可为 nil。
@@ -135,6 +143,8 @@ type Payload struct {
 	AvailableNodes  []AvailableNode `json:"availableNodes"`
 	Subscriptions   []SubRef        `json:"subscriptions"`
 	AvailableGroups []string        `json:"availableGroups"`
+	// 带宽择优的统一测速参数({intervalHours, maxDownloadMB}),没接档案时不出现
+	Bandwidth any `json:"bandwidth,omitempty"`
 }
 
 // stored 返回当前生效的节点组:存过就用存的,没存过用默认(不落盘)。
@@ -217,7 +227,11 @@ func (s *Service) Get(ctx context.Context) (*Payload, error) {
 			}
 		}
 	}
-	return &Payload{Groups: groups, Types: Types, AvailableNodes: nodes, Subscriptions: subsList, AvailableGroups: avail}, nil
+	p := &Payload{Groups: groups, Types: Types, AvailableNodes: nodes, Subscriptions: subsList, AvailableGroups: avail}
+	if s.bandwidth != nil {
+		p.Bandwidth = s.bandwidth(ctx)
+	}
+	return p, nil
 }
 
 // Renamed 是一次保存里被改名的组。
@@ -323,6 +337,9 @@ func (s *Service) checkedGroups(ctx context.Context, in []any, tags func() (map[
 		if _, ok := g.(map[string]any); !ok {
 			return nil, nil, bad("第 %d 个节点组不是对象", i+1)
 		}
+	}
+	if err := checkBandwidthFlags(in); err != nil {
+		return nil, nil, err
 	}
 	norm, err := s.core.NormalizeGroups(ctx, in)
 	if err != nil {
@@ -594,6 +611,22 @@ func checkLoadBalance(in []any, tagSet map[string]bool, prev []any) error {
 			}
 			if !tagSet[ms] && !old[ms] {
 				return bad("负载均衡「%s」只能添加真实节点：%s", name, ms)
+			}
+		}
+	}
+	return nil
+}
+
+// checkBandwidthFlags:带宽择优开关只能是布尔。看的是用户提交的原始内容(规范化会把别的值悄悄当成关,用户就不知道了)。
+func checkBandwidthFlags(in []any) error {
+	for _, g := range in {
+		m, ok := g.(map[string]any)
+		if !ok {
+			continue
+		}
+		if v, has := m["bandwidth"]; has {
+			if _, isBool := v.(bool); !isBool {
+				return bad("节点组「%s」的 bandwidth 必须是 true 或 false", str(m, "name"))
 			}
 		}
 	}

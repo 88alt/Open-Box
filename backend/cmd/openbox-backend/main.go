@@ -17,6 +17,7 @@ import (
 	activationapi "github.com/timeflysoon/Open-Box/backend/internal/api/activation"
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
 	backupapi "github.com/timeflysoon/Open-Box/backend/internal/api/backup"
+	bandwidthapi "github.com/timeflysoon/Open-Box/backend/internal/api/bandwidth"
 	clientappapi "github.com/timeflysoon/Open-Box/backend/internal/api/clientapp"
 	clientsapi "github.com/timeflysoon/Open-Box/backend/internal/api/clients"
 	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
@@ -47,6 +48,7 @@ import (
 	updateapi "github.com/timeflysoon/Open-Box/backend/internal/api/update"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/backup"
+	"github.com/timeflysoon/Open-Box/backend/internal/bandwidth"
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
 	"github.com/timeflysoon/Open-Box/backend/internal/controllerproxy"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
@@ -179,7 +181,10 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	subsSvc := subs.New(st, nil)
 	profileapi.Register(srv.Mux(), profileapi.Deps{Profile: profileSvc})
 	subsapi.Register(srv.Mux(), subsapi.Deps{Subs: subsSvc})
-	groupsSvc := nodegroups.New(st, groupsCore, subsSvc, nodegroups.ChainsFromProfile(profileSvc))
+	groupsSvc := nodegroups.New(st, groupsCore, subsSvc, nodegroups.ChainsFromProfile(profileSvc)).WithBandwidth(func(ctx context.Context) any {
+		p, _ := profileSvc.Get(ctx)
+		return bandwidth.SettingsFrom(p)
+	})
 	groupsapi.Register(srv.Mux(), groupsapi.Deps{Groups: groupsSvc})
 
 	// 备份:导出(档案 + 节点组,可选订阅和节点,外加面板设置和背景图)和导入;两者共用一个服务(导入同一时刻只做一次)
@@ -405,6 +410,13 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 
 	// 延迟历史:每个节点 / 组最近 10 次测速,后端记、各浏览器共享;sync 读一次内核的 /proxies 把成功的结果记下来
 	latencyhistoryapi.Register(srv.Mux(), latencyhistoryapi.Deps{Service: nodeHistory})
+	// 带宽择优:状态接口(设置、要测的节点数、每日下载量上限)。设置存在档案的 bandwidth 里,节点从已部署配置里算
+	bandwidthapi.Register(srv.Mux(), bandwidthapi.Deps{Service: &bandwidth.Service{
+		Profile: profileSvc.Get,
+		Config: func() (map[string]any, error) {
+			return routetest.ReadConfig(filepath.Join(cfg.ConfigDir, "config.json"))
+		},
+	}})
 	failoverapi.Register(srv.Mux(), failoverapi.Deps{
 		Manager: failoverMgr,
 		Plan:    func() (failover.Plan, error) { return failover.LoadPlan(failoverPlanPath) },
