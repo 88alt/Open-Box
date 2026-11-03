@@ -142,7 +142,8 @@ func TestGetFreshHasDefaults(t *testing.T) {
 	if !hasKind["direct"] || !hasKind["block"] || len(gs) < 3 {
 		t.Fatalf("默认组不对: %v", names(gs))
 	}
-	if ty := list(m, "types"); len(ty) != 3 {
+	// 分组规则共四种:自动择优、手动选择、故障转移、负载均衡(负载均衡是 v0.1.387 加的)
+	if ty := list(m, "types"); len(ty) != 4 {
 		t.Fatalf("types=%v", ty)
 	}
 	if len(list(m, "availableNodes")) != 0 || list(m, "availableNodes") == nil {
