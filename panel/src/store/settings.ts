@@ -175,8 +175,8 @@ export const automaticDisconnection = useStorage('config/automatic-disconnection
 export const truncateProxyName = useStorage('config/truncate-proxy-name', true)
 export const proxyPreviewType = useStorage('config/proxy-preview-type', PROXY_PREVIEW_TYPE.AUTO)
 export const hideUnavailableProxies = useStorage('config/hide-unavailable-proxies', false)
-export const lowLatency = useStorage('config/low-latency', 400)
-export const mediumLatency = useStorage('config/medium-latency', 800)
+export const lowLatency = useStorage('config/low-latency', 500)
+export const mediumLatency = useStorage('config/medium-latency', 1000)
 // 带宽(Mbps)着色阈值:≤ poor 红,≤ adequate 橙,更高为绿
 export const bandwidthPoorThreshold = useStorage('config/bandwidth-poor-threshold', 5)
 export const bandwidthAdequateThreshold = useStorage('config/bandwidth-adequate-threshold', 20)
