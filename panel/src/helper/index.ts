@@ -143,9 +143,9 @@ export const getColorForLatency = (latency: number) => {
   if (latency === NOT_CONNECTED) {
     return ''
   } else if (latency < lowLatency.value) {
-    return 'text-green-500'
+    return 'text-primary'
   } else if (latency < mediumLatency.value) {
-    return 'text-yellow-500'
+    return 'text-orange-500'
   } else {
     return 'text-red-500'
   }

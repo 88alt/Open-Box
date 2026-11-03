@@ -105,8 +105,8 @@ const recentHistory = (): LatencySample[] => {
 // 类名要写全,Tailwind 只编它在源码里见过的类;从 text-* 动态拼 bg-* 会被裁掉
 const dotColor = (delay: number) => {
   switch (getColorForLatency(delay)) {
-    case 'text-green-500': return 'bg-green-500'
-    case 'text-yellow-500': return 'bg-yellow-500'
+    case 'text-primary': return 'bg-primary'
+    case 'text-orange-500': return 'bg-orange-500'
     case 'text-red-500': return 'bg-red-500'
     default: return 'bg-gray-400'
   }

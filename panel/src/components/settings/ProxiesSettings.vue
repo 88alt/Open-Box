@@ -72,6 +72,47 @@
         </div>
       </div>
     </template>
+    <!-- 带宽着色阈值:不足(红)/一般(橙)可改,优秀(绿)是高于两者的部分,只读(与上游 v0.1.391 一致) -->
+    <div class="settings-title">
+      {{ $t('nodeTipBandwidth') }}
+    </div>
+    <div class="settings-grid">
+      <div class="setting-item">
+        <div class="setting-item-label">
+          {{ $t('bandwidthPoorDesc') }}
+        </div>
+        <input
+          type="number"
+          class="input input-sm w-20"
+          min="0"
+          :max="bandwidthAdequateThreshold"
+          step="0.1"
+          v-model.number="bandwidthPoorThreshold"
+          :aria-label="$t('bandwidthPoorDesc')"
+        />
+        Mbps
+      </div>
+      <div class="setting-item">
+        <div class="setting-item-label">
+          {{ $t('bandwidthAdequateDesc') }}
+        </div>
+        <input
+          type="number"
+          class="input input-sm w-20"
+          :min="bandwidthPoorThreshold"
+          step="0.1"
+          v-model.number="bandwidthAdequateThreshold"
+          :aria-label="$t('bandwidthAdequateDesc')"
+        />
+        Mbps
+      </div>
+      <div class="setting-item">
+        <div class="setting-item-label">
+          {{ $t('bandwidthExcellentDesc') }}
+        </div>
+        <span class="text-primary tabular-nums">&gt; {{ bandwidthExcellentFloor }} Mbps</span>
+      </div>
+    </div>
     <!-- 布局:代理组分几列(GitHub #10) -->
     <template v-if="isVisibleProxyGroupColumnsPC || isVisibleProxyGroupColumnsMobile">
       <div class="settings-title">
@@ -129,6 +170,8 @@
 import { useIsSettingVisible } from '@/composables/settings'
 import { PROXIES_ITEM_KEYS } from '@/config/settingsItems'
 import {
+  bandwidthAdequateThreshold,
+  bandwidthPoorThreshold,
   hideUnavailableProxies,
   IPv6test,
   lowLatency,
@@ -146,6 +189,11 @@ const isVisibleMediumLatency = useIsSettingVisible(k.mediumLatencyDesc)
 const isVisibleIpv6Test = useIsSettingVisible(k.ipv6Test)
 const isVisibleProxyGroupColumnsPC = useIsSettingVisible(k.proxyGroupColumnsPC)
 const isVisibleProxyGroupColumnsMobile = useIsSettingVisible(k.proxyGroupColumnsMobile)
+
+// 优秀 = 高于不足和一般两个阈值中较大的那个
+const bandwidthExcellentFloor = computed(() =>
+  Math.max(Number(bandwidthPoorThreshold.value) || 0, Number(bandwidthAdequateThreshold.value) || 0),
+)
 
 const hasVisibleLatencyItems = computed(() => {
   return (

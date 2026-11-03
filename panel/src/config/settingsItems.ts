@@ -129,6 +129,9 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
       { key: `${SETTINGS_MENU_KEY.proxies}.speedtestTimeout`, label: 'speedtestTimeout' },
       { key: `${SETTINGS_MENU_KEY.proxies}.lowLatency`, label: 'lowLatencyDesc' },
       { key: `${SETTINGS_MENU_KEY.proxies}.mediumLatency`, label: 'mediumLatencyDesc' },
+      { key: `${SETTINGS_MENU_KEY.proxies}.bandwidthPoor`, label: 'bandwidthPoorDesc' },
+      { key: `${SETTINGS_MENU_KEY.proxies}.bandwidthAdequate`, label: 'bandwidthAdequateDesc' },
+      { key: `${SETTINGS_MENU_KEY.proxies}.bandwidthExcellent`, label: 'bandwidthExcellentDesc' },
       { key: `${SETTINGS_MENU_KEY.proxies}.ipv6Test`, label: 'ipv6Test' },
       {
         key: `${SETTINGS_MENU_KEY.proxies}.independentLatencyTest`,

@@ -111,10 +111,10 @@ const { locale, t } = useI18n()
 const barColor = (delay: number) => {
   if (delay === NOT_CONNECTED) return 'bg-red-500'
   switch (getColorForLatency(delay)) {
-    case 'text-green-500':
-      return 'bg-green-500'
-    case 'text-yellow-500':
-      return 'bg-yellow-500'
+    case 'text-primary':
+      return 'bg-primary'
+    case 'text-orange-500':
+      return 'bg-orange-500'
     case 'text-red-500':
       return 'bg-red-500'
     default:
