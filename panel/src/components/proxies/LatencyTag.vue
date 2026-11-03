@@ -36,7 +36,8 @@
       <button
         type="button"
         class="flex h-full cursor-pointer items-center justify-center px-1.5 disabled:cursor-default"
-        :class="getColorForBandwidth(bandwidth?.mbps) || 'text-base-content/60'"
+        :class="bandwidthFailText ? 'text-red-500' : getColorForBandwidth(bandwidth?.mbps) || 'text-base-content/60'"
+        :title="bandwidthFailText ? bandwidth?.error : undefined"
         :disabled="bandwidthBusy"
         :aria-label="`${$t('nodeTipBandwidth')} · ${name}`"
         :aria-busy="bandwidthBusy || undefined"
@@ -46,6 +47,7 @@
           v-if="bandwidthBusy"
           class="loading loading-dots loading-xs"
         ></span>
+        <span v-else-if="bandwidthFailText">{{ bandwidthFailText }}</span>
         <ChartBarIcon
           v-else-if="bandwidth?.mbps == null"
           class="text-base-content h-3 w-3"
@@ -219,6 +221,10 @@ const { bandwidthMeasurements, bandwidthPendingNodes } = useBandwidth()
 const bandwidth = computed(() => (infoNode() ? bandwidthMeasurements.value[props.name ?? ''] : undefined))
 const bandwidthEnabled = computed(() => !!bandwidth.value?.enabled)
 const bandwidthBusy = computed(() => !!bandwidth.value?.pending || !!bandwidthPendingNodes.value[props.name ?? ''])
+// 上一次测失败了(没在测的时候)就在这一段显示归类后的原因,红字;悬停是原始报错
+const bandwidthFailText = computed(() =>
+  !bandwidthBusy.value && (bandwidth.value?.error || bandwidth.value?.failed) ? latencyReasonText(bandwidth.value?.reason || 'error') : '',
+)
 const latency = computed(() => getLatencyByName(props.name ?? '', props.groupName))
 let countUp: CountUp | null = null
 

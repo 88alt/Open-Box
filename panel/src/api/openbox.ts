@@ -863,6 +863,12 @@ export interface OpenboxBandwidthSample {
 export interface OpenboxBandwidthMeasurement extends OpenboxBandwidthSample {
   enabled?: boolean
   pending?: boolean
+  // 手动重测:这次请求排队的时间、测完的时间(后者没有就是还没测完),用来认出「我点的这次」测完了没有
+  requestedAt?: number
+  completedAt?: number
+  // 失败时的原始报错和归类原因(reason 同延时失败原因:timeout / dns / tls …)
+  error?: string
+  reason?: string
   // 最近的样本,旧的在前
   history?: OpenboxBandwidthSample[]
 }
@@ -870,6 +876,8 @@ export interface OpenboxBandwidthMeasurement extends OpenboxBandwidthSample {
 export interface OpenboxBandwidthQueueResult {
   queued: number
   joined?: number
+  // 这次排队的时间戳,和测量里的 requestedAt 对上才算「这一次」测完
+  requestedAt?: number
   pendingBySubscription: Record<string, number>
 }
 
