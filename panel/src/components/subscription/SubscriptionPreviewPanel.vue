@@ -149,9 +149,7 @@
             <table class="table table-sm table-pin-rows">
               <thead>
                 <tr>
-                  <!-- 原名只是个参照,新名那一列要装下输入框 + 延迟 + 两颗图标,
-                       所以不再对半分:原名压到 1/3,省下的宽度全给输入框。 -->
-                  <th class="w-1/3">{{ $t('subscriptionRenameOriginalColumn') }}</th>
+                  <th class="w-5/12">{{ $t('subscriptionRenameOriginalColumn') }}</th>
                   <th>{{ $t('subscriptionRenameNewColumn') }}</th>
                 </tr>
               </thead>
@@ -160,11 +158,11 @@
                   v-for="(entry, index) in rows"
                   :key="`${entry.originalTag}-${index}`"
                 >
-                  <td class="text-base-content/70 max-w-0 truncate text-sm">
+                  <td class="text-base-content/70 max-w-0 truncate pr-4 text-sm">
                     {{ entry.originalTag }}
                     <span
                       v-if="rateMap.get(entry.originalTag) != null"
-                      class="text-main ml-1 text-xs"
+                      class="badge badge-ghost badge-sm ml-1"
                     >{{ rateMap.get(entry.originalTag) }}×</span>
                   </td>
                   <td class="max-w-0">
@@ -195,17 +193,9 @@
                     </span>
                     <span
                       v-else
-                      class="flex items-center gap-1"
+                      class="flex flex-wrap items-center gap-1"
                     >
                       <ArrowRightIcon class="text-base-content/30 h-3 w-3 shrink-0" />
-                      <!-- 国旗跟着**新名**走:这一列才是最终写进配置的名字,国旗贴在它
-                           前面,一眼就是"这条节点是哪个国家的"。放在原名那列的话,中间
-                           隔着大半个表格,反而看不出对应关系。 -->
-                      <CountryFlag
-                        :code="entry.regionCode || ''"
-                        :size="16"
-                        :title="entry.regionCode || ''"
-                      />
                       <!-- 没在编辑这一行时,一律显示服务端算出来的最终名字:手工改过的
                            名字也可能被再加工(比如套上订阅名前缀),显示本地存的原始值
                            会和真正写进配置的名字对不上。
@@ -213,42 +203,23 @@
                            的内容顶掉、光标也跳走。 -->
                       <input
                         type="text"
-                        class="input input-sm w-full text-sm font-medium"
+                        class="input input-sm max-w-[360px] min-w-32 flex-1 text-sm font-medium"
                         :value="editingTag === entry.originalTag ? draft : entry.newTag"
                         @focus="startEdit(entry)"
                         @blur="editingTag = null"
                         @input="onRename(entry, ($event.target as HTMLInputElement).value)"
                       />
-                      <!-- 独立测速:结果就地显示在按钮旁,不另开一列——一列只为几个数字
-                           占掉的宽度,比把数字挤在按钮边上更浪费。
-                           这一格固定宽度且常驻(没测过就写「未测速」):否则有结果的行会把
-                           输入框挤窄,同一列里的文本框宽度参差不齐。 -->
-                      <span
-                        v-tip="latencyTitle(entry.originalTag)"
-                        :class="[
-                          'w-20 shrink-0 truncate text-right text-xs whitespace-nowrap',
-                          latencyClass(entry.originalTag),
-                        ]"
-                      >
-                        {{ latencyText(entry.originalTag) }}
-                      </span>
-                      <button
-                        type="button"
-                        class="btn btn-ghost btn-square btn-sm shrink-0"
-                        :disabled="testingAll || testing.has(entry.originalTag)"
-                        :aria-label="$t('subscriptionLatencyTestOne')"
-                        v-tip="$t('subscriptionLatencyHint')"
-                        @click="testOne(entry.originalTag)"
-                      >
-                        <span
-                          v-if="testing.has(entry.originalTag)"
-                          class="loading loading-spinner loading-xs"
-                        />
-                        <BoltIcon
-                          v-else
-                          class="h-4 w-4"
-                        />
-                      </button>
+                      <!-- 独立测速:结果就地显示在胶囊里(闪电 = 没测过,点一下测这个节点) -->
+                      <LatencyPill
+                        v-tip="latencyTitle(entry.originalTag) || $t('subscriptionLatencyHint')"
+                        class="w-20"
+                        :ms="latency[entry.originalTag]?.ok ? latency[entry.originalTag].ms : undefined"
+                        :error="latency[entry.originalTag] && !latency[entry.originalTag].ok ? latencyText(entry.originalTag) : undefined"
+                        :loading="testingAll || testing.has(entry.originalTag)"
+                        :disabled="!source"
+                        :test-label="`${$t('subscriptionLatencyTestOne')}: ${entry.originalTag}`"
+                        @click.stop="testOne(entry.originalTag)"
+                      />
                       <button
                         type="button"
                         class="btn btn-ghost btn-square btn-sm shrink-0 hover:text-error"
@@ -273,7 +244,7 @@
 <script setup lang="ts">
 import type { OpenboxLatencyResult, OpenboxRenameOptions, OpenboxSubscriptionNodeDns, OpenboxSubscriptionPreview, OpenboxSkippedNode } from '@/api/openbox'
 import { testNodeLatency } from '@/api/openbox'
-import CountryFlag from '@/components/common/CountryFlag.vue'
+import LatencyPill from '@/components/common/LatencyPill.vue'
 import { latencyReasonText } from '@/helper/latencyReason'
 import {
   ArrowRightIcon,
@@ -352,15 +323,6 @@ const latencyTitle = (originalTag: string) => {
   if (!r || r.ok) return ''
   return [latencyReasonText(r.reason), r.error].filter(Boolean).join(' ')
 }
-const latencyClass = (originalTag: string) => {
-  const r = latency.value[originalTag]
-  // 没测过是"暂无信息",不是坏消息,用最淡的颜色,别和失败抢注意力
-  if (!r) return 'text-base-content/30'
-  if (!r.ok) return 'text-error'
-  const ms = r.ms ?? 0
-  return ms < 200 ? 'text-success' : ms < 500 ? 'text-warning' : 'text-error'
-}
-
 const testOne = async (originalTag: string) => {
   if (!props.source || testing.value.has(originalTag)) return
   testing.value = new Set(testing.value).add(originalTag)

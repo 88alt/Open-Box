@@ -430,6 +430,15 @@ const zh: LANG_MESSAGE = {
   bandwidthManualTest: '带宽检测',
   bandwidthManualQueued: '已加入 {queued} 个节点重新检测带宽，{joined} 个节点已在排队或检测中。',
   bandwidthManualFailed: '带宽检测失败：{message}',
+  subscriptionBandwidthCheck: '启用带宽定期检查',
+  subscriptionBandwidthEvery: '每 {hours} 小时',
+  subscriptionBandwidthHelpTitle: '带宽定期检查',
+  subscriptionBandwidthHelp:
+    '由路由器按后端设置的统一周期检测本订阅的有效节点：每 {hours} 小时一次，单次下载上限 {maxMB} MB。只对已确认健康的节点下载，健康检查和手动测速优先。',
+  subscriptionBandwidthDedupe:
+    '同一有效连接在订阅与启用带宽择优的分组之间共用持久化记录。更名、排序或重启不会重复下载。关闭本订阅的检查后，若其他订阅或分组仍需要该节点，仍会共用检测。',
+  subscriptionBandwidthBudget:
+    '后端设置显示全部去重节点的每日下载流量上界；协议开销、首次或新增节点测试、机场倍率另计。此开关不自动开启带宽择优，也不改变分流出口。',
   qualityState_down: '检测失败',
   nodeInfoProtocol: '协议',
   nodeInfoServer: '服务器',

@@ -455,6 +455,15 @@ const en = {
   bandwidthManualTest: 'Test download bandwidth',
   bandwidthManualQueued: 'New bandwidth checks queued: {queued}; already queued or testing: {joined}.',
   bandwidthManualFailed: 'Bandwidth check failed: {message}',
+  subscriptionBandwidthCheck: 'Enable periodic bandwidth checks',
+  subscriptionBandwidthEvery: 'Every {hours} h',
+  subscriptionBandwidthHelpTitle: 'Periodic bandwidth checks',
+  subscriptionBandwidthHelp:
+    'The router checks this subscription’s eligible nodes at the shared interval from backend settings: {hours} hours, up to {maxMB} MB per download. Only healthy nodes are admitted; health and manual probes have priority.',
+  subscriptionBandwidthDedupe:
+    'Identical effective connections share one durable measurement across subscriptions and bandwidth-enabled groups. Renaming, reordering or restarting does not start a duplicate download. Disabling this subscription does not cancel a test still needed by another subscription or group.',
+  subscriptionBandwidthBudget:
+    'The backend bandwidth settings show the daily upper bound for all unique eligible nodes. It is download payload only; protocol overhead, initial/new-node tests and provider multipliers may add traffic. This switch does not enable bandwidth preference or change routing.',
   qualityState_down: 'Probe failed',
   nodeInfoProtocol: 'Protocol',
   nodeInfoServer: 'Server',

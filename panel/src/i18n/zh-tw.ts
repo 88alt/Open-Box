@@ -431,6 +431,15 @@ const zhTW: LANG_MESSAGE = {
   bandwidthManualTest: '頻寬檢測',
   bandwidthManualQueued: '已加入 {queued} 個節點重新檢測頻寬，{joined} 個節點已在排隊或檢測中。',
   bandwidthManualFailed: '頻寬檢測失敗：{message}',
+  subscriptionBandwidthCheck: '啟用頻寬定期檢查',
+  subscriptionBandwidthEvery: '每 {hours} 小時',
+  subscriptionBandwidthHelpTitle: '頻寬定期檢查',
+  subscriptionBandwidthHelp:
+    '由路由器按後端設定的統一週期檢測本訂閱的有效節點：每 {hours} 小時一次，單次下載上限 {maxMB} MB。只對已確認健康的節點下載，健康檢查與手動測速優先。',
+  subscriptionBandwidthDedupe:
+    '同一有效連線在訂閱與啟用頻寬擇優的分組間共用持久化紀錄。更名、排序或重啟不會重複下載。關閉本訂閱檢查後，若其他訂閱或分組仍需要該節點，仍會共用檢測。',
+  subscriptionBandwidthBudget:
+    '後端設定顯示全部去重節點的每日下載流量上界；協定開銷、首次或新增節點測試、機場倍率另計。此開關不自動啟用頻寬擇優，也不改變分流出口。',
   qualityState_down: '檢測失敗',
   nodeInfoProtocol: '協定',
   nodeInfoServer: '伺服器',

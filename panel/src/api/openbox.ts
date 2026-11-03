@@ -352,6 +352,8 @@ export interface OpenboxSubscription {
   id: string
   name: string
   url: string
+  // 启用带宽定期检查:路由器按统一周期给本订阅的有效节点测下载带宽;没有这个字段 = 关
+  bandwidthCheck?: boolean
   // 停用(false)的订阅节点不进内核,重启内核生效;没有这个字段 = 启用
   enabled?: boolean
   autoUpdate?: OpenboxSubscriptionAutoUpdate | null

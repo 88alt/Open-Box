@@ -286,6 +286,30 @@
             <p class="text-base-content/50 text-xs">{{ $t('subscriptionContentHint') }}</p>
           </div>
 
+          <!-- 带宽定期检查(和 v0.1.389 一样):开关 + 统一周期 + 说明按钮,三种来源都有 -->
+          <div
+            class="flex flex-wrap items-center gap-2 text-xs"
+            data-subscription-bandwidth
+          >
+            <label class="flex items-center gap-2 font-medium">
+              {{ $t('subscriptionBandwidthCheck') }}
+              <input
+                v-model="bandwidthCheck"
+                type="checkbox"
+                class="toggle toggle-sm toggle-primary"
+              />
+            </label>
+            <span class="text-base-content/60">{{ $t('subscriptionBandwidthEvery', { hours: bandwidthSettings.intervalHours }) }}</span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-circle btn-xs"
+              :aria-label="$t('subscriptionBandwidthHelpTitle')"
+              @click="bandwidthHelpOpen = true"
+            >
+              <InformationCircleIcon class="h-4 w-4" />
+            </button>
+          </div>
+
           <!-- 订阅 DNS 解析:机场要求节点域名用它自己的 DoH 解析时填(相当于 OpenClash 的
                proxy-server-nameserver / nameserver-policy)。只解析这份订阅的节点服务器域名;
                三种来源都能配 -->
@@ -380,6 +404,30 @@
       </div>
     </template>
   </DialogWrapper>
+
+  <DialogWrapper
+    v-model="bandwidthHelpOpen"
+    :title="$t('subscriptionBandwidthHelpTitle')"
+    box-class="w-full max-w-2xl"
+    modal-class="z-[100]"
+    header-class="pr-10!"
+  >
+    <template #footer>
+      <button
+        type="button"
+        class="btn btn-primary btn-sm"
+        @click="bandwidthHelpOpen = false"
+      >
+        {{ $t('close') }}
+      </button>
+    </template>
+    <div class="flex flex-col gap-4 text-sm leading-relaxed">
+      <p>{{ $t('subscriptionBandwidthHelp', { hours: bandwidthSettings.intervalHours, maxMB: bandwidthSettings.maxDownloadMB }) }}</p>
+      <p>{{ $t('subscriptionBandwidthDedupe') }}</p>
+      <p>{{ $t('subscriptionBandwidthBudget') }}</p>
+      <p class="text-base-content/70">{{ $t('bandwidthClientDisabled') }}</p>
+    </div>
+  </DialogWrapper>
 </template>
 
 <script setup lang="ts">
@@ -391,10 +439,10 @@ import type {
   OpenboxSubscriptionPreview,
   OpenboxSubscriptionUsage,
 } from '@/api/openbox'
-import { createSubscription, loginSubscription, previewSubscription, updateSubscription } from '@/api/openbox'
+import { createSubscription, fetchProfile, loginSubscription, previewSubscription, updateSubscription } from '@/api/openbox'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import ExpandTransition from '@/components/common/ExpandTransition.vue'
-import { ChevronDownIcon, PlusIcon, TrashIcon } from '@heroicons/vue/24/outline'
+import { ChevronDownIcon, InformationCircleIcon, PlusIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { debounce } from 'lodash'
 import { showNotification } from '@/helper/notification'
 import { prettyBytesHelper } from '@/helper/utils'
@@ -551,6 +599,10 @@ const autoUpdateInterval = computed({
 })
 
 // 订阅 DNS 解析(DoH):没配就都留空。展开状态:已经配过就展开,否则收起(和 v0.1.317 一样)
+// 带宽定期检查:开关跟着订阅存(bandwidthCheck);周期和单次上限是后端统一设置,这里只读来显示
+const bandwidthCheck = ref(props.subscription?.bandwidthCheck === true)
+const bandwidthHelpOpen = ref(false)
+const bandwidthSettings = ref({ intervalHours: 12, maxDownloadMB: 64 })
 const nodeDnsUrl = ref(props.subscription?.nodeDns?.url ?? '')
 const nodeDnsBootstrap = ref(props.subscription?.nodeDns?.bootstrap ?? '')
 const nodeDnsOpen = ref(Boolean(props.subscription?.nodeDns?.url))
@@ -747,6 +799,8 @@ const resetForm = () => {
   name.value = props.subscription?.name ?? ''
   urls.value = initialUrls()
   autoUpdate.value = initialAutoUpdate()
+  bandwidthCheck.value = props.subscription?.bandwidthCheck === true
+  bandwidthHelpOpen.value = false
   nodeDnsUrl.value = props.subscription?.nodeDns?.url ?? ''
   nodeDnsBootstrap.value = props.subscription?.nodeDns?.bootstrap ?? ''
   content.value = props.subscription?.content ?? ''
@@ -766,8 +820,14 @@ const resetForm = () => {
 }
 
 watch(isOpen, (open) => {
-  if (open) resetForm()
-  else {
+  if (open) {
+    resetForm()
+    fetchProfile()
+      .then((profile) => {
+        if (isOpen.value && profile.bandwidth) bandwidthSettings.value = profile.bandwidth
+      })
+      .catch(() => {})
+  } else {
     // 关掉就别让密码留在内存里,也别让还在飞的登录结果落回表单
     loginSeq += 1
     loginForm.password = ''
@@ -796,6 +856,7 @@ const handleSave = async () => {
       autoUpdate: sourceMode.value !== 'paste' ? autoUpdate.value : { enabled: false, days: 1, hour: 4 },
       // 地址留空或没通过校验 = 不用专用解析器(服务端存成没有);「订阅」「节点」两种来源都能配
       nodeDns: effectiveNodeDns.value,
+      bandwidthCheck: bandwidthCheck.value,
     }
     const res = props.subscription
       ? await updateSubscription(props.subscription.id, payload)
