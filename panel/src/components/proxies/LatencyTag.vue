@@ -10,29 +10,32 @@
     :style="bandwidthEnabled ? { minWidth: 'max-content' } : undefined"
     @mouseenter="handlerHistoryTip"
   >
-    <span
-      v-if="loading"
-      class="loading loading-dots loading-xs text-base-content/80"
-    ></span>
-    <BoltIcon
-      v-else-if="latency === NOT_CONNECTED || !latency"
-      class="text-base-content h-3 w-3"
-    />
-    <div
-      v-show="latency !== NOT_CONNECTED && !loading"
-      ref="latencyRef"
-    >
-      {{ latency }}
-    </div>
+    <!-- 开了带宽段:延迟、竖线、带宽三块各自左右留 px-1.5,和上游 v0.1.389 的胶囊一致 -->
+    <span :class="bandwidthEnabled ? 'flex h-full items-center justify-center px-1.5' : 'contents'">
+      <span
+        v-if="loading"
+        class="loading loading-dots loading-xs text-base-content/80"
+      ></span>
+      <BoltIcon
+        v-else-if="latency === NOT_CONNECTED || !latency"
+        class="text-base-content h-3 w-3"
+      />
+      <div
+        v-show="latency !== NOT_CONNECTED && !loading"
+        ref="latencyRef"
+      >
+        {{ latency }}
+      </div>
+    </span>
     <!-- 所属订阅开了带宽定期检查:延迟后面接一段带宽实测(Mbps,点一下重测这个节点) -->
     <template v-if="bandwidthEnabled">
       <span
-        class="text-base-content/40 px-1.5"
+        class="text-base-content/40"
         aria-hidden="true"
       >|</span>
       <button
         type="button"
-        class="flex h-full cursor-pointer items-center justify-center disabled:cursor-default"
+        class="flex h-full cursor-pointer items-center justify-center px-1.5 disabled:cursor-default"
         :class="getColorForBandwidth(bandwidth?.mbps) || 'text-base-content/60'"
         :disabled="bandwidthBusy"
         :aria-label="`${$t('nodeTipBandwidth')} · ${name}`"
