@@ -68,10 +68,11 @@
       </div>
       <NodeInfoPanel
         v-if="infoOpened"
-        v-show="tab === 'info'"
+        v-show="tab === 'info' || tab === 'risk'"
         class="h-full"
         :name="name"
         :udp="udp"
+        :risk-only="tab === 'risk'"
       />
     </div>
     <div
@@ -125,6 +126,7 @@ const allTabs = [
   { key: 'latency', label: 'nodeTipLatency' },
   { key: 'bandwidth', label: 'nodeTipBandwidth' },
   { key: 'info', label: 'nodeInfo' },
+  { key: 'risk', label: 'nodeRiskAssessment' },
 ] as const
 const tabs = computed(() => allTabs.filter((t) => t.key !== 'bandwidth' || measurement.value?.enabled))
 type TabKey = (typeof allTabs)[number]['key']
@@ -134,7 +136,7 @@ const historyHost = ref<HTMLElement>()
 
 const select = (key: TabKey) => {
   tab.value = key
-  if (key === 'info') infoOpened.value = true
+  if (key === 'info' || key === 'risk') infoOpened.value = true
 }
 
 onMounted(() => {

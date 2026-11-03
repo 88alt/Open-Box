@@ -1912,7 +1912,7 @@ export const testStoredLatencyStream = async (
   return state.final
 }
 
-// 节点信息(服务端 panel/server/api/node-info.mjs):入口地址解析、出口 IP 归属和风控值。
+// 节点信息(服务端 panel/server/api/node-info.mjs):入口地址解析、出口 IP 归属和 Net.Coffee 风险评估。
 export interface OpenboxNodeInfo {
   tag: string
   type: string
@@ -1927,6 +1927,29 @@ export interface OpenboxNodeInfo {
   resolveError?: string
 }
 
+// 出口 IP 的风险评估(source 为 ip.net.coffee 时才有)
+export interface OpenboxNodeRiskAssessment {
+  // 滥用评分(0~1,越大越差);没有就看 abuseLevel
+  abuseScore?: number | null
+  abuseLevel?: string
+  // HTTP 黑名单命中分(0~255)
+  httpBlacklist?: number | null
+  threats?: { label: string; severity: string }[] | null
+  rpki?: string
+  rpkiReported?: string
+  vpn?: boolean | null
+  proxy?: boolean | null
+  tor?: boolean | null
+  crawler?: boolean | null
+}
+
+export interface OpenboxNodeHumanTraffic {
+  // 真人流量占比(0~100)
+  human: number
+  // asn-28d:按 ASN 近 28 天的统计;其它是按 IP 估算
+  basis?: string
+}
+
 export interface OpenboxNodeExit {
   ok: boolean
   at: number
@@ -1938,12 +1961,15 @@ export interface OpenboxNodeExit {
   asnOwner?: string
   ipType: string
   proxyType: string
-  risk: number | null
-  devices: number | null
+  // 信任分(0~100,越高越可信)
+  trustScore: number | null
   registeredCountry: string
   native: boolean | null
+  source?: string
+  riskAssessment?: OpenboxNodeRiskAssessment
+  humanTraffic?: OpenboxNodeHumanTraffic
   // 某一路没查到的来源,值是失败原因
-  errors?: { proxycheck?: string; rdap?: string }
+  errors?: { netcoffee?: string }
   cached?: boolean
 }
 
@@ -1951,4 +1977,8 @@ export const fetchNodeInfo = (tag: string) => requestJson<OpenboxNodeInfo>(`/api
 export const fetchNodeEntryCountry = (tag: string) => requestJson<{ ip: string; country: string }>(`/api/openbox/node-info/${encodeURIComponent(tag)}/entry-country`)
 // refresh = true 跳过 6 小时缓存重新查(服务端 15 秒内的重复刷新仍按缓存答)
 export const fetchNodeExit = (tag: string, refresh = false) =>
-  requestJson<OpenboxNodeExit>(`/api/openbox/node-info/${encodeURIComponent(tag)}/exit`, { method: 'POST', body: JSON.stringify({ refresh }) })
+  requestJson<OpenboxNodeExit>(`/api/openbox/node-info/${encodeURIComponent(tag)}/exit`, {
+    method: 'POST',
+    body: JSON.stringify({ refresh }),
+    signal: AbortSignal.timeout(60_000),
+  })
