@@ -89,9 +89,14 @@ func CollectLAN(ifs []IfaceAddrs) (addrs, subnets []string) {
 
 // LAN 读本机网卡后交给 CollectLAN。读不到网卡返回空切片,不报错(信息只用于展示和拼 App 码)。
 func LAN() (addrs, subnets []string) {
+	return CollectLAN(realIfaces())
+}
+
+// realIfaces 读本机网卡此刻的状态(读不到返回 nil)。
+func realIfaces() []IfaceAddrs {
 	ifs, err := net.Interfaces()
 	if err != nil {
-		return CollectLAN(nil)
+		return nil
 	}
 	in := make([]IfaceAddrs, 0, len(ifs))
 	for _, ifc := range ifs {
@@ -124,7 +129,7 @@ func LAN() (addrs, subnets []string) {
 		}
 		in = append(in, ia)
 	}
-	return CollectLAN(in)
+	return in
 }
 
 // skipLANName 是不可能代表「家里局域网」的接口:隧道类(与 isTunName 同一批)和容器网桥 / 虚拟对。

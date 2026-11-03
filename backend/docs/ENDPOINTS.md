@@ -422,6 +422,8 @@
 | POST | `/api/openbox/terminal-test` | `testTerminal` (api/openbox.ts:1398) | OpenboxTerminalTest | (target: string, port?: number, method: OpenboxProbeMethod = 'GET') |
 | GET | `/api/openbox/terminal-test/capability` | `fetchTerminalCapability` (api/openbox.ts:1396) | OpenboxTerminalCapability | () |
 
+实现约定(只做了前提检测,`internal/system/terminalcap.go`、`internal/api/terminaltest`):`GET /capability` 只读,逐项检查建虚拟终端要的前提,缺的按 `root` / `netns` / `veth` / `lan` / `conntrack` / `dhcp` 的顺序列在 `missing`(永远是数组),`ok` = 一样不缺,`lan` 是要接的 LAN 口 `{ device, address, mask }`(没有是 `null`)。判据:`root` 是进程有效用户为 0;`netns` 是有 `ip`、`/proc/self/ns/net` 在、`ip netns list` 退出码为 0(OpenWrt 默认的 busybox ip 不带 netns,要装 ip-full);`veth` 是有 `ip` 且内核有 veth 驱动(已加载 / 编进内核 / 模块文件在 `/lib/modules/<版本>/` 下);`lan` 是有私有 IPv4 的 LAN 口(`br-lan` / `lan*` 优先,跳过隧道和容器网桥);`conntrack` 是 `/proc/net/nf_conntrack` 在或有 `conntrack` 命令;`dhcp` 是有 `udhcpc` / `dhclient` / `dhcpcd` 之一。判断不了的当缺,不猜。`POST` 请求体和校验与 `route-test` 一样:缺前提时 200 回 `{ target, mode: "lan", capable: false, missing }`;前提都满足时回 501(建虚拟终端的部分还没做,不会碰系统)。
+
 ## `/api/openbox/traffic`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |

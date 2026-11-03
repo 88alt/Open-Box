@@ -43,6 +43,7 @@ import (
 	storageapi "github.com/timeflysoon/Open-Box/backend/internal/api/storage"
 	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
 	subsharesapi "github.com/timeflysoon/Open-Box/backend/internal/api/subshares"
+	terminaltestapi "github.com/timeflysoon/Open-Box/backend/internal/api/terminaltest"
 	timezoneapi "github.com/timeflysoon/Open-Box/backend/internal/api/timezone"
 	trafficapi "github.com/timeflysoon/Open-Box/backend/internal/api/traffic"
 	updateapi "github.com/timeflysoon/Open-Box/backend/internal/api/update"
@@ -474,6 +475,10 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		DNS: dnsPredictor,
 	}
 	routetestapi.Register(srv.Mux(), routetestapi.Deps{Service: routeSvc})
+
+	// 模拟 LAN 终端的真实路由测试:目前只有只读的「能不能做」检测,建虚拟终端的部分还没做
+	terminalProbe := system.RealTerminalProbe()
+	terminaltestapi.Register(srv.Mux(), terminaltestapi.Deps{Capability: terminalProbe.Capability})
 
 	// 域名穿透:按已部署配置里的路由规则推算一个域名 / IP 会命中哪条规则、走哪条线路(DNS 判定和真实路由测试共用一个预测器)
 	penetrationSets := &dnsdecide.FileSets{SingBox: cfg.SingBox, TmpDir: probeDir}
