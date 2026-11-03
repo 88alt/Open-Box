@@ -1982,3 +1982,62 @@ export const fetchNodeExit = (tag: string, refresh = false) =>
     body: JSON.stringify({ refresh }),
     signal: AbortSignal.timeout(60_000),
   })
+
+// ===== 节点质量(概览页「节点质量」卡,对齐上游 v0.1.391) =====
+export type OpenboxQualityState = 'healthy' | 'down' | 'unknown' | 'stale'
+export type OpenboxQualityGrade = 'pending' | 'attention' | 'fair' | 'good' | 'excellent'
+export type OpenboxQualitySample = { at: number | string; value: number; failed?: boolean }
+export type OpenboxQualityStats = {
+  availability: number | null
+  latency: number | null
+  jitter: number | null
+  download: number | null
+  upload: number | null
+  activeMs: number
+  up: number
+  down: number
+  lastAt: number | string | null
+  checks?: number
+}
+export type OpenboxQualityNode = OpenboxQualityStats & {
+  tag: string
+  region: string
+  protocol: string
+  state: OpenboxQualityState
+  score: number | null
+  charts?: { latency?: OpenboxQualitySample[]; bandwidth?: OpenboxQualitySample[] }
+}
+export type OpenboxQualitySubscription = OpenboxQualityStats & {
+  id: string
+  name: string
+  mode: 'login' | 'subscription' | 'node'
+  usable: number
+  total: number
+  failed: number
+  unknown: number
+  assessed: number
+  coverage: number
+  score: number | null
+  grade: OpenboxQualityGrade
+  provisional?: boolean
+  bandwidthCount: number
+  nodes?: OpenboxQualityNode[]
+}
+export type OpenboxNodeQuality = { subscriptions: OpenboxQualitySubscription[] }
+export type OpenboxNodeQualityQuery = {
+  allSubscriptions?: boolean
+  search?: string
+  details?: string
+  nodePageSize?: number
+  allNodes?: boolean
+  node?: string
+}
+export const fetchNodeQuality = (query: OpenboxNodeQualityQuery, signal?: AbortSignal) =>
+  requestJson<OpenboxNodeQuality>(
+    `/api/openbox/node-quality?${new URLSearchParams(
+      Object.entries(query)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, String(v)]),
+    )}`,
+    { signal },
+  )
