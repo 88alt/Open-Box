@@ -5,7 +5,7 @@
   "goVersion": "1.25.12",
   "os": "linux",
   "arch": "amd64",
-  "sha256": "8c076a3712c564841bdf9cb353e10b0e177adf24f5387b21f14d405f3a1b01e0",
+  "sha256": "d57c98dd17d942a4318c7b5c96ddf22c0d4bfc74333ae039ed361c0c438bbdfd",
   "size": 3711124,
-  "bindingSha256": "d9b46acf54e03e951ed28a8a3455fd630f2c6c8e280faa26d4b517c15d587858"
+  "bindingSha256": "c9ba0356d149a2d9ba1c601ce156c029f8737585a742671e05801f97ef28d0c0"
 }
