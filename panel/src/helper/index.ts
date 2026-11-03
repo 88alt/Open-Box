@@ -1,7 +1,7 @@
 import { NOT_CONNECTED, PROXY_CHAIN_DIRECTION, PROXY_TYPE, ROUTE_NAME } from '@/constant'
 import { timeSaved } from '@/store/overview'
 import { hiddenGroupMap, proxyMap } from '@/store/proxies'
-import { lowLatency, mediumLatency, proxyChainDirection } from '@/store/settings'
+import { bandwidthAdequateThreshold, bandwidthPoorThreshold, lowLatency, mediumLatency, proxyChainDirection } from '@/store/settings'
 import type { Connection, Proxy } from '@/types'
 import dayjs from 'dayjs'
 import * as ipaddr from 'ipaddr.js'
@@ -148,6 +148,27 @@ export const getColorForLatency = (latency: number) => {
     return 'text-yellow-500'
   } else {
     return 'text-red-500'
+  }
+}
+
+// 带宽(Mbps)着色:没有有效值不着色;≤ 不足阈值红,≤ 一般阈值橙,更高绿。一般阈值不会低于不足阈值
+export const getColorForBandwidth = (mbps?: number | null) => {
+  if (mbps == null || !Number.isFinite(mbps) || mbps < 0) return ''
+  const poor = Number.isFinite(Number(bandwidthPoorThreshold.value)) ? Math.max(0, Number(bandwidthPoorThreshold.value)) : 5
+  const adequate = Number.isFinite(Number(bandwidthAdequateThreshold.value))
+    ? Math.max(poor, Number(bandwidthAdequateThreshold.value))
+    : Math.max(poor, 20)
+  if (mbps <= poor) return 'text-red-500'
+  if (mbps <= adequate) return 'text-orange-500'
+  return 'text-primary'
+}
+// 类名要写全,Tailwind 只编它在源码里见过的类
+export const getBgColorForBandwidth = (mbps?: number | null) => {
+  switch (getColorForBandwidth(mbps)) {
+    case 'text-primary': return 'bg-primary'
+    case 'text-orange-500': return 'bg-orange-500'
+    case 'text-red-500': return 'bg-red-500'
+    default: return 'bg-base-content/20'
   }
 }
 

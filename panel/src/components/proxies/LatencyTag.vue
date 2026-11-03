@@ -4,8 +4,10 @@
       twMerge(
         'latency-tag bg-base-100 flex h-5 w-10 cursor-pointer items-center justify-center rounded-xl text-xs select-none',
         color,
+        bandwidthEnabled && 'w-auto whitespace-nowrap',
       )
     "
+    :style="bandwidthEnabled ? { minWidth: 'max-content' } : undefined"
     @mouseenter="handlerHistoryTip"
   >
     <span
@@ -22,19 +24,46 @@
     >
       {{ latency }}
     </div>
+    <!-- 所属订阅开了带宽定期检查:延迟后面接一段带宽实测(Mbps,点一下重测这个节点) -->
+    <template v-if="bandwidthEnabled">
+      <span
+        class="text-base-content/40 px-1.5"
+        aria-hidden="true"
+      >|</span>
+      <button
+        type="button"
+        class="flex h-full cursor-pointer items-center justify-center disabled:cursor-default"
+        :class="getColorForBandwidth(bandwidth?.mbps) || 'text-base-content/60'"
+        :disabled="bandwidthBusy"
+        :aria-label="`${$t('nodeTipBandwidth')} · ${name}`"
+        :aria-busy="bandwidthBusy || undefined"
+        @click.stop="testNodeBandwidth(name ?? '')"
+      >
+        <span
+          v-if="bandwidthBusy"
+          class="loading loading-dots loading-xs"
+        ></span>
+        <ChartBarIcon
+          v-else-if="bandwidth?.mbps == null"
+          class="text-base-content h-3 w-3"
+        />
+        <template v-else>{{ (bandwidth.lowerBound ? '≥ ' : '') + Math.round(bandwidth.mbps) }}</template>
+      </button>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { NOT_CONNECTED } from '@/constant'
-import { getColorForLatency } from '@/helper'
+import { getColorForBandwidth, getColorForLatency } from '@/helper'
 import { latencyReasonText } from '@/helper/latencyReason'
 import { useTooltip } from '@/helper/tooltip'
 import { isSingBox } from '@/api'
 import { MAX_LATENCY_HISTORY, getRecentLatencyHistory, type LatencySample } from '@/store/latencyHistory'
 import { getHistoryByName, getLatencyByName, getNowProxyNodeName, proxyMap } from '@/store/proxies'
+import { testNodeBandwidth, useBandwidth } from '@/store/bandwidth'
 import { independentLatencyTest } from '@/store/settings'
-import { BoltIcon } from '@heroicons/vue/24/outline'
+import { BoltIcon, ChartBarIcon } from '@heroicons/vue/24/outline'
 import { CountUp } from 'countup.js'
 import dayjs from 'dayjs'
 import { twMerge } from 'tailwind-merge'
@@ -182,6 +211,11 @@ const props = defineProps<{
   timelineName?: string
 }>()
 const latencyRef = ref()
+const { bandwidthMeasurements, bandwidthPendingNodes } = useBandwidth()
+// 带宽段只给真节点(不是组、不是内置出站)显示,且要所属订阅开了检查
+const bandwidth = computed(() => (infoNode() ? bandwidthMeasurements.value[props.name ?? ''] : undefined))
+const bandwidthEnabled = computed(() => !!bandwidth.value?.enabled)
+const bandwidthBusy = computed(() => !!bandwidth.value?.pending || !!bandwidthPendingNodes.value[props.name ?? ''])
 const latency = computed(() => getLatencyByName(props.name ?? '', props.groupName))
 let countUp: CountUp | null = null
 

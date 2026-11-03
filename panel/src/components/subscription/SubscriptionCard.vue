@@ -65,6 +65,23 @@
             <button
               type="button"
               class="btn btn-ghost btn-square btn-sm z-30"
+              v-tip="$t('bandwidthManualTest')"
+              :aria-label="$t('bandwidthManualTest')"
+              :disabled="subscription.enabled === false || !!bandwidthPending[subscription.id]"
+              @click.stop="testSubscriptionBandwidth(subscription.id)"
+            >
+              <span
+                v-if="bandwidthPending[subscription.id]"
+                class="loading loading-spinner loading-xs"
+              ></span>
+              <ChartBarIcon
+                v-else
+                class="h-4 w-4"
+              />
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-square btn-sm z-30"
               v-tip="$t('refresh')"
               :aria-label="$t('refresh')"
               :disabled="refreshing"
@@ -172,10 +189,11 @@ import ProxyNodeGrid from '@/components/proxies/ProxyNodeGrid.vue'
 import ProxyPreview from '@/components/proxies/ProxyPreview.vue'
 import { useRenderProxies } from '@/composables/renderProxies'
 import { prettyBytesHelper } from '@/helper/utils'
+import { testSubscriptionBandwidth, useBandwidth } from '@/store/bandwidth'
 import { loadOpenboxNodeGroups, nodeProviders } from '@/store/openboxSiteSets'
 import { proxiesFilter, proxyMap, proxyNodesLatencyTest } from '@/store/proxies'
 import { hideUnavailableProxies } from '@/store/settings'
-import { ArrowPathIcon, Bars3Icon, BoltIcon, PencilSquareIcon, PowerIcon, TrashIcon } from '@heroicons/vue/24/outline'
+import { ArrowPathIcon, Bars3Icon, BoltIcon, ChartBarIcon, PencilSquareIcon, PowerIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import dayjs from 'dayjs'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -235,6 +253,7 @@ const updatedAtText = computed(() => dayjs(props.subscription.updatedAt).fromNow
 
 // 定期更新的计划,写成一句:每天 04:00 自动更新 / 每 3 天 04:00 自动更新 / 每 6 小时自动更新
 const { t } = useI18n()
+const { bandwidthPending } = useBandwidth()
 const scheduleText = computed(() => {
   const plan = props.subscription.autoUpdate
   if (!plan || !plan.enabled) return ''

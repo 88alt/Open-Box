@@ -844,10 +844,46 @@ export interface OpenboxBandwidthStatus {
   running: boolean
   lastError: string
   updatedAt: number
+  // 每个节点最近的带宽实测(键是节点名);只有所属订阅开了定期检查的节点才有 enabled
+  measurements?: Record<string, OpenboxBandwidthMeasurement>
+  // 订阅 id → 还有几个节点在排队检测(0 / 没有 = 空闲)
+  pendingBySubscription?: Record<string, number>
+}
+
+export interface OpenboxBandwidthSample {
+  at: number
+  mbps: number
+  failed?: boolean
+  // 下载被上限截断,真实带宽不低于这个值(显示成「≥ 数值」)
+  lowerBound?: boolean
+}
+
+export interface OpenboxBandwidthMeasurement extends OpenboxBandwidthSample {
+  enabled?: boolean
+  pending?: boolean
+  // 最近的样本,旧的在前
+  history?: OpenboxBandwidthSample[]
+}
+
+export interface OpenboxBandwidthQueueResult {
+  queued: number
+  joined?: number
+  pendingBySubscription: Record<string, number>
 }
 
 export const fetchBandwidthStatus = async (): Promise<OpenboxBandwidthStatus> =>
   requestJson<OpenboxBandwidthStatus>('/api/openbox/bandwidth')
+
+// 手动重测整条订阅 / 单个节点的带宽:只是把节点排进队,结果靠轮询 fetchBandwidthStatus 取
+export const queueSubscriptionBandwidth = async (id: string): Promise<OpenboxBandwidthQueueResult> =>
+  requestJson<OpenboxBandwidthQueueResult>(`/api/openbox/bandwidth/subscriptions/${encodeURIComponent(id)}`, {
+    method: 'POST',
+  })
+
+export const queueNodeBandwidth = async (name: string): Promise<OpenboxBandwidthQueueResult> =>
+  requestJson<OpenboxBandwidthQueueResult>(`/api/openbox/bandwidth/nodes/${encodeURIComponent(name)}`, {
+    method: 'POST',
+  })
 
 export interface OpenboxGroupsPayload {
   groups: OpenboxUserGroup[]

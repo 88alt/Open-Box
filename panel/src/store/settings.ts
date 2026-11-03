@@ -177,6 +177,9 @@ export const proxyPreviewType = useStorage('config/proxy-preview-type', PROXY_PR
 export const hideUnavailableProxies = useStorage('config/hide-unavailable-proxies', false)
 export const lowLatency = useStorage('config/low-latency', 400)
 export const mediumLatency = useStorage('config/medium-latency', 800)
+// 带宽(Mbps)着色阈值:≤ poor 红,≤ adequate 橙,更高为绿
+export const bandwidthPoorThreshold = useStorage('config/bandwidth-poor-threshold', 5)
+export const bandwidthAdequateThreshold = useStorage('config/bandwidth-adequate-threshold', 20)
 export const IPv6test = useStorage('config/ipv6-test', false)
 export const proxyCardSize = useStorage<PROXY_CARD_SIZE>(
   'config/proxy-card-size',
