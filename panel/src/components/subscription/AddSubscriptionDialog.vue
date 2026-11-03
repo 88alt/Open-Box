@@ -318,8 +318,31 @@
               v-if="nodeDnsOpen"
               class="flex flex-col gap-1"
             >
-              <label class="text-xs font-medium">{{ $t('subscriptionNodeDnsLabel') }}</label>
-              <div class="flex flex-col gap-2 sm:flex-row">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <label class="text-xs font-medium">{{ $t('subscriptionNodeDnsLabel') }}</label>
+                <div
+                  role="tablist"
+                  class="tabs-box tabs tabs-xs"
+                  :aria-label="$t('subscriptionNodeDnsLabel')"
+                >
+                  <button
+                    v-for="item in NODE_DNS_PROTOCOLS"
+                    :key="item.key"
+                    type="button"
+                    role="tab"
+                    class="tab"
+                    :class="nodeDnsProtocol === item.key && 'tab-active'"
+                    :aria-selected="nodeDnsProtocol === item.key"
+                    @click="nodeDnsProtocol = item.key"
+                  >
+                    {{ item.label }}
+                  </button>
+                </div>
+              </div>
+              <div
+                v-if="nodeDnsProtocol === 'https'"
+                class="flex flex-col gap-2 sm:flex-row"
+              >
                 <input
                   v-model="nodeDnsUrl"
                   type="text"
@@ -335,11 +358,33 @@
                   autocomplete="off"
                 />
               </div>
+              <div
+                v-else
+                class="flex flex-col gap-2 sm:flex-row"
+              >
+                <input
+                  v-model="nodeDnsPlainCurrent.server"
+                  type="text"
+                  class="input input-sm min-w-0 flex-1 font-mono text-xs"
+                  :placeholder="$t('subscriptionNodeDnsIpPlaceholder')"
+                  :aria-label="$t('subscriptionNodeDnsIpPlaceholder')"
+                  autocomplete="off"
+                />
+                <input
+                  v-model.number="nodeDnsPlainCurrent.port"
+                  type="number"
+                  min="1"
+                  max="65535"
+                  class="input input-sm w-full font-mono text-xs sm:w-48"
+                  :placeholder="$t('port')"
+                  :aria-label="$t('port')"
+                />
+              </div>
               <p
                 v-if="nodeDnsError"
                 class="text-error text-xs"
               >{{ $t(nodeDnsError) }}</p>
-              <p class="text-base-content/50 text-xs">{{ $t('subscriptionNodeDnsHint') }}</p>
+              <p class="text-base-content/50 text-xs">{{ $t(nodeDnsProtocol === 'https' ? 'subscriptionNodeDnsHint' : 'subscriptionNodeDnsPlainHint') }}</p>
             </div>
           </ExpandTransition>
         </div>
@@ -448,6 +493,7 @@ import { showNotification } from '@/helper/notification'
 import { prettyBytesHelper } from '@/helper/utils'
 import { notifySubscriptionSaved } from '@/store/openboxSubscriptions'
 import dayjs from 'dayjs'
+import * as ipaddr from 'ipaddr.js'
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import RenameRulesEditor from './RenameRulesEditor.vue'
@@ -598,28 +644,65 @@ const autoUpdateInterval = computed({
   },
 })
 
-// 订阅 DNS 解析(DoH):没配就都留空。展开状态:已经配过就展开,否则收起(和 v0.1.317 一样)
+// 订阅 DNS 解析:没配就都留空。展开状态:已经配过就展开,否则收起(和 v0.1.317 一样)
 // 带宽定期检查:开关跟着订阅存(bandwidthCheck);周期和单次上限是后端统一设置,这里只读来显示
 const bandwidthCheck = ref(props.subscription?.bandwidthCheck === true)
 const bandwidthHelpOpen = ref(false)
 const bandwidthSettings = ref({ intervalHours: 12, maxDownloadMB: 64 })
-const nodeDnsUrl = ref(props.subscription?.nodeDns?.url ?? '')
+// 订阅 DNS 解析有三种写法:DoH(https 地址 + 可选的引导 DNS)、UDP、TCP(明文 DNS,只填 IP 和端口)。
+// 保存时 UDP/TCP 拼成 udp://ip[:port] / tcp://ip[:port] 放进 nodeDns.url
+const NODE_DNS_PROTOCOLS = [
+  { key: 'https', label: 'DoH' },
+  { key: 'udp', label: 'UDP' },
+  { key: 'tcp', label: 'TCP' },
+] as const
+type NodeDnsProtocol = (typeof NODE_DNS_PROTOCOLS)[number]['key']
+const parseNodeDns = (url: string): { protocol: NodeDnsProtocol; server: string; port: number } => {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol === 'udp:' || parsed.protocol === 'tcp:') {
+      return {
+        protocol: parsed.protocol.slice(0, -1) as NodeDnsProtocol,
+        server: parsed.hostname.replace(/^\[|\]$/g, ''),
+        port: Number(parsed.port) || 53,
+      }
+    }
+  } catch {
+    // 不是 udp/tcp 地址就按 DoH 处理
+  }
+  return { protocol: 'https', server: '', port: 53 }
+}
+const initialNodeDns = parseNodeDns(props.subscription?.nodeDns?.url || '')
+const nodeDnsProtocol = ref<NodeDnsProtocol>(initialNodeDns.protocol)
+const nodeDnsPlain = reactive({
+  udp: { server: '', port: 53 },
+  tcp: { server: '', port: 53 },
+})
+if (nodeDnsProtocol.value !== 'https') {
+  Object.assign(nodeDnsPlain[nodeDnsProtocol.value], { server: initialNodeDns.server, port: initialNodeDns.port })
+}
+const nodeDnsPlainCurrent = computed(() => nodeDnsPlain[nodeDnsProtocol.value === 'tcp' ? 'tcp' : 'udp'])
+const nodeDnsUrl = ref(nodeDnsProtocol.value === 'https' ? (props.subscription?.nodeDns?.url ?? '') : '')
 const nodeDnsBootstrap = ref(props.subscription?.nodeDns?.bootstrap ?? '')
 const nodeDnsOpen = ref(Boolean(props.subscription?.nodeDns?.url))
 
-// 填写校验:DoH 地址必须是 https://(不带账号密码);主机名是域名时,必须同时给出解析它用的 DNS(IP)。
-// 有错就不能保存,并自动展开输入框把提示显示出来。
-const IPV4_RE = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/
-const isIpAddress = (value: string) =>
-  IPV4_RE.test(value) || (/^[0-9a-f:]+$/i.test(value) && value.includes(':'))
+// 填写校验:DoH 地址必须是 https://(不带账号密码和 #);主机名是域名时,必须同时给出解析它用的 DNS(IP)。
+// UDP/TCP 只能填有效的 IPv4/IPv6 地址,端口 1-65535。有错就不能保存,并自动展开输入框把提示显示出来。
+const isIpAddress = (value: string) => ipaddr.IPv4.isValidFourPartDecimal(value) || ipaddr.IPv6.isValid(value)
 const nodeDnsError = computed(() => {
+  if (nodeDnsProtocol.value !== 'https') {
+    const { server, port } = nodeDnsPlainCurrent.value
+    if (!server.trim()) return ''
+    if (!isIpAddress(server.trim())) return 'subscriptionNodeDnsInvalidIp'
+    return Number.isInteger(port) && port >= 1 && port <= 65535 ? '' : 'dnsUpstreamInvalidPort'
+  }
   const url = nodeDnsUrl.value.trim()
   const bootstrap = nodeDnsBootstrap.value.trim()
   if (!url) return bootstrap ? 'subscriptionNodeDnsNeedUrl' : ''
   let host = ''
   try {
     const parsed = new URL(url)
-    if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
+    if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password || parsed.hash) {
       return 'subscriptionNodeDnsInvalidUrl'
     }
     host = parsed.hostname.replace(/^\[|\]$/g, '')
@@ -635,6 +718,12 @@ watch(nodeDnsError, (error) => {
 })
 // 实际发出去的值:地址留空或校验没过就是 null(服务端存成没有)
 const effectiveNodeDns = computed<{ url: string; bootstrap?: string } | null>(() => {
+  if (nodeDnsProtocol.value !== 'https') {
+    const { server, port } = nodeDnsPlainCurrent.value
+    const host = server.trim()
+    if (!host || nodeDnsError.value) return null
+    return { url: `${nodeDnsProtocol.value}://${host.includes(':') ? `[${host}]` : host}${port === 53 ? '' : `:${port}`}` }
+  }
   const url = nodeDnsUrl.value.trim()
   if (!url || nodeDnsError.value) return null
   const bootstrap = nodeDnsBootstrap.value.trim()
@@ -801,7 +890,12 @@ const resetForm = () => {
   autoUpdate.value = initialAutoUpdate()
   bandwidthCheck.value = props.subscription?.bandwidthCheck === true
   bandwidthHelpOpen.value = false
-  nodeDnsUrl.value = props.subscription?.nodeDns?.url ?? ''
+  const dns = parseNodeDns(props.subscription?.nodeDns?.url || '')
+  nodeDnsProtocol.value = dns.protocol
+  nodeDnsPlain.udp = { server: '', port: 53 }
+  nodeDnsPlain.tcp = { server: '', port: 53 }
+  if (dns.protocol !== 'https') Object.assign(nodeDnsPlain[dns.protocol], { server: dns.server, port: dns.port })
+  nodeDnsUrl.value = dns.protocol === 'https' ? (props.subscription?.nodeDns?.url ?? '') : ''
   nodeDnsBootstrap.value = props.subscription?.nodeDns?.bootstrap ?? ''
   content.value = props.subscription?.content ?? ''
   overrides.value = { ...(props.subscription?.renameOptions?.overrides || {}) }

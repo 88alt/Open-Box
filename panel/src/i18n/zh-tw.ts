@@ -1114,6 +1114,9 @@ const zhTW: LANG_MESSAGE = {
   subscriptionNodeDnsLabel: '節點網域解析（可選）',
   subscriptionNodeDnsUrlPlaceholder: 'DoH 位址,如 https://dns.example.net:2096/路徑',
   subscriptionNodeDnsBootstrapPlaceholder: '解析 DoH 的 DNS(IP)',
+  subscriptionNodeDnsIpPlaceholder: 'DNS IP,如 223.5.5.5 或 2001:4860:4860::8888',
+  subscriptionNodeDnsInvalidIp: 'DNS 位址只能填有效的 IPv4 或 IPv6 位址',
+  subscriptionNodeDnsPlainHint: '僅解析這份訂閱的節點伺服器網域,一般網站和區域網路 DNS 不受影響;節點檢測使用相同解析器。',
   subscriptionNodeDnsHint:
     '機場要求節點網域用它自己的 DoH 解析時填(相當於 OpenClash 的 proxy-server-nameserver / nameserver-policy)。只用來解析這份訂閱的節點伺服器網域,一般網站和區域網路的 DNS 不受影響;測速也按它解析。DoH 位址是網域時,右邊要填解析它用的 DNS(IP)。',
   subscriptionNodeDnsInvalidUrl: 'DoH 位址要以 https:// 開頭',

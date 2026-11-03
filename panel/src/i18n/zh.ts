@@ -1113,6 +1113,9 @@ const zh: LANG_MESSAGE = {
   subscriptionNodeDnsLabel: '节点域名解析（可选）',
   subscriptionNodeDnsUrlPlaceholder: 'DoH 地址,如 https://dns.example.net:2096/路径',
   subscriptionNodeDnsBootstrapPlaceholder: '解析 DoH 的 DNS(IP)',
+  subscriptionNodeDnsIpPlaceholder: 'DNS IP,如 223.5.5.5 或 2001:4860:4860::8888',
+  subscriptionNodeDnsInvalidIp: 'DNS 地址只能填有效的 IPv4 或 IPv6 地址',
+  subscriptionNodeDnsPlainHint: '仅解析这份订阅的节点服务器域名,普通网站和局域网 DNS 不受影响;节点检测使用相同解析器。',
   subscriptionNodeDnsHint:
     '机场要求节点域名用它自己的 DoH 解析时填(相当于 OpenClash 的 proxy-server-nameserver / nameserver-policy)。只用来解析这份订阅的节点服务器域名,普通网站和局域网的 DNS 不受影响;测速也按它解析。DoH 地址是域名时,右边要填解析它用的 DNS(IP)。',
   subscriptionNodeDnsInvalidUrl: 'DoH 地址要以 https:// 开头',

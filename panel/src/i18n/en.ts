@@ -1161,6 +1161,9 @@ const en = {
   subscriptionNodeDnsLabel: 'Node domain resolver (optional)',
   subscriptionNodeDnsUrlPlaceholder: 'DoH URL, e.g. https://dns.example.net:2096/path',
   subscriptionNodeDnsBootstrapPlaceholder: 'DNS for DoH host (IP)',
+  subscriptionNodeDnsIpPlaceholder: 'DNS IP, e.g. 223.5.5.5 or 2001:4860:4860::8888',
+  subscriptionNodeDnsInvalidIp: 'Enter a valid IPv4 or IPv6 DNS address',
+  subscriptionNodeDnsPlainHint: 'Resolves only server names in this subscription. Website and LAN DNS are unchanged; node checks use the same resolver.',
   subscriptionNodeDnsHint:
     "Fill this in when the provider requires its own DoH to resolve node domains (like OpenClash's proxy-server-nameserver / nameserver-policy). It only resolves this subscription's node server domains; regular sites and LAN DNS are unaffected, and speed tests use it too. When the DoH URL uses a domain, enter an IP on the right to resolve it.",
   subscriptionNodeDnsInvalidUrl: 'The DoH URL must start with https://',
