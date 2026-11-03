@@ -1,7 +1,7 @@
-// 文案对齐上游 v0.1.351(中 / 繁 / 英),并入原先拆在 dns-filter / dns-page / client-app-page 等文件里的补充文案。
+// 文案对齐上游 v0.1.391(中 / 繁 / 英),并入原先拆在 dns-filter / dns-page / client-app-page 等文件里的补充文案。
 // 键名与键值和上游 panel/dist 逐键一致,不另设 main 自有键。
 const en = {
-  // ===== 上游 v0.1.351 文案(取自上游 panel/dist,逐键与上游一致)=====
+  // ===== 上游 v0.1.391 文案(取自上游 panel/dist,逐键与上游一致)=====
   cfTitle: 'Content filtering',
   cfDescription:
     'Manage rule and script snapshots here. iOS runs the synced copy offline. HTTPS filtering requires a trusted certificate on the phone.',
@@ -452,9 +452,39 @@ const en = {
   nodeInfo: 'Node info',
   nodeTipLatency: 'Latency',
   nodeTipBandwidth: 'Bandwidth',
+  nodeInfoTrust: 'Trust score',
+  bandwidthPoorDesc: 'Insufficient bandwidth (red)',
+  bandwidthAdequateDesc: 'Moderate bandwidth (orange)',
+  bandwidthExcellentDesc: 'Excellent bandwidth (green)',
+  nodeInfoCoffeeReport: 'Net.Coffee report',
+  qualityNodeLatency: 'Node latency',
+  qualityEntry: 'Entry',
+  qualityExit: 'Exit',
+  qualityBandwidthTest: 'Download bandwidth',
+  qualityScope: 'Last 24 hours',
+  qualitySearch: 'Search subscriptions',
+  qualitySummary:
+    '{subscriptions} subscriptions · {nodes} nodes · {failed} failed · {unknown} pending',
+  qualitySubscription: 'Subscription',
+  qualityOverall: 'Overall quality',
+  qualityAvailability: 'Availability',
+  qualityLatencyJitter: 'Latency / variation',
+  qualityBandwidth: 'Download / upload',
+  qualityCoverage: 'Assessment coverage',
+  qualityUsage: 'Usage',
+  qualityUsable: '{usable} / {total} nodes available',
+  qualityPoints: 'points',
+  qualityMeasuredScore: 'Measured average {score}',
+  qualityGrade_pending: 'More data needed',
+  qualityGrade_attention: 'Needs attention',
+  qualityGrade_excellent: 'Excellent',
+  qualityGrade_good: 'Good',
+  qualityGrade_fair: 'Fair',
+  qualityState_healthy: 'Available',
   bandwidthManualTest: 'Test download bandwidth',
   bandwidthManualQueued: 'New bandwidth checks queued: {queued}; already queued or testing: {joined}.',
   bandwidthManualFailed: 'Bandwidth check failed: {message}',
+  bandwidthManualComplete: '{name}: {value} Mbps',
   subscriptionBandwidthCheck: 'Enable periodic bandwidth checks',
   subscriptionBandwidthEvery: 'Every {hours} h',
   subscriptionBandwidthHelpTitle: 'Periodic bandwidth checks',
@@ -465,9 +495,51 @@ const en = {
   subscriptionBandwidthBudget:
     'The backend bandwidth settings show the daily upper bound for all unique eligible nodes. It is download payload only; protocol overhead, initial/new-node tests and provider multipliers may add traffic. This switch does not enable bandwidth preference or change routing.',
   qualityState_down: 'Probe failed',
+  qualityState_unknown: 'Not tested',
+  qualityState_stale: 'Outdated',
+  qualityInactive: 'Disabled / not deployed',
+  qualityProvisional: 'Provisional',
+  qualitySamples: '{count} health checks',
+  qualityUploadPending: 'Upload not tested',
+  qualityAssessed: 'Assessed nodes',
+  qualityBandwidthSamples: '{count} bandwidth samples',
+  qualityEmpty: 'No subscriptions',
+  qualityNoResults: 'No matching subscriptions',
+  qualityExpand: 'Expand {name} nodes',
+  qualityCollapse: 'Collapse {name} nodes',
+  qualityNodeDetails: 'Node quality details',
+  qualityNodeDetailsLink: 'Node details',
+  qualityShowAllNodes: 'Show all',
+  qualityShowFirstNodes: 'Show first 10',
+  qualityHelp: 'Node quality explained',
+  qualityLastCheck: 'Last check',
+  qualityNever: 'Not tested',
+  qualityActiveTime: 'Active time (sampled)',
+  qualityTraffic: 'Traffic (sampled)',
+  qualityTime: '{hours} h {minutes} min',
+  qualityNotMeasured: 'Not tested',
+  qualityDetailScope: 'Delay, variation and bandwidth are medians of current valid samples.',
+  qualityHealthHelp:
+    'Availability comes first. Confirmed failed nodes count as zero in subscription quality. Unmeasured or outdated nodes lower coverage. Below 80% coverage, the main label shows “More data needed”.',
+  qualityModelHelp:
+    'Node score: availability 35%, latency 20%, HTTP timing variation 15%, download 20%, upload 10%. A provisional score requires at least 20 checks over one hour, ten successful checks and a current download sample. Missing uploads are excluded and the remaining weights are normalized.',
+  qualityExampleHelp:
+    'Example: one 95-point node and nine failed nodes score about 10 overall. One 95-point node and nine unmeasured nodes require more data instead of an excellent rating.',
+  qualityMeasurementHelp:
+    'Metrics use the current connection identity, network and global probe target. The last 24 hourly buckets are retained. HTTP timing variation is the mean difference between consecutive successful probe durations, not UDP jitter or IP packet loss. Active time and traffic are sampled, exclude panel probes, and never add points. Concurrent activity is counted once.',
+  qualityBandwidthHelp:
+    'Bandwidth is the median of valid measured nodes, not their sum. Samples older than two shared periods do not enter scoring. Upload bandwidth remains unmeasured until an upload test exists; application upload traffic is not upload bandwidth.',
+  qualityFailedHelp:
+    'A historical download result does not prove current availability. A failed node contributes zero to the subscription assessment.',
+  qualityMode_login: 'Login',
+  qualityMode_subscription: 'Subscription',
+  qualityMode_node: 'Node',
+  qualityLoadFailed: 'Failed to load node quality: {message}',
   nodeInfoProtocol: 'Protocol',
   nodeInfoServer: 'Server',
   nodeInfoEntryIp: 'Entry IP',
+  nodeInfoEntryIpv6: 'Entry IPv6',
+  nodeInfoIpv4Unverified: 'IPv4 exit not detected',
   nodeInfoUpstream: 'Upstream',
   nodeInfoSupported: 'Yes',
   nodeInfoUnsupported: 'No',
@@ -585,6 +657,7 @@ const en = {
   importFromUrl: 'Import from URL',
   sync: 'Sync',
   upgradeSuccess: 'Upgrade successful',
+  nodeInfoIpv6Unverified: 'IPv6 exit not verified',
   IPInfoAPI: 'IP info API',
   IPInfoAPITip:
     "This API will be used for IP checks in global node IP information queries, IP geolocation queries in connection details, and IP geolocation queries in zashboard's DNS query feature.",
@@ -2216,7 +2289,7 @@ const en = {
   bandwidthDaily:
     '{count} unique eligible nodes × {times} tests/day: up to {size}/day at the current limit.',
   bandwidthBudgetHint:
-    'Only enabled groups are tested. Each effective node shares one test across groups. This estimates periodic download payload; initial/new-node tests, protocol overhead and provider multipliers are additional. Clients never run bandwidth tests.',
+    'Only enabled subscriptions and groups are tested. Each effective node shares one test across subscriptions and groups. This estimates periodic download payload; initial/new-node tests, protocol overhead and provider multipliers are additional. Clients never run bandwidth tests.',
   bandwidthHealthFirst:
     'Availability comes first. Confirmed failed nodes and nodes awaiting recovery confirmation are excluded regardless of past bandwidth. Missing bandwidth data does not mean a node is unavailable.',
   bandwidthOff: 'When disabled',
@@ -2244,6 +2317,42 @@ const en = {
     'One shared test per effective node every {hours} hours, capped at {maxMB} MB per task. Reading scores does not download again. A failed test retains the last valid result. Missing/expired data falls back to neutral data or the original algorithm. Download-test failure is not health failure.',
   bandwidthClientDisabled:
     'Android, iOS, Windows, macOS and Linux clients do not enable bandwidth preference or download testing. In node mode the router can still apply its own policy. Measurements estimate current conditions; combined throughput is not guaranteed.',
+  nodeInfoExpandText: 'Expand {field}',
+  nodeInfoCollapseText: 'Collapse {field}',
+  nodeTrafficEstimate: 'Human / bot (estimate)',
+  nodeTrafficAsnHelp:
+    'Net.Coffee: 28-day ASN aggregate adjusted by this IP’s risk signals; not measured router traffic.',
+  nodeTrafficEstimateHelp:
+    'Net.Coffee network-type and IP risk estimate; not measured router traffic.',
+  nodeTrafficRatio: 'Human {human}%, bot {bot}%',
+  nodeTrafficHuman: 'Human',
+  nodeTrafficBot: 'Bot',
+  nodeRiskLow: 'Low risk',
+  nodeRiskModerate: 'Moderate risk',
+  nodeRiskHigh: 'High risk',
+  nodeRiskAssessment: 'Risk',
+  nodeRiskIntelligence: 'IP intelligence',
+  nodeRiskThreats: 'Risk flags',
+  nodeRiskAbuse: 'Abuse level',
+  nodeRiskBlacklist: 'HTTP honeypot blacklist',
+  nodeRiskRpki: 'RPKI status',
+  nodeRiskUnverified: 'Unverified',
+  nodeRiskRpkiReported:
+    'Net.Coffee reports {value}, but does not provide the announced BGP prefix and matching ROA evidence. This is not a verified validity verdict.',
+  nodeRiskDeep: 'Risk detection',
+  nodeRiskVpn: 'VPN',
+  nodeRiskProxy: 'Proxy',
+  nodeRiskTor: 'Tor',
+  nodeRiskCrawler: 'Crawler / bot',
+  nodeRiskUnknown: 'No data',
+  nodeRiskNotDetected: 'Not detected',
+  nodeRiskDetected: 'Detected',
+  nodeRiskNoThreats: 'No evident threats',
+  nodeRiskClean: 'Clean',
+  nodeRiskVeryClean: 'Very clean',
+  nodeRiskVeryLow: 'Very low risk',
+  nodeRiskVeryHigh: 'Very high risk',
+  qualityTitle: 'Node quality',
 }
 
 export type LANG_MESSAGE = typeof en
