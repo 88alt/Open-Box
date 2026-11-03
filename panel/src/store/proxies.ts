@@ -666,8 +666,9 @@ const testLatencyOneByOneWithTip = async (
       failed: `${testFailed}`,
       reasons,
     },
-    type: testFailed ? 'alert-warning' : 'alert-success',
-    timeout: 3000,
+    // 与上游 v0.1.389 一致:完成提示一律用 info(蓝),有失败时多停一会儿(6 秒),全成功 3 秒
+    type: 'alert-info',
+    timeout: testFailed ? 6000 : 3000,
   })
   await fetchProxies()
 }
@@ -752,8 +753,9 @@ export const proxyGroupLatencyTest = async (proxyGroupName: string) => {
       success: `${total - testFailed}`,
       failed: `${testFailed}`,
     },
-    type: testFailed ? 'alert-warning' : 'alert-success',
-    timeout: 3000,
+    // 与上游 v0.1.389 一致:完成提示一律用 info(蓝),有失败时多停一会儿(6 秒),全成功 3 秒
+    type: 'alert-info',
+    timeout: testFailed ? 6000 : 3000,
   })
 }
 
