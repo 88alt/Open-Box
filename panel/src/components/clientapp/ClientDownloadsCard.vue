@@ -5,14 +5,14 @@
       <!-- 不放第三方下载站的推广链接(上游 v0.1.388 有「极速下载用 DownMan」,main 有意不要)。
            同步上游时不要把它加回来;clientDownloadFastWith 键保留但不引用。 -->
       <h2 class="text-base font-semibold">{{ $t('clientDownloadTitle') }}</h2>
-      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div class="grid grid-cols-1 app-card-gap sm:grid-cols-2 xl:grid-cols-4">
         <component
           :is="tile.available ? 'a' : 'div'"
           v-for="tile in tiles"
           :key="tile.key"
           v-bind="tile.attrs"
           :title="tile.hint"
-          class="border-base-300/60 bg-base-100 flex items-center gap-2 rounded-lg border px-3 py-2.5"
+          class="border-base-300/60 bg-base-100 app-card-inset flex items-center gap-2 rounded-lg border"
           @click="onTileClick($event, tile)"
           :class="tile.available ? 'hover:bg-base-200/60 transition-colors' : 'cursor-not-allowed'"
         >
