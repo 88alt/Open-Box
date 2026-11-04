@@ -8,7 +8,7 @@ name: Release
 #
 # 可选的仓库变量(Settings → Secrets and variables → Actions → Variables):
 #   OPENBOX_KERNEL_SOURCE  upstream(默认) | build(用本仓库补丁源码自己编译,没有上游那批未公开补丁)
-#   OPENBOX_KERNEL_TAG     固定到上游某个版本(如 v0.1.283);留空 = 每次取 Latest
+#   OPENBOX_KERNEL_TAG     固定到上游某个版本(如 v0.1.283);留空 = 上游有与发布版本同名的 Release 就取它,没有才取 Latest
 #   OPENBOX_KERNEL_REPO    上游仓库,默认 liandu2024/Open-Box
 #   OPENBOX_SOURCE_TAG     内核源码包(*-source.tar.gz)固定取自上游某个版本;留空 = 与内核所取版本相同
 #                          (手动运行时填写的 source_tag 输入框优先于这个变量)
@@ -80,6 +80,19 @@ jobs:
             exit 0
           fi
           tag="$PINNED_TAG"
+          # 没固定版本时:本仓库的 tag 与上游版本一一对应,上游有同名 Release 就取同一个版本,
+          # 这样补发 / 重跑旧版本(比如 v0.1.398 在上游已出 v0.1.399 之后才构建)不会拿到更新版本的内核和客户端;
+          # 上游没有同名 Release(新 tag 还没对上、或上游已删)才退回 Latest
+          if [ -z "$tag" ]; then
+            code=$(curl -s -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 2 --connect-timeout 20 \
+              "https://github.com/$OPENBOX_KERNEL_REPO/releases/tag/$RELEASE_TAG" || true)
+            if [ "$code" = 200 ]; then
+              tag="$RELEASE_TAG"
+              echo "上游有同名 Release,内核取 $tag"
+            else
+              echo "上游没有 $RELEASE_TAG 的 Release(HTTP $code),改取 Latest"
+            fi
+          fi
           if [ -z "$tag" ]; then
             tag=$(curl -sI --retry 3 --retry-delay 2 --connect-timeout 20 "https://github.com/$OPENBOX_KERNEL_REPO/releases/latest" \
               | tr -d '\r' | sed -n 's/^[Ll]ocation: .*\/releases\/tag\/\(v[0-9][0-9A-Za-z._-]*\).*/\1/p' | head -n 1)
