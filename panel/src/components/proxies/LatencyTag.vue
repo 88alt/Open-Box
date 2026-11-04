@@ -75,7 +75,7 @@ import { twMerge } from 'tailwind-merge'
 import { computed, createVNode, getCurrentInstance, nextTick, onMounted, onUnmounted, ref, render, watch } from 'vue'
 import NodeLatencyTip from './NodeLatencyTip.vue'
 
-const { showTip } = useTooltip()
+const { showTip, hideTip } = useTooltip()
 // 浮层是手动挂到 tippy 里的 DOM,不在这个组件的渲染树下:把应用上下文带过去,里面的组件才拿得到 i18n
 const appContext = getCurrentInstance()?.appContext ?? null
 // 最近 10 次结果,新的在上:mihomo 的独立测试模式内核自己留了多条,照用;sing-box 每个节点只留
@@ -113,13 +113,8 @@ const dotColor = (delay: number) => {
     default: return 'bg-gray-400'
   }
 }
-const handlerHistoryTip = (e: Event) => {
-  const history = recentHistory()
-  const node = infoNode()
-
-  // 没有历史也没有节点信息可看,就没有浮层
-  if (!history.length && !node) return
-
+// 竖着的时间线:浮层里刷新测速以后也靠它重建
+const buildHistoryList = (history: LatencySample[]) => {
   // 竖着的时间线:左边时间、中间一根线穿过每次的点(顶端箭头,新的在上)、右边延迟按阈值着色;
   // 组的样本在时间上面用小字标出那一笔是当时选中的哪个节点测出来的
   const withNode = history.some((item) => Boolean(item.node))
@@ -167,6 +162,16 @@ const handlerHistoryTip = (e: Event) => {
 
     historyList.append(time, cell, latency)
   })
+  return historyList
+}
+const handlerHistoryTip = (e: Event) => {
+  const history = recentHistory()
+  const node = infoNode()
+
+  // 没有历史也没有节点信息可看,就没有浮层
+  if (!history.length && !node) return
+
+  const historyList = buildHistoryList(history)
 
   // 不是真节点:浮层就是时间线本身
   if (!node) {
@@ -196,6 +201,9 @@ const handlerHistoryTip = (e: Event) => {
         name: props.name ?? '',
         udp: !!node.udp,
         history: history.length ? historyList : null,
+        groupName: props.groupName,
+        makeHistory: () => buildHistoryList(recentHistory()),
+        onClose: hideTip,
       })
       vnode.appContext = appContext
       render(vnode, host)
