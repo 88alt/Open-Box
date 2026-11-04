@@ -5,23 +5,53 @@
     :title="$t(group ? 'shareRegionsEditTitle' : 'shareRegionsAddTitle')"
     box-class="h-[90dvh] w-full max-w-4xl"
   >
-    <!-- 页签放工具栏槽,和上游 v0.1.397 一样:与下面内容区只隔一个卡片间距 -->
+    <!-- 页签和规则页的提示行都放工具栏槽,和上游 v0.1.397 一样:同一个 gap-4 容器,与下面内容区只隔一个卡片间距 -->
     <template #toolbar>
       <div
         v-if="form"
-        role="tablist"
-        class="tabs-box tabs tabs-xs w-fit"
+        class="flex flex-col gap-4 text-sm"
       >
-        <a
-          v-for="item in TABS"
-          :key="item.key"
-          role="tab"
-          class="tab"
-          :class="tab === item.key && 'tab-active'"
-          @click="tab = item.key"
+        <div
+          role="tablist"
+          class="tabs-box tabs tabs-xs w-fit"
         >
-          {{ $t(item.label) }}
-        </a>
+          <a
+            v-for="item in TABS"
+            :key="item.key"
+            role="tab"
+            class="tab"
+            :class="tab === item.key && 'tab-active'"
+            @click="tab = item.key"
+          >
+            {{ $t(item.label) }}
+          </a>
+        </div>
+        <div v-show="tab === 'rules'">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-base-content/60 text-xs">
+              {{ $t(form.rules.length || lanSubnets.length ? 'shareRegionsRulesHint' : 'shareRegionsNoRules') }}
+            </p>
+            <div class="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs"
+                :disabled="form.rules.length >= SHARE_REGION_LIMITS.rulesPerGroup"
+                @click="showImport = true"
+              >
+                {{ $t('routingPolicyRuleImport') }}
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs"
+                :disabled="form.rules.length >= SHARE_REGION_LIMITS.rulesPerGroup"
+                @click="addRule"
+              >
+                <PlusIcon class="h-3.5 w-3.5" />
+                {{ $t('routingPolicyRuleAdd') }}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </template>
 
@@ -139,34 +169,6 @@
         v-show="tab === 'rules'"
         class="flex flex-col gap-4"
       >
-        <div class="flex flex-col gap-2">
-          <div class="flex items-center justify-between gap-2">
-            <p class="text-base-content/60 text-xs">
-              {{ $t(form.rules.length || lanSubnets.length ? 'shareRegionsRulesHint' : 'shareRegionsNoRules') }}
-            </p>
-            <div class="flex shrink-0 items-center gap-1">
-              <button
-                type="button"
-                class="btn btn-ghost btn-xs"
-                :disabled="form.rules.length >= SHARE_REGION_LIMITS.rulesPerGroup"
-                @click="showImport = true"
-              >
-                {{ $t('routingPolicyRuleImport') }}
-              </button>
-              <button
-                type="button"
-                class="btn btn-ghost btn-xs"
-                :disabled="form.rules.length >= SHARE_REGION_LIMITS.rulesPerGroup"
-                @click="addRule"
-              >
-                <PlusIcon class="h-3.5 w-3.5" />
-                {{ $t('routingPolicyRuleAdd') }}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 提示行和规则列表之间留一档 16px(上游把这一行放在弹窗工具栏里,和正文隔一档),规则行之间仍是 8px -->
         <div class="flex flex-col gap-2">
           <!-- 路由器自动加的「家里局域网 → 经路由器」,只读(规则里已经有同一网段就不重复显示) -->
           <div
