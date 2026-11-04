@@ -288,10 +288,9 @@ export const DEFAULT_THEME = {
 
 export type THEME = Record<string, string>
 
+// 上游 v0.1.396 起 IP 信息只剩 Net.Coffee 一个来源
 export enum IP_INFO_API {
-  IPSB = 'ip.sb',
-  IPWHOIS = 'ipwho.is',
-  IPAPI = 'ipapi.is',
+  NETCOFFEE = 'Net.Coffee',
 }
 
 // 设置页顶部的一级页签。SETTINGS_MENU_KEY(见下)是「面板设置」这一个页签**内部**

@@ -20,7 +20,7 @@ import {
 import { detectDefaultLanguage, getMinCardWidth, isMiddleScreen, isPreferredDark } from '@/helper/utils'
 import type { SourceIPLabel } from '@/types'
 import { useStorage } from '@vueuse/core'
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 
 // global
 // 主题只有三档:跟随系统 / 亮色 / 暗色。亮色 = daisyUI 的 emerald,暗色 = forest;
@@ -82,7 +82,15 @@ export const disablePullToRefresh = useStorage('config/disable-pull-to-refresh',
 export const displayAllFeatures = useStorage('config/display-all-features', false)
 export const blurIntensity = useStorage('config/blur-intensity', 10)
 export const scrollAnimationEffect = useStorage('config/scroll-animation-effect', true)
-export const IPInfoAPI = useStorage('config/geoip-info-api', IP_INFO_API.IPSB)
+export const IPInfoAPI = useStorage<string>('config/geoip-info-api', IP_INFO_API.NETCOFFEE)
+// 旧版本存过 ip.sb / ipwho.is / ipapi.is:这些来源已下线,读到就改回 Net.Coffee(同步执行,避免下拉框先显示空白)
+watch(
+  IPInfoAPI,
+  (value) => {
+    if (value !== IP_INFO_API.NETCOFFEE) IPInfoAPI.value = IP_INFO_API.NETCOFFEE
+  },
+  { immediate: true, flush: 'sync' },
+)
 export const autoDisconnectIdleUDP = useStorage('config/auto-disconnect-idle-udp', false)
 export const autoDisconnectIdleUDPTime = useStorage('config/auto-disconnect-idle-udp-time', 300)
 

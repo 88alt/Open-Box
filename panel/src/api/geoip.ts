@@ -1,5 +1,4 @@
-import { IP_INFO_API } from '@/constant'
-import { IPInfoAPI } from '@/store/settings'
+import { i18n } from '@/i18n'
 
 export interface IPInfo {
   ip: string
@@ -22,185 +21,86 @@ export const getIPFromIpipnetAPI = async () => {
   }
 }
 
-// global
-const getIPFromIpsbAPI = async (ip = '') => {
-  const response = await fetch(
-    'https://api.ip.sb/geoip' + (ip ? `/${ip}` : '') + '?t=' + Date.now(),
+// 全局 IP 信息只用 Net.Coffee(对齐上游 v0.1.396,不再提供 ip.sb / ipwho.is / ipapi.is 可选)。
+// 不带 IP 时先问 cdn-cgi/trace 拿到本机出口 IP,再用 ipv2/lookup 查详情。
+const NET_COFFEE_TRACE_URL = 'https://ip.net.coffee/cdn-cgi/trace'
+const netCoffeeLookupUrl = (ip: string) => `https://ip.net.coffee/api/ipv2/lookup/${encodeURIComponent(ip)}`
+
+const isIPLike = (value: unknown): value is string =>
+  typeof value === 'string' && (/^\d{1,3}(\.\d{1,3}){3}$/.test(value) || (value.includes(':') && /^[0-9a-f:.]+$/i.test(value)))
+
+const parseTraceIP = (text: string) => {
+  const trace = Object.fromEntries(
+    text
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => {
+        const i = line.indexOf('=')
+        return [line.slice(0, i), line.slice(i + 1).trim()]
+      }),
   )
 
-  return (await response.json()) as {
-    organization: string
-    longitude: number
-    city: string
-    region: string
-    timezone: string
-    isp: string
-    offset: number
-    asn: number
-    asn_organization: string
-    country: string
-    ip: string
-    latitude: number
-    postal_code: string
-    continent_code: string
-    country_code: string
-    region_code: string
+  if (trace.h !== 'ip.net.coffee' || !isIPLike(trace.ip)) throw new Error('Net.Coffee 出口查询失败')
+
+  return trace.ip as string
+}
+
+// 有国家代码时按面板语言显示国家名,没有就保持接口返回的原文
+const localizedCountry = (countryCode: string, fallback: string) => {
+  if (!/^[A-Za-z]{2}$/.test(countryCode)) return fallback
+
+  try {
+    const locale = String(i18n.global.locale.value || 'en').replace('_', '-')
+
+    return new Intl.DisplayNames([locale], { type: 'region' }).of(countryCode.toUpperCase()) || fallback
+  } catch {
+    return fallback
   }
 }
 
-const getIPFromIPWhoisAPI = async (ip = '') => {
-  const response = await fetch('https://ipwho.is' + (ip ? `/${ip}` : '') + '?t=' + Date.now())
-
-  return (await response.json()) as {
-    ip: string
-    success: boolean
-    type: string
-    continent: string
-    continent_code: string
-    country: string
-    country_code: string
-    region: string
-    region_code: string
-    city: string
-    latitude: number
-    longitude: number
-    is_eu: boolean
-    postal: string
-    calling_code: string
-    capital: string
-    borders: string
-    flag: {
-      img: string
-      emoji: string
-      emoji_unicode: string
-    }
-    connection: {
-      asn: number
-      org: string
-      isp: string
-      domain: string
-    }
-    timezone: {
-      id: string
-      abbr: string
-      is_dst: boolean
-      offset: number
-      utc: string
-      current_time: string
-    }
-  }
-}
-
-const getIPFromIPapiisAPI = async (ip = '') => {
-  const response = await fetch(
-    'https://api.ipapi.is' + (ip ? `/?q=${ip}` : '') + (ip ? '&' : '?') + 't=' + Date.now(),
-  )
-
-  return (await response.json()) as {
-    ip: string
-    rir: string
-    is_bogon: boolean
-    is_mobile: boolean
-    is_satellite: boolean
-    is_crawler: boolean
-    is_datacenter: boolean
-    is_tor: boolean
-    is_proxy: boolean
-    is_vpn: boolean
-    is_abuser: boolean
-    datacenter: {
-      datacenter: string
-      network: string
-      region: string
-      service: string
-      network_border_group: string
-    }
-    company: {
-      name: string
-      abuser_score: string
-      domain: string
-      type: string
-      network: string
-      whois: string
-    }
-    abuse: {
-      name: string
-      address: string
-      email: string
-      phone: string
-    }
-    asn: {
-      asn: number
-      abuser_score: string
-      route: string
-      descr: string
-      country: string
-      active: boolean
-      org: string
-      domain: string
-      abuse: string
-      type: string
-      created: string
-      updated: string
-      rir: string
-      whois: string
-    }
-    location: {
-      is_eu_member: boolean
-      calling_code: string
-      currency_code: string
-      continent: string
-      country: string
-      country_code: string
-      state: string
-      city: string
-      latitude: number
-      longitude: number
-      zip: string
-      timezone: string
-      local_time: string
-      local_time_unix: number
-      is_dst: boolean
-    }
-    elapsed_ms: number
-  }
+type NetCoffeeLookup = {
+  ip?: string
+  country?: string
+  countryCode?: string
+  region?: string
+  city?: string
+  asn?: string | number
+  asOrganization?: string
+  isp?: string
+  company_name?: string
+  error?: unknown
+  is_bogon?: boolean
 }
 
 export const getIPInfo = async (ip = ''): Promise<IPInfo> => {
-  switch (IPInfoAPI.value) {
-    case IP_INFO_API.IPAPI:
-      const ipapi = await getIPFromIPapiisAPI(ip)
+  let target = ip
 
-      return {
-        ip: ipapi.ip,
-        country: ipapi.location.country,
-        region: ipapi.location.state,
-        city: ipapi.location.city,
-        asn: ipapi.asn.asn.toString(),
-        organization: ipapi.asn.org,
-      }
-    case IP_INFO_API.IPWHOIS:
-      const ipwhois = await getIPFromIPWhoisAPI(ip)
+  if (!target) {
+    const response = await fetch(NET_COFFEE_TRACE_URL, { signal: AbortSignal.timeout(10000), cache: 'no-store' })
 
-      return {
-        ip: ipwhois.ip,
-        region: ipwhois.region,
-        country: ipwhois.country,
-        city: ipwhois.city,
-        asn: ipwhois.connection.asn.toString(),
-        organization: ipwhois.connection.org,
-      }
-    case IP_INFO_API.IPSB:
-    default:
-      const ipsb = await getIPFromIpsbAPI(ip)
+    if (!response.ok) throw new Error('Net.Coffee 出口查询失败')
+    target = parseTraceIP(await response.text())
+  }
 
-      return {
-        ip: ipsb.ip,
-        country: ipsb.country,
-        region: ipsb.region,
-        city: ipsb.city,
-        asn: ipsb.asn.toString(),
-        organization: ipsb.organization,
-      }
+  const response = await fetch(netCoffeeLookupUrl(target), { signal: AbortSignal.timeout(15000) })
+
+  if (!response.ok) throw new Error('Net.Coffee IP 查询失败')
+
+  const data = (await response.json()) as NetCoffeeLookup
+
+  if (!data || typeof data !== 'object' || !isIPLike(data.ip) || data.error || data.is_bogon) {
+    throw new Error('Net.Coffee 返回的不是有效 IP 信息')
+  }
+  if (data.ip !== target) throw new Error('Net.Coffee 返回的 IP 不匹配')
+
+  const countryCode = String(data.countryCode || '')
+
+  return {
+    ip: data.ip,
+    country: localizedCountry(countryCode, String(data.country || '')),
+    region: String(data.region || ''),
+    city: String(data.city || ''),
+    asn: String(data.asn || '').replace(/^AS/i, ''),
+    organization: String(data.asOrganization || data.isp || data.company_name || ''),
   }
 }

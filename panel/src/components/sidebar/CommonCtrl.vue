@@ -1,7 +1,7 @@
 <template>
   <!-- 只有一张卡片:连接 / 内存 / 上下行那几个数。运行时长和启动 / 停止 / 重启不进卡片,
        直接摆在侧边栏这一层——以前是卡片套卡片,看着像两层壳。 -->
-  <div class="flex flex-col gap-2 text-sm">
+  <div class="app-card-gap flex flex-col text-sm">
     <!-- 上下左右内边距 12px,和上面的图表卡片一样 -->
     <div class="card app-card-inset">
       <StatisticsStats type="ctrl" />

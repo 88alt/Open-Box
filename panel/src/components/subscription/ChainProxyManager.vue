@@ -351,9 +351,8 @@ import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import LatencyPill from '@/components/common/LatencyPill.vue'
 import OutboundPicker from '@/components/common/OutboundPicker.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
-import { IP_INFO_API } from '@/constant'
 import { showNotification } from '@/helper/notification'
-import { IPInfoAPI, speedtestTimeout, speedtestUrl } from '@/store/settings'
+import { speedtestTimeout, speedtestUrl } from '@/store/settings'
 import {
   ArrowTopRightOnSquareIcon,
   BoltIcon,
@@ -576,14 +575,8 @@ const confirmDelete = async () => {
 }
 
 // ---------- 测速 / IP 地区 ----------
-// 面板设置里选的 IP 信息接口排第一,其余依次兜底(后端只认这几家的主机名)
-const IP_URLS = [
-  { api: IP_INFO_API.IPSB, url: 'https://api.ip.sb/geoip' },
-  { api: IP_INFO_API.IPWHOIS, url: 'https://ipwho.is' },
-  { api: IP_INFO_API.IPAPI, url: 'https://api.ipapi.is' },
-]
-const ipUrls = () =>
-  [...IP_URLS.filter((x) => x.api === IPInfoAPI.value), ...IP_URLS.filter((x) => x.api !== IPInfoAPI.value)].map((x) => x.url)
+// 后端只认这几家的主机名,顺序即兜底顺序
+const ipUrls = () => ['https://api.ip.sb/geoip', 'https://ipwho.is', 'https://api.ipapi.is']
 
 // 延迟的颜色:越慢越偏红
 const latencyClass = (ms: number) => (ms < 300 ? 'text-success' : ms < 800 ? 'text-warning' : 'text-error')
