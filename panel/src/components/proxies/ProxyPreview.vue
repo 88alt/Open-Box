@@ -2,7 +2,7 @@
   <div
     ref="previewRef"
     class="flex flex-wrap"
-    :class="[showDots ? (relaxedDotsSpacing ? 'gap-1 pt-3.5' : 'gap-1 pt-1') : 'gap-2 pt-2 pb-1']"
+    :class="[showDots ? 'gap-1 pt-[var(--app-card-space)]' : 'app-card-gap pt-[var(--app-card-space)]']"
   >
     <template v-if="showDots">
       <div
