@@ -28,13 +28,13 @@
       <!-- 分列:设置里选的列数,组按 index % 列数 轮流落到各列(策略 / 节点两个页签) -->
       <template v-else-if="displayColumns > 1 && proxiesTabShow !== PROXY_TAB_TYPE.PROVIDER">
         <div
-          class="grid gap-2 p-2"
+          class="grid app-page-content app-card-gap"
           :class="displayColumns === 3 ? 'grid-cols-3' : 'grid-cols-2'"
         >
           <div
             v-for="idx in displayColumns"
             :key="idx"
-            class="flex flex-1 flex-col gap-2"
+            class="app-card-gap flex flex-1 flex-col"
           >
             <component
               v-for="name in filterContent(
@@ -52,7 +52,7 @@
            Clash 的 provider 概念在 Open-Box 里不存在)。分列和策略 / 节点页签同一个设置(GitHub #33) -->
       <div
         v-else-if="proxiesTabShow === PROXY_TAB_TYPE.PROVIDER"
-        class="grid gap-2 px-2 md:py-2"
+        class="grid app-page-content app-card-gap"
         :class="displayColumns === 3 ? 'grid-cols-3' : displayColumns === 2 ? 'grid-cols-2' : 'grid-cols-1'"
       >
         <p
@@ -66,7 +66,7 @@
         <div
           v-for="idx in displayColumns"
           :key="idx"
-          class="flex flex-1 flex-col gap-2"
+          class="app-card-gap flex flex-1 flex-col"
         >
           <SubscriptionCard
             v-for="sub in filterContent(openboxSubscriptions, idx - 1)"
@@ -79,7 +79,7 @@
         </div>
       </div>
       <div
-        class="grid grid-cols-1 gap-2 px-2 md:py-2"
+        class="grid grid-cols-1 app-page-content app-card-gap"
         v-else
       >
         <component

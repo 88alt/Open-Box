@@ -1,7 +1,7 @@
 <template>
   <div :class="`collapse ${isExpanded ? 'collapse-open' : 'collapse-close'}`">
     <div
-      class="collapse-title overflow-hidden pr-4"
+      class="app-card-inset collapse-title overflow-hidden"
       :class="[!disableCollapse && 'cursor-pointer']"
       @click="!disableCollapse && (showCollapse = !showCollapse)"
     >
@@ -17,7 +17,7 @@
     >
       <div
         v-if="shouldRenderContent"
-        class="px-4 pt-0 pb-4 max-md:px-3 max-md:pt-0 max-md:pb-3"
+        class="app-collapse-inset transition-opacity duration-200"
         :class="[
           contentScrollable && 'max-h-108 overflow-y-auto',
           contentScrollable && SCROLLABLE_PARENT_CLASS,
