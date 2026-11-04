@@ -101,6 +101,7 @@ func TestAppFactoryReset(t *testing.T) {
 		write(filepath.Join(cfg.StateDir(), name+".json"))
 	}
 	write(filepath.Join(cfg.StateDir(), "dns-takeover.json")) // DNS 接管的记录是撤销用的,不删
+	write(filepath.Join(cfg.StateDir(), "terminal-net.json")) // 虚拟终端的记账同理:删了就没人知道该拆哪个命名空间
 
 	code, body := call(c, "POST", ts.URL+"/api/openbox/factory-reset", "")
 	if code != 200 {
@@ -127,12 +128,14 @@ func TestAppFactoryReset(t *testing.T) {
 			t.Errorf("设备身份(证书)不该删: %s", p)
 		}
 	}
-	if !exists(filepath.Join(cfg.StateDir(), "dns-takeover.json")) {
-		t.Error("dns-takeover.json 不该删")
+	for _, name := range []string{"dns-takeover.json", "terminal-net.json"} {
+		if !exists(filepath.Join(cfg.StateDir(), name)) {
+			t.Errorf("%s 不该删", name)
+		}
 	}
 	left, _ := filepath.Glob(filepath.Join(cfg.StateDir(), "*.json"))
-	if len(left) != 1 || filepath.Base(left[0]) != "dns-takeover.json" {
-		t.Errorf("状态目录里只该剩 dns-takeover.json: %v", left)
+	if len(left) != 2 || filepath.Base(left[0]) != "dns-takeover.json" || filepath.Base(left[1]) != "terminal-net.json" {
+		t.Errorf("状态目录里只该剩 dns-takeover.json 和 terminal-net.json: %v", left)
 	}
 	for _, d := range []string{filepath.Join(data, "rules"), filepath.Join(data, "dns-filter")} {
 		if !exists(d) {

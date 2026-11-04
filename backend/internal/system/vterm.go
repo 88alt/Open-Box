@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"regexp"
 	"strconv"
@@ -382,6 +383,47 @@ func (n *VTermNet) Recover(ctx context.Context) (bool, error) {
 	}
 	n.cur = nil
 	return true, n.teardownLocked(ctx)
+}
+
+// 启动清理和退出拆除各自的时限。命令本身有单条超时(CmdTimeout),这里是兜底,防止卡住进程的启动或退出。
+const (
+	vtermStartupTimeout  = 30 * time.Second
+	vtermShutdownTimeout = 60 * time.Second
+)
+
+// Guard 把虚拟终端的清理接到进程的生命周期上:
+//   - 返回之前先同步做一次 Recover,清掉上次异常退出遗留的命名空间和 veth。同步做是为了让它一定排在任何
+//     Ensure 之前(服务还没开始接请求),不会出现「刚建好的被启动清理拆掉」。没有记账时不跑任何命令,
+//     正常情况下不拖慢启动;有遗留才会多花几秒;
+//   - ctx 结束(进程要退出)后再 Teardown 一次,拆掉本进程建的。拆除用不受 ctx 取消影响的新 ctx 加时限;
+//   - 清理失败只记日志、不挡启动和退出:记账会保留,下次 Ensure 或下次启动再拆(见 teardownLocked)。
+//
+// 返回的 wait 等退出拆除做完。log 为空时不记日志。
+func (n *VTermNet) Guard(ctx context.Context, log *slog.Logger) (wait func()) {
+	if log == nil {
+		log = slog.New(slog.DiscardHandler)
+	}
+	sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), vtermStartupTimeout)
+	did, err := n.Recover(sctx)
+	cancel()
+	switch {
+	case err != nil:
+		log.Warn("清理上次遗留的虚拟终端失败,记账已保留,之后会再试", "err", err)
+	case did:
+		log.Info("已清理上次异常退出遗留的虚拟终端")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		<-ctx.Done()
+		tctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), vtermShutdownTimeout)
+		defer cancel()
+		if err := n.Teardown(tctx); err != nil {
+			log.Warn("退出时拆除虚拟终端失败,记账已保留,下次启动会再拆", "err", err)
+		}
+	}()
+	return func() { <-done }
 }
 
 func (n *VTermNet) teardownLocked(ctx context.Context) error {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -629,6 +631,85 @@ func TestVTermNoRunnerOrStateFile(t *testing.T) {
 	if _, err := n2.Ensure(context.Background(), "br-lan"); err == nil {
 		t.Fatal("没有状态文件路径应报错")
 	}
+}
+
+func discardLog() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
+
+// Guard:启动时先清遗留(同步,Guard 返回时已经清完),退出(ctx 结束)时再拆本进程建的。
+func TestVTermGuard(t *testing.T) {
+	t.Run("没有记账:启动和退出都不跑任何命令", func(t *testing.T) {
+		n, f, _ := newVTerm(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		wait := n.Guard(ctx, discardLog())
+		cancel()
+		wait()
+		if len(f.calls) != 0 {
+			t.Fatalf("不该跑命令: %v", f.calls)
+		}
+	})
+	t.Run("启动时清掉上次遗留的,Guard 返回时就已经清完", func(t *testing.T) {
+		n, f, state := newVTerm(t)
+		if _, err := n.Ensure(context.Background(), "br-lan"); err != nil {
+			t.Fatal(err)
+		}
+		// 模拟进程重启:新的管理器,同一个记账文件。
+		n2 := &VTermNet{Run: f.run, StateFile: state, IsBridge: n.IsBridge, Sleep: n.Sleep, Kill: n.Kill}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		wait := n2.Guard(ctx, discardLog())
+		if !f.clean() || exists(state) {
+			t.Fatal("Guard 返回时遗留应已清掉")
+		}
+		cancel()
+		wait()
+	})
+	t.Run("退出时拆掉本进程建的", func(t *testing.T) {
+		n, f, state := newVTerm(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		wait := n.Guard(ctx, discardLog())
+		if _, err := n.Ensure(context.Background(), "br-lan"); err != nil {
+			t.Fatal(err)
+		}
+		if f.clean() || !exists(state) {
+			t.Fatal("建好后应有东西和记账")
+		}
+		cancel() // 进程要退出:ctx 已经取消,拆除仍要做完
+		wait()
+		if !f.clean() || exists(state) {
+			t.Fatal("退出后命名空间、veth、记账都该没了")
+		}
+	})
+	t.Run("启动清理失败不挡启动,记账保留,退出时再试", func(t *testing.T) {
+		n, f, state := newVTerm(t)
+		if _, err := n.Ensure(context.Background(), "br-lan"); err != nil {
+			t.Fatal(err)
+		}
+		n2 := &VTermNet{Run: f.run, StateFile: state, IsBridge: n.IsBridge, Sleep: n.Sleep, Kill: n.Kill}
+		f.fail = func(a string) (int, string) {
+			if a == "link del dev obtv-h" {
+				return 3, "busy"
+			}
+			return 0, ""
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		wait := n2.Guard(ctx, discardLog()) // 不能 panic、不能卡住
+		if !exists(state) {
+			t.Fatal("拆不干净要保留记账")
+		}
+		f.fail = nil // 故障消失
+		cancel()
+		wait()
+		if !f.clean() || exists(state) {
+			t.Fatal("退出时应把遗留拆干净")
+		}
+	})
+	t.Run("日志为空也能用", func(t *testing.T) {
+		n, _, _ := newVTerm(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		wait := n.Guard(ctx, nil)
+		cancel()
+		wait()
+	})
 }
 
 // ---- 真实命名空间的集成测试:要 root、iproute2、允许建命名空间 / veth / 网桥,缺一样就跳过。

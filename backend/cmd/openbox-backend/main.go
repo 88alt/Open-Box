@@ -479,6 +479,9 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 模拟 LAN 终端的真实路由测试:目前只有只读的「能不能做」检测,建虚拟终端的部分还没做
 	terminalProbe := system.RealTerminalProbe()
 	terminaltestapi.Register(srv.Mux(), terminaltestapi.Deps{Capability: terminalProbe.Capability})
+	// 虚拟终端的网络部分(命名空间 + veth):目前还没有接口去建它,先把清理接上——启动清上次遗留、退出拆掉(见下面的 Guard)。
+	// 记账文件 terminal-net.json 是撤销用的,恢复出厂设置不删(见 factoryWipes)
+	vterm := &system.VTermNet{Run: system.ExecRunner, StateFile: filepath.Join(cfg.StateDir(), "terminal-net.json")}
 
 	// 域名穿透:按已部署配置里的路由规则推算一个域名 / IP 会命中哪条规则、走哪条线路(DNS 判定和真实路由测试共用一个预测器)
 	penetrationSets := &dnsdecide.FileSets{SingBox: cfg.SingBox, TmpDir: probeDir}
@@ -594,8 +597,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		factoryreset.RemoveFiles("生成的内核配置", filepath.Join(cfg.ConfigDir, "config.json"), deployer.PrevPath()),
 		factoryreset.ClearDirs("规则集和过滤名单缓存", rulesDir, filepath.Join(cfg.DataDir, "dns-filter")),
 		factoryreset.RemoveFiles("内核缓存", filepath.Join(cfg.DataDir, "cache.db")),
-		// 订阅、节点、节点组、档案、面板设置、背景图、各种状态……全部 .json;访问密码留到最后,DNS 接管的记录是撤销用的、不删
-		factoryreset.Step{Name: "已保存的数据", Run: func(context.Context) error { _, err := st.Clear("auth", "dns-takeover"); return err }},
+		// 订阅、节点、节点组、档案、面板设置、背景图、各种状态……全部 .json;访问密码留到最后,DNS 接管和虚拟终端的记录是撤销用的、不删
+		factoryreset.Step{Name: "已保存的数据", Run: func(context.Context) error { _, err := st.Clear("auth", "dns-takeover", "terminal-net"); return err }},
 	)
 	factoryresetapi.Register(srv.Mux(), factoryresetapi.Deps{Service: &factoryreset.Service{
 		Services: svcCtl, CoreService: cfg.CoreService, DNS: dnsSync,
@@ -695,6 +698,18 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			dnsSync.Recover(rctx)
 		}()
 		return func() { wait(); <-done }
+	}
+
+	// 再加一项:虚拟终端的清理。Guard 返回前同步清掉上次异常退出遗留的命名空间和 veth(没有记账就不跑任何命令),
+	// 排在服务开始接请求之前;ctx 结束(要退出)后拆掉本进程建的,退出时等它拆完
+	withVTerm := background
+	background = func(ctx context.Context) func() {
+		wait := func() {}
+		if withVTerm != nil {
+			wait = withVTerm(ctx)
+		}
+		guard := vterm.Guard(ctx, log)
+		return func() { wait(); guard() }
 	}
 
 	// 再加一项:故障转移检测循环,每秒让管理器看一遍各组(到时间的就开一轮检测);退出时等进行中的检测收尾
