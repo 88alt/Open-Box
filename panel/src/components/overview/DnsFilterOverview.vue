@@ -3,7 +3,7 @@
     v-if="data?.enabled"
     class="card bg-base-100 border-base-300/60 border p-4"
   >
-    <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+    <div class="mb-[var(--app-card-space)] flex flex-wrap items-start justify-between gap-2">
       <div>
         <h2 class="text-base font-semibold">{{ $t('dfOverview') }}</h2>
         <p class="text-base-content/60 text-xs">
@@ -55,7 +55,7 @@
         />
       </div>
       <div class="bg-base-100 border-base-300/60 rounded-xl border p-4">
-        <div class="text-base-content/60 mb-3 text-xs">{{ $t('dfTop') }}</div>
+        <div class="text-base-content/60 mb-[var(--app-card-space)] text-xs">{{ $t('dfTop') }}</div>
         <div
           v-if="!data.topDomains.length"
           class="text-base-content/40 py-6 text-center text-xs"

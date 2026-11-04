@@ -166,11 +166,11 @@
     <template v-slot:preview>
       <div
         v-if="isWindowResizing"
-        class="bg-base-content/10 mt-4 h-4 rounded-full"
+        class="bg-base-content/10 mt-[var(--app-card-space)] h-4 rounded-full"
       />
       <div
         v-else-if="shouldShowProviderCategories"
-        class="mt-4 flex flex-col gap-3"
+        class="app-card-gap mt-[var(--app-card-space)] flex flex-col"
       >
         <ProxyCategorySection
           v-for="(

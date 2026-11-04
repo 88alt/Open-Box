@@ -5,7 +5,7 @@
     class="card w-full"
     data-node-quality
   >
-    <div class="flex flex-wrap items-center gap-2 px-4 pt-4 max-md:px-3 max-md:pt-3">
+    <div class="flex flex-wrap items-center gap-2 app-card-header">
       <div class="flex min-w-0 flex-col gap-1">
         <div class="flex flex-wrap items-center gap-2">
           <h2 class="text-base font-semibold">{{ $t('qualityTitle') }}</h2>
@@ -57,7 +57,7 @@
         >
           <button
             type="button"
-            class="quality-summary quality-toggle flex w-full cursor-pointer flex-col gap-3 p-4 text-left text-sm max-md:p-3"
+            class="quality-summary quality-toggle flex w-full cursor-pointer flex-col app-card-gap app-card-inset text-left text-sm"
             :aria-label="$t(openSub === sub.id ? 'qualityCollapse' : 'qualityExpand', { name: sub.name })"
             :aria-expanded="openSub === sub.id"
             :aria-controls="`quality-nodes-${sub.id}`"
@@ -157,7 +157,7 @@
             <div
               v-if="openSub === sub.id"
               :id="`quality-nodes-${sub.id}`"
-              class="mx-4 mb-4 grid grid-cols-1 gap-3 max-md:mx-3 max-md:mb-3"
+              class="app-card-content-margin grid grid-cols-1 app-card-gap"
               data-quality-nodes
             >
               <div
@@ -169,13 +169,13 @@
               <article
                 v-for="(node, ni) in sub.nodes || []"
                 :key="node.tag"
-                class="bg-base-100 border-base-300/60 rounded-box min-w-0 border p-4 max-md:p-3"
+                class="bg-base-100 border-base-300/60 rounded-box min-w-0 border app-card-inset"
                 data-quality-node
               >
                 <div
                   role="button"
                   tabindex="0"
-                  class="quality-node-toggle flex min-w-0 cursor-pointer flex-wrap items-center gap-3 text-left text-sm lg:flex-nowrap"
+                  class="quality-node-toggle flex min-w-0 cursor-pointer flex-wrap items-center app-card-gap text-left text-sm lg:flex-nowrap"
                   :aria-expanded="openNode === node.tag"
                   :aria-label="$t(openNode === node.tag ? 'qualityCollapse' : 'qualityExpand', { name: node.tag })"
                   :aria-controls="`quality-chart-${sub.id}-${ni}`"
@@ -245,7 +245,7 @@
                   <div
                     v-if="openNode === node.tag"
                     :id="`quality-chart-${sub.id}-${ni}`"
-                    class="pt-3"
+                    class="pt-[var(--app-card-space)]"
                   >
                     <div
                       v-if="loading && !node.charts"
@@ -261,7 +261,7 @@
                       <section
                         v-for="item in detailItems"
                         :key="item.key"
-                        class="bg-base-100 border-base-300/60 flex min-w-0 items-center gap-3 rounded-xl border p-3"
+                        class="bg-base-100 border-base-300/60 flex min-w-0 items-center app-card-gap app-card-inset rounded-xl border"
                         :data-quality-detail="item.key"
                       >
                         <QualityHistoryChart

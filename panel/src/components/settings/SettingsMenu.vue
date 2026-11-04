@@ -8,10 +8,10 @@
   >
     <!-- 页签靠左、各自按内容取宽,不两端拉伸;右侧 #settings-header-actions 是各页签
          把自己的操作按钮(添加订阅、自动分组…)Teleport 过来的位置,位置固定在右上角 -->
-    <div class="flex w-full items-center gap-2">
+    <div class="app-card-gap flex w-full items-center">
       <ul
         ref="listRef"
-        class="menu menu-horizontal settings-menu-list scrollbar-hidden flex min-w-0 flex-1 flex-nowrap gap-2 overflow-x-auto bg-transparent p-0"
+        class="menu menu-horizontal settings-menu-list scrollbar-hidden app-card-gap flex min-w-0 flex-1 flex-nowrap overflow-x-auto bg-transparent p-0"
         :style="fadeStyle"
         @scroll.passive="updateFade"
         @wheel="onWheel"

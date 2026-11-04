@@ -15,10 +15,10 @@
       class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
     >
       <div
-        class="grid grid-cols-1 gap-2 p-2"
+        class="grid grid-cols-1 app-page-content app-card-gap"
         :style="padding"
       >
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col app-card-gap">
           <div
             v-for="item in panelSections"
             :key="item.key"

@@ -2,7 +2,7 @@
   <!-- 每日流量:后端按连接采样记下每天的入口/出口字节数(server/system/traffic-collector.mjs),
        这里画成月视图柱状图;点一根柱子下钻到当天按终端设备、节点、访问目标的明细,每一行再能点开看它的构成。 -->
   <div class="card w-full">
-    <div class="flex flex-wrap items-center gap-2 px-4 pt-4 max-md:px-3 max-md:pt-3">
+    <div class="flex flex-wrap items-center gap-2 app-card-header">
       <div class="flex min-w-0 flex-col gap-1">
         <div class="flex flex-wrap items-center gap-2">
           <h2 class="text-base font-semibold">{{ $t('dailyTraffic') }}</h2>
@@ -79,13 +79,13 @@
       </div>
     </div>
 
-    <div class="card-body gap-4">
+    <div class="card-body app-card-gap">
       <!-- 柱状图:每天一根,下段入口(primary)、上段出口(secondary);虚线是日均 -->
       <!-- 不做横向滚动:31 根柱子平分卡片宽度,窄屏只藏掉柱顶数值。
            滚动容器在 Windows 上会冒出横竖两条占位的滚动条,很难看 -->
       <div
         v-if="days.length"
-        class="border-base-300/60 bg-base-100 relative rounded-xl border px-2 pt-6 pb-3"
+        class="border-base-300/60 bg-base-100 app-card-inset relative rounded-xl border"
       >
         <div class="relative">
           <div
@@ -140,7 +140,7 @@
       </div>
       <div
         v-if="days.length"
-        class="text-base-content/70 flex flex-wrap items-center gap-4 text-xs"
+        class="text-base-content/70 flex flex-wrap items-center app-card-gap text-xs"
       >
         <!-- 图例顺手写上选中那天的进站 / 出站,不用点开明细就能看到 -->
         <span class="inline-flex items-center gap-1.5">

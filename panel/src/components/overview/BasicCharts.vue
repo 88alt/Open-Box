@@ -28,7 +28,7 @@
     </div>
     <div
       v-if="title"
-      class="mt-2 flex flex-1 flex-col overflow-hidden rounded-b-[var(--app-radius-panel,1.25rem)]"
+      class="mt-[var(--app-card-space)] flex flex-1 flex-col overflow-hidden rounded-b-[var(--app-radius-panel,1.25rem)]"
     >
       <div
         ref="chart"

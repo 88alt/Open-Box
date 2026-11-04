@@ -3,7 +3,7 @@
     class="bg-base-200/50 flex h-full w-full items-center justify-center overflow-auto px-4"
     @keydown.enter="handleLogin"
   >
-    <div class="card bg-base-100 w-full max-w-md gap-4 px-6 py-6 shadow-xl">
+    <div class="card bg-base-100 w-full max-w-md app-card-gap app-card-inset shadow-xl">
       <div class="space-y-2">
         <h1 class="text-2xl font-semibold">{{ $t('passwordLoginTitle') }}</h1>
         <p class="text-base-content/70 text-sm">

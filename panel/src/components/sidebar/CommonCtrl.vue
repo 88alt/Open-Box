@@ -3,7 +3,7 @@
        直接摆在侧边栏这一层——以前是卡片套卡片,看着像两层壳。 -->
   <div class="flex flex-col gap-2 text-sm">
     <!-- 上下左右内边距 12px,和上面的图表卡片一样 -->
-    <div class="card p-3">
+    <div class="card app-card-inset">
       <StatisticsStats type="ctrl" />
     </div>
     <!-- 左:内核运行时长,贴着卡片左边;右:启动/停止/重启,贴着卡片右边——和卡片的外边对齐,不是内容边 -->

@@ -4,7 +4,7 @@
       class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
       :style="padding"
     >
-      <div class="flex flex-col gap-2 px-2 md:py-2">
+      <div class="flex flex-col app-page-content app-card-gap">
         <!-- 顶部总卡片:标识、平台、版本、状态、启停、更新都在这一张里 -->
         <KernelServiceCard
           :status="status"

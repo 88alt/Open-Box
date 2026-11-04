@@ -4,7 +4,7 @@
       class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
       :style="padding"
     >
-      <div class="flex flex-col gap-2 px-2 md:py-2">
+      <div class="flex flex-col app-page-content app-card-gap">
         <!-- 链式代理:上游是单独的一级页签,不再塞在「出站节点」里 -->
         <ChainProxyManager />
       </div>

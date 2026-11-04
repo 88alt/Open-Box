@@ -41,7 +41,7 @@
             <slot name="title-right" />
             <button
               type="button"
-              class="btn btn-circle btn-ghost btn-xs absolute top-1/2 right-2 -translate-y-1/2"
+              class="btn btn-circle btn-ghost btn-xs absolute top-1/2 right-[var(--app-card-space)] -translate-y-1/2"
               aria-label="close"
               @click="close"
             >
@@ -51,7 +51,7 @@
           <!-- 工具栏(可选):页签这类要固定在内容区上面的东西,内容多了只滚下面的内容区 -->
           <div
             v-if="slots.toolbar && isOpen"
-            class="dialog-toolbar max-h-[40dvh] min-h-0 shrink-0 overflow-y-auto overscroll-contain px-4 pt-4"
+            class="dialog-toolbar max-h-[40dvh] min-h-0 shrink-0 overflow-y-auto overscroll-contain px-[var(--app-card-space)] pt-[var(--app-card-space)]"
           >
             <slot name="toolbar" />
           </div>

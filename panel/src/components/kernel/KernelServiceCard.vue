@@ -33,7 +33,7 @@
       <!-- 平台:OpenWrt / Linux / Docker 三张卡,本机所在的那张高亮,其余灰底灰图标(与 v0.1.337 一致) -->
       <div
         v-if="serviceStatus"
-        class="router-platform-tiles grid grid-cols-[repeat(auto-fill,minmax(min(19rem,100%),1fr))] gap-2"
+        class="router-platform-tiles grid grid-cols-[repeat(auto-fill,minmax(min(19rem,100%),1fr))] app-card-gap"
       >
         <div
           v-for="p in platformCards"

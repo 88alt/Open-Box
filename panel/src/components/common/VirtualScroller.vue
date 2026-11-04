@@ -12,7 +12,7 @@
       v-if="data.length > 0"
     >
       <div
-        class="app-card-padding absolute top-0 left-0 w-full"
+        class="app-card-inset absolute top-0 left-0 w-full"
         :style="{
           transform: `translateY(${virtualRows[0]?.start ?? 0}px)`,
         }"
@@ -33,7 +33,7 @@
     </div>
     <div
       v-else
-      class="card app-card-inset m-2 flex-row text-sm"
+      class="card app-card-inset app-card-margin flex-row text-sm"
     >
       {{ $t('noContent') }}
     </div>
@@ -77,7 +77,7 @@ const virtualRows = computed(() => rowVirtualizer.value.getVirtualItems())
 const totalSize = computed(() => rowVirtualizer.value.getTotalSize())
 
 const marginBottom = (index: number) => {
-  return index === props.data.length - 1 ? `${paddingBottom.value}px` : 'var(--app-space, 0.5rem)'
+  return index === props.data.length - 1 ? `${paddingBottom.value}px` : 'var(--app-card-space, 12px)'
 }
 const measureElement = (el: Element | null) => {
   if (!el) {

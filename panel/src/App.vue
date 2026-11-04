@@ -162,6 +162,8 @@ const appStyles = computed(() => {
     {
       // 全局间距 = 8px,和代理页写死的 p-2 / gap-2 一致(工具栏、日志行、连接表、虚拟列表都用它)
       '--app-space': '0.5rem',
+      // 卡片内边距 / 卡片间距 / 页面边距统一用 12px(对齐上游 v0.1.394~396)
+      '--app-card-space': '12px',
       '--radius-box': boxRadius,
       '--radius-selector': fieldRadius,
       '--radius-field': fieldRadius,

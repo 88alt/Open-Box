@@ -43,7 +43,7 @@ html.apple-mobile-ui {
 @utility card {
   @apply bg-base-100 rounded-lg shadow-none;
   .card-body {
-    @apply p-4;
+    padding: var(--app-card-space, 12px);
   }
 }
 
@@ -415,14 +415,9 @@ body:has(.sortable-chosen) * {
 }
 
 @media screen and (max-width: 768px) {
-  #app-content .ctrls-bar .app-card-padding,
-  #app-content .settings-menu.app-card-padding {
-    padding-inline: 0.875rem !important;
-  }
-
   #app-content .icon-settings-toolbar {
     align-items: stretch;
-    gap: 0.75rem;
+    gap: var(--app-card-space, 12px);
   }
 
   #app-content .icon-settings-trigger {
@@ -851,19 +846,41 @@ div::-webkit-scrollbar-thumb:hover {
   background-color: color-mix(in srgb, var(--color-base-300) 82%, transparent);
 }
 
-.app-card-padding {
-  padding: var(--app-space, 0.5rem) !important;
+.app-card-padding,
+#app-content .card-body,
+#app-content .card:is(.p-2, .p-3, .p-4),
+.app-card-inset {
+  padding: var(--app-card-space, 12px) !important;
 }
 
-/* 卡片内部的留白:全站统一 16px(和代理卡片的 collapse-title、设置卡片的 p-4 一致),
-   小屏 12px。app-card-padding(8px)只给工具栏、列表外框、表格外框这类"容器"用。 */
-.app-card-inset {
-  padding: 1rem !important;
+#app-content .card-body,
+.app-card-gap {
+  gap: var(--app-card-space, 12px) !important;
 }
-@media (max-width: 767px) {
-  .app-card-inset {
-    padding: 0.75rem !important;
+
+.app-card-margin {
+  margin: var(--app-card-space, 12px);
+}
+
+.app-page-content {
+  padding-inline: var(--app-card-space, 12px);
+}
+@media (min-width: 768px) {
+  .app-page-content {
+    padding-block: var(--app-card-space, 12px);
   }
+}
+
+.app-collapse-inset {
+  padding: 0 var(--app-card-space, 12px) var(--app-card-space, 12px);
+}
+
+.app-card-content-margin {
+  margin: 0 var(--app-card-space, 12px) var(--app-card-space, 12px);
+}
+
+.app-card-header {
+  padding: var(--app-card-space, 12px) var(--app-card-space, 12px) 0;
 }
 
 .app-inline-gap {
@@ -972,4 +989,24 @@ dialog .overflow-y-scroll,
    悬停也不再变浅 */
 #app-content .proxy-node-card-active {
   background-color: var(--color-primary) !important;
+}
+
+/* 浅色主题(emerald)的 neutral 换成浅蓝灰,按钮 / 胶囊 / 页签 / 客户端顶栏文字更清楚(对齐上游 v0.1.396) */
+[data-theme='emerald'] {
+  --color-neutral: #bdcadd;
+  --color-neutral-content: #243247;
+}
+
+[data-theme='emerald'] .range {
+  --range-progress: var(--color-neutral);
+  --range-thumb: var(--color-neutral-content);
+}
+
+[data-theme='emerald'] .settings-menu-item-active,
+[data-theme='emerald'] .settings-menu-item:hover {
+  color: var(--color-neutral-content) !important;
+}
+
+[data-theme='emerald'] .btn-neutral.btn-outline:not(:hover, :active, :disabled, .btn-disabled, [disabled]) {
+  --btn-fg: var(--color-base-content);
 }

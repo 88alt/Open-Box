@@ -157,7 +157,7 @@
       />
       <div
         v-else-if="kernelLoaded"
-        class="text-base-content/50 mt-2 text-sm"
+        class="text-base-content/50 mt-[var(--app-card-space)] text-sm"
       >
         {{ $t(emptyHintKey) }}
       </div>

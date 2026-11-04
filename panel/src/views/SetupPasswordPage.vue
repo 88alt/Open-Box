@@ -1,6 +1,6 @@
 <template>
   <div class="bg-base-200/50 flex h-full w-full items-center justify-center overflow-auto px-4">
-    <div class="card bg-base-100 w-full max-w-md gap-4 px-6 py-6 shadow-xl">
+    <div class="card bg-base-100 w-full max-w-md app-card-gap app-card-inset shadow-xl">
       <PasswordSetupForm @success="handleSuccess" />
     </div>
   </div>

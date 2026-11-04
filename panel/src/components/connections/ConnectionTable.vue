@@ -1,5 +1,5 @@
 <template>
-  <div class="app-card-padding flex min-h-0 flex-1">
+  <div class="app-card-inset flex min-h-0 flex-1">
     <div
       class="connection-table-shell border-base-300/60 bg-base-100 flex min-h-0 flex-1 overflow-hidden rounded-lg border"
     >
