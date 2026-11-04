@@ -38,7 +38,7 @@
         <div
           v-for="p in platformCards"
           :key="p.id"
-          class="@container/tile bg-base-100 border-base-300/60 rounded-lg border px-3 py-2.5"
+          class="@container/tile app-card-inset bg-base-100 border-base-300/60 rounded-lg border"
           :class="p.current && 'platform-tile-current'"
           :title="p.hint"
         >
@@ -334,11 +334,12 @@ const openboxVersion = computed(() => {
   return raw ? `v${raw.replace(/^v/i, '')}` : ''
 })
 
-// 内核版本:新服务端读到的是「1.14.1-xxx」,界面统一写成「sing-box version …」
+// 内核版本:不管服务端读到的是「1.14.1-xxx」「sing-box version 1.14.1-xxx」还是「sing-box-1.14.1-xxx」,
+// 界面统一写成「sing-box-1.14.1-xxx」(对齐上游 v0.1.396)
 const kernelText = computed(() => {
   const raw = (props.kernelVersion?.ok === false ? '' : props.kernelVersion?.version) || updateInfo.value?.singboxVersion || ''
-  if (!raw) return t('kernelVersionUnknown')
-  return /^sing-box/i.test(raw) ? raw : `sing-box version ${raw}`
+  const bare = raw.trim().replace(/^sing-box(?:\s+version)?[\s-]*/i, '')
+  return bare ? `sing-box-${bare}` : t('kernelVersionUnknown')
 })
 
 // 冲突的代理工具读共享状态,不用页面传进来的那份快照:
