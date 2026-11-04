@@ -25,7 +25,7 @@
         />
       </button>
     </Teleport>
-    <div class="flex flex-col gap-2 p-2">
+    <div class="flex flex-col app-card-gap app-card-inset">
       <template v-if="profile && status">
         <DnsModeCard
           :profile="profile"

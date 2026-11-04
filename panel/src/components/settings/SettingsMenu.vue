@@ -103,19 +103,28 @@ const handleMenuClick = (key: string) => {
   emit('menu-click', key)
 }
 
-// 切换页签时把当前页签滚到正中间。最后几个页签(DNS / 后端设置)滚不到中间,就自然靠右停住,
-// 不会被挤出屏幕;和上游 v0.1.315 一样
+// 页签条两端的渐隐遮罩:左边滚出去了就左边渐隐,右边还有就右边渐隐,提示还能继续滑
+const listRef = ref<HTMLUListElement>()
+
+// 把当前页签滚到页签条(ul)的正中间——只滚这一条,不用 scrollIntoView(它会连外层容器一起滚)。
+// 最后几个页签(DNS / 后端设置)滚不到中间,浏览器会把 scrollLeft 夹在最大值,自然靠右停住,
+// 右端和右上角的操作按钮对齐;算法和上游 v0.1.396 一致
+const centerActiveTab = (key: string, behavior: ScrollBehavior = 'smooth') => {
+  const list = listRef.value
+  const item = menuItemRefs.value.get(key)
+  if (!list || !item) return
+  const listRect = list.getBoundingClientRect()
+  const itemRect = item.getBoundingClientRect()
+  const delta = itemRect.left + itemRect.width / 2 - (listRect.left + listRect.width / 2)
+  if (Math.abs(delta) > 1) list.scrollBy({ left: delta, behavior })
+}
+
 watch(
   () => props.activeMenuKey,
-  (key) => {
-    const el = menuItemRefs.value.get(key)
-    el?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
-  },
+  (key) => centerActiveTab(key),
   { flush: 'post' },
 )
 
-// 页签条两端的渐隐遮罩:左边滚出去了就左边渐隐,右边还有就右边渐隐,提示还能继续滑
-const listRef = ref<HTMLUListElement>()
 const fadeLeft = ref(false)
 const fadeRight = ref(false)
 const FADE_PX = 28
@@ -146,11 +155,15 @@ let resizeObserver: ResizeObserver | undefined
 onMounted(() => {
   const el = listRef.value
   if (el) {
-    resizeObserver = new ResizeObserver(updateFade)
+    // 条宽变化(窗口缩放、右上角按钮出现 / 消失)时重新居中并刷新渐隐遮罩
+    resizeObserver = new ResizeObserver(() => {
+      centerActiveTab(props.activeMenuKey, 'auto')
+      updateFade()
+    })
     resizeObserver.observe(el)
   }
   // 首次进入时,当前页签直接居中(不做动画),不然停在最左边会看不到靠后的页签
-  menuItemRefs.value.get(props.activeMenuKey)?.scrollIntoView({ block: 'nearest', inline: 'center' })
+  centerActiveTab(props.activeMenuKey, 'auto')
   updateFade()
 })
 onBeforeUnmount(() => resizeObserver?.disconnect())
