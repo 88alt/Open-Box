@@ -1,7 +1,7 @@
 import { nodeGroups, policyGroups, renderGroups } from '@/composables/proxies'
 import { useCtrlsBar } from '@/composables/useCtrlsBar'
 import { PROXY_SORT_TYPE, PROXY_TAB_TYPE } from '@/constant'
-import { getMinCardWidth } from '@/helper/utils'
+import { getMinCardWidth, isMiddleScreen } from '@/helper/utils'
 import {
   openboxSubscriptions,
   refreshAllOpenboxSubscriptions,
@@ -29,6 +29,9 @@ import {
   BoltIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  RectangleStackIcon,
+  RssIcon,
+  ServerIcon,
   WrenchScrewdriverIcon,
 } from '@heroicons/vue/24/outline'
 import { isEmpty } from 'lodash'
@@ -37,6 +40,13 @@ import { useI18n } from 'vue-i18n'
 import DialogWrapper from '../common/DialogWrapper.vue'
 import TextInput from '../common/TextInput.vue'
 import PolicyDisplayOrder from '../proxies/PolicyDisplayOrder.vue'
+
+// 三个页签各自的图标(策略 / 节点 / 订阅)
+const PROXY_TAB_ICONS = {
+  [PROXY_TAB_TYPE.POLICY]: RectangleStackIcon,
+  [PROXY_TAB_TYPE.NODE]: ServerIcon,
+  [PROXY_TAB_TYPE.PROVIDER]: RssIcon,
+}
 
 export default defineComponent({
   name: 'ProxiesCtrl',
@@ -145,26 +155,43 @@ export default defineComponent({
       const isProviderTab = proxiesTabShow.value === PROXY_TAB_TYPE.PROVIDER
       const moveRefreshToSecondRow = !isLargeCtrlsBar.value && isProviderTab
 
+      // 顶部三个页签:和设置页同一套横向菜单(icon + 文字,选中是填充圆角块);手机端窄屏只留文字
       const tabs = (
-        <div
+        <ul
+          key="proxy-main-tabs"
           role="tablist"
-          class="proxy-main-tabs tabs-box tabs tabs-xs"
+          class="proxy-main-tabs menu menu-horizontal scrollbar-hidden app-card-gap flex min-w-0 flex-nowrap items-center overflow-x-auto bg-transparent p-0"
         >
           {tabsWithNumbers.value.map(({ type, count }) => {
             const label = t(type)
+            const Icon = PROXY_TAB_ICONS[type]
 
             return (
-              <a
-                role="tab"
+              <li
                 key={type}
-                class={['tab', proxiesTabShow.value === type && 'tab-active']}
-                onClick={() => (proxiesTabShow.value = type)}
+                class="settings-menu-slot min-w-fit"
               >
-                {label} ({count})
-              </a>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={proxiesTabShow.value === type}
+                  class={['settings-menu-btn whitespace-nowrap', proxiesTabShow.value === type && 'menu-active']}
+                  onClick={() => (proxiesTabShow.value = type)}
+                >
+                  {!isMiddleScreen.value && (
+                    <Icon
+                      aria-hidden="true"
+                      class="h-5 w-5 shrink-0"
+                    />
+                  )}
+                  <span>
+                    {label} ({count})
+                  </span>
+                </button>
+              </li>
             )
           })}
-        </div>
+        </ul>
       )
 
       const upgradeAllIcon = proxiesTabShow.value === PROXY_TAB_TYPE.PROVIDER && (
@@ -308,7 +335,7 @@ export default defineComponent({
       )
 
       const content = !isLargeCtrlsBar.value ? (
-        <div class="app-card-padding flex flex-col gap-2">
+        <div class="app-card-padding app-card-gap flex flex-col">
           <div class="flex gap-2">
             {tabs}
             {!moveRefreshToSecondRow && upgradeAllIcon}

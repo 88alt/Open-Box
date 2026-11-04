@@ -36,7 +36,7 @@
       <button
         type="button"
         class="flex h-full cursor-pointer items-center justify-center px-1.5 disabled:cursor-default"
-        :class="bandwidthFailText ? 'text-red-500' : getColorForBandwidth(bandwidth?.mbps) || 'text-base-content/60'"
+        :class="getColorForBandwidth(bandwidthFailText ? undefined : bandwidth?.mbps) || 'text-base-content/60'"
         :title="bandwidthFailText ? bandwidth?.error : undefined"
         :disabled="bandwidthBusy"
         :aria-label="`${$t('nodeTipBandwidth')} · ${name}`"
@@ -47,12 +47,11 @@
           v-if="bandwidthBusy"
           class="loading loading-dots loading-xs"
         ></span>
-        <span v-else-if="bandwidthFailText">{{ bandwidthFailText }}</span>
         <ChartBarIcon
-          v-else-if="bandwidth?.mbps == null"
+          v-else-if="bandwidthFailText || bandwidth?.mbps == null"
           class="text-base-content h-3 w-3"
         />
-        <template v-else>{{ (bandwidth.lowerBound ? '≥ ' : '') + Math.round(bandwidth.mbps) }}</template>
+        <template v-else>{{ Math.round(bandwidth.mbps) }}</template>
       </button>
     </template>
   </div>
@@ -67,7 +66,7 @@ import { isSingBox } from '@/api'
 import { MAX_LATENCY_HISTORY, getRecentLatencyHistory, type LatencySample } from '@/store/latencyHistory'
 import { getHistoryByName, getLatencyByName, getNowProxyNodeName, proxyMap } from '@/store/proxies'
 import { testNodeBandwidth, useBandwidth } from '@/store/bandwidth'
-import { independentLatencyTest } from '@/store/settings'
+import { independentLatencyTest, speedtestTimeout } from '@/store/settings'
 import { BoltIcon, ChartBarIcon } from '@heroicons/vue/24/outline'
 import { CountUp } from 'countup.js'
 import dayjs from 'dayjs'
@@ -106,6 +105,7 @@ const recentHistory = (): LatencySample[] => {
 }
 // 类名要写全,Tailwind 只编它在源码里见过的类;从 text-* 动态拼 bg-* 会被裁掉
 const dotColor = (delay: number) => {
+  if (delay === NOT_CONNECTED) return 'bg-red-500'
   switch (getColorForLatency(delay)) {
     case 'text-primary': return 'bg-primary'
     case 'text-orange-500': return 'bg-orange-500'
@@ -113,19 +113,25 @@ const dotColor = (delay: number) => {
     default: return 'bg-gray-400'
   }
 }
-// 竖着的时间线:浮层里刷新测速以后也靠它重建
+// 竖着的时间线:浮层里刷新测速以后也靠它重建。固定 10 行:不足的空行放在上面(— / — ms),
+// 实测的新的在上、紧接在空行下面;右边除了数值还有一根按本组最大延迟折算长度的进度条
 const buildHistoryList = (history: LatencySample[]) => {
-  // 竖着的时间线:左边时间、中间一根线穿过每次的点(顶端箭头,新的在上)、右边延迟按阈值着色;
   // 组的样本在时间上面用小字标出那一笔是当时选中的哪个节点测出来的
   const withNode = history.some((item) => Boolean(item.node))
+  const slots: (LatencySample | null)[] = [
+    ...Array(Math.max(0, MAX_LATENCY_HISTORY - history.length)).fill(null),
+    ...history.slice(0, MAX_LATENCY_HISTORY),
+  ]
+  const timeout = Number(speedtestTimeout.value) || 5000
+  // 失败的按超时时间算满格;其余按这批里最大的那条折算
+  const maxDelay = Math.max(1, ...history.map((item) => (item.delay === NOT_CONNECTED ? timeout : item.delay)).filter(Number.isFinite))
   const historyList = document.createElement('div')
-  // 顶部留出箭头的位置:箭头探出第一行 0.45rem + 自身 7px,pt-3 的 12px 刚好包住它,再加浮层
-  // 自己的内边距,箭头尖离浮层边缘约 10px,不会顶到边
-  historyList.className = 'grid grid-cols-[auto_1rem_auto] items-stretch gap-x-3 pt-3 pb-1'
-  history.forEach((item, i) => {
+  // 顶部留出箭头的位置:箭头探出第一行 0.45rem + 自身 7px,pt-3 的 12px 刚好包住它
+  historyList.className = 'mx-auto grid h-full w-fit max-w-full grid-cols-[auto_1rem_auto] grid-rows-[repeat(10,minmax(0,1fr))] items-stretch gap-x-2 pt-3 pb-1'
+  slots.forEach((item, i) => {
     const time = document.createElement('div')
     time.className = `flex flex-col items-end justify-center ${withNode ? 'py-0.5' : ''}`
-    if (withNode) {
+    if (withNode && item) {
       const node = document.createElement('div')
       node.className = 'text-[10px] leading-tight opacity-70'
       node.textContent = item.node || ''
@@ -133,7 +139,8 @@ const buildHistoryList = (history: LatencySample[]) => {
     }
     const stamp = document.createElement('div')
     stamp.className = 'text-xs leading-tight tabular-nums'
-    stamp.textContent = dayjs(item.time).format('YYYY-MM-DD HH:mm:ss')
+    stamp.textContent = item ? dayjs(item.time).format('YYYY-MM-DD HH:mm:ss') : '—'
+    if (!item) stamp.classList.add('text-base-content/30')
     time.append(stamp)
 
     // 行高跟着左边那格走(组的样本是两行),线从上到下连着
@@ -141,7 +148,6 @@ const buildHistoryList = (history: LatencySample[]) => {
     cell.className = 'relative flex min-h-6 items-center justify-center'
     const line = document.createElement('div')
     line.className = 'absolute bottom-0 left-1/2 w-px -translate-x-1/2'
-    // 跟着浮层的文字色走(浮层深色底白字),深浅主题都看得清
     line.style.background = 'color-mix(in srgb, currentColor 45%, transparent)'
     line.style.top = i === 0 ? '-0.3rem' : '0'
     cell.append(line)
@@ -152,13 +158,31 @@ const buildHistoryList = (history: LatencySample[]) => {
       arrow.style.borderBottomColor = 'color-mix(in srgb, currentColor 55%, transparent)'
       cell.append(arrow)
     }
-    const dot = document.createElement('div')
-    dot.className = `relative z-10 h-2.5 w-2.5 rounded-full ${dotColor(item.delay)}`
-    cell.append(dot)
+    const dotWrap = document.createElement('div')
+    dotWrap.className = 'relative z-10 h-2.5 w-2.5 rounded-full'
+    dotWrap.style.backgroundColor = 'var(--color-base-100)'
+    const dot = document.createElement('span')
+    dot.className = `block h-full w-full rounded-full ${item ? dotColor(item.delay) : 'bg-base-content/10'}`
+    dotWrap.append(dot)
+    cell.append(dotWrap)
 
     const latency = document.createElement('div')
-    latency.className = `flex items-center text-xs tabular-nums ${getColorForLatency(item.delay)}`
-    latency.textContent = item.delay === NOT_CONNECTED ? latencyReasonText(item.reason) : `${item.delay}ms`
+    const failed = item?.delay === NOT_CONNECTED
+    latency.className = `flex min-w-0 items-center gap-2 text-xs tabular-nums ${
+      item ? (failed ? 'text-red-500' : getColorForLatency(item.delay)) : 'text-base-content/30'
+    }`
+    const barWrap = document.createElement('span')
+    barWrap.className = 'flex h-[6px] w-12 shrink-0 items-center'
+    barWrap.setAttribute('aria-hidden', 'true')
+    const bar = document.createElement('span')
+    bar.className = `detection-bar h-full ${item ? dotColor(item.delay) : 'bg-base-content/10'}`
+    const barValue = item ? (failed ? timeout : item.delay) : 0
+    bar.style.width = `${item ? Math.min(100, Math.max(0, (barValue / maxDelay) * 100)) : 100}%`
+    barWrap.append(bar)
+    const text = document.createElement('span')
+    text.className = 'min-w-0 wrap-break-word'
+    text.textContent = item ? (failed ? latencyReasonText(item.reason) : `${item.delay}ms`) : '— ms'
+    latency.append(barWrap, text)
 
     historyList.append(time, cell, latency)
   })
@@ -182,6 +206,7 @@ const handlerHistoryTip = (e: Event) => {
       touch: false,
       interactive: true,
       interactiveBorder: 8,
+      theme: 'base node-latency',
     })
     return
   }
@@ -195,6 +220,7 @@ const handlerHistoryTip = (e: Event) => {
     touch: false,
     interactive: true,
     interactiveBorder: 8,
+    theme: 'base node-latency',
     onShow: () => {
       if (mounted) return
       const vnode = createVNode(NodeLatencyTip, {

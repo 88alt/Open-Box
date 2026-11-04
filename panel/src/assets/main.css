@@ -219,10 +219,6 @@ html.apple-mobile-ui {
   border-radius: max(calc(var(--app-radius-nav, 0.875rem) - 0.25rem), 0px) !important;
 }
 
-#app-content .proxy-main-tabs .tab {
-  white-space: nowrap;
-}
-
 #app-content .ctrls-bar .input,
 #app-content .ctrls-bar .select,
 #app-content .ctrls-bar .join-item,
@@ -436,19 +432,6 @@ body:has(.sortable-chosen) * {
     white-space: nowrap;
   }
 
-  #app-content .proxy-main-tabs {
-    gap: 0.125rem;
-    padding: 0.25rem !important;
-    flex-wrap: nowrap;
-    width: max-content;
-    max-width: 100%;
-  }
-
-  #app-content .proxy-main-tabs .tab {
-    min-width: 0 !important;
-    padding-inline: 0.625rem !important;
-  }
-
   #app-content .proxy-domain-tabs-row {
     overflow-x: auto;
     scrollbar-width: none;
@@ -599,6 +582,16 @@ body:has(.sortable-chosen) * {
 }
 .tippy-box[data-theme^='base'][data-placement^='left'] > .tippy-arrow:before {
   @apply border-l-base-100;
+}
+
+.tippy-box[data-theme~='node-latency'] {
+  border-radius: var(--app-radius-panel, var(--radius-box)) !important;
+}
+.tippy-box[data-theme~='node-latency'] > .tippy-content {
+  padding: var(--app-card-space, 12px);
+}
+.detection-bar {
+  border-radius: var(--app-radius-bar, var(--radius-field));
 }
 
 .tippy-box[data-theme^='transparent'] {

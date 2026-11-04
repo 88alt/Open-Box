@@ -1,7 +1,7 @@
 <template>
   <!-- 延迟标签悬停浮层:「测速延时」页签是原来的时间线,「节点信息」页签查入口和出口。
        节点信息第一次点开才查(浮层里默认不发请求),之后来回切换不重查。 -->
-  <div class="flex flex-col gap-1.5">
+  <div :class="['app-card-gap flex max-w-[calc(100vw-var(--app-card-space,12px)*4)] flex-col', widthClass]">
     <!-- 标题栏:当前页签的名字 + 刷新(测速延时:重测延迟;带宽:重测带宽;节点信息 / 风险评估:重查)+ 关闭 -->
     <div class="flex min-w-0 items-center justify-between gap-2">
       <div class="flex min-w-0 items-center gap-2">
@@ -34,7 +34,7 @@
         <XMarkIcon class="h-4 w-4" />
       </button>
     </div>
-    <div :class="sizeClass">
+    <div class="h-64 w-full max-w-[calc(100vw-var(--app-card-space,12px)*4)] overflow-hidden">
       <div
         v-show="tab === 'latency'"
         class="flex h-full items-start justify-center"
@@ -97,7 +97,7 @@
                 :style="{ width: `${item ? barPercent(item) : 100}%` }"
               ></span>
             </span>
-            <span class="min-w-0 wrap-break-word">{{ item ? (item.failed ? $t('qualityState_down') : (item.lowerBound ? '≥ ' : '') + Math.round(item.mbps) + ' Mbps') : '— Mbps' }}</span>
+            <span class="min-w-0 wrap-break-word">{{ item ? (item.failed ? $t('qualityState_down') : Math.round(item.mbps) + ' Mbps') : '— Mbps' }}</span>
           </span>
         </template>
       </div>
@@ -153,17 +153,18 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>()
 const { locale } = useI18n()
 
-// 两个页签等大:中文窄一点,英文标签长要宽一点
-const sizeClass = computed(() => (locale.value.startsWith('zh') ? 'h-64 w-64' : 'h-64 w-76'))
+// 各页签等大:中文窄一点,英文标签长要宽一点
+const widthClass = computed(() => (locale.value.startsWith('zh') ? 'w-76' : 'w-80'))
 const { bandwidthMeasurements, bandwidthPendingNodes } = useBandwidth()
 const measurement = computed(() => bandwidthMeasurements.value[props.name])
-// 最近 10 条,新的在上;不足 10 条前面不补,后面用空行占位让线对齐
+// 最近 10 条,新的在上;不足 10 条时空行占位放在上面(和延时时间线一致),让线对齐
 const rows = computed<(OpenboxBandwidthSample | null)[]>(() => {
   const list = (measurement.value?.history || []).slice(-10).reverse()
-  return [...list, ...Array(Math.max(0, 10 - list.length)).fill(null)]
+  return [...Array(Math.max(0, 10 - list.length)).fill(null), ...list]
 })
-const maxMbps = computed(() => Math.max(1, ...rows.value.filter((r) => r && !r.failed).map((r) => r!.mbps)))
-const barPercent = (r: OpenboxBandwidthSample) => (r.failed ? 0 : r.mbps === 0 ? 100 : Math.max(5, Math.round((r.mbps / maxMbps.value) * 100)))
+const maxMbps = computed(() => Math.max(1, ...rows.value.filter((r) => r && !r.failed && r.mbps > 0).map((r) => r!.mbps)))
+// 失败的满格(红),其余按这批里最大的折算
+const barPercent = (r: OpenboxBandwidthSample) => (r.failed ? 100 : Math.min(100, Math.max(0, (r.mbps / maxMbps.value) * 100)))
 const dotClass = (r: OpenboxBandwidthSample | null) => (!r ? 'bg-base-content/10' : r.failed ? 'bg-red-500' : getBgColorForBandwidth(r.mbps))
 const allTabs = [
   { key: 'latency', label: 'nodeTipLatency' },
