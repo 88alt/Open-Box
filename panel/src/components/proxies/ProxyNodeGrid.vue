@@ -1,6 +1,6 @@
 <template>
   <div
-    class="grid min-w-0 gap-2"
+    class="app-card-gap grid min-w-0"
     :style="`grid-template-columns: repeat(auto-fill, minmax(min(${minProxyCardWidth}px, 100%), 1fr));`"
   >
     <slot />

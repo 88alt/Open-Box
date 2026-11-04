@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col gap-3">
+  <div class="flex flex-col app-card-gap">
     <div
       v-if="loading && !groups.length"
       class="flex justify-center py-10"
@@ -19,7 +19,7 @@
       handle=".drag-handle"
       ghost-class="opacity-40"
       item-key="id"
-      class="flex flex-col gap-2"
+      class="flex flex-col app-card-gap"
       @end="persistOrder"
     >
       <template #item="{ element: group }">
