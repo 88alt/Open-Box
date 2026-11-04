@@ -476,12 +476,12 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	}
 	routetestapi.Register(srv.Mux(), routetestapi.Deps{Service: routeSvc})
 
-	// 模拟 LAN 终端的真实路由测试:目前只有只读的「能不能做」检测,建虚拟终端的部分还没做
-	terminalProbe := system.RealTerminalProbe()
-	terminaltestapi.Register(srv.Mux(), terminaltestapi.Deps{Capability: terminalProbe.Capability})
-	// 虚拟终端的网络部分(命名空间 + veth):目前还没有接口去建它,先把清理接上——启动清上次遗留、退出拆掉(见下面的 Guard)。
+	// 模拟 LAN 终端的真实路由测试:POST 现在做到「建虚拟终端 + DHCP 取址」(命名空间 + veth,探测还没做);
+	// 清理接在下面的 Guard——启动清上次遗留、退出拆掉,另有空闲 5 分钟自动拆(terminaltest.Deps.IdleAfter)。
 	// 记账文件 terminal-net.json 是撤销用的,恢复出厂设置不删(见 factoryWipes)
+	terminalProbe := system.RealTerminalProbe()
 	vterm := &system.VTermNet{Run: system.ExecRunner, StateFile: filepath.Join(cfg.StateDir(), "terminal-net.json")}
+	terminaltestapi.Register(srv.Mux(), terminaltestapi.Deps{Capability: terminalProbe.Capability, Terminal: vterm, Log: log})
 
 	// 域名穿透:按已部署配置里的路由规则推算一个域名 / IP 会命中哪条规则、走哪条线路(DNS 判定和真实路由测试共用一个预测器)
 	penetrationSets := &dnsdecide.FileSets{SingBox: cfg.SingBox, TmpDir: probeDir}
