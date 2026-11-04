@@ -5,11 +5,10 @@
     :title="$t(group ? 'shareRegionsEditTitle' : 'shareRegionsAddTitle')"
     box-class="h-[90dvh] w-full max-w-4xl"
   >
-    <div
-      v-if="form"
-      class="flex flex-col gap-4 text-sm"
-    >
+    <!-- 页签放工具栏槽,和上游 v0.1.397 一样:与下面内容区只隔一个卡片间距 -->
+    <template #toolbar>
       <div
+        v-if="form"
         role="tablist"
         class="tabs-box tabs tabs-xs w-fit"
       >
@@ -24,7 +23,12 @@
           {{ $t(item.label) }}
         </a>
       </div>
+    </template>
 
+    <div
+      v-if="form"
+      class="flex flex-col gap-4 text-sm"
+    >
       <!-- 名称与地区 -->
       <div
         v-show="tab === 'name'"
