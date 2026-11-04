@@ -111,19 +111,25 @@ export interface OpenboxDnsRewriteRule {
   addresses?: string[]
   note?: string
 }
+export type OpenboxDnsProtocol = 'udp' | 'tcp' | 'https'
+export interface OpenboxDnsBootstrap { server: string; protocol: 'udp' | 'tcp'; port: number }
+export interface OpenboxDnsExtra { server: string; protocol?: OpenboxDnsProtocol; port?: number; bootstrap?: OpenboxDnsBootstrap | null }
 export interface OpenboxProfileDns {
   filter?: DnsFilterSettings
   split?: boolean
   mode?: OpenboxDnsMode
-  // DNS 上游(server/engine/dns-upstream.mjs):地址只收 IP 或记号 'wan'(路由器系统的上游 DNS),协议只有 udp / tcp,
-  // 端口默认 53;extras 是备用上游(每侧最多 3 个,和主上游并发查询)。region:路由器在中国大陆(cn)还是之外(intl)
+  // DNS 上游:地址收 IP、记号 'wan'(路由器系统的上游 DNS)或 DoH 的 https 地址,协议是 udp / tcp / https(DoH),
+  // 端口默认 53(DoH 取地址里的端口,缺省 443);DoH 另带 bootstrap:解析 DoH 主机名用的 DNS(server 为 'wan' 即用路由器的上游 DNS)。
+  // extras 是备用上游(每侧最多 3 个,和主上游并发查询)。region:路由器在中国大陆(cn)还是之外(intl)
   region?: 'cn' | 'intl'
-  directProtocol?: 'udp' | 'tcp'
+  directProtocol?: OpenboxDnsProtocol
   directPort?: number
-  directExtras?: { server: string; protocol?: 'udp' | 'tcp'; port?: number }[]
-  proxyProtocol?: 'udp' | 'tcp'
+  directBootstrap?: OpenboxDnsBootstrap | null
+  directExtras?: OpenboxDnsExtra[]
+  proxyProtocol?: OpenboxDnsProtocol
   proxyPort?: number
-  proxyExtras?: { server: string; protocol?: 'udp' | 'tcp'; port?: number }[]
+  proxyBootstrap?: OpenboxDnsBootstrap | null
+  proxyExtras?: OpenboxDnsExtra[]
   direct?: string
   proxy?: string
   // 走代理的域名由内核发占位地址(FakeIP 原型):域名交给选中的节点解析,解析和连接落在同一个节点
@@ -1673,6 +1679,8 @@ export interface OpenboxDnsUpstreamTestPayload {
   server: string
   protocol: string
   port?: number
+  // protocol 为 https(DoH)时:解析 DoH 主机名用的 DNS
+  bootstrap?: OpenboxDnsBootstrap
 }
 export interface OpenboxDnsUpstreamTestResult {
   ok: boolean
@@ -1973,7 +1981,9 @@ export interface OpenboxNodeExit {
   cached?: boolean
 }
 
-export const fetchNodeInfo = (tag: string) => requestJson<OpenboxNodeInfo>(`/api/openbox/node-info/${encodeURIComponent(tag)}`)
+// refresh = true 跳过服务端缓存重新解析入口(?refresh=1)
+export const fetchNodeInfo = (tag: string, refresh = false) =>
+  requestJson<OpenboxNodeInfo>(`/api/openbox/node-info/${encodeURIComponent(tag)}${refresh ? '?refresh=1' : ''}`)
 export const fetchNodeEntryCountry = (tag: string) => requestJson<{ ip: string; country: string }>(`/api/openbox/node-info/${encodeURIComponent(tag)}/entry-country`)
 // refresh = true 跳过 6 小时缓存重新查(服务端 15 秒内的重复刷新仍按缓存答)
 export const fetchNodeExit = (tag: string, refresh = false) =>

@@ -544,6 +544,8 @@ const zhTW: LANG_MESSAGE = {
   nodeInfoCheckedAt: '{time} 查詢',
   nodeInfoUnknown: '判斷不出',
   nodeInfoPartial: '部分資訊沒查到:{what}',
+  nodeInfoRefreshComplete: '節點資訊和風險評估已重新整理。',
+  nodeInfoRefreshFailed: '重新整理失敗，已保留上一次結果：{message}',
   testFinishedResultTip: '{name}\n測試完成: {success} 成功，{failed} 失敗',
   latencyTimeout: '逾時',
   testFinishedReasonsTip: '{name}\n測試完成: {success} 成功，{failed} 失敗（{reasons}）',
@@ -1329,7 +1331,7 @@ const zhTW: LANG_MESSAGE = {
   dnsModeSaved: 'DNS 劫持方式已儲存。',
   dnsUpstreamTitle: 'DNS 上游',
   dnsUpstreamDescription:
-    '核心兩側解析器分別問誰、走 UDP 還是 TCP、哪個連接埠。位址填 IP,或選「上游 DNS」(路由器介面上 DHCP 分配或手動指定的 DNS)。改完即儲存:先讓核心按所選協定真的查一次,查不通不儲存。代理 DNS 走哪條線路,由目標分流按它的位址決定;上游 DNS 固定直連。',
+    '核心兩側解析器分別問誰、使用 UDP、TCP 或 DoH。UDP / TCP 填 IP 與連接埠,DoH 填 HTTPS 位址並選擇解析其網域的 DNS,也可選「上游 DNS」(路由器介面上 DHCP 分配或手動指定的 DNS)。改完即儲存:先讓核心按所選協定真的查一次,查不通不儲存。代理 DNS 走哪條線路,由目標分流按它的位址決定;上游 DNS 固定直連。',
   dnsUpstreamDirect: '直連 DNS',
   dnsUpstreamDirectNote: '解析直連網域用。預設是上游 DNS。',
   dnsUpstreamWan: '上游 DNS',
@@ -1359,9 +1361,11 @@ const zhTW: LANG_MESSAGE = {
   dnsRegionSwitched: '已切換到「{region}」',
   dnsUpstreamProxy: '代理 DNS',
   dnsUpstreamProxyNote:
-    '走代理的網域向它查詢,走哪條線路由目標分流按位址決定,測試也經同一條線路。TCP 穩妥;UDP 要線路支援 UDP。',
+    '走代理的網域向它查詢,走哪條線路由目標分流按位址決定,測試也經同一條線路。DoH 使用 HTTPS;TCP 穩妥;UDP 要線路支援 UDP。',
   dnsUpstreamProtocol: '協定',
   dnsUpstreamPort: '連接埠',
+  dnsUpstreamDohUrl: 'DoH 位址',
+  dnsUpstreamDohBootstrap: 'DoH 解析 DNS',
   dnsUpstreamTest: '測試',
   dnsUpstreamRestore: '恢復預設',
   dnsUpstreamRestoreConfirm:
@@ -1388,7 +1392,7 @@ const zhTW: LANG_MESSAGE = {
   dnsUpstreamProxyExtras: '代理 DNS 備用上游',
   dnsUpstreamAddExtra: '新增備用上游',
   dnsUpstreamExtrasNote:
-    '一行一條:哪一側、協定、位址和連接埠。同一側的第一條是主上游,後面的是備用 —— 和主上游並發查詢,誰先返回結果就用誰的,一個上游卡住時不用乾等到逾時。每側最多 4 個,位址填 IP 或選上游 DNS。儲存前會讓核心按所選協定真的查一次,查不通不儲存。',
+    '一行一條:哪一側、協定、位址和連接埠。同一側的第一條是主上游,後面的是備用 —— 和主上游並發查詢,誰先返回結果就用誰的,一個上游卡住時不用乾等到逾時。每側最多 4 個,UDP / TCP 填 IP,DoH 填 HTTPS 位址,也可選上游 DNS。儲存前會讓核心按所選協定真的查一次,查不通不儲存。',
   dnsUpstreamExtraDuplicate: '這個位址已經用過了',
   dnsUpstreamTestVia: '經「{policy}」→ {node}',
   dnsUpstreamTestOk: '{side}可用（{detail}）。',

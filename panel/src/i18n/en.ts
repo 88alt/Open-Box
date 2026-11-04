@@ -571,6 +571,8 @@ const en = {
   nodeInfoCheckedAt: 'Checked {time}',
   nodeInfoUnknown: 'Unknown',
   nodeInfoPartial: 'Some details unavailable: {what}',
+  nodeInfoRefreshComplete: 'Node information and risk data refreshed.',
+  nodeInfoRefreshFailed: 'Refresh failed; previous results retained: {message}',
   testFinishedResultTip: '{name}\nTest finished: {success} success, {failed} failed',
   latencyTimeout: 'timeout',
   testFinishedReasonsTip: '{name}\nTest finished: {success} success, {failed} failed ({reasons})',
@@ -1397,7 +1399,7 @@ const en = {
   dnsModeSaved: 'DNS hijack mode saved.',
   dnsUpstreamTitle: 'DNS upstreams',
   dnsUpstreamDescription:
-    'Which servers the two kernel resolvers query, over UDP or TCP, and on which port. Enter an IP address or pick "Upstream DNS" (the DNS assigned by DHCP or set manually on the router’s interfaces). Changes save immediately: the kernel really queries the server over the chosen protocol first and nothing is saved if that fails. Which line the proxy DNS goes through is decided by Destination routing from its address; the upstream DNS always goes direct.',
+    'Choose UDP, TCP or DoH for each resolver. UDP / TCP use an IP address and port; DoH uses an HTTPS URL with a DNS server to resolve its hostname. You can also pick "Upstream DNS" (the DNS assigned by DHCP or set manually on the router’s interfaces). Changes save immediately: the kernel really queries the server over the chosen protocol first and nothing is saved if that fails. Which line the proxy DNS goes through is decided by Destination routing from its address; the upstream DNS always goes direct.',
   dnsUpstreamDirect: 'Direct DNS',
   dnsUpstreamDirectNote: 'Resolves direct domains. Defaults to the upstream DNS.',
   dnsUpstreamWan: 'Upstream DNS',
@@ -1430,9 +1432,11 @@ const en = {
   dnsRegionSwitched: 'Switched to “{region}”',
   dnsUpstreamProxy: 'Proxy DNS',
   dnsUpstreamProxyNote:
-    'Proxied domains are resolved through it; Destination routing picks the line from its address, and the test uses the same line. TCP is the safe choice; UDP needs a line that carries UDP.',
+    'Proxied domains are resolved through it; Destination routing picks the line from its address, and the test uses the same line. DoH uses HTTPS; TCP is the safe choice; UDP needs a line that carries UDP.',
   dnsUpstreamProtocol: 'Protocol',
   dnsUpstreamPort: 'Port',
+  dnsUpstreamDohUrl: 'DoH URL',
+  dnsUpstreamDohBootstrap: 'DoH bootstrap DNS',
   dnsUpstreamTest: 'Test',
   dnsUpstreamRestore: 'Restore defaults',
   dnsUpstreamRestoreConfirm:
@@ -1464,7 +1468,7 @@ const en = {
   dnsUpstreamProxyExtras: 'Extra proxy DNS upstreams',
   dnsUpstreamAddExtra: 'Add upstream',
   dnsUpstreamExtrasNote:
-    'One row per upstream: side, protocol, address and port. The first row of each side is the primary, the rest are backups — queried concurrently with it, whichever answers first wins, so one stalled upstream no longer blocks the client. Up to 4 per side, each an IP address or the upstream DNS. Before saving, the kernel queries it once over the chosen protocol; it is not saved if that fails.',
+    'One row per upstream: side, protocol, address and port. The first row of each side is the primary, the rest are backups — queried concurrently with it, whichever answers first wins, so one stalled upstream no longer blocks the client. Up to 4 per side: an IP address for UDP / TCP, an HTTPS URL for DoH, or the upstream DNS. Before saving, the kernel queries it once over the chosen protocol; it is not saved if that fails.',
   dnsUpstreamExtraDuplicate: 'That address is already in the list',
   dnsUpstreamTestVia: 'via “{policy}” → {node}',
   dnsUpstreamTestOk: '{side} is working ({detail}).',

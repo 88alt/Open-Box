@@ -152,13 +152,13 @@
         <button
           type="button"
           class="flex shrink-0 cursor-pointer items-center opacity-70 hover:opacity-100"
-          :disabled="loading"
+          :disabled="busy"
           :title="$t('refresh')"
-          @click="load(true)"
+          @click="refresh"
         >
           <ArrowPathIcon
             class="h-3.5 w-3.5"
-            :class="loading && 'animate-spin'"
+            :class="busy && 'animate-spin'"
           />
         </button>
       </div>
@@ -225,13 +225,13 @@
             <button
               type="button"
               class="flex cursor-pointer items-center hover:opacity-100"
-              :disabled="loading"
+              :disabled="busy"
               :title="$t('refresh')"
-              @click="load(true)"
+              @click="refresh"
             >
               <ArrowPathIcon
                 class="h-3 w-3"
-                :class="loading && 'animate-spin'"
+                :class="busy && 'animate-spin'"
               />
             </button>
           </span>
@@ -257,6 +257,7 @@ import NodeInfoText from '@/components/proxies/NodeInfoText.vue'
 import NodeRiskPanel from '@/components/proxies/NodeRiskPanel.vue'
 import { useNodeExit, type NodeExitState } from '@/composables/nodeExit'
 import { countryName, findCountry } from '@/constant/countries'
+import { showNotification } from '@/helper/notification'
 import { ArrowPathIcon, ArrowTopRightOnSquareIcon } from '@heroicons/vue/24/outline'
 import dayjs from 'dayjs'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -289,24 +290,45 @@ const errorText = (err: unknown) => (err instanceof Error ? err.message : String
 
 const entryIps = computed(() => (info.value ? [...info.value.addresses.v4, ...info.value.addresses.v6] : []))
 
-const loadInfo = async () => {
+const infoLoading = ref(false)
+// force = true 跳过服务端缓存重新解析入口
+const loadInfo = async (force = false) => {
+  infoLoading.value = true
   infoError.value = ''
   try {
-    info.value = await fetchNodeInfo(props.name)
-  } catch (err) {
-    infoError.value = errorText(err)
-    return
-  }
-  if (props.compact) return
-  entryCountry.value = info.value.entryCountry
-  // 服务端缓存里没有入口 IP 的国家时再单独问一次(要查库,比解析慢,所以不卡着上面那几行)
-  if (entryCountry.value || !entryIps.value.length) return
-  try {
-    entryCountry.value = (await fetchNodeEntryCountry(props.name)).country
-  } catch {
-    // 查不到就只是不显示国旗
+    try {
+      info.value = await fetchNodeInfo(props.name, force)
+    } catch (err) {
+      infoError.value = errorText(err)
+      return
+    }
+    if (props.compact) return
+    entryCountry.value = info.value.entryCountry
+    // 服务端缓存里没有入口 IP 的国家时再单独问一次(要查库,比解析慢,所以不卡着上面那几行)
+    if (entryCountry.value || !entryIps.value.length) return
+    try {
+      entryCountry.value = (await fetchNodeEntryCountry(props.name)).country
+    } catch {
+      // 查不到就只是不显示国旗
+    }
+  } finally {
+    infoLoading.value = false
   }
 }
+// 入口信息和出口(风险评估)只要有一个在查就算忙
+const busy = computed(() => infoLoading.value || loading.value)
+// 手动刷新:入口信息(风险评估页签不查)和出口都跳过缓存重查,查完提示一次;失败时保留上一次的结果
+const refresh = async () => {
+  if (busy.value) return
+  await Promise.all([props.riskOnly ? Promise.resolve() : loadInfo(true), load(true)])
+  const message = (!props.riskOnly && infoError.value) || error.value
+  showNotification(
+    message
+      ? { content: 'nodeInfoRefreshFailed', params: { message }, type: 'alert-error' }
+      : { content: 'nodeInfoRefreshComplete', type: 'alert-success' },
+  )
+}
+defineExpose({ refresh, loading: busy })
 
 onMounted(() => {
   if (!props.riskOnly) void loadInfo()

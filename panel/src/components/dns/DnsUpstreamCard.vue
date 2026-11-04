@@ -63,7 +63,7 @@
             <span
               v-if="!row.wan"
               class="text-base-content/60"
-            >{{ row.protocol.toUpperCase() }}</span>
+            >{{ protocolName(row.protocol) }}</span>
             <template v-if="row.wan">
               <span class="font-sans">{{ $t('dnsUpstreamWan') }}</span>
               <span class="text-base-content/50 truncate font-sans">{{ wanLabel }}</span>
@@ -75,7 +75,10 @@
             <span
               v-else
               class="truncate"
-            >{{ row.server }}<span class="text-base-content/50">:{{ row.port }}</span></span>
+            >{{ row.server }}<span
+              v-if="row.protocol !== 'https'"
+              class="text-base-content/50"
+            >:{{ row.port }}</span></span>
             <span
               v-if="row.index > 0"
               class="text-base-content/50 font-sans"
@@ -248,6 +251,7 @@
           >
             <option value="udp">UDP</option>
             <option value="tcp">TCP</option>
+            <option value="https">DoH</option>
           </select>
           <span
             v-if="draft.wan"
@@ -258,11 +262,13 @@
               v-model.trim="draft.server"
               type="text"
               class="input input-sm min-w-0 flex-1 font-mono"
-              :class="{ 'input-error': draft.server && !isIp(draft.server) }"
-              :placeholder="draft.side === 'direct' ? '223.5.5.5' : '1.1.1.1'"
+              :class="{ 'input-error': draft.server && !isServerValid(draft) }"
+              :placeholder="draft.protocol === 'https' ? 'https://dns.example/dns-query' : draft.side === 'direct' ? '223.5.5.5' : '1.1.1.1'"
+              :aria-label="$t(draft.protocol === 'https' ? 'dnsUpstreamDohUrl' : 'dnsUpstreamSourceIp')"
               spellcheck="false"
             >
             <input
+              v-if="draft.protocol !== 'https'"
               v-model.number="draft.port"
               type="number"
               min="1"
@@ -289,6 +295,67 @@
               class="h-4 w-4"
             />
           </button>
+        </div>
+        <!-- DoH 的地址是域名时,要有一个 DNS 来解析它:默认用路由器的上游 DNS,也可以指定 -->
+        <div
+          v-if="!draft.wan && draft.protocol === 'https'"
+          class="flex flex-col gap-3"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <label class="text-xs font-medium">{{ $t('dnsUpstreamDohBootstrap') }}</label>
+            <div
+              role="tablist"
+              class="tabs-box tabs tabs-xs w-fit"
+            >
+              <a
+                role="tab"
+                class="tab"
+                :class="draft.bootstrap.server === WAN && 'tab-active'"
+                @click="draft.bootstrap.server = WAN"
+              >{{ $t('dnsUpstreamSourceWan') }}</a>
+              <a
+                role="tab"
+                class="tab"
+                :class="draft.bootstrap.server !== WAN && 'tab-active'"
+                @click="draft.bootstrap.server === WAN && (draft.bootstrap.server = '')"
+              >{{ $t('dnsUpstreamSourceIp') }}</a>
+            </div>
+          </div>
+          <span
+            v-if="draft.bootstrap.server === WAN"
+            class="text-base-content/60 text-xs"
+          >{{ wanLabel }}</span>
+          <div
+            v-else
+            class="flex items-center gap-2"
+          >
+            <select
+              v-model="draft.bootstrap.protocol"
+              class="select select-sm w-20 shrink-0"
+              :aria-label="$t('dnsUpstreamProtocol')"
+            >
+              <option value="udp">UDP</option>
+              <option value="tcp">TCP</option>
+            </select>
+            <input
+              v-model.trim="draft.bootstrap.server"
+              type="text"
+              class="input input-sm min-w-0 flex-1 font-mono"
+              :class="{ 'input-error': draft.bootstrap.server && !isIp(draft.bootstrap.server) }"
+              placeholder="223.5.5.5"
+              :aria-label="$t('dnsUpstreamDohBootstrap')"
+              spellcheck="false"
+            >
+            <input
+              v-model.number="draft.bootstrap.port"
+              type="number"
+              min="1"
+              max="65535"
+              class="input input-sm w-20 shrink-0"
+              :class="{ 'input-error': !isPort(draft.bootstrap.port) }"
+              :aria-label="$t('dnsUpstreamPort')"
+            >
+          </div>
         </div>
         <p
           v-if="editorError"
@@ -344,14 +411,21 @@ import { useI18n } from 'vue-i18n'
 
 type Region = 'cn' | 'intl'
 type Side = 'direct' | 'proxy'
-type Protocol = 'udp' | 'tcp'
-// 一条上游:wan 为真表示「上游 DNS」(路由器接口上的,固定直连、UDP 53)
+type Protocol = 'udp' | 'tcp' | 'https'
+// DoH 的解析 DNS:server 为 'wan' 表示用路由器的上游 DNS
+interface Bootstrap {
+  server: string
+  protocol: 'udp' | 'tcp'
+  port: number
+}
+// 一条上游:wan 为真表示「上游 DNS」(路由器接口上的,固定直连、UDP 53);protocol 为 https 是 DoH,server 填 https 地址,bootstrap 才有用
 interface Upstream {
   side: Side
   wan: boolean
   server: string
   protocol: Protocol
   port: number
+  bootstrap: Bootstrap
 }
 interface Row extends Upstream {
   index: number
@@ -384,6 +458,38 @@ const isIp = (value: string) => {
   return IPV6_RE.test(host) && host !== '::' && host.split('::').length <= 2 && host.split(':').length <= 8
 }
 const isPort = (value: unknown) => typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 65535
+// DoH 地址:https://,有主机名,不带账号密码 / 查询 / #,端口缺省 443
+const isDohUrl = (value: string) => {
+  try {
+    const u = new URL(value)
+    const port = Number(u.port || 443)
+    return (
+      u.protocol === 'https:' &&
+      !!u.hostname &&
+      !u.username &&
+      !u.password &&
+      !u.hash &&
+      !u.search &&
+      !['0.0.0.0', '[::]'].includes(u.hostname) &&
+      port >= 1 &&
+      port <= 65535
+    )
+  } catch {
+    return false
+  }
+}
+const protocolName = (protocol: Protocol) => (protocol === 'https' ? 'DoH' : protocol.toUpperCase())
+const defaultBootstrap = (b?: Partial<Bootstrap> | null): Bootstrap => ({
+  server: b?.server ?? WAN,
+  protocol: b?.protocol === 'tcp' ? 'tcp' : 'udp',
+  port: b?.port ?? DEFAULT_PORT,
+})
+// 地址(和端口)填对了:DoH 看地址,UDP / TCP 看 IP 加端口
+const isServerValid = (u: Upstream) => (u.protocol === 'https' ? isDohUrl(u.server) : isIp(u.server) && isPort(u.port))
+// 整条能不能保存 / 测试:上游 DNS 直接算;DoH 还要解析 DNS 填对(用上游 DNS,或 IP 加端口)
+const isUpstreamValid = (u: Upstream) =>
+  u.wan ||
+  (isServerValid(u) && (u.protocol !== 'https' || u.bootstrap.server === WAN || (isIp(u.bootstrap.server) && isPort(u.bootstrap.port))))
 
 const sideName = (side: Side) => t(side === 'direct' ? 'dnsUpstreamDirect' : 'dnsUpstreamProxy')
 const regionName = (r: Region) => t(r === 'intl' ? 'dnsRegionIntl' : 'dnsRegionCn')
@@ -471,7 +577,7 @@ onBeforeUnmount(() => {
 
 // ---- 档案 ⇄ 行
 const busy = ref(false)
-const readOne = (side: Side, server: unknown, protocol: unknown, port: unknown): Upstream | null => {
+const readOne = (side: Side, server: unknown, protocol: unknown, port: unknown, bootstrap: unknown): Upstream | null => {
   const wan = server === WAN
   const host = typeof server === 'string' && !wan ? server : ''
   if (!wan && !host) return null
@@ -479,17 +585,21 @@ const readOne = (side: Side, server: unknown, protocol: unknown, port: unknown):
     side,
     wan,
     server: wan ? '' : host,
-    protocol: wan ? 'udp' : protocol === 'udp' || protocol === 'tcp' ? protocol : FALLBACK_PROTOCOL[side],
+    protocol: wan ? 'udp' : protocol === 'udp' || protocol === 'tcp' || protocol === 'https' ? protocol : FALLBACK_PROTOCOL[side],
     port: wan || !isPort(port) ? DEFAULT_PORT : (port as number),
+    bootstrap: defaultBootstrap(bootstrap as Partial<Bootstrap> | null),
   }
 }
 const sideRows = (side: Side): Row[] => {
   const dns = (props.profile.dns ?? {}) as Record<string, unknown>
-  const main = side === 'direct' ? readOne(side, dns.direct, dns.directProtocol, dns.directPort) : readOne(side, dns.proxy, dns.proxyProtocol, dns.proxyPort)
+  const main =
+    side === 'direct'
+      ? readOne(side, dns.direct, dns.directProtocol, dns.directPort, dns.directBootstrap)
+      : readOne(side, dns.proxy, dns.proxyProtocol, dns.proxyPort, dns.proxyBootstrap)
   const extrasRaw = (side === 'direct' ? dns.directExtras : dns.proxyExtras) as Array<Record<string, unknown>> | undefined
   const extras = (Array.isArray(extrasRaw) ? extrasRaw : [])
     .slice(0, MAX_EXTRAS)
-    .map((x) => readOne(side, x?.server, x?.protocol, x?.port))
+    .map((x) => readOne(side, x?.server, x?.protocol, x?.port, x?.bootstrap))
   return [main, ...extras]
     .filter((x): x is Upstream => !!x)
     .map((x, index) => ({ ...x, index, key: `${side}-${index}` }))
@@ -498,18 +608,32 @@ const rows = computed<Row[]>(() => [...sideRows('direct'), ...sideRows('proxy')]
 const countOf = (side: Side) => rows.value.filter((r) => r.side === side).length
 const rowLabel = (r: Upstream) => (r.wan ? t('dnsUpstreamWan') : r.server)
 
+// DoH 的端口取自地址(缺省 443),只有 DoH 才带 bootstrap
 const toUpstreamOut = (u: Upstream) =>
-  u.wan ? { server: WAN, protocol: 'udp', port: DEFAULT_PORT } : { server: u.server, protocol: u.protocol, port: u.port }
+  u.wan
+    ? { server: WAN, protocol: 'udp', port: DEFAULT_PORT }
+    : {
+        server: u.server,
+        protocol: u.protocol,
+        port: u.protocol === 'https' && isDohUrl(u.server) ? Number(new URL(u.server).port || 443) : u.port,
+        ...(u.protocol === 'https' ? { bootstrap: u.bootstrap } : {}),
+      }
 // 把一整张列表写回档案:每侧第一条是主上游,后面是备用;一侧删光了就退回「上游 DNS」
 const toPatch = (list: Upstream[]) => {
   const out: Record<string, unknown> = {}
   for (const side of SIDES) {
     const own = list.filter((r) => r.side === side)
-    const [main, ...extras] = own.length ? own : [{ side, wan: true, server: '', protocol: 'udp' as Protocol, port: DEFAULT_PORT }]
+    const [main, ...extras] = own.length
+      ? own
+      : [{ side, wan: true, server: '', protocol: 'udp' as Protocol, port: DEFAULT_PORT, bootstrap: defaultBootstrap() }]
     const m = toUpstreamOut(main)
     const ex = extras.slice(0, MAX_EXTRAS).map(toUpstreamOut)
-    if (side === 'direct') Object.assign(out, { direct: m.server, directProtocol: m.protocol, directPort: m.port, directExtras: ex })
-    else Object.assign(out, { proxy: m.server, proxyProtocol: m.protocol, proxyPort: m.port, proxyExtras: ex })
+    const bootstrap = 'bootstrap' in m ? m.bootstrap : null
+    out[side] = m.server
+    out[`${side}Protocol`] = m.protocol
+    out[`${side}Port`] = m.port
+    out[`${side}Bootstrap`] = bootstrap
+    out[`${side}Extras`] = ex
   }
   return out
 }
@@ -616,12 +740,7 @@ const restoreDefaults = async () => {
 
 // ---- 测试:让内核按所选协议真的查一次;经代理的那一侧会带上走的线路
 const testingKey = ref('')
-const testPayload = (u: Upstream) => ({
-  side: u.side,
-  server: u.wan ? WAN : u.server,
-  protocol: u.wan ? 'udp' : u.protocol,
-  port: u.port,
-})
+const testPayload = (u: Upstream) => ({ side: u.side, ...toUpstreamOut(u) })
 const viaText = (r: OpenboxDnsUpstreamTestResult) => (r.chain?.length ? r.chain.join(' → ') : r.via)
 const detailOf = (r: OpenboxDnsUpstreamTestResult, withNote: boolean) =>
   [
@@ -634,7 +753,7 @@ const detailOf = (r: OpenboxDnsUpstreamTestResult, withNote: boolean) =>
 const failText = (r: OpenboxDnsUpstreamTestResult) =>
   [t('dnsUpstreamTestFail', { message: r.error ?? '' }), ...(r.note ? [r.note] : [])].join(' · ')
 const runTest = async (u: Upstream, key: string) => {
-  if (!u.wan && (!isIp(u.server) || !isPort(u.port))) return
+  if (!isUpstreamValid(u)) return
   testingKey.value = key
   editorError.value = ''
   try {
@@ -692,14 +811,14 @@ const draft = ref<Upstream | null>(null)
 const editorError = ref('')
 const draftValid = computed(() => {
   const d = draft.value
-  return !!d && (d.wan || (isIp(d.server) && isPort(d.port)))
+  return !!d && isUpstreamValid(d)
 })
 const openEditor = (row: Row | null) => {
   editing.value = row
   editorError.value = ''
   draft.value = row
-    ? { side: row.side, wan: row.wan, server: row.server, protocol: row.protocol, port: row.port }
-    : { side: 'proxy', wan: false, server: '', protocol: 'tcp', port: DEFAULT_PORT }
+    ? { side: row.side, wan: row.wan, server: row.server, protocol: row.protocol, port: row.port, bootstrap: { ...row.bootstrap } }
+    : { side: 'proxy', wan: false, server: '', protocol: 'tcp', port: DEFAULT_PORT, bootstrap: defaultBootstrap() }
   editorOpen.value = true
 }
 const saveEditor = async () => {

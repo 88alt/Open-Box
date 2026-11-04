@@ -543,6 +543,8 @@ const zh: LANG_MESSAGE = {
   nodeInfoCheckedAt: '{time} 查询',
   nodeInfoUnknown: '判不出',
   nodeInfoPartial: '部分信息没查到:{what}',
+  nodeInfoRefreshComplete: '节点信息和风险评估已刷新。',
+  nodeInfoRefreshFailed: '刷新失败，已保留上一次结果：{message}',
   testFinishedResultTip: '{name}\n测试完成: {success} 成功，{failed} 失败',
   latencyTimeout: '超时',
   testFinishedReasonsTip: '{name}\n测试完成: {success} 成功，{failed} 失败（{reasons}）',
@@ -1328,7 +1330,7 @@ const zh: LANG_MESSAGE = {
   dnsModeSaved: 'DNS 劫持方式已保存。',
   dnsUpstreamTitle: 'DNS 上游',
   dnsUpstreamDescription:
-    '内核两侧解析器分别问谁、走 UDP 还是 TCP、哪个端口。地址填 IP,或选「上游 DNS」(路由器接口上 DHCP 分配或手动指定的 DNS)。改完即保存:先让内核按所选协议真的查一次,查不通不保存。代理 DNS 走哪条线路,由目标分流按它的地址决定;上游 DNS 固定直连。',
+    '内核两侧解析器分别问谁、使用 UDP、TCP 或 DoH。UDP / TCP 填 IP 和端口,DoH 填 HTTPS 地址并选择解析其域名的 DNS,也可选「上游 DNS」(路由器接口上 DHCP 分配或手动指定的 DNS)。改完即保存:先让内核按所选协议真的查一次,查不通不保存。代理 DNS 走哪条线路,由目标分流按它的地址决定;上游 DNS 固定直连。',
   dnsUpstreamDirect: '直连 DNS',
   dnsUpstreamDirectNote: '解析直连域名用。默认是上游 DNS。',
   dnsUpstreamWan: '上游 DNS',
@@ -1358,9 +1360,11 @@ const zh: LANG_MESSAGE = {
   dnsRegionSwitched: '已切换到「{region}」',
   dnsUpstreamProxy: '代理 DNS',
   dnsUpstreamProxyNote:
-    '走代理的域名向它查询,走哪条线路由目标分流按地址决定,测试也经同一条线路。TCP 稳妥;UDP 要线路支持 UDP。',
+    '走代理的域名向它查询,走哪条线路由目标分流按地址决定,测试也经同一条线路。DoH 使用 HTTPS;TCP 稳妥;UDP 要线路支持 UDP。',
   dnsUpstreamProtocol: '协议',
   dnsUpstreamPort: '端口',
+  dnsUpstreamDohUrl: 'DoH 地址',
+  dnsUpstreamDohBootstrap: 'DoH 解析 DNS',
   dnsUpstreamTest: '测试',
   dnsUpstreamRestore: '恢复默认',
   dnsUpstreamRestoreConfirm:
@@ -1387,7 +1391,7 @@ const zh: LANG_MESSAGE = {
   dnsUpstreamProxyExtras: '代理 DNS 备用上游',
   dnsUpstreamAddExtra: '添加备用上游',
   dnsUpstreamExtrasNote:
-    '一行一条:哪一侧、协议、地址和端口。同一侧的第一条是主上游,后面的是备用 —— 和主上游并发查询,谁先返回结果就用谁的,一个上游卡住时不用干等到超时。每侧最多 4 个,地址填 IP 或选上游 DNS。保存前会让内核按所选协议真的查一次,查不通不保存。',
+    '一行一条:哪一侧、协议、地址和端口。同一侧的第一条是主上游,后面的是备用 —— 和主上游并发查询,谁先返回结果就用谁的,一个上游卡住时不用干等到超时。每侧最多 4 个,UDP / TCP 填 IP,DoH 填 HTTPS 地址,也可选上游 DNS。保存前会让内核按所选协议真的查一次,查不通不保存。',
   dnsUpstreamExtraDuplicate: '这个地址已经用过了',
   dnsUpstreamTestVia: '经「{policy}」→ {node}',
   dnsUpstreamTestOk: '{side}可用（{detail}）。',
