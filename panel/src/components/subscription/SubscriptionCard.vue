@@ -154,6 +154,7 @@
         v-if="renderProxies.length"
         :nodes="renderProxies"
         :relaxed-dots-spacing="true"
+        :class="usageInfo?.percent != null && '-mt-1'"
       />
       <div
         v-else-if="kernelLoaded"
