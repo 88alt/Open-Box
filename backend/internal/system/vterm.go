@@ -87,6 +87,10 @@ type VTermNet struct {
 	Now   func() time.Time
 	// CmdTimeout 是单条命令的超时,默认 10 秒。
 	CmdTimeout time.Duration
+	// LookPath 找 DHCP 客户端程序,默认 exec.LookPath;ScriptDir 是放取址回调脚本的目录,默认 os.TempDir()
+	// (OpenWrt 上是内存盘)。见 vterm_dhcp.go。
+	LookPath  func(file string) (string, error)
+	ScriptDir string
 
 	mu  sync.Mutex
 	cur *VirtualTerminal // 本进程建好、仍在用的
@@ -113,11 +117,11 @@ func (n *VTermNet) readFile(p string) ([]byte, error) {
 	return os.ReadFile(p)
 }
 
-func (n *VTermNet) writeFile(p string, b []byte) error {
+func (n *VTermNet) writeFile(p string, b []byte, perm os.FileMode) error {
 	if n.WriteFile != nil {
-		return n.WriteFile(p, b, 0o600)
+		return n.WriteFile(p, b, perm)
 	}
-	return store.WriteFileAtomic(p, b, 0o600)
+	return store.WriteFileAtomic(p, b, perm)
 }
 
 func (n *VTermNet) remove(p string) error {
@@ -169,6 +173,14 @@ func (n *VTermNet) run(ctx context.Context, name string, args ...string) (RunRes
 	to := n.CmdTimeout
 	if to <= 0 {
 		to = 10 * time.Second
+	}
+	return n.runFor(ctx, to, name, args...)
+}
+
+// runFor 和 run 一样,只是单条命令的超时由调用方定(DHCP 取址要等服务器应答,比 ip 命令久)。
+func (n *VTermNet) runFor(ctx context.Context, to time.Duration, name string, args ...string) (RunResult, error) {
+	if n.Run == nil {
+		return RunResult{}, errors.New("没有可用的命令运行器")
 	}
 	ctx, cancel := context.WithTimeout(ctx, to)
 	defer cancel()
@@ -252,7 +264,7 @@ func (n *VTermNet) writeState(st vtermState) error {
 	if err != nil {
 		return err
 	}
-	return n.writeFile(n.StateFile, b)
+	return n.writeFile(n.StateFile, b, 0o600)
 }
 
 // Ensure 保证有一个可用的虚拟终端并返回它:本进程已经建好且还在就沿用(Reused=true);
