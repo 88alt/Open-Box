@@ -1,6 +1,6 @@
 # backend/ — 自研后端(取代上游的 panel/server)
 
-面板前端(`panel/`)通过 HTTP 调用的所有 `/api/...` 接口,由这里实现。目标是**自己写、自己维护**,不依赖也不打包上游的闭源后端。
+面板前端(`panel/`)通过 HTTP 调用的所有 `/api/...` 接口,由这里实现。目标是**自己写、自己维护**,不打包上游闭源后端为依赖;行为与默认尽量对齐上游同版本(见 HANDOFF 第五、六节)。
 目录名故意不用 `panel/server`:同步脚本会把 `panel/server` 从 main 里剔除,而 `backend/` 在 `sync-main.sh` 的 `KEEP` 里,不会被上游覆盖。
 
 ## 接手前先读(按顺序)
@@ -23,11 +23,10 @@
 5. 发现前端的接口调用和 `docs/ENDPOINTS.md` 对不上(漏了、多了、类型变了):先改 `docs/ENDPOINTS.md`,再改实现,同一个提交里完成。
 
 ## 硬性规则(不能违反)
-- **只依据这些来源写代码**:前端源码(`panel/src`,尤其 `api/openbox.ts`、`api/clientApp.ts`)、本仓库自研的 `core/`、
-  sing-box / OpenWrt / Debian 的公开文档、协议规范。
-- **不要读取、复制、反编译上游的闭源部分**:`panel/server/index.mjs`、`panel/server/native/*`、任何 v0.1.321 之后的上游编译产物。
-  `main` 里没有它们,也不要从 `catch-up-upstream` 分支取来参考。v0.1.318 快照(tag `engine-snapshot`)只能在维护者确认其许可条件之后,
-  才可作为行为参考,默认当作**不可用**;`docs/DESIGN.md` 里有说明。
+- **对齐目标**:行为、默认值、校验、封包外形、接口字段尽量对齐上游同版本(见 HANDOFF 第五、六节)。实现全部自己写。
+- **可以只读参考**:`catch-up-upstream` 上的上游同步树与随包默认、前端源码(`panel/src`)、本仓库自研 `core/`(只读)、
+  sing-box / OpenWrt / Debian 公开文档、协议规范。参考后在 `backend/` 自写实现,不要整段复制上游源码文件。
+- **禁止**:把上游闭源源码或 native 二进制搬进 `main/backend` 当依赖或再分发;任何授权 / 激活绕过。
 - **后端没有「激活 / 授权」概念**,也不写任何授权桩。前端残留的 `/api/openbox/activation*` 调用只返回固定的「无需激活」状态(见 DESIGN)。
 - **不要弄断路由器的网络**:任何会改 DNS、防火墙、路由、sing-box 启停的操作,都必须可回滚(见 DESIGN「变更安全」)。
 - 不要改 `panel/server/`、不要往 `backend/` 之外的上游同步目录(`openwrt/`、`debian/`、`docker/`、`docs/` 等)里放自己的改动,它们会被同步覆盖。
