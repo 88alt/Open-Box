@@ -151,7 +151,7 @@ const getBgColor = (latency: number) => {
     return 'bg-base-content/60'
   } else if (latency < lowLatency.value) {
     return 'bg-low-latency'
-  } else if (latency < mediumLatency.value) {
+  } else if (latency <= mediumLatency.value) {
     return 'bg-medium-latency'
   } else {
     return 'bg-high-latency'
@@ -165,11 +165,11 @@ const goodsCounts = computed(() => {
 })
 const mediumCounts = computed(() => {
   return nodesLatency.value.filter(
-    (node) => node.latency >= lowLatency.value && node.latency < mediumLatency.value,
+    (node) => node.latency >= lowLatency.value && node.latency <= mediumLatency.value,
   ).length
 })
 const badCounts = computed(() => {
-  return nodesLatency.value.filter((node) => node.latency >= mediumLatency.value).length
+  return nodesLatency.value.filter((node) => node.latency > mediumLatency.value).length
 })
 const notConnectedCounts = computed(() => {
   return nodesLatency.value.filter((node) => node.latency === NOT_CONNECTED).length

@@ -88,7 +88,7 @@
           </div>
           <span
             class="flex min-w-0 items-center gap-2 text-xs tabular-nums"
-            :class="item ? (item.failed ? 'text-red-500' : getColorForBandwidth(item.mbps)) : 'text-base-content/30'"
+            :class="item ? (item.failed ? 'text-high-latency' : getColorForBandwidth(item.mbps)) : 'text-base-content/30'"
           >
             <span class="flex h-[6px] w-12 shrink-0 items-center">
               <span
@@ -165,7 +165,7 @@ const rows = computed<(OpenboxBandwidthSample | null)[]>(() => {
 const maxMbps = computed(() => Math.max(1, ...rows.value.filter((r) => r && !r.failed && r.mbps > 0).map((r) => r!.mbps)))
 // 失败的满格(红),其余按这批里最大的折算
 const barPercent = (r: OpenboxBandwidthSample) => (r.failed ? 100 : Math.min(100, Math.max(0, (r.mbps / maxMbps.value) * 100)))
-const dotClass = (r: OpenboxBandwidthSample | null) => (!r ? 'bg-base-content/10' : r.failed ? 'bg-red-500' : getBgColorForBandwidth(r.mbps))
+const dotClass = (r: OpenboxBandwidthSample | null) => (!r ? 'bg-base-content/10' : r.failed ? 'bg-high-latency' : getBgColorForBandwidth(r.mbps))
 const allTabs = [
   { key: 'latency', label: 'nodeTipLatency' },
   { key: 'bandwidth', label: 'nodeTipBandwidth' },

@@ -89,9 +89,9 @@ const fmt = (v: number) => (props.kind === 'latency' ? Math.round(v).toString() 
 const barHeight = (s: OpenboxQualitySample) =>
   s.failed ? 100 : Number.isFinite(s.value) ? Math.min(100, Math.max(0, (s.value / ceiling.value) * 100)) : 0
 const textToBg = (c: string) =>
-  c === 'text-primary' ? 'bg-primary' : c === 'text-orange-500' ? 'bg-orange-500' : c === 'text-red-500' ? 'bg-red-500' : 'bg-base-content/20'
+  c === 'text-low-latency' ? 'bg-low-latency' : c === 'text-medium-latency' ? 'bg-medium-latency' : c === 'text-high-latency' ? 'bg-high-latency' : 'bg-base-content/20'
 const barClass = (s: OpenboxQualitySample) =>
-  s.failed ? 'bg-red-500' : props.kind === 'latency' ? textToBg(getColorForLatency(s.value)) : getBgColorForBandwidth(s.value)
+  s.failed ? 'bg-high-latency' : props.kind === 'latency' ? textToBg(getColorForLatency(s.value)) : getBgColorForBandwidth(s.value)
 const tipText = (s: OpenboxQualitySample) =>
   `${dayjs(s.at).format('MM-DD HH:mm:ss')} · ${s.failed ? t('qualityState_down') : fmt(s.value) + ' ' + unit.value}`
 

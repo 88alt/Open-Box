@@ -377,7 +377,7 @@ const en = {
   unavailableProxy: 'Hide unavailable proxies',
   global: 'Global',
   direct: 'Direct',
-  lowLatencyDesc: 'Moderate latency (orange)',
+  lowLatencyDesc: 'Moderate latency (amber)',
   mediumLatencyDesc: 'Severe latency (red)',
   fonts: 'Fonts',
   emoji: 'Emoji',

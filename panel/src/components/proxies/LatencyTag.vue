@@ -105,11 +105,11 @@ const recentHistory = (): LatencySample[] => {
 }
 // 类名要写全,Tailwind 只编它在源码里见过的类;从 text-* 动态拼 bg-* 会被裁掉
 const dotColor = (delay: number) => {
-  if (delay === NOT_CONNECTED) return 'bg-red-500'
+  if (delay === NOT_CONNECTED) return 'bg-high-latency'
   switch (getColorForLatency(delay)) {
-    case 'text-primary': return 'bg-primary'
-    case 'text-orange-500': return 'bg-orange-500'
-    case 'text-red-500': return 'bg-red-500'
+    case 'text-low-latency': return 'bg-low-latency'
+    case 'text-medium-latency': return 'bg-medium-latency'
+    case 'text-high-latency': return 'bg-high-latency'
     default: return 'bg-gray-400'
   }
 }
@@ -169,7 +169,7 @@ const buildHistoryList = (history: LatencySample[]) => {
     const latency = document.createElement('div')
     const failed = item?.delay === NOT_CONNECTED
     latency.className = `flex min-w-0 items-center gap-2 text-xs tabular-nums ${
-      item ? (failed ? 'text-red-500' : getColorForLatency(item.delay)) : 'text-base-content/30'
+      item ? (failed ? 'text-high-latency' : getColorForLatency(item.delay)) : 'text-base-content/30'
     }`
     const barWrap = document.createElement('span')
     barWrap.className = 'flex h-[6px] w-12 shrink-0 items-center'

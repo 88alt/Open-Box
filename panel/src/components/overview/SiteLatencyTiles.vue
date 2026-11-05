@@ -109,14 +109,14 @@ const { locale, t } = useI18n()
 
 // 类名要写全,Tailwind 只编它在源码里见过的类
 const barColor = (delay: number) => {
-  if (delay === NOT_CONNECTED) return 'bg-red-500'
+  if (delay === NOT_CONNECTED) return 'bg-high-latency'
   switch (getColorForLatency(delay)) {
-    case 'text-primary':
-      return 'bg-primary'
-    case 'text-orange-500':
-      return 'bg-orange-500'
-    case 'text-red-500':
-      return 'bg-red-500'
+    case 'text-low-latency':
+      return 'bg-low-latency'
+    case 'text-medium-latency':
+      return 'bg-medium-latency'
+    case 'text-high-latency':
+      return 'bg-high-latency'
     default:
       return 'bg-gray-400'
   }

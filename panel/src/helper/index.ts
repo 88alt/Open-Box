@@ -143,11 +143,11 @@ export const getColorForLatency = (latency: number) => {
   if (latency === NOT_CONNECTED) {
     return ''
   } else if (latency < lowLatency.value) {
-    return 'text-primary'
-  } else if (latency < mediumLatency.value) {
-    return 'text-orange-500'
+    return 'text-low-latency'
+  } else if (latency <= mediumLatency.value) {
+    return 'text-medium-latency'
   } else {
-    return 'text-red-500'
+    return 'text-high-latency'
   }
 }
 
@@ -158,16 +158,16 @@ export const getColorForBandwidth = (mbps?: number | null) => {
   const adequate = Number.isFinite(Number(bandwidthAdequateThreshold.value))
     ? Math.max(poor, Number(bandwidthAdequateThreshold.value))
     : Math.max(poor, 20)
-  if (mbps <= poor) return 'text-red-500'
-  if (mbps <= adequate) return 'text-orange-500'
-  return 'text-primary'
+  if (mbps <= poor) return 'text-high-latency'
+  if (mbps <= adequate) return 'text-medium-latency'
+  return 'text-low-latency'
 }
 // 类名要写全,Tailwind 只编它在源码里见过的类
 export const getBgColorForBandwidth = (mbps?: number | null) => {
   switch (getColorForBandwidth(mbps)) {
-    case 'text-primary': return 'bg-primary'
-    case 'text-orange-500': return 'bg-orange-500'
-    case 'text-red-500': return 'bg-red-500'
+    case 'text-low-latency': return 'bg-low-latency'
+    case 'text-medium-latency': return 'bg-medium-latency'
+    case 'text-high-latency': return 'bg-high-latency'
     default: return 'bg-base-content/20'
   }
 }

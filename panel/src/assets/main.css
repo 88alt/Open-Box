@@ -984,6 +984,14 @@ dialog .overflow-y-scroll,
   background-color: var(--color-primary) !important;
 }
 
+/* 延时 / 带宽三档配色(对齐上游 v0.1.399):绿 / 橙黄 / 红;text-orange-500、bg-orange-500 一并指向橙黄色 */
+:root {
+  --app-latency-low: #00a96e;
+  --app-latency-medium: #f0b83f;
+  --app-latency-high: #f4606c;
+  --color-orange-500: var(--app-latency-medium);
+}
+
 /* 浅色主题(emerald)的 neutral 换成浅蓝灰,按钮 / 胶囊 / 页签 / 客户端顶栏文字更清楚(对齐上游 v0.1.396) */
 [data-theme='emerald'] {
   --color-neutral: #bdcadd;

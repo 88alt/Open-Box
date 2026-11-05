@@ -357,7 +357,7 @@ const zh: LANG_MESSAGE = {
   unavailableProxy: '隐藏不可用节点',
   global: '全局',
   direct: '直连',
-  lowLatencyDesc: '延时一般（橙色）',
+  lowLatencyDesc: '延时一般（橙黄色）',
   mediumLatencyDesc: '延时严重（红色）',
   fonts: '面板字体',
   emoji: 'Emoji',
