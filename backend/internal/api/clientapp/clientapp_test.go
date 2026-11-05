@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
 )
@@ -297,5 +298,87 @@ func TestClientConfigFileErrors(t *testing.T) {
 	rec = callPath(t, Deps{File: &fakeFile{err: errors.New("boom")}}, http.MethodPost, "/api/openbox/client-config/file", `{}`)
 	if rec.Code != 500 || !strings.Contains(rec.Body.String(), "导出客户端配置失败") {
 		t.Errorf("内部错误: %d %s", rec.Code, rec.Body)
+	}
+}
+
+type fakeSync struct {
+	gotNonce, gotIP string
+	res             clientapp.SyncResult
+	err             error
+}
+
+func (f *fakeSync) Sync(_ context.Context, nonce, ip string) (clientapp.SyncResult, error) {
+	f.gotNonce, f.gotIP = nonce, ip
+	return f.res, f.err
+}
+
+func syncCall(t *testing.T, f *fakeSync, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	mux := http.NewServeMux()
+	Register(mux, Deps{Sync: f})
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.RemoteAddr = "192.168.5.20:51234"
+	req.Header.Set("X-Forwarded-For", "6.6.6.6") // 不能被信任
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestSyncConfigOK(t *testing.T) {
+	f := &fakeSync{res: clientapp.SyncResult{Format: "open-box-client-config", V: 1, RouterID: "r", ExportedAt: 9,
+		Seal: clientapp.Envelope{V: 1, KDF: "pbkdf2-sha256", Iter: 600000, Salt: "s", IV: "i", CT: "c"}}}
+	rec := syncCall(t, f, "/client/v1/config?p=0123456789abcdef")
+	if rec.Code != 200 || !strings.Contains(rec.Header().Get("Cache-Control"), "no-store") {
+		t.Fatalf("%d %v %s", rec.Code, rec.Header(), rec.Body)
+	}
+	if f.gotNonce != "0123456789abcdef" || f.gotIP != "192.168.5.20" {
+		t.Fatalf("nonce 和来源 IP(取连接对端,不信 X-Forwarded-For): %q %q", f.gotNonce, f.gotIP)
+	}
+	var got map[string]any
+	json.Unmarshal(rec.Body.Bytes(), &got)
+	if got["routerId"] != "r" || got["exportedAt"] != float64(9) || got["seal"].(map[string]any)["ct"] != "c" {
+		t.Fatalf("形状: %s", rec.Body)
+	}
+}
+
+func TestSyncConfigErrors(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		code int
+		want string
+	}{
+		{"关着", clientapp.ErrDisabled, 403, `{"error":"disabled"}`},
+		{"nonce 不对", clientapp.ErrSyncNotFound, 404, `"error":"not found"`},
+		{"限速", &clientapp.LimitedError{After: 61500 * time.Millisecond}, 429, ""},
+		{"内部错误", errors.New("db 路径 /secret 坏了"), 500, `"error":"同步失败"`},
+	}
+	for _, c := range cases {
+		rec := syncCall(t, &fakeSync{err: c.err}, "/client/v1/config?p=x")
+		if rec.Code != c.code || !strings.Contains(rec.Body.String(), c.want) {
+			t.Errorf("%s: %d %s", c.name, rec.Code, rec.Body)
+		}
+		if strings.Contains(rec.Body.String(), "/secret") {
+			t.Errorf("%s: 不能把内部细节回给匿名调用方", c.name)
+		}
+	}
+	rec := syncCall(t, &fakeSync{err: &clientapp.LimitedError{After: 61500 * time.Millisecond}}, "/client/v1/config?p=x")
+	if rec.Header().Get("Retry-After") != "62" {
+		t.Errorf("Retry-After 应向上取整: %q", rec.Header().Get("Retry-After"))
+	}
+	// 没接服务 503;POST 405;别的路径回 JSON 404
+	mux := http.NewServeMux()
+	Register(mux, Deps{})
+	for _, c := range []struct {
+		method, path string
+		code         int
+	}{
+		{http.MethodGet, "/client/v1/config", 503}, {http.MethodPost, "/client/v1/config", 405}, {http.MethodGet, "/client/v1/other", 404},
+	} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(c.method, c.path, nil))
+		if rec.Code != c.code {
+			t.Errorf("%s %s: %d", c.method, c.path, rec.Code)
+		}
 	}
 }

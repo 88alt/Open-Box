@@ -123,9 +123,17 @@
 | POST | `/api/openbox/client-config/file` | `fetchClientConfigFile` (api/clientApp.ts:199) | OpenboxClientBundle | (lan: string, publicBase: string) |
 | POST | `/api/openbox/client-config/rotate` | `rotateClientConfig` (api/clientApp.ts:186) | OpenboxClientConfigIssue | () |
 
-实现约定(M2,前三条):状态存在 `client-app.json`(与路由器 ID 同一文件)。`GET` 第一次读时生成配对码(8 个字符,取自去掉 I / O / 0 / 1 的 32 字符表,大写)和 nonce(16 位小写十六进制)并保存,**同步开关默认关**;其余字段 `routerId` / `routerName` / `lanAddresses` / `panelPort` 与 `client-app/info` 同源。`PUT enabled` 请求体必须是 `{"enabled": true|false}`(其它一律 400,上限 1 KiB),返回 `{enabled}`,不动配对码。`POST rotate` 换配对码和 nonce、`lastSyncAt` 清零、开关保持,返回换完的整份。三条响应都带 `Cache-Control: no-store`,配对码不写日志、错误响应里不出现。`lastSyncAt` 要等 App 用的公开同步接口(未做)来更新,现在恒为 0。App 用的公开同步接口还没做。
+实现约定(M2,前三条):状态存在 `client-app.json`(与路由器 ID 同一文件)。`GET` 第一次读时生成配对码(8 个字符,取自去掉 I / O / 0 / 1 的 32 字符表,大写)和 nonce(16 位小写十六进制)并保存,**同步开关默认关**;其余字段 `routerId` / `routerName` / `lanAddresses` / `panelPort` 与 `client-app/info` 同源。`PUT enabled` 请求体必须是 `{"enabled": true|false}`(其它一律 400,上限 1 KiB),返回 `{enabled}`,不动配对码。`POST rotate` 换配对码和 nonce、`lastSyncAt` 清零、开关保持,返回换完的整份。三条响应都带 `Cache-Control: no-store`,配对码不写日志、错误响应里不出现。`lastSyncAt` 要等 App 用的公开同步接口(未做)来更新,现在恒为 0。App 用的公开同步接口见下面 `/client/v1/config`。
 
 `POST /client-config/file`(M2):请求体 `{lan, publicBase}`,两项都可以不传或为空,前后空白去掉;`lan` 只收空、IP 或主机名(字母数字 . - _,最长 253),`publicBase` 只收空或 http(s) 地址(要有主机名、不带账号密码、最长 2048),不合格 400(中文原因)且什么都不写,请求体上限 8 KiB。返回导出文件(前端当 `Record<string, unknown>` 原样存成 .json,字段由后端定):`{format:"open-box-client-config", v:1, routerId, routerName, importCode, exportedAt, seal}`。`importCode` 是 `openbox://import?v=2&r=&n=&lan=&port=[&pub=]&p=nonce`,字段顺序和 `encodeURIComponent` 转义与前端 `buildClientImportCode` 一致(`lan` 空时仍带 `lan=`,`pub` 空时不带)。`seal` 是配对码封包 `{v:1, kdf:"pbkdf2-sha256", iter, salt, iv, ct}`(三项二进制字段是不带填充的 base64url):密钥 = PBKDF2-HMAC-SHA256(配对码, salt, iter, 32 字节),`iter` 默认 60 万次;`salt` = SHA-256(`"open-box/client-config/v1"` 0x00 routerId 0x00 nonce) 的前 16 字节,所以同一代配对码的密钥只在第一次用到时派生一次、放内存缓存,换码(nonce 跟着变)即换密钥;`iv` 每个封包随机 12 字节;`ct` 是 AES-256-GCM 密文加标签,附加认证数据 AAD = `"open-box/client-config/v1"` 0x00 routerId 0x00 nonce,把封包绑在这台路由器和这一代配对上。明文是 `{v:1, kind:"client-config", generatedAt, router:{id, name, lanAddresses, lanSubnets, panelPort, serverInfo}, shareRegions}`,`shareRegions` 是此刻生效的地区分流(没改过 = 默认三组),App 发给内核时自己在每组最前面带上 `lanSubnets → 回路由器`。导出不看同步开关。响应 no-store,导出文件等于凭据(配对码只有 40 位,文件被拿走后可离线爆破)。**与上游 App 不互通**(自己定义的格式,DESIGN 第 8 节)。
+
+## `/client/v1/config`(App 用的公开同步接口,不在 `/api/` 下)
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/client/v1/config?p=<nonce>` | App 同步本地分流配置;不需要登录,凭 nonce(导入码里的 `p`)访问 |
+
+前端没有这个接口的调用(它是给 App 的),约定取自前端 `OpenboxClientConfigIssue` 的注释(同步开关关着时公开接口一律回 403 `{error:"disabled"}`)和 DESIGN 第 8 节的授权口径,其余自己定;`/client/v1/` 下别的路径回 JSON 404。路由在 `/api/` 之外,所以不过登录鉴权(鉴权只拦 `/api/`)。判断顺序固定,每一步都比下一步便宜:一、同步开关关着(或从没配对过)403 `{error:"disabled"}`,只读状态文件,不进任何密码运算,也不记失败、不限速;二、来源 IP 被锁 429 加 `Retry-After`(秒,向上取整);三、`p` 和当前 nonce 常数时间比较,不对 404 `{error:"not found"}` 并给这个 IP 记一次失败;四、通过后返回 `{format:"open-box-client-config", v:1, routerId, exportedAt, seal}`,`seal` 与 `client-config/file` 同一套封包、同一份明文(没有配对码解不开),并把 `lastSyncAt` 更新成现在(只在 nonce 没被换掉时写,换码清零的 `lastSyncAt` 不会被迟到的同步写回)。限速:按来源 IP,连续失败 10 次后锁定,1 分钟起逐次翻倍、封顶 15 分钟,15 分钟内没有新的失败清零,表最多 1024 条(满了清空);来源 IP 取连接对端地址,**不信任 `X-Forwarded-For`**(谁都能伪造),所以放在反向代理后面时所有人共用代理的 IP,请让代理直接转发而不是用它替换来源。内部错误只回「同步失败」,不带细节。响应 no-store,日志只记方法、路径和状态。密钥缓存:启动时(`Warm`)把当前配对码的密钥派生好,换码后第一次成功同步时派生一次并缓存。拿到封包的人可以离线爆破 40 位配对码(60 万次 PBKDF2 只是拖慢),所以 nonce 对上才给封包;内容过滤快照还没并进明文(见 STATUS)。
 
 ## `/api/openbox/clients`
 

@@ -90,7 +90,8 @@ type Service struct {
 	// KDFIter 是配对码封包的 PBKDF2 迭代次数,0 = DefaultSealIter(60 万次);只有测试会改小。
 	KDFIter int
 
-	keys keyCache // 当前这一代配对码派生出的密钥,只在内存里
+	keys      keyCache    // 当前这一代配对码派生出的密钥,只在内存里
+	syncLimit syncLimiter // 公开同步接口按来源 IP 的失败限速
 }
 
 // PortOf 取 "host:port" 里的端口;格式不对或不在 1~65535 返回 0。

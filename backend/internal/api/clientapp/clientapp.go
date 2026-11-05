@@ -6,7 +6,10 @@ package clientapp
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
@@ -29,16 +32,22 @@ type FileService interface {
 	ExportFile(ctx context.Context, lan, publicBase string) (clientapp.Bundle, error)
 }
 
+// SyncService 是 App 公开同步接口要用的功能(*clientapp.Service 满足)。
+type SyncService interface {
+	Sync(ctx context.Context, nonce, ip string) (clientapp.SyncResult, error)
+}
+
 // EgressService 是按出口 IP 判国家要用的功能(*clientapp.Service 满足)。
 type EgressService interface {
 	DetectEgressCountry(ctx context.Context) (clientapp.EgressCountry, error)
 }
 
-// Deps 是本分组的依赖。Config 为 nil 时 client-config* 回 503,File 为 nil 时 client-config/file 回 503,Egress 为 nil 时 egress-country 回 503。
+// Deps 是本分组的依赖。Config 为 nil 时 client-config* 回 503,File 为 nil 时 client-config/file 回 503,Sync 为 nil 时 /client/v1/config 回 503,Egress 为 nil 时 egress-country 回 503。
 type Deps struct {
 	Service Service
 	Config  ConfigService
 	File    FileService
+	Sync    SyncService
 	Egress  EgressService
 }
 
@@ -62,6 +71,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.HandleFunc("/api/openbox/client-config/file", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodPost: d.configFile,
 	}))
+	// App 用的公开同步接口:路径在 /api/ 之外,不过登录鉴权(鉴权只拦 /api/),凭 nonce 访问。
+	mux.HandleFunc("/client/v1/config", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodGet: d.syncConfig,
+	}))
+	mux.HandleFunc("/client/v1/", httpx.NotFound) // 别的路径回 JSON 404,不落到前端的 index.html
 	mux.HandleFunc("/api/openbox/client-config/rotate", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodPost: d.configRotate,
 	}))
@@ -169,6 +183,44 @@ func (d Deps) configFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, b)
+}
+
+// syncConfig 是 App 的公开同步接口:GET /client/v1/config?p=<nonce>(nonce 就是导入码里的 p)。
+// 同步开关关着 403 {error:"disabled"}(前端注释写明的约定);来源 IP 被限速 429 加 Retry-After;nonce 对不上 404;
+// 成功 200 返回封包(没有配对码解不开)。取来源 IP 用连接对端地址,不信任 X-Forwarded-For(谁都能伪造)。
+// 响应一律 no-store;日志只记方法、路径和状态,query 里的 nonce 不进日志。
+func (d Deps) syncConfig(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Sync == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "客户端配置服务不可用")
+		return
+	}
+	res, err := d.Sync.Sync(r.Context(), r.URL.Query().Get("p"), peerIP(r))
+	if err != nil {
+		var le *clientapp.LimitedError
+		switch {
+		case errors.Is(err, clientapp.ErrDisabled):
+			httpx.Error(w, http.StatusForbidden, "disabled")
+		case errors.As(err, &le):
+			secs := int((le.After + time.Second - 1) / time.Second)
+			w.Header().Set("Retry-After", strconv.Itoa(max(secs, 1)))
+			httpx.Error(w, http.StatusTooManyRequests, le.Error())
+		case errors.Is(err, clientapp.ErrSyncNotFound):
+			httpx.Error(w, http.StatusNotFound, "not found")
+		default:
+			httpx.Error(w, http.StatusInternalServerError, "同步失败")
+		}
+		return
+	}
+	httpx.JSON(w, http.StatusOK, res)
+}
+
+func peerIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 // egressCountry 对应前端 detectEgressCountry:按出口公网 IP 判一次国家(只查不改设置),返回 {ip, country, at}。

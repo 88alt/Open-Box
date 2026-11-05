@@ -86,9 +86,23 @@ func (s *Service) ExportFile(ctx context.Context, lan, publicBase string) (Bundl
 	if err != nil {
 		return Bundle{}, err
 	}
-	info, err := s.Info(ctx)
+	env, now, err := s.sealConfig(ctx, is)
 	if err != nil {
 		return Bundle{}, err
+	}
+	return Bundle{
+		Format: BundleFormat, V: BundleVersion,
+		RouterID: is.RouterID, RouterName: is.RouterName,
+		ImportCode: ImportCode(is.RouterID, is.RouterName, lan, is.PanelPort, publicBase, is.Nonce),
+		ExportedAt: now, Seal: env,
+	}, nil
+}
+
+// sealConfig 把此刻的本地分流配置按 is 里的配对码封好。导出文件和公开同步接口共用,返回封包和生成时刻(毫秒)。
+func (s *Service) sealConfig(ctx context.Context, is Issue) (Envelope, int64, error) {
+	info, err := s.Info(ctx)
+	if err != nil {
+		return Envelope{}, 0, err
 	}
 	now := s.now().UnixMilli()
 	plain, err := json.Marshal(payload{
@@ -100,23 +114,18 @@ func (s *Service) ExportFile(ctx context.Context, lan, publicBase string) (Bundl
 		ShareRegions: info.ShareRegions,
 	})
 	if err != nil {
-		return Bundle{}, fmt.Errorf("编码配置失败: %w", err)
+		return Envelope{}, 0, fmt.Errorf("编码配置失败: %w", err)
 	}
 	iter := s.kdfIter()
 	key, err := s.keys.get(is.PairCode, sealSalt(is.RouterID, is.Nonce), iter)
 	if err != nil {
-		return Bundle{}, err
+		return Envelope{}, 0, err
 	}
 	env, err := seal(key, is.RouterID, is.Nonce, iter, plain, s.Rand)
 	if err != nil {
-		return Bundle{}, fmt.Errorf("封包失败: %w", err)
+		return Envelope{}, 0, fmt.Errorf("封包失败: %w", err)
 	}
-	return Bundle{
-		Format: BundleFormat, V: BundleVersion,
-		RouterID: is.RouterID, RouterName: is.RouterName,
-		ImportCode: ImportCode(is.RouterID, is.RouterName, lan, is.PanelPort, publicBase, is.Nonce),
-		ExportedAt: now, Seal: env,
-	}, nil
+	return env, now, nil
 }
 
 // ImportCode 拼本地分流的导入码,字段顺序和写法与前端 helper/clientAppCode.ts 的 buildClientImportCode 一致:
