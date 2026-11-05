@@ -24,15 +24,21 @@ type ConfigService interface {
 	RotateClientConfig(ctx context.Context) (clientapp.Issue, error)
 }
 
+// FileService 是导出文件要用的功能(*clientapp.Service 满足)。
+type FileService interface {
+	ExportFile(ctx context.Context, lan, publicBase string) (clientapp.Bundle, error)
+}
+
 // EgressService 是按出口 IP 判国家要用的功能(*clientapp.Service 满足)。
 type EgressService interface {
 	DetectEgressCountry(ctx context.Context) (clientapp.EgressCountry, error)
 }
 
-// Deps 是本分组的依赖。Config 为 nil 时 client-config* 回 503,Egress 为 nil 时 egress-country 回 503。
+// Deps 是本分组的依赖。Config 为 nil 时 client-config* 回 503,File 为 nil 时 client-config/file 回 503,Egress 为 nil 时 egress-country 回 503。
 type Deps struct {
 	Service Service
 	Config  ConfigService
+	File    FileService
 	Egress  EgressService
 }
 
@@ -52,6 +58,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	}))
 	mux.HandleFunc("/api/openbox/client-config/enabled", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodPut: d.configEnabled,
+	}))
+	mux.HandleFunc("/api/openbox/client-config/file", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodPost: d.configFile,
 	}))
 	mux.HandleFunc("/api/openbox/client-config/rotate", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodPost: d.configRotate,
@@ -129,6 +138,37 @@ func (d Deps) configRotate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, is)
+}
+
+// maxFileBody 是 POST client-config/file 的请求体上限:只有 lan 和 publicBase 两个短字符串。
+const maxFileBody = 8 << 10
+
+// configFile 对应前端 fetchClientConfigFile:请求体 {lan, publicBase}(都可以空),返回封好的导出文件。
+// 参数不合格 400;文件等于凭据,响应 no-store,不写日志。
+func (d Deps) configFile(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.File == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "客户端配置服务不可用")
+		return
+	}
+	var body struct {
+		Lan        string `json:"lan"`
+		PublicBase string `json:"publicBase"`
+	}
+	if !httpx.DecodeJSON(w, r, &body, maxFileBody) {
+		return
+	}
+	b, err := d.File.ExportFile(r.Context(), body.Lan, body.PublicBase)
+	if err != nil {
+		var ie *clientapp.InputError
+		if errors.As(err, &ie) {
+			httpx.Error(w, http.StatusBadRequest, ie.Msg)
+			return
+		}
+		httpx.Error(w, http.StatusInternalServerError, "导出客户端配置失败: "+err.Error())
+		return
+	}
+	httpx.JSON(w, http.StatusOK, b)
 }
 
 // egressCountry 对应前端 detectEgressCountry:按出口公网 IP 判一次国家(只查不改设置),返回 {ip, country, at}。

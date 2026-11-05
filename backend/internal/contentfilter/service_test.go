@@ -327,17 +327,20 @@ func TestSaveEveryDialect(t *testing.T) {
 		"quantumultx":  "host, a.com, reject\n",
 		"stash":        "rules:\n  - DOMAIN,a.com,REJECT\n",
 	}
+	ids := map[string]string{} // texts 是 map,遍历顺序随机,所以按格式名记下每份的 id,不能写死
 	for d, txt := range texts {
 		l, err := e.svc.Save(ctx(), SaveInput{Name: d, Dialect: d, Text: strp(txt)})
 		if err != nil {
 			t.Fatalf("%s: %v", d, err)
 		}
-		if got := l.Sets[len(l.Sets)-1]; got.Dialect != Dialect(d) || got.RuleCount != 1 {
+		got := l.Sets[len(l.Sets)-1]
+		if got.Dialect != Dialect(d) || got.RuleCount != 1 {
 			t.Fatalf("%s: %+v", d, got)
 		}
+		ids[d] = got.ID
 	}
 	// 同一份文本换格式要重数:quantumultx 的写法按 surge 认不出,保存被拒
-	if _, err := e.svc.Save(ctx(), SaveInput{ID: "cf4", Name: "x", Dialect: "surge"}); !isInput(err) {
+	if _, err := e.svc.Save(ctx(), SaveInput{ID: ids["quantumultx"], Name: "x", Dialect: "surge"}); !isInput(err) {
 		t.Fatalf("quantumultx 的文本改成 surge 应认不出而被拒: %v", err)
 	}
 }

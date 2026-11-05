@@ -87,6 +87,10 @@ type Service struct {
 	Running func(ctx context.Context) (bool, error)
 	// Now 取当前时间,默认 time.Now(测试里换假的)。
 	Now func() time.Time
+	// KDFIter 是配对码封包的 PBKDF2 迭代次数,0 = DefaultSealIter(60 万次);只有测试会改小。
+	KDFIter int
+
+	keys keyCache // 当前这一代配对码派生出的密钥,只在内存里
 }
 
 // PortOf 取 "host:port" 里的端口;格式不对或不在 1~65535 返回 0。

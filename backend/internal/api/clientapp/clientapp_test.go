@@ -230,3 +230,72 @@ func TestEgressCountryHandler(t *testing.T) {
 		}
 	}
 }
+
+type fakeFile struct {
+	gotLan, gotPub string
+	calls          int
+	b              clientapp.Bundle
+	err            error
+}
+
+func (f *fakeFile) ExportFile(_ context.Context, lan, pub string) (clientapp.Bundle, error) {
+	f.calls++
+	f.gotLan, f.gotPub = lan, pub
+	return f.b, f.err
+}
+
+func TestClientConfigFile(t *testing.T) {
+	f := &fakeFile{b: clientapp.Bundle{Format: clientapp.BundleFormat, V: 1, RouterID: "r", RouterName: "n", ImportCode: "openbox://import?v=2", ExportedAt: 7,
+		Seal: clientapp.Envelope{V: 1, KDF: clientapp.SealKDF, Iter: 600000, Salt: "s", IV: "i", CT: "c"}}}
+	rec := callPath(t, Deps{File: f}, http.MethodPost, "/api/openbox/client-config/file", `{"lan":"192.168.5.1","publicBase":"https://h/"}`)
+	if rec.Code != 200 || !strings.Contains(rec.Header().Get("Cache-Control"), "no-store") {
+		t.Fatalf("%d %v %s", rec.Code, rec.Header(), rec.Body)
+	}
+	if f.gotLan != "192.168.5.1" || f.gotPub != "https://h/" {
+		t.Fatalf("参数没传到: %q %q", f.gotLan, f.gotPub)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	seal, _ := got["seal"].(map[string]any)
+	if got["format"] != "open-box-client-config" || got["importCode"] != "openbox://import?v=2" || got["exportedAt"] != float64(7) ||
+		seal["kdf"] != "pbkdf2-sha256" || seal["iter"] != float64(600000) || seal["ct"] != "c" {
+		t.Fatalf("响应形状: %s", rec.Body)
+	}
+	// 两个参数都可以不传
+	f.calls = 0
+	if rec := callPath(t, Deps{File: f}, http.MethodPost, "/api/openbox/client-config/file", `{}`); rec.Code != 200 || f.gotLan != "" || f.gotPub != "" {
+		t.Fatalf("空参数: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestClientConfigFileErrors(t *testing.T) {
+	// 没接服务 503;GET 405
+	if rec := callPath(t, Deps{}, http.MethodPost, "/api/openbox/client-config/file", `{}`); rec.Code != 503 {
+		t.Errorf("没接服务: %d", rec.Code)
+	}
+	if rec := callPath(t, Deps{File: &fakeFile{}}, http.MethodGet, "/api/openbox/client-config/file", ""); rec.Code != 405 {
+		t.Errorf("GET: %d", rec.Code)
+	}
+	// 请求体不是 JSON / 后面还跟东西 / 太大:400 或 413,且没调用服务
+	f := &fakeFile{}
+	for _, body := range []string{`nope`, `{} {}`, `{"lan":"` + strings.Repeat("a", 9000) + `"}`} {
+		rec := callPath(t, Deps{File: f}, http.MethodPost, "/api/openbox/client-config/file", body)
+		if rec.Code != 400 && rec.Code != 413 {
+			t.Errorf("坏请求体 %.20q: %d", body, rec.Code)
+		}
+	}
+	if f.calls != 0 {
+		t.Errorf("坏请求体不该调用服务: %d", f.calls)
+	}
+	// 参数不合格 400,带中文原因;别的错误 500 且不回显内部细节以外的东西
+	rec := callPath(t, Deps{File: &fakeFile{err: &clientapp.InputError{Msg: "lan 必须是 IP 地址或主机名"}}}, http.MethodPost, "/api/openbox/client-config/file", `{"lan":"a b"}`)
+	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "lan 必须是") {
+		t.Errorf("InputError: %d %s", rec.Code, rec.Body)
+	}
+	rec = callPath(t, Deps{File: &fakeFile{err: errors.New("boom")}}, http.MethodPost, "/api/openbox/client-config/file", `{}`)
+	if rec.Code != 500 || !strings.Contains(rec.Body.String(), "导出客户端配置失败") {
+		t.Errorf("内部错误: %d %s", rec.Code, rec.Body)
+	}
+}

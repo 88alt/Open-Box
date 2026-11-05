@@ -651,7 +651,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			return info.Running, err
 		},
 	}
-	clientappapi.Register(srv.Mux(), clientappapi.Deps{Service: clientAppSvc, Config: clientAppSvc, Egress: clientAppSvc})
+	clientappapi.Register(srv.Mux(), clientappapi.Deps{Service: clientAppSvc, Config: clientAppSvc, File: clientAppSvc, Egress: clientAppSvc})
 
 	// 内容过滤:规则集和脚本的快照(记录在 content-filter.json,每份文本另存 content-filter/<id>.txt),路由器只存不执行
 	contentfilterapi.Register(srv.Mux(), contentfilterapi.Deps{Service: &contentfilter.Service{
