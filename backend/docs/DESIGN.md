@@ -82,3 +82,14 @@
 | 客户端 App 的默认地区分流(`client-app/info` 的 `defaultShareRegions`,「恢复默认」= 存空数组) | 三组:「中国大陆」(`CN`;geosite cn、geoip cn 本地直连,其余经路由器;DNS 直连系统 DNS、代理 TCP 1.1.1.1)、「港澳」(`HK`、`MO`)、「其他地区」(默认组,`CN` / `HK` / `MO` 之外);后两组本地直连、只把 geosite cn、geoip cn 送回路由器,DNS 两侧都是系统 DNS(与前端 `regionDnsDefaults` 一致)。自研定的起点,没有参照上游;用户可随时改 |
 | 档案默认值 | `region` 默认 `cn`;DNS 上游按前端 `regionDefaultsPatch`;`testUrl` 用 gstatic 204,`directTestUrl` 用华为 connectivitycheck 204;流量保留 12 个月 |
 | DNS 查询日志位置(`-dns-query-log`) | 默认 `/var/run/openbox-dnsmasq.log`(内存盘,不写闪存 / SD 卡),DNS 接管时让 dnsmasq 写到这里;`off` = 不开不读;用户自己设了日志去向就不覆盖 |
+| 热切换开关状态(`flipFlags`) | core 在 `configDetailed` 的返回里多带 `flipFlags`(`{tag: bool}`),不新增方法;core 的金标准只手写期望值或用自己的测试向量,不用官方二进制 / 压缩 bundle 重新生成;后端不改 core,core 做完后在 `WriteLocalSets` 写 `obflip-*` 的初始状态,运行中热切换留到真机阶段 |
+| core 现有金标准 | 保留只读,不再重新生成,逐步换成自己写的测试向量(core/HANDOFF 第四节 2) |
+| 内容过滤的三份默认规则(`content-filter*`) | 先不预置:没有可靠依据的规则不预置(同 `dnsRewriteDefaults`)。默认列表为空,做成内嵌的 `defaults.json`,以后只改数据;「恢复默认」在默认为空时 = 列表清空,前端按钮不报错 |
+| 内容过滤列表的 `sha256` / `size` | 对「启用的集合按 id 排序后的规范化内容」算,算一次缓存,增删改时失效;每个集合的规则文本单独存文件,列表接口不读全部文本 |
+| 内容过滤五种格式的计数与 `arguments` | 按段落逐行计数:`ruleCount` 规则行、`scriptCount` 脚本或带脚本的重写、`skipped` 认不出的行(不报错);`arguments` 只做 `{{{名字}}}` 的文本代入,没给值的保持原样;先做 surge / loon / shadowrocket,再 quantumultx 和 stash;抓取复用 `rulelist.Fetch`(http(s),8 MiB) |
+| 配对码封包(`client-config/file`、`share-codes*`) | 自己定义格式,带版本号 `v:1`:AES-256-GCM,密钥由配对码经 PBKDF2-HMAC-SHA256(60 万次)派生,密钥在配对码生成 / 更换时派生一次、只放内存;同步开关关着回 403 `{error:"disabled"}`,不进密码运算,按 IP 限速且放在派生和解密之前;换码时代数加一、该服务器的密码一起换并走部署;**与上游 App 不互通**(上游格式无从合法得知,要互通须维护者提供 App 端格式说明) |
+| 订阅分享的对外链接 `/sub/<token>` | 按 User-Agent 或 `?format=` 选格式,默认 base64 分享链接,先做 base64 + `singbox`、后做 `clash`;路由在 `/api/` 鉴权之外;存 token 的 SHA-256、先哈希再查表;失败一律同样的 404,按 IP 对失败限速、超限 429;内容按「分享 id + 节点池版本 + 订阅更新时间」缓存,`ETag` / 304,最多并发生成 2 份;`no-store`,带 `subscription-userinfo`,日志不打 token |
+| 带宽择优(3414adff) | 整体回退(`git revert`,不改写历史),按前端 `BandwidthSettingsCard` 和 sing-box 公开文档重写;core 层 e5f8d5ab 保留。回退期间 `GET /api/openbox/bandwidth` 返回 404 |
+| `route-test` 的 `dns.stale` / `debug`、`penetration` 的 `firstLayer` / `preMatch` | 不做:前端没规定含义,或依据的是上游部署产物。`route-test` 的 `context` 留到 `terminal-test` 做探测时一起做 |
+| Docker 平台 | 不在范围(目标平台只有 OpenWrt 和 Debian) |
+| M6 发布包设计 | 由后端起草,另出文档(`docs/M6.md`)交维护者过目;确认前不动 `update*` 第二部分和打包的代码。发布签名 v1 不做(只做 SHA256 加 HTTPS),需要签名时由维护者生成密钥并放进 Actions secrets |
