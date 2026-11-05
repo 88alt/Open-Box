@@ -20,6 +20,7 @@ import (
 	clientappapi "github.com/timeflysoon/Open-Box/backend/internal/api/clientapp"
 	clientsapi "github.com/timeflysoon/Open-Box/backend/internal/api/clients"
 	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
+	contentfilterapi "github.com/timeflysoon/Open-Box/backend/internal/api/contentfilter"
 	controllerapi "github.com/timeflysoon/Open-Box/backend/internal/api/controller"
 	deployapi "github.com/timeflysoon/Open-Box/backend/internal/api/deploy"
 	diagnosticsapi "github.com/timeflysoon/Open-Box/backend/internal/api/diagnostics"
@@ -49,6 +50,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/backup"
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
+	"github.com/timeflysoon/Open-Box/backend/internal/contentfilter"
 	"github.com/timeflysoon/Open-Box/backend/internal/controllerproxy"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
 	"github.com/timeflysoon/Open-Box/backend/internal/deploystate"
@@ -583,7 +585,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		factoryreset.Step{Name: "故障转移检测", Run: func(context.Context) error { failoverMgr.SetPlan(nil); return nil }},
 		factoryreset.RemoveFiles("故障转移计划", failoverPlanPath),
 		factoryreset.RemoveFiles("生成的内核配置", filepath.Join(cfg.ConfigDir, "config.json"), deployer.PrevPath()),
-		factoryreset.ClearDirs("规则集和过滤名单缓存", rulesDir, filepath.Join(cfg.DataDir, "dns-filter")),
+		factoryreset.ClearDirs("规则集、过滤名单和内容过滤文本", rulesDir, filepath.Join(cfg.DataDir, "dns-filter"), filepath.Join(cfg.DataDir, "content-filter")),
 		factoryreset.RemoveFiles("内核缓存", filepath.Join(cfg.DataDir, "cache.db")),
 		// 订阅、节点、节点组、档案、面板设置、背景图、各种状态……全部 .json;访问密码留到最后,DNS 接管和虚拟终端的记录是撤销用的、不删
 		factoryreset.Step{Name: "已保存的数据", Run: func(context.Context) error { _, err := st.Clear("auth", "dns-takeover", "terminal-net"); return err }},
@@ -650,6 +652,11 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		},
 	}
 	clientappapi.Register(srv.Mux(), clientappapi.Deps{Service: clientAppSvc, Config: clientAppSvc, Egress: clientAppSvc})
+
+	// 内容过滤:规则集和脚本的快照(记录在 content-filter.json,每份文本另存 content-filter/<id>.txt),路由器只存不执行
+	contentfilterapi.Register(srv.Mux(), contentfilterapi.Deps{Service: &contentfilter.Service{
+		Store: st, Dir: filepath.Join(cfg.DataDir, "content-filter"),
+	}})
 
 	// 订阅分享(只管记录和 token;对外的 /sub/<token> 下发内容是另一条,还没做):新选的订阅必须存在
 	subsharesapi.Register(srv.Mux(), subsharesapi.Deps{Service: &subshare.Service{

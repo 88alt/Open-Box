@@ -153,6 +153,17 @@
 | PATCH | `/api/openbox/content-filter/{x}` | `setContentFilterEnabled` (api/clientApp.ts:298) | OpenboxContentFilterList | (id: string, enabled: boolean) |
 | GET | `/api/openbox/content-filter/{x}/source` | `fetchContentFilterSource` (api/clientApp.ts:278) | { text: string } | (id: string) |
 
+实现约定(M2,自己的设计,依据前端 `OpenboxContentFilter*` 类型和 `ContentFilterCard.vue`、Surge / Loon / Shadowrocket 的公开文档,没有参照上游;路由器只存快照,不执行规则):
+- 存储:记录在 `content-filter.json`,每份规则文本单独存 `<数据目录>/content-filter/<id>.txt`(存盘前规整:去 BOM、换行统一 `\n`、行尾去空白、结尾只留一个换行)。列表接口不读全部文本;`GET /content-filter/{id}/source` 取单份。上限:50 份、单份文本 512 KiB(与前端上传一致)、必须是 UTF-8。恢复出厂会连文本目录一起清。
+- 列表 `{sets, sha256, size}`:`sha256` / `size` 对「启用的集合按 id 排序后的规范化内容」算(每份依次是 id、格式、文本,带长度前缀),算一次缓存,新建 / 更新 / 启停 / 删除 / 恢复默认时失效;没有启用的集合时是空内容的摘要、`size` 为 0。`sets[]` 的 `updatedAt` 是 RFC3339(UTC);`skipped` 为 0 时不输出;`arguments` 只在有值时输出,形如 `{values:{名字:值}}`。
+- `POST /content-filter`(新建 / 更新,回整份列表):`id` 空 = 新建(默认启用),有 id = 更新(不存在 404,启用状态不变);`name` 必填(最长 80 个字符),`dialect` 取 `surge` / `quantumultx` / `loon` / `shadowrocket` / `stash`。文本来源按顺序:`text` 非空白 → 直接用(不再代入参数);否则 `sourceUrl` 有值 → 后端抓取并代入参数;否则更新时沿用已存的文本(只改名 / 格式);都没有 400。`arguments` 没传 = 更新时沿用已存的值(前端「立即更新」不带参数),传了(含 `{}`)= 整个替换;值只能是字符串 / 数字 / 布尔,最多 50 个,名字不含花括号。至少要认出一条规则或脚本,否则 400「没有认得出的规则或脚本」。
+- `POST /content-filter/preview`:抓取 `sourceUrl`(http(s),8 MiB 上限,超限报错不截断)、代入参数、规整、按格式校验,回 `{text}`,不保存。抓取失败 502,链接不合法 400。
+- 参数代入:只做文本里的 `{{{名字}}}` → 值(名字两侧空白忽略);没给值的、值不是标量的保持原样,不做默认值、条件或别的语法。
+- 计数(逐行、按段落,认不出的行不报错,注释 `#` `;` `//`、空行、元信息行和不关心的段 MITM / General 等不计):`ruleCount` = 规则段里认得出的行,`scriptCount` = 脚本条目或带脚本的重写,`skipped` = 这些段里认不出的行。Surge / Shadowrocket:`[Rule]`(规则类型名认得才算)、`[URL Rewrite]`(末词是 reject* / 302 / 307 / header)、`[Header Rewrite]` / `[Body Rewrite]`(`http-*` 开头)、`[Map Local]`(带 `data=` / `data-type=` / `data-path=`)算规则,`[Script]` 里带 `script-path=` 的算脚本;Loon:`[Rule]`、`[Rewrite]`(第二个词是 reject* / 302 / 307 / header* / mock-* / request-* / response-* 算规则,`script-*` 算脚本)、`[Script]`(带 `script-path=`)。第一个段头之前的行按规则行算(纯规则集文件没有段头)。
+- 格式 `quantumultx` 和 `stash` 排在第二批,现在保存和预览都回 501「该规则格式暂不支持」。
+- 恢复默认:随包默认放在内嵌的 `internal/contentfilter/defaults.json`(现在为空:没有可靠依据的规则不预置)。默认为空时 = 列表清空(按钮不报错);不为空时每份默认回到随包内容和启用状态、被删的补回、自己加的保留。
+- 错误:400 参数 / 内容不合法,404 没有这份规则集,501 格式暂不支持,502 抓取失败,500 其它;`{error}` 为中文信息。
+
 ## `/api/openbox/defaults`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
