@@ -135,7 +135,6 @@ func TestSaveErrors(t *testing.T) {
 		{"没名字", SaveInput{Dialect: "surge", Text: &ok}, isInput},
 		{"名字太长", SaveInput{Name: strings.Repeat("长", 81), Dialect: "surge", Text: &ok}, isInput},
 		{"格式不认识", SaveInput{Name: "a", Dialect: "clash", Text: &ok}, isInput},
-		{"格式暂不支持", SaveInput{Name: "a", Dialect: "stash", Text: &ok}, func(err error) bool { return errors.Is(err, ErrUnsupported) }},
 		{"链接不是 http", SaveInput{Name: "a", Dialect: "surge", SourceURL: "ftp://x/y"}, isInput},
 		{"文本和链接都没有", SaveInput{Name: "a", Dialect: "surge", Text: &empty}, isInput},
 		{"只有空白", SaveInput{Name: "a", Dialect: "surge", Text: &blank}, isInput},
@@ -246,12 +245,11 @@ func TestPreview(t *testing.T) {
 	}
 	e.pages["https://x/junk"] = "hello world"
 	for name, in := range map[string]PreviewInput{
-		"没链接":     {Dialect: "surge"},
-		"格式不对":    {Dialect: "x", SourceURL: "https://x/r"},
-		"认不出内容":   {Dialect: "surge", SourceURL: "https://x/junk"},
-		"链接坏":     {Dialect: "surge", SourceURL: "javascript:1"},
-		"参数不合法":   {Dialect: "surge", SourceURL: "https://x/r", Arguments: map[string]any{"a": nil}},
-		"暂不支持的格式": {Dialect: "quantumultx", SourceURL: "https://x/r"},
+		"没链接":   {Dialect: "surge"},
+		"格式不对":  {Dialect: "x", SourceURL: "https://x/r"},
+		"认不出内容": {Dialect: "surge", SourceURL: "https://x/junk"},
+		"链接坏":   {Dialect: "surge", SourceURL: "javascript:1"},
+		"参数不合法": {Dialect: "surge", SourceURL: "https://x/r", Arguments: map[string]any{"a": nil}},
 	} {
 		if _, err := e.svc.Preview(ctx(), in); err == nil {
 			t.Errorf("%s: 应报错", name)
@@ -319,3 +317,27 @@ func isInput(err error) bool {
 }
 
 func strp(s string) *string { return &s }
+
+func TestSaveEveryDialect(t *testing.T) {
+	e := newEnv(t)
+	texts := map[string]string{
+		"surge":        "DOMAIN,a.com\n",
+		"shadowrocket": "DOMAIN,a.com\n",
+		"loon":         "DOMAIN,a.com\n",
+		"quantumultx":  "host, a.com, reject\n",
+		"stash":        "rules:\n  - DOMAIN,a.com,REJECT\n",
+	}
+	for d, txt := range texts {
+		l, err := e.svc.Save(ctx(), SaveInput{Name: d, Dialect: d, Text: strp(txt)})
+		if err != nil {
+			t.Fatalf("%s: %v", d, err)
+		}
+		if got := l.Sets[len(l.Sets)-1]; got.Dialect != Dialect(d) || got.RuleCount != 1 {
+			t.Fatalf("%s: %+v", d, got)
+		}
+	}
+	// 同一份文本换格式要重数:quantumultx 的写法按 surge 认不出,保存被拒
+	if _, err := e.svc.Save(ctx(), SaveInput{ID: "cf4", Name: "x", Dialect: "surge"}); !isInput(err) {
+		t.Fatalf("quantumultx 的文本改成 surge 应认不出而被拒: %v", err)
+	}
+}

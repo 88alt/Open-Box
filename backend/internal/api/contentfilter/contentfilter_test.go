@@ -106,8 +106,7 @@ func TestErrorStatuses(t *testing.T) {
 		want                     int
 	}{
 		{"没名字", "POST", "/api/openbox/content-filter", `{"dialect":"surge","text":"DOMAIN,a"}`, 400},
-		{"格式暂不支持", "POST", "/api/openbox/content-filter", `{"name":"a","dialect":"stash","text":"DOMAIN,a"}`, 501},
-		{"quantumultx 预览", "POST", "/api/openbox/content-filter/preview", `{"dialect":"quantumultx","sourceUrl":"https://x/r"}`, 501},
+		{"格式不认识", "POST", "/api/openbox/content-filter", `{"name":"a","dialect":"clash","text":"DOMAIN,a"}`, 400},
 		{"链接格式错(来自抓取层)", "POST", "/api/openbox/content-filter/preview", `{"dialect":"surge","sourceUrl":"https://x/bad"}`, 400},
 		{"抓取失败", "POST", "/api/openbox/content-filter/preview", `{"dialect":"surge","sourceUrl":"https://down/x"}`, 502},
 		{"JSON 坏了", "POST", "/api/openbox/content-filter", `{`, 400},

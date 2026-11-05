@@ -160,9 +160,11 @@
 - `POST /content-filter/preview`:抓取 `sourceUrl`(http(s),8 MiB 上限,超限报错不截断)、代入参数、规整、按格式校验,回 `{text}`,不保存。抓取失败 502,链接不合法 400。
 - 参数代入:只做文本里的 `{{{名字}}}` → 值(名字两侧空白忽略);没给值的、值不是标量的保持原样,不做默认值、条件或别的语法。
 - 计数(逐行、按段落,认不出的行不报错,注释 `#` `;` `//`、空行、元信息行和不关心的段 MITM / General 等不计):`ruleCount` = 规则段里认得出的行,`scriptCount` = 脚本条目或带脚本的重写,`skipped` = 这些段里认不出的行。Surge / Shadowrocket:`[Rule]`(规则类型名认得才算)、`[URL Rewrite]`(末词是 reject* / 302 / 307 / header)、`[Header Rewrite]` / `[Body Rewrite]`(`http-*` 开头)、`[Map Local]`(带 `data=` / `data-type=` / `data-path=`)算规则,`[Script]` 里带 `script-path=` 的算脚本;Loon:`[Rule]`、`[Rewrite]`(第二个词是 reject* / 302 / 307 / header* / mock-* / request-* / response-* 算规则,`script-*` 算脚本)、`[Script]`(带 `script-path=`)。第一个段头之前的行按规则行算(纯规则集文件没有段头)。
-- 格式 `quantumultx` 和 `stash` 排在第二批,现在保存和预览都回 501「该规则格式暂不支持」。
+- Quantumult X:`[filter_local]`(`host` / `host-suffix` / `host-keyword` / `host-wildcard` / `ip-cidr` / `ip6-cidr` / `ip-asn` / `geoip` / `user-agent` / `url-regex` / `final`)算规则;`[rewrite_local]` 的行形如 `<正则> url <类型> [值]`,类型是 reject* / 302 / 307 / header / request-* / response-* / echo-* / jsonjq-* / mock-* 算规则,`script-*` 算脚本;`[task_local]` 里带 `.js` 的 cron 行(5 段时间 + 脚本路径)或 `event-*` 行算脚本。`[rewrite_remote]`(别的文件的链接)、`[mitm]`、`[general]` 整段忽略;没有段头的文件按 `[filter_local]` 的规则行算。
+- Stash(YAML 覆写文件,不做完整 YAML 解析,只按缩进逐行认):顶层 `rules:` 的每个 `- 规则` 认得出的算规则;`http:` 下 `url-rewrite` / `header-rewrite` / `body-rewrite` 是字符串列表,口径同 Surge;`map-local` 每个条目算一条规则,`script` 每个条目算一个脚本(条目是多行映射,只数 `- key:` 开头的那一行,条目里嵌套的列表不数);`cron:` 下 `script` 的每个条目算一个脚本。`mitm`、`script-providers`、`name` / `desc` 等其它键整段忽略。
+- 五种格式都已支持;格式字符串不是这五种之一回 400。
 - 恢复默认:随包默认放在内嵌的 `internal/contentfilter/defaults.json`(现在为空:没有可靠依据的规则不预置)。默认为空时 = 列表清空(按钮不报错);不为空时每份默认回到随包内容和启用状态、被删的补回、自己加的保留。
-- 错误:400 参数 / 内容不合法,404 没有这份规则集,501 格式暂不支持,502 抓取失败,500 其它;`{error}` 为中文信息。
+- 错误:400 参数 / 内容不合法,404 没有这份规则集,502 抓取失败,500 其它;`{error}` 为中文信息。
 
 ## `/api/openbox/defaults`
 

@@ -13,6 +13,17 @@ func TestCount(t *testing.T) {
 	loonPlugin := "#!name=x\n[Rule]\nDOMAIN,a.com,REJECT\nIP-CIDR,1.1.1.0/24,REJECT,no-resolve\n" +
 		"[Rewrite]\n^https://a/ reject-200\n^https://b/ 302 https://c/\n^https://d/ script-response-body https://s/d.js\n^https://e/ response-body-json-del data.ads\nweird\n" +
 		"[Script]\nhttp-response ^https://f/ script-path=https://s/f.js, tag=f\ncron \"0 8 * * *\" script-path=https://s/c.js\nnope\n[MITM]\nhostname = a.com\n"
+	qx := "[general]\nforce-http-engine-hosts = a.com\n[filter_local]\nhost, a.com, reject\nhost-suffix, b.com, proxy\nip-cidr, 1.1.1.0/24, direct\nnonsense\n" +
+		"[rewrite_local]\n^https://a/ url reject-200\n^https://b/ url 302 https://c/\n^https://d/ url script-response-body https://s/d.js\n" +
+		"^https://e/ url request-header (\\r\\n)A:.+ request-header (\\r\\n)A: b\nweird line here\n" +
+		"[rewrite_remote]\nhttps://x/r.conf, tag=r, update-interval=86400, enabled=true\n" +
+		"[task_local]\n0 8 * * * https://s/t.js, tag=t, enabled=true\nevent-interaction https://s/e.js, tag=e\nbad task\n[mitm]\nhostname = a.com\n"
+	stash := "name: 测试\ndesc: x\nrules:\n  - DOMAIN-SUFFIX,ads.com,REJECT\n  - \"DOMAIN,b.com,REJECT\"\n  - bogus\n" +
+		"http:\n  mitm:\n    - \"a.com\"\n  url-rewrite:\n    - ^https?://a/ - reject\n    - ^http://b/ https://b/ 302\n    - nonsense\n" +
+		"  header-rewrite:\n    - http-request ^https://c/ header-del Cookie\n  body-rewrite:\n    - http-response-jq ^https://d/ '.a=1'\n" +
+		"  map-local:\n    - match: ^https://e/\n      data: \"{}\"\n" +
+		"  script:\n    - match: ^https://f/\n      name: f\n      type: response\n    - match: ^https://g/\n      name: g\n" +
+		"script-providers:\n  f:\n    url: https://s/f.js\ncron:\n  script:\n    - name: f\n      cron: \"0 8 * * *\"\n"
 	cases := []struct {
 		name string
 		d    Dialect
@@ -23,6 +34,10 @@ func TestCount(t *testing.T) {
 		{"shadowrocket 同 surge", Shadowrocket, surgeModule, Counts{Rules: 7, Scripts: 1, Skipped: 4}},
 		{"loon 插件", Loon, loonPlugin, Counts{Rules: 5, Scripts: 3, Skipped: 2}},
 		{"纯规则集没有段头", Surge, "# c\nDOMAIN,a.com\nAND,((DOMAIN,a),(DST-PORT,443)),REJECT\nfoo\n", Counts{Rules: 2, Skipped: 1}},
+		{"quantumultx", QuantumultX, qx, Counts{Rules: 6, Scripts: 3, Skipped: 3}},
+		{"quantumultx 纯规则集", QuantumultX, "host-suffix, a.com, proxy\nDOMAIN,a.com\n", Counts{Rules: 1, Skipped: 1}},
+		{"stash", Stash, stash, Counts{Rules: 7, Scripts: 3, Skipped: 2}},
+		{"stash 没有 YAML 结构", Stash, "hello\nworld\n", Counts{}},
 		{"surge 里的 loon 段不认", Surge, "[Rewrite]\n^a reject\n", Counts{}},
 		{"空文本", Surge, "", Counts{}},
 	}
@@ -32,9 +47,12 @@ func TestCount(t *testing.T) {
 			t.Errorf("%s: got %+v err=%v, want %+v", c.name, got, err, c.want)
 		}
 	}
-	for _, d := range []Dialect{QuantumultX, Stash} {
-		if _, err := Count(d, "x"); err != ErrUnsupported || Supported(d) {
-			t.Errorf("%s 应暂不支持", d)
+	if _, err := Count(Dialect("clash"), "x"); err != ErrUnsupported || Supported("clash") {
+		t.Error("不认识的格式应返回 ErrUnsupported")
+	}
+	for _, d := range []Dialect{Surge, QuantumultX, Loon, Shadowrocket, Stash} {
+		if !Supported(d) {
+			t.Errorf("%s 应已支持", d)
 		}
 	}
 }
