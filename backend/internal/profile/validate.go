@@ -28,11 +28,6 @@ const (
 	maxExtras     = 3
 	minKeepMonths = 1
 	maxKeepMonths = 36
-	// 带宽择优的统一测速参数范围(与上游 / 面板一致)
-	minBandwidthHours = 1
-	maxBandwidthHours = 24
-	minBandwidthMB    = 1
-	maxBandwidthMB    = 1024
 )
 
 // Check 校验合并后的完整档案。只检查「已知字段」,未知字段原样放行。
@@ -72,9 +67,6 @@ func Check(p map[string]any) error {
 		return err
 	}
 	if err := checkTraffic(p); err != nil {
-		return err
-	}
-	if err := checkBandwidth(p); err != nil {
 		return err
 	}
 	return checkUpdates(p)
@@ -373,27 +365,6 @@ func checkTraffic(p map[string]any) error {
 		return err
 	}
 	tr["keepMonths"] = float64(min(max(n, minKeepMonths), maxKeepMonths))
-	return nil
-}
-
-// checkBandwidth:带宽择优的统一测速参数。和流量保留不同,越界不夹,直接报错(与上游一致)。
-func checkBandwidth(p map[string]any) error {
-	bw, err := wantObject(p, "bandwidth", "bandwidth")
-	if err != nil || bw == nil {
-		return err
-	}
-	for _, f := range []struct {
-		key    string
-		lo, hi int
-	}{{"intervalHours", minBandwidthHours, maxBandwidthHours}, {"maxDownloadMB", minBandwidthMB, maxBandwidthMB}} {
-		n, ok, err := wantInt(bw, f.key, "bandwidth."+f.key)
-		if err != nil {
-			return fmt.Errorf("bandwidth.%s 必须是 %d~%d 的整数", f.key, f.lo, f.hi)
-		}
-		if ok && (n < f.lo || n > f.hi) {
-			return fmt.Errorf("bandwidth.%s 必须是 %d~%d 的整数", f.key, f.lo, f.hi)
-		}
-	}
 	return nil
 }
 
