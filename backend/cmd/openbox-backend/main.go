@@ -633,8 +633,12 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 客户端 App 页的信息:路由器标识、局域网地址与网段、地区分流、路由器名称。只读网卡和档案,
 	// 路由器 ID 第一次读时生成并存进状态目录。本地分流的同步状态(client-config:开关、配对码、换码)也在这里;封包、App 用的公开同步接口等私有约定另列条目,还没做
 	egressDetector := &regiondetect.Detector{} // 与 dns/region-detect 各用各的:互不占用「判断中」状态
+	// 内容过滤:规则集和脚本的快照(记录在 content-filter.json,每份文本另存 content-filter/<id>.txt),路由器只存不执行。
+	// 同一个实例既给 content-filter* 接口用,也给本地分流的同步明文取启用集合的快照(同一把锁,拿到的是同一时刻的内容)
+	contentFilterSvc := &contentfilter.Service{Store: st, Dir: filepath.Join(cfg.DataDir, "content-filter")}
 	clientAppSvc := &clientapp.Service{
 		Store: st, Profile: profileSvc.Get, LAN: system.LAN, PanelPort: clientapp.PortOf(cfg.Listen),
+		ContentFilter: func(ctx context.Context) (contentfilter.Snapshot, error) { return contentFilterSvc.Snapshot(ctx, 0) },
 		// 出口国家:内核在运行时才判(只查询,不改任何设置),结果缓存在状态目录里
 		DetectEgress: func(ctx context.Context) (string, string, error) {
 			r := egressDetector.Detect(ctx)
@@ -654,10 +658,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	clientappapi.Register(srv.Mux(), clientappapi.Deps{Service: clientAppSvc, Config: clientAppSvc, File: clientAppSvc, Sync: clientAppSvc, Egress: clientAppSvc})
 	go clientAppSvc.Warm(context.Background()) // 把当前配对码的密钥预先派生好,第一次同步不用现算
 
-	// 内容过滤:规则集和脚本的快照(记录在 content-filter.json,每份文本另存 content-filter/<id>.txt),路由器只存不执行
-	contentfilterapi.Register(srv.Mux(), contentfilterapi.Deps{Service: &contentfilter.Service{
-		Store: st, Dir: filepath.Join(cfg.DataDir, "content-filter"),
-	}})
+	contentfilterapi.Register(srv.Mux(), contentfilterapi.Deps{Service: contentFilterSvc})
 
 	// 订阅分享(只管记录和 token;对外的 /sub/<token> 下发内容是另一条,还没做):新选的订阅必须存在
 	subsharesapi.Register(srv.Mux(), subsharesapi.Deps{Service: &subshare.Service{

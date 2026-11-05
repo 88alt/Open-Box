@@ -175,11 +175,15 @@ func (d Deps) configFile(w http.ResponseWriter, r *http.Request) {
 	b, err := d.File.ExportFile(r.Context(), body.Lan, body.PublicBase)
 	if err != nil {
 		var ie *clientapp.InputError
-		if errors.As(err, &ie) {
+		var tl *clientapp.ContentFilterTooLargeError
+		switch {
+		case errors.As(err, &ie):
 			httpx.Error(w, http.StatusBadRequest, ie.Msg)
-			return
+		case errors.As(err, &tl): // 启用的内容过滤规则太多:如实说,不截断
+			httpx.Error(w, http.StatusConflict, tl.Error())
+		default:
+			httpx.Error(w, http.StatusInternalServerError, "导出客户端配置失败: "+err.Error())
 		}
-		httpx.Error(w, http.StatusInternalServerError, "导出客户端配置失败: "+err.Error())
 		return
 	}
 	httpx.JSON(w, http.StatusOK, b)
@@ -187,6 +191,7 @@ func (d Deps) configFile(w http.ResponseWriter, r *http.Request) {
 
 // syncConfig 是 App 的公开同步接口:GET /client/v1/config?p=<nonce>(nonce 就是导入码里的 p)。
 // 同步开关关着 403 {error:"disabled"}(前端注释写明的约定);来源 IP 被限速 429 加 Retry-After;nonce 对不上 404;
+// nonce 对上了但启用的内容过滤规则超过同步上限 409 {error:"content filter too large"}(不截断,也不更新 lastSyncAt);
 // 成功 200 返回封包(没有配对码解不开)。取来源 IP 用连接对端地址,不信任 X-Forwarded-For(谁都能伪造)。
 // 响应一律 no-store;日志只记方法、路径和状态,query 里的 nonce 不进日志。
 func (d Deps) syncConfig(w http.ResponseWriter, r *http.Request) {
@@ -198,6 +203,7 @@ func (d Deps) syncConfig(w http.ResponseWriter, r *http.Request) {
 	res, err := d.Sync.Sync(r.Context(), r.URL.Query().Get("p"), peerIP(r))
 	if err != nil {
 		var le *clientapp.LimitedError
+		var tl *clientapp.ContentFilterTooLargeError
 		switch {
 		case errors.Is(err, clientapp.ErrDisabled):
 			httpx.Error(w, http.StatusForbidden, "disabled")
@@ -207,6 +213,8 @@ func (d Deps) syncConfig(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, http.StatusTooManyRequests, le.Error())
 		case errors.Is(err, clientapp.ErrSyncNotFound):
 			httpx.Error(w, http.StatusNotFound, "not found")
+		case errors.As(err, &tl): // 已通过 nonce 才会走到这里;启用的内容过滤规则超过同步上限,不截断
+			httpx.Error(w, http.StatusConflict, "content filter too large")
 		default:
 			httpx.Error(w, http.StatusInternalServerError, "同步失败")
 		}

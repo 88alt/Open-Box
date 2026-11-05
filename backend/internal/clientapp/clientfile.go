@@ -3,12 +3,15 @@ package clientapp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/timeflysoon/Open-Box/backend/internal/contentfilter"
 )
 
 // POST /api/openbox/client-config/file:导出文件。把本地分流的配置用配对码封好,连同「导入码」一起给面板存成 .json。
@@ -43,12 +46,19 @@ type Bundle struct {
 // payload 是封进去的明文:App 导入后要用的整份本地分流配置。
 // shareRegions 是此刻生效的地区分流(没改过 = 默认三组)。App 发给内核时每组最前面要自己带上
 // 「lanSubnets 这些网段 → 回路由器」(前端对 lanSubnets 的说明),所以这里只给网段、不改每组的规则。
+//
+// contentFilter 是启用的内容过滤集合的快照(规则和脚本的文本,App 在手机上执行,见 contentfilter.Snapshot):
+// {sha256, size, sets:[{id, name, dialect, ruleCount, scriptCount, updatedAt, text}]},sha256 / size 与 GET /content-filter
+// 同一口径,App 拿它判断本地的快照要不要换。这一项是新增的可选键,payload 的 v 仍是 1(旧 App 忽略不认识的键);
+// 没有接内容过滤服务时整个键不出现,接了而没有启用的集合时是空的 sets。
+// 不分块:启用集合总量有 4 MiB 的上限(contentfilter.MaxSnapshotSize),整份放进同一个封包,局域网里一次传完。
 type payload struct {
-	V            int        `json:"v"`
-	Kind         string     `json:"kind"`
-	GeneratedAt  int64      `json:"generatedAt"`
-	Router       payloadRtr `json:"router"`
-	ShareRegions []Group    `json:"shareRegions"`
+	V             int                     `json:"v"`
+	Kind          string                  `json:"kind"`
+	GeneratedAt   int64                   `json:"generatedAt"`
+	Router        payloadRtr              `json:"router"`
+	ShareRegions  []Group                 `json:"shareRegions"`
+	ContentFilter *contentfilter.Snapshot `json:"contentFilter,omitempty"`
 }
 
 type payloadRtr struct {
@@ -64,6 +74,27 @@ type payloadRtr struct {
 type InputError struct{ Msg string }
 
 func (e *InputError) Error() string { return e.Msg }
+
+// ContentFilterTooLargeError:启用的内容过滤规则总量超过同步上限,导出和同步都不给(不截断、不挑几份)。
+type ContentFilterTooLargeError struct{ Size, Max int }
+
+func (e *ContentFilterTooLargeError) Error() string {
+	return (&contentfilter.TooLargeError{Size: e.Size, Max: e.Max}).Error() + ",请先在「内容过滤」里停用或删除一些"
+}
+
+// maxConcurrentSeals 是同一时刻最多几份封包在生成。明文最大约 4 MiB,生成时内存里同时有明文、密文、base64 和响应体,
+// 路由器上不能让一堆同步请求各占一份;多出来的请求等着(可随连接断开取消),不拒绝。
+const maxConcurrentSeals = 2
+
+func (s *Service) acquireSeal(ctx context.Context) (release func(), err error) {
+	s.sealOnce.Do(func() { s.sealSem = make(chan struct{}, maxConcurrentSeals) })
+	select {
+	case s.sealSem <- struct{}{}:
+		return func() { <-s.sealSem }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
 
 func (s *Service) kdfIter() int {
 	if s.KDFIter > 0 {
@@ -100,9 +131,26 @@ func (s *Service) ExportFile(ctx context.Context, lan, publicBase string) (Bundl
 
 // sealConfig 把此刻的本地分流配置按 is 里的配对码封好。导出文件和公开同步接口共用,返回封包和生成时刻(毫秒)。
 func (s *Service) sealConfig(ctx context.Context, is Issue) (Envelope, int64, error) {
+	release, err := s.acquireSeal(ctx)
+	if err != nil {
+		return Envelope{}, 0, err
+	}
+	defer release()
 	info, err := s.Info(ctx)
 	if err != nil {
 		return Envelope{}, 0, err
+	}
+	var cf *contentfilter.Snapshot
+	if s.ContentFilter != nil {
+		sn, err := s.ContentFilter(ctx)
+		if err != nil {
+			var tl *contentfilter.TooLargeError
+			if errors.As(err, &tl) {
+				return Envelope{}, 0, &ContentFilterTooLargeError{Size: tl.Size, Max: tl.Max}
+			}
+			return Envelope{}, 0, fmt.Errorf("读取内容过滤失败: %w", err)
+		}
+		cf = &sn
 	}
 	now := s.now().UnixMilli()
 	plain, err := json.Marshal(payload{
@@ -111,7 +159,8 @@ func (s *Service) sealConfig(ctx context.Context, is Issue) (Envelope, int64, er
 			ID: info.RouterID, Name: info.RouterName, LanAddresses: info.LanAddresses,
 			LanSubnets: info.LanSubnets, PanelPort: info.PanelPort, ServerInfo: info.ServerInfo,
 		},
-		ShareRegions: info.ShareRegions,
+		ShareRegions:  info.ShareRegions,
+		ContentFilter: cf,
 	})
 	if err != nil {
 		return Envelope{}, 0, fmt.Errorf("编码配置失败: %w", err)

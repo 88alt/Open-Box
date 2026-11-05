@@ -299,6 +299,11 @@ func TestClientConfigFileErrors(t *testing.T) {
 	if rec.Code != 500 || !strings.Contains(rec.Body.String(), "导出客户端配置失败") {
 		t.Errorf("内部错误: %d %s", rec.Code, rec.Body)
 	}
+	// 启用的内容过滤规则超过同步上限:409,带中文原因(多大、上限多少、怎么办),不是 500;登录后的接口可以说清楚
+	rec = callPath(t, Deps{File: &fakeFile{err: &clientapp.ContentFilterTooLargeError{Size: 5 << 20, Max: 4 << 20}}}, http.MethodPost, "/api/openbox/client-config/file", `{}`)
+	if rec.Code != 409 || !strings.Contains(rec.Body.String(), "5.0 MiB") || !strings.Contains(rec.Body.String(), "4.0 MiB") || !strings.Contains(rec.Body.String(), "停用或删除") {
+		t.Errorf("内容过滤太大: %d %s", rec.Code, rec.Body)
+	}
 }
 
 type fakeSync struct {
@@ -351,6 +356,7 @@ func TestSyncConfigErrors(t *testing.T) {
 		{"关着", clientapp.ErrDisabled, 403, `{"error":"disabled"}`},
 		{"nonce 不对", clientapp.ErrSyncNotFound, 404, `"error":"not found"`},
 		{"限速", &clientapp.LimitedError{After: 61500 * time.Millisecond}, 429, ""},
+		{"内容过滤太大", &clientapp.ContentFilterTooLargeError{Size: 5 << 20, Max: 4 << 20}, 409, `{"error":"content filter too large"}`},
 		{"内部错误", errors.New("db 路径 /secret 坏了"), 500, `"error":"同步失败"`},
 	}
 	for _, c := range cases {
