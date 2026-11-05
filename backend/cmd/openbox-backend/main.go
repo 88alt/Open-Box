@@ -655,7 +655,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			return info.Running, err
 		},
 	}
-	clientappapi.Register(srv.Mux(), clientappapi.Deps{Service: clientAppSvc, Config: clientAppSvc, File: clientAppSvc, Sync: clientAppSvc, Egress: clientAppSvc})
+	clientappapi.Register(srv.Mux(), clientappapi.Deps{Service: clientAppSvc, Config: clientAppSvc, File: clientAppSvc, Sync: clientAppSvc, Share: clientAppSvc, Egress: clientAppSvc})
 	go clientAppSvc.Warm(context.Background()) // 把当前配对码的密钥预先派生好,第一次同步不用现算
 
 	contentfilterapi.Register(srv.Mux(), contentfilterapi.Deps{Service: contentFilterSvc})

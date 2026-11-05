@@ -110,9 +110,11 @@
 | POST | `/api/openbox/client-app/share-codes` | `fetchShareCodeSeals` (api/clientApp.ts:215) | Record<string, OpenboxShareCodeSeal> | (links: Record<string, string>) |
 | POST | `/api/openbox/client-app/share-codes/{x}/rotate` | `rotateShareCode` (api/clientApp.ts:232) | OpenboxShareCodeRotated | (id: string) |
 
-实现约定(M2,只列已做的 `info`):`GET /client-app/info` 返回 `OpenboxClientAppInfo` 全部字段。`routerId` 第一次读时生成(32 位小写十六进制)并保存,之后不变,不提供更换;`lanAddresses` / `lanSubnets` 只含私有地址(跳过回环 / 隧道 / 容器网桥),IPv4 在前、LAN 口在前,`lanSubnets` 只有 IPv4;`panelPort` 是本后端监听的端口;`shareRegions` 没存或存了空数组 = 默认三组且 `shareRegionsCustomized` 为 false,`defaultShareRegions` 恒为默认三组;`serverInfo` 原样,`routerName` = `serverInfo.name`(去首尾空白)或「Open-Box」;`egressCountry` 是上一次 `POST egress-country` 判出的 `{ip, country, at}`,没判过或缓存不合格时为 `null`。`share-codes*` 未做,见 STATUS.md;封包格式和密钥派生见下面 `client-config` 的 `file` 一段。
+实现约定(M2,只列已做的 `info`):`GET /client-app/info` 返回 `OpenboxClientAppInfo` 全部字段。`routerId` 第一次读时生成(32 位小写十六进制)并保存,之后不变,不提供更换;`lanAddresses` / `lanSubnets` 只含私有地址(跳过回环 / 隧道 / 容器网桥),IPv4 在前、LAN 口在前,`lanSubnets` 只有 IPv4;`panelPort` 是本后端监听的端口;`shareRegions` 没存或存了空数组 = 默认三组且 `shareRegionsCustomized` 为 false,`defaultShareRegions` 恒为默认三组;`serverInfo` 原样,`routerName` = `serverInfo.name`(去首尾空白)或「Open-Box」;`egressCountry` 是上一次 `POST egress-country` 判出的 `{ip, country, at}`,没判过或缓存不合格时为 `null`。`share-codes`(POST)已做,见下面;`share-codes/{x}/rotate` 未做(见 STATUS.md,现在回 501);封包格式和密钥派生见下面 `client-config` 的 `file` 一段。
 
 `POST /client-app/egress-country`(M2):无请求体,返回 `{ip, country, at}`(`country` 两位大写国家代码,`at` 毫秒,是「最后确认的时刻」)。只在内核服务在运行时才判(复用 `dns/region-detect` 的三家 https IP 接口,顺序问、第一家给出合法 IP 和国家代码的为准,只查询不改设置);出口 IP 和上次相同就沿用上次的国家、只刷新 `at`(前端一天内不再重判,不刷新的话过一天每次打开页面都会重判),不同才换国家;结果存在 `client-app.json` 的 `egressCountry`。内核没在运行 / 没有 procd 或 systemd(面板不在路由器上)503,读不出服务状态 500,三家接口都问不到 502(带「主机: 原因」),请求被取消 / 超时 503。
+
+`POST /client-app/share-codes`(M2,共享网络服务器的 App 码;依据 DESIGN 第 8 节、前端 `OpenboxShareCodeSeal` 的注释和 `helper/clientAppCode.ts` 对 share 码的说明,封包沿用 `client-config` 的封包,share 码本身的格式没有参照上游):请求体 `{links: {服务器 id: 节点分享链接}}`(上限 1 MiB,`links` 必须是对象、值必须是字符串,否则 400;一次最多 64 台,超了 400)。链接由前端按服务器档案拼好交来,后端不自己拼。返回 `{服务器 id: {pairCode, gen, sealed}}`:id 不合格(字母 / 数字 / `_` / `-`,1–64 个字符)、档案 `servers` 里没有的、链接为空或超过 4096 个字符(或不是合法文本)的,回包里没有、也不建状态;一台都没有时回 `{}`。**每台服务器有自己的配对码**(长度和字母表同 `client-config`),第一次为它出码时生成并存进 `client-app.json` 的 `shareCodes`,之后不变(直到换码);`gen` 是 16 位小写十六进制的代数,第一次是 `0000000000000001`,换码时加一(前端只认这个格式的 `gen` 才拼码);`sealed` 是封包 `{kdf:{alg,iterations,salt}, data}` 的 JSON 文本(前端当不透明字符串,v=3 的码里已不带它)。封包与 `client-config/file` 同一套(PBKDF2-SHA256 + AES-256-GCM,salt 每个封包随机,无 AAD),明文 `{"v":1,"kind":"share-link","generatedAt":毫秒,"routerId":…,"sid":…,"gen":…,"link":…}`:路由器 ID、服务器 id、代数写在明文里,解开后核对,对不上按解不开处理。状态里**不存明文链接**,只存封包和链接的 HMAC-SHA256(密钥由路由器 ID、服务器 id、代数和配对码派生):同一条链接再交一次(面板每次打开页面都会交)认得出来,配对码、代数、封包原样返回、不写盘;链接变了(服务器改了密码)配对码和代数不变、封包换新。所有写串行化,同一时刻只有一份 PBKDF2 在跑。每次出码顺带清掉档案里已经没有的服务器的状态。响应 no-store,配对码不写日志。`share-codes/{x}/rotate` 还没做:现在回 501 `{error}`。
 
 ## `/api/openbox/client-config`
 
@@ -134,6 +136,14 @@
 | GET | `/client/v1/config?p=<nonce>` | App 同步本地分流配置;不需要登录,凭 nonce(导入码里的 `p`)访问 |
 
 前端没有这个接口的调用(它是给 App 的),约定取自前端 `OpenboxClientConfigIssue` 的注释(同步开关关着时公开接口一律回 403 `{error:"disabled"}`)和 DESIGN 第 8 节的授权口径,其余自己定;`/client/v1/` 下别的路径回 JSON 404。路由在 `/api/` 之外,所以不过登录鉴权(鉴权只拦 `/api/`)。判断顺序固定,每一步都比下一步便宜:一、同步开关关着(或从没配对过)403 `{error:"disabled"}`,只读状态文件,不进任何密码运算,也不记失败、不限速;二、来源 IP 被锁 429 加 `Retry-After`(秒,向上取整);三、`p` 和当前 nonce 常数时间比较,不对 404 `{error:"not found"}` 并给这个 IP 记一次失败;四、通过后返回 `{format:"open-box-client-config", v:1, routerId, exportedAt, seal}`,`seal` 与 `client-config/file` 同一套封包、同一份明文(含 `contentFilter` 快照;没有配对码解不开;启用的内容过滤规则超过 4 MiB 时回 409 `{error:"content filter too large"}`,不更新 `lastSyncAt`),并把 `lastSyncAt` 更新成现在(只在 nonce 没被换掉时写,换码清零的 `lastSyncAt` 不会被迟到的同步写回)。限速:按来源 IP,连续失败 10 次后锁定,1 分钟起逐次翻倍、封顶 15 分钟,15 分钟内没有新的失败清零,表最多 1024 条(满了清空);来源 IP 取连接对端地址,**不信任 `X-Forwarded-For`**(谁都能伪造),所以放在反向代理后面时所有人共用代理的 IP,请让代理直接转发而不是用它替换来源。内部错误只回「同步失败」,不带细节。响应 no-store,日志只记方法、路径和状态。密钥缓存:启动时(`Warm`)把当前配对码的密钥派生好,换码后第一次成功同步时派生一次并缓存。拿到封包的人可以离线爆破 40 位配对码(60 万次 PBKDF2 只是拖慢),所以 nonce 对上才给封包。
+
+## `/client/v1/share`(App 取回共享服务器节点配置的公开接口,不在 `/api/` 下)
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/client/v1/share?sid=<服务器 id>&g=<代数>` | App 扫了 share 码(`openbox://share?...&g=代数&sid=服务器ID`)后取回封包;不需要登录,凭 sid 和代数访问,封包要用这台服务器的配对码才解得开 |
+
+前端没有这个接口的调用(它是给 App 的),口径照 `/client/v1/config`,外壳自己定的部分:同一个同步开关(`client-config/enabled`)、同一份按来源 IP 的限速、同样的 `Retry-After` 和「不信任 `X-Forwarded-For`」。判断顺序:一、同步开关关着 403 `{error:"disabled"}`,只读状态文件,不进密码运算、不记失败;二、来源 IP 被锁 429 加 `Retry-After`;三、`sid` 不合格 / 这台服务器还没出过码 / `g` 和当前代数(常数时间比较)对不上 / 这台服务器已不在档案里,一律 404 `{error:"not found"}` 并给这个 IP 记一次失败(同一个失败计数,与 `/client/v1/config` 共用);四、通过后 200 `{format:"open-box-share", v:1, routerId, sid, gen, exportedAt, seal}`,`seal` 是最近一次 `share-codes` 封好的那份(`exportedAt` 是封的时刻),不重新封、不进密码运算,也不更新 `lastSyncAt`(那是本地分流的)。链接停留在最近一次面板交来的版本:服务器改了而面板没再打开过「共享网络」页时,这里还是旧的;换码(`rotate`,未做)会立刻让旧 `gen` 失效。内部错误只回「取回失败」,不带细节。响应 no-store,日志只记方法、路径和状态,query 不进日志。
 
 ## `/api/openbox/clients`
 

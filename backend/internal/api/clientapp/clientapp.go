@@ -37,17 +37,24 @@ type SyncService interface {
 	Sync(ctx context.Context, nonce, ip string) (clientapp.SyncResult, error)
 }
 
+// ShareService 是共享网络服务器的 App 码要用的功能(*clientapp.Service 满足)。
+type ShareService interface {
+	ShareCodes(ctx context.Context, links map[string]string) (map[string]clientapp.ShareSeal, error)
+	Share(ctx context.Context, sid, gen, ip string) (clientapp.ShareResult, error)
+}
+
 // EgressService 是按出口 IP 判国家要用的功能(*clientapp.Service 满足)。
 type EgressService interface {
 	DetectEgressCountry(ctx context.Context) (clientapp.EgressCountry, error)
 }
 
-// Deps 是本分组的依赖。Config 为 nil 时 client-config* 回 503,File 为 nil 时 client-config/file 回 503,Sync 为 nil 时 /client/v1/config 回 503,Egress 为 nil 时 egress-country 回 503。
+// Deps 是本分组的依赖。Config 为 nil 时 client-config* 回 503,File 为 nil 时 client-config/file 回 503,Sync 为 nil 时 /client/v1/config 回 503,Share 为 nil 时 share-codes 和 /client/v1/share 回 503,Egress 为 nil 时 egress-country 回 503。
 type Deps struct {
 	Service Service
 	Config  ConfigService
 	File    FileService
 	Sync    SyncService
+	Share   ShareService
 	Egress  EgressService
 }
 
@@ -75,9 +82,22 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.HandleFunc("/client/v1/config", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodGet: d.syncConfig,
 	}))
+	mux.HandleFunc("/client/v1/share", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodGet: d.shareGet,
+	}))
 	mux.HandleFunc("/client/v1/", httpx.NotFound) // 别的路径回 JSON 404,不落到前端的 index.html
 	mux.HandleFunc("/api/openbox/client-config/rotate", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodPost: d.configRotate,
+	}))
+	mux.HandleFunc("/api/openbox/client-app/share-codes", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodPost: d.shareCodes,
+	}))
+	// share-codes/{x}/rotate(换这台服务器的配对码和密码并部署)还没做:如实回 501,不落到前端的 index.html
+	mux.HandleFunc("/api/openbox/client-app/share-codes/", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodPost: func(w http.ResponseWriter, _ *http.Request) {
+			httpx.NoStore(w)
+			httpx.Error(w, http.StatusNotImplemented, "更换共享服务器的配对码暂未实现")
+		},
 	}))
 }
 
@@ -217,6 +237,71 @@ func (d Deps) syncConfig(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, http.StatusConflict, "content filter too large")
 		default:
 			httpx.Error(w, http.StatusInternalServerError, "同步失败")
+		}
+		return
+	}
+	httpx.JSON(w, http.StatusOK, res)
+}
+
+// maxShareCodesBody 是 POST share-codes 的请求体上限:最多 64 台服务器、每条链接最多 4096 个字符(JSON 转义和多字节字符留足余量)。
+const maxShareCodesBody = 1 << 20
+
+// shareCodes 对应前端 fetchShareCodeSeals:请求体 {links: {服务器 id: 节点分享链接}},返回 {服务器 id: {pairCode, gen, sealed}}。
+// 档案里没有的服务器、链接为空或超过 4096 字符的,回包里没有。第一次为某台服务器出码时生成它的配对码,配对码属于凭据:
+// 响应 no-store,不写日志。
+func (d Deps) shareCodes(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Share == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "客户端配置服务不可用")
+		return
+	}
+	var body struct {
+		Links map[string]string `json:"links"`
+	}
+	if !httpx.DecodeJSON(w, r, &body, maxShareCodesBody) {
+		return
+	}
+	if body.Links == nil {
+		httpx.Error(w, http.StatusBadRequest, "links 必须是对象")
+		return
+	}
+	out, err := d.Share.ShareCodes(r.Context(), body.Links)
+	if err != nil {
+		var ie *clientapp.InputError
+		if errors.As(err, &ie) {
+			httpx.Error(w, http.StatusBadRequest, ie.Msg)
+			return
+		}
+		httpx.Error(w, http.StatusInternalServerError, "生成共享服务器的配对码失败: "+err.Error())
+		return
+	}
+	httpx.JSON(w, http.StatusOK, out)
+}
+
+// shareGet 是 App 取回共享服务器节点配置的公开接口:GET /client/v1/share?sid=<服务器 id>&g=<代数>(码里的 sid 和 g)。
+// 口径与 /client/v1/config 相同:同步开关关着 403 {error:"disabled"},来源 IP 被限速 429 加 Retry-After,
+// 服务器不存在 / 代数对不上 404,成功 200 返回封包(没有这台服务器的配对码解不开)。响应 no-store,日志不记 query。
+func (d Deps) shareGet(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Share == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "客户端配置服务不可用")
+		return
+	}
+	q := r.URL.Query()
+	res, err := d.Share.Share(r.Context(), q.Get("sid"), q.Get("g"), peerIP(r))
+	if err != nil {
+		var le *clientapp.LimitedError
+		switch {
+		case errors.Is(err, clientapp.ErrDisabled):
+			httpx.Error(w, http.StatusForbidden, "disabled")
+		case errors.As(err, &le):
+			secs := int((le.After + time.Second - 1) / time.Second)
+			w.Header().Set("Retry-After", strconv.Itoa(max(secs, 1)))
+			httpx.Error(w, http.StatusTooManyRequests, le.Error())
+		case errors.Is(err, clientapp.ErrSyncNotFound):
+			httpx.Error(w, http.StatusNotFound, "not found")
+		default:
+			httpx.Error(w, http.StatusInternalServerError, "取回失败")
 		}
 		return
 	}

@@ -36,6 +36,8 @@ type state struct {
 	Config *configState `json:"clientConfig,omitempty"`
 	// Egress 是上一次按出口 IP 判出的国家,见 egress.go。
 	Egress *EgressCountry `json:"egressCountry,omitempty"`
+	// Shares 是共享网络服务器的 App 码状态(服务器 id → 配对码、代数、封好的节点分享链接),见 sharecodes.go。
+	Shares map[string]*shareState `json:"shareCodes,omitempty"`
 }
 
 // ServerInfo 是档案里的路由器标识(serverInfo),四个字段都可以空。原样回给前端。
@@ -99,6 +101,8 @@ type Service struct {
 	syncLimit syncLimiter // 公开同步接口按来源 IP 的失败限速
 	sealOnce  sync.Once
 	sealSem   chan struct{} // 同一时刻最多几份封包在生成,见 acquireSeal
+
+	shareMu sync.Mutex // 串行化共享服务器 App 码的所有写(POST share-codes 等),也让 20 万次派生一次只跑一份
 }
 
 // PortOf 取 "host:port" 里的端口;格式不对或不在 1~65535 返回 0。

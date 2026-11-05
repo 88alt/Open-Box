@@ -27,14 +27,16 @@ func TestPublicSyncBypassesLoginButAPIDoesNot(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := &clientapp.Service{
-		Store:     st,
-		Profile:   func(context.Context) (map[string]any, error) { return map[string]any{}, nil },
+		Store: st,
+		Profile: func(context.Context) (map[string]any, error) {
+			return map[string]any{"servers": []any{map[string]any{"id": "srv1"}}}, nil
+		},
 		LAN:       func() ([]string, []string) { return []string{"192.168.5.1"}, []string{"192.168.5.0/24"} },
 		PanelPort: 3036,
 		KDFIter:   1000,
 	}
 	mux := http.NewServeMux()
-	Register(mux, Deps{Service: svc, Config: svc, File: svc, Sync: svc})
+	Register(mux, Deps{Service: svc, Config: svc, File: svc, Sync: svc, Share: svc})
 	srv := httptest.NewServer(authapi.Require(m)(mux))
 	defer srv.Close()
 
@@ -89,5 +91,45 @@ func TestPublicSyncBypassesLoginButAPIDoesNot(t *testing.T) {
 	}
 	if after, _ := svc.ClientConfig(ctx); after.LastSyncAt == 0 {
 		t.Fatal("成功同步后 lastSyncAt 应更新")
+	}
+
+	// 共享服务器的 App 码:管理接口(出码)要登录,App 取回的公开接口不要
+	resp, err := http.Post(srv.URL+"/api/openbox/client-app/share-codes", "application/json", strings.NewReader(`{"links":{"srv1":"ss://x"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 403 {
+		t.Fatalf("未登录不能出码: %d", resp.StatusCode)
+	}
+	out, err := svc.ShareCodes(ctx, map[string]string{"srv1": "ss://example@203.0.113.9:8388"}) // 模拟面板里登录后出码
+	if err != nil {
+		t.Fatal(err)
+	}
+	seal := out["srv1"]
+	code, body = get("/client/v1/share?sid=srv1&g=" + seal.Gen)
+	if code != 200 {
+		t.Fatalf("不登录凭 sid 和代数应能取回: %d %s", code, body)
+	}
+	var sr clientapp.ShareResult
+	if err := json.Unmarshal([]byte(body), &sr); err != nil {
+		t.Fatal(err)
+	}
+	plain, err := clientapp.OpenShare(sr.Seal, seal.PairCode, is.RouterID, "srv1", sr.Gen, 1000, 1000)
+	if err != nil || !strings.Contains(string(plain), "203.0.113.9") {
+		t.Fatalf("这台服务器的配对码应能解开: %v %s", err, plain)
+	}
+	if strings.Contains(body, seal.PairCode) || strings.Contains(body, "203.0.113.9") {
+		t.Fatal("响应里不能出现配对码或明文链接")
+	}
+	if code, _ := get("/client/v1/share?sid=srv1&g=0000000000000009"); code != 404 {
+		t.Fatalf("代数不对: %d", code)
+	}
+	// 同步开关关着,取回也一律 disabled
+	if _, err := svc.SetClientConfigEnabled(ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	if code, body := get("/client/v1/share?sid=srv1&g=" + seal.Gen); code != 403 || !strings.Contains(body, `"error":"disabled"`) {
+		t.Fatalf("开关关着: %d %s", code, body)
 	}
 }
