@@ -174,7 +174,7 @@
 - Stash(YAML 覆写文件,不做完整 YAML 解析,只按缩进逐行认):顶层 `rules:` 的每个 `- 规则` 认得出的算规则;`http:` 下 `url-rewrite` / `header-rewrite` / `body-rewrite` 是字符串列表,口径同 Surge;`map-local` 每个条目算一条规则,`script` 每个条目算一个脚本(条目是多行映射,只数 `- key:` 开头的那一行,条目里嵌套的列表不数);`cron:` 下 `script` 的每个条目算一个脚本。`mitm`、`script-providers`、`name` / `desc` 等其它键整段忽略。
 - 五种格式都已支持;格式字符串不是这五种之一回 400。
 - 同步给 App:启用的集合连文本一起并进本地分流的同步明文(`client-config/file` 和 `/client/v1/config` 共用,字段、上限与 409 见上面 `client-config` 一节);实现是 `contentfilter.Service.Snapshot`,持着服务的锁一次读出记录、文本和摘要,所以拿到的是同一时刻的内容。
-- 恢复默认:随包默认放在内嵌的 `internal/contentfilter/defaults.json`(现在为空:没有可靠依据的规则不预置)。默认为空时 = 列表清空(按钮不报错);不为空时每份默认回到随包内容和启用状态、被删的补回、自己加的保留。
+- 恢复默认:随包默认放在内嵌的 `internal/contentfilter/defaults.json`(对齐上游 v0.1.402 三份:综合省流 / Youtube-Surge / Youtube-补丁)。每份默认回到随包内容和启用状态、被删的补回、自己加的保留;若将来 defaults 为空则 = 列表清空(按钮不报错)。
 - 错误:400 参数 / 内容不合法,404 没有这份规则集,502 抓取失败,500 其它;`{error}` 为中文信息。
 
 ## `/api/openbox/defaults`

@@ -34,12 +34,16 @@ func (e *LimitedError) Error() string { return "尝试太频繁,请稍后再试"
 
 // SyncResult 是公开同步接口的响应体:认得出格式、版本和这台路由器,配置在 Seal 里。
 type SyncResult struct {
-	Format     string   `json:"format"`
-	V          int      `json:"v"`
-	RouterID   string   `json:"routerId"`
-	ExportedAt int64    `json:"exportedAt"`
-	Seal       Envelope `json:"seal"`
+	Format     string       `json:"format"`
+	Version    int          `json:"version"`
+	Router     BundleRouter `json:"router"`
+	KDF        KDFParams    `json:"kdf"`
+	Data       string       `json:"data"`
+	ExportedAt int64        `json:"exportedAt,omitempty"`
 }
+
+// Seal 方便测试解开密文。
+func (r SyncResult) Seal() Envelope { return Envelope{KDF: r.KDF, Data: r.Data} }
 
 // Sync 处理一次 App 同步。ip 是连接对端 IP(调用方不要用 X-Forwarded-For)。
 func (s *Service) Sync(ctx context.Context, nonce, ip string) (SyncResult, error) {
@@ -62,7 +66,7 @@ func (s *Service) Sync(ctx context.Context, nonce, ip string) (SyncResult, error
 	if err != nil {
 		return SyncResult{}, err
 	}
-	env, now, err := s.sealConfig(ctx, is)
+	env, now, err := s.sealConfig(ctx, is, "")
 	if err != nil {
 		return SyncResult{}, err
 	}
@@ -77,19 +81,17 @@ func (s *Service) Sync(ctx context.Context, nonce, ip string) (SyncResult, error
 	if err != nil && !errors.Is(err, errNoChange) {
 		return SyncResult{}, fmt.Errorf("记录同步时刻失败: %w", err)
 	}
-	return SyncResult{Format: BundleFormat, V: BundleVersion, RouterID: is.RouterID, ExportedAt: now, Seal: env}, nil
+	return SyncResult{
+		Format: BundleFormat, Version: BundleVersion,
+		Router: BundleRouter{ID: is.RouterID, Name: is.RouterName},
+		KDF:    env.KDF, Data: env.Data, ExportedAt: now,
+	}, nil
 }
 
 // Warm 在启动时把当前这一代配对码的密钥派生好放进缓存,第一次同步就不用现算。
 // 没有配对码(从没打开过页面)、读不出状态时什么都不做。
-func (s *Service) Warm(ctx context.Context) {
-	var st state
-	if ok, err := s.Store.Load(stateFile, &st); err != nil || !ok || st.Config == nil || !validPairCode(st.Config.PairCode) || !validNonce(st.Config.Nonce) {
-		return
-	}
-	if id, err := s.RouterID(ctx); err == nil {
-		_, _ = s.keys.get(st.Config.PairCode, sealSalt(id, st.Config.Nonce), s.kdfIter())
-	}
+func (s *Service) Warm(context.Context) {
+	// 上游 salt 每个封包随机,启动时无法预派生;第一次同步时再进缓存。
 }
 
 // syncLimiter 按来源 IP 限制连续失败的同步:连续失败 10 次后锁定,从 1 分钟起逐次翻倍、封顶 15 分钟;

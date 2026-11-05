@@ -15,33 +15,41 @@ import (
 )
 
 // POST /api/openbox/client-config/file:导出文件。把本地分流的配置用配对码封好,连同「导入码」一起给面板存成 .json。
-// 自己的设计,依据前端 api/clientApp.ts 的注释(服务端用配对码封好的整份配置、含 importCode、lan / publicBase
-// 是码里的两项)和 helper/clientAppCode.ts 里 import 码的字段顺序,封包格式见 seal.go;没有参照上游。
+// 对齐上游 v0.1.402 封包外形(open-box-client-sealed + PBKDF2 20 万次 + AES-GCM);导入码仍按前端 helper/clientAppCode.ts 字段顺序拼进二维码。
 //
 // 导出不看同步开关:开关管的是 App 用的公开接口,文件是用户手动拿走的。
-// 导出文件等于凭据(配对码只有 40 位,文件被拿走后可离线爆破,60 万次 PBKDF2 只是拖慢),面板的响应是 no-store。
+// 导出文件等于凭据(配对码 4 位,文件被拿走后可离线爆破,20 万次 PBKDF2 只是拖慢),面板的响应是 no-store。
 
 const (
-	// BundleFormat 是导出文件里 format 字段的值。
-	BundleFormat = "open-box-client-config"
-	// BundleVersion 是导出文件本身的版本(封包另有自己的 v)。
+	// BundleFormat 对齐上游 open-box-client-sealed。
+	BundleFormat = "open-box-client-sealed"
+	// BundleVersion 对齐上游 version:1。
 	BundleVersion = 1
 
 	maxLanLen        = 253
 	maxPublicBaseLen = 2048
 )
 
-// Bundle 是导出文件的内容。前端把它当 Record<string, unknown> 原样存成 JSON,所以字段由我们定:
-// 不封的部分只有识别用的(格式、版本、路由器 ID / 名字、导入码),真正的配置全在 seal 里。
-type Bundle struct {
-	Format     string   `json:"format"`
-	V          int      `json:"v"`
-	RouterID   string   `json:"routerId"`
-	RouterName string   `json:"routerName"`
-	ImportCode string   `json:"importCode"`
-	ExportedAt int64    `json:"exportedAt"`
-	Seal       Envelope `json:"seal"`
+// BundleRouter 是导出文件里的路由器标识。
+type BundleRouter struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
+
+// Bundle 是导出文件的内容,外形对齐上游 v0.1.402:
+// format / version / router / kdf / data;data = base64url(iv||ct||tag)。
+// 前端当 Record<string, unknown> 原样存成 JSON。
+type Bundle struct {
+	Format     string       `json:"format"`
+	Version    int          `json:"version"`
+	Router     BundleRouter `json:"router"`
+	KDF        KDFParams    `json:"kdf"`
+	Data       string       `json:"data"`
+	ExportedAt int64        `json:"exportedAt,omitempty"`
+}
+
+// Seal 方便测试与公开同步接口取同一份密文。
+func (b Bundle) Seal() Envelope { return Envelope{KDF: b.KDF, Data: b.Data} }
 
 // payload 是封进去的明文:App 导入后要用的整份本地分流配置。
 // shareRegions 是此刻生效的地区分流(没改过 = 默认三组)。App 发给内核时每组最前面要自己带上
@@ -59,6 +67,7 @@ type payload struct {
 	Router        payloadRtr              `json:"router"`
 	ShareRegions  []Group                 `json:"shareRegions"`
 	ContentFilter *contentfilter.Snapshot `json:"contentFilter,omitempty"`
+	ImportCode    string                  `json:"importCode,omitempty"`
 }
 
 type payloadRtr struct {
@@ -117,20 +126,21 @@ func (s *Service) ExportFile(ctx context.Context, lan, publicBase string) (Bundl
 	if err != nil {
 		return Bundle{}, err
 	}
-	env, now, err := s.sealConfig(ctx, is)
+	code := ImportCode(is.RouterID, is.RouterName, lan, is.PanelPort, publicBase, is.Nonce)
+	env, now, err := s.sealConfig(ctx, is, code)
 	if err != nil {
 		return Bundle{}, err
 	}
 	return Bundle{
-		Format: BundleFormat, V: BundleVersion,
-		RouterID: is.RouterID, RouterName: is.RouterName,
-		ImportCode: ImportCode(is.RouterID, is.RouterName, lan, is.PanelPort, publicBase, is.Nonce),
-		ExportedAt: now, Seal: env,
+		Format: BundleFormat, Version: BundleVersion,
+		Router: BundleRouter{ID: is.RouterID, Name: is.RouterName},
+		KDF:    env.KDF, Data: env.Data, ExportedAt: now,
 	}, nil
 }
 
 // sealConfig 把此刻的本地分流配置按 is 里的配对码封好。导出文件和公开同步接口共用,返回封包和生成时刻(毫秒)。
-func (s *Service) sealConfig(ctx context.Context, is Issue) (Envelope, int64, error) {
+// importCode 非空时写入明文(导出文件需要;公开同步可空)。
+func (s *Service) sealConfig(ctx context.Context, is Issue, importCode string) (Envelope, int64, error) {
 	release, err := s.acquireSeal(ctx)
 	if err != nil {
 		return Envelope{}, 0, err
@@ -161,18 +171,19 @@ func (s *Service) sealConfig(ctx context.Context, is Issue) (Envelope, int64, er
 		},
 		ShareRegions:  info.ShareRegions,
 		ContentFilter: cf,
+		ImportCode:    importCode,
 	})
 	if err != nil {
 		return Envelope{}, 0, fmt.Errorf("编码配置失败: %w", err)
 	}
 	iter := s.kdfIter()
-	key, err := s.keys.get(is.PairCode, sealSalt(is.RouterID, is.Nonce), iter)
-	if err != nil {
-		return Envelope{}, 0, err
-	}
-	env, err := seal(key, is.RouterID, is.Nonce, iter, plain, s.Rand)
+	env, err := seal(is.PairCode, iter, plain, s.Rand)
 	if err != nil {
 		return Envelope{}, 0, fmt.Errorf("封包失败: %w", err)
+	}
+	// 缓存这一代密钥(用封包里的 salt),公开同步接口热路径不再现算
+	if salt, err := b64.DecodeString(env.KDF.Salt); err == nil {
+		_, _ = s.keys.get(is.PairCode, salt, iter)
 	}
 	return env, now, nil
 }

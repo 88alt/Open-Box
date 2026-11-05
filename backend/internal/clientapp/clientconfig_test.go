@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	pairRe  = regexp.MustCompile(`^[A-HJ-NP-Z2-9]{8}$`)
-	nonceRe = regexp.MustCompile(`^[0-9a-f]{16}$`)
+	pairRe  = regexp.MustCompile(`^[A-Z0-9]{4}$`)
+	nonceRe = regexp.MustCompile(`^[0-9a-f]{24}$`)
 )
 
 func TestClientConfigFirstReadGeneratesAndPersists(t *testing.T) {
@@ -218,7 +218,7 @@ func TestClientConfigConcurrentFirstRead(t *testing.T) {
 
 func TestPairCodeDistribution(t *testing.T) {
 	seen := map[byte]bool{}
-	for i := 0; i < 400; i++ {
+	for i := 0; i < 2000; i++ {
 		c, err := newPairCode(nil)
 		if err != nil || !pairRe.MatchString(c) {
 			t.Fatalf("%q %v", c, err)

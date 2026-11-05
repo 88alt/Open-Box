@@ -264,7 +264,8 @@ func TestRestoreDefaults(t *testing.T) {
 	e := newEnv(t)
 	a := "DOMAIN,a.com\n"
 	e.svc.Save(ctx(), SaveInput{Name: "自己的", Dialect: "surge", Text: &a})
-	// 默认为空:恢复默认 = 清空列表,不报错
+	// 默认为空:恢复默认 = 清空列表,不报错(覆盖 BuiltinDefaults,单元测试不依赖随包数据)
+	e.svc.Defaults = func() ([]Default, error) { return nil, nil }
 	l, err := e.svc.RestoreDefaults(ctx())
 	if err != nil || len(l.Sets) != 0 {
 		t.Fatalf("%+v %v", l, err)

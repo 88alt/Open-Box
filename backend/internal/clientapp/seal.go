@@ -13,60 +13,51 @@ import (
 	"sync"
 )
 
-// 配对码封包(client-config/file,以后也给 App 用的公开同步接口和 share-codes 用)。
-// 自己定义的格式,带版本号 v:1,依据 DESIGN 第 8 节「配对码封包」的决定和 NIST SP 800-132 / RFC 8018
-// (PBKDF2)、NIST SP 800-38D(GCM)的公开规范,没有参照上游;与上游 App 不互通。
+// 配对码封包:对齐上游 v0.1.402 面板服务端(catch-up-upstream 的 panel/server/index.mjs 可读部分)。
+// 维护者 2026-11-05 授权参考上游闭源产物 / engine-snapshot 相关部分。
 //
-// 封包是 JSON 对象 {v, kdf, iter, salt, iv, ct},三个二进制字段都是不带填充的 base64url:
+// 导出 / 同步密文外形(与上游 open-box-client-sealed 一致):
 //
-//	密钥 = PBKDF2-HMAC-SHA256(配对码, salt, iter, 32 字节)
-//	salt = SHA-256("open-box/client-config/v1" 0x00 routerId 0x00 nonce) 的前 16 字节
-//	iv   = 每个封包随机的 12 字节
-//	ct   = AES-256-GCM 密文加 16 字节标签;附加认证数据 AAD = "open-box/client-config/v1" 0x00 routerId 0x00 nonce
+//	密钥 = PBKDF2-HMAC-SHA256(配对码, salt, 200000, 32 字节)
+//	salt = 每个封包随机的 16 字节(写进 kdf.salt,base64url)
+//	data = base64url( iv(12) || ciphertext || tag(16) )  // AES-256-GCM,无 AAD
 //
-// salt 由路由器 ID 和 nonce 决定、不是每个封包随机的:这样同一个配对码周期内密钥只需派生一次
-// (配对码和 nonce 一起换,换码即换密钥),请求来了查内存缓存,不再现算 60 万次(否则公开接口会变成吃 CPU 的入口)。
-// iv 仍是每个封包随机,同一把密钥封的封包数远小于 2^32,随机 96 位 iv 的碰撞概率可忽略。
-// AAD 把封包绑在这台路由器和这一代配对上:拿别家的封包、换码前的封包塞进来,GCM 校验都会失败。
+// 配对码:4 个字符,字母表 ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789。
+// nonce:12 字节随机 → 24 位十六进制(进二维码,不参与派生)。
+
 const (
 	SealVersion = 1
-	// SealKDF 是封包里 kdf 字段的取值。
+	// SealKDF 是封包里 kdf.alg 的取值。
 	SealKDF = "pbkdf2-sha256"
-	// DefaultSealIter 与 DESIGN D7 的密码哈希同一个迭代次数。
-	DefaultSealIter = 600000
+	// DefaultSealIter 对齐上游 zf=2e5。
+	DefaultSealIter = 200000
 
-	sealDomain = "open-box/client-config/v1"
 	sealKeyLen = 32
 	saltLen    = 16
 	ivLen      = 12
+	tagLen     = 16
 )
 
-// ErrSealOpen 是解不开封包(配对码不对、封包被改、不是这一代的、格式不认识)。不区分原因,不给攻击者多余信息。
+// ErrSealOpen 是解不开封包(配对码不对、封包被改、格式不认识)。不区分原因。
 var ErrSealOpen = errors.New("封包解不开")
-
-// Envelope 是封好的内容。
-type Envelope struct {
-	V    int    `json:"v"`
-	KDF  string `json:"kdf"`
-	Iter int    `json:"iter"`
-	Salt string `json:"salt"`
-	IV   string `json:"iv"`
-	CT   string `json:"ct"`
-}
 
 var b64 = base64.RawURLEncoding
 
-func sealSalt(routerID, nonce string) []byte {
-	h := sha256.Sum256([]byte(sealDomain + "\x00" + routerID + "\x00" + nonce))
-	return h[:saltLen]
+// Envelope 是上游导出文件里的加密部分:kdf + data。
+// 导出文件顶层还会带 format / version / router;这里只描述可解开的密文。
+type Envelope struct {
+	KDF  KDFParams `json:"kdf"`
+	Data string    `json:"data"`
 }
 
-func sealAAD(routerID, nonce string) []byte {
-	return []byte(sealDomain + "\x00" + routerID + "\x00" + nonce)
+// KDFParams 是派生参数。
+type KDFParams struct {
+	Alg        string `json:"alg"`
+	Iterations int    `json:"iterations"`
+	Salt       string `json:"salt"`
 }
 
-// keyCache 只缓存「当前这一代」的一把密钥:配对码或 nonce 一换,条目对不上,重新派生并顶掉旧的。
-// 密钥只在内存里,不落盘。
+// keyCache 缓存「同一把配对码 + 同一份 salt + 同一迭代次数」的密钥,避免公开接口反复算 20 万次。
 type keyCache struct {
 	mu   sync.Mutex
 	pair string
@@ -75,8 +66,6 @@ type keyCache struct {
 	key  []byte
 }
 
-// get 取 (配对码, salt, iter) 对应的密钥,没有缓存就派生一次。派生期间持锁:同一时刻只算一次,
-// 并发的请求等着用现成的,不会同时起多份 PBKDF2。
 func (c *keyCache) get(pair string, salt []byte, iter int) ([]byte, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -99,10 +88,21 @@ func gcmOf(key []byte) (cipher.AEAD, error) {
 	return cipher.NewGCM(blk)
 }
 
-// seal 用 key 封 plain。rnd 为 nil 用 crypto/rand。
-func seal(key []byte, routerID, nonce string, iter int, plain []byte, rnd io.Reader) (Envelope, error) {
+// seal 用配对码封 plain。rnd 为 nil 用 crypto/rand。
+func seal(pair string, iter int, plain []byte, rnd io.Reader) (Envelope, error) {
 	if rnd == nil {
 		rnd = rand.Reader
+	}
+	if iter <= 0 {
+		iter = DefaultSealIter
+	}
+	salt := make([]byte, saltLen)
+	if _, err := io.ReadFull(rnd, salt); err != nil {
+		return Envelope{}, fmt.Errorf("生成随机数失败: %w", err)
+	}
+	key, err := pbkdf2.Key(sha256.New, pair, salt, iter, sealKeyLen)
+	if err != nil {
+		return Envelope{}, fmt.Errorf("派生密钥失败: %w", err)
 	}
 	g, err := gcmOf(key)
 	if err != nil {
@@ -112,28 +112,29 @@ func seal(key []byte, routerID, nonce string, iter int, plain []byte, rnd io.Rea
 	if _, err := io.ReadFull(rnd, iv); err != nil {
 		return Envelope{}, fmt.Errorf("生成随机数失败: %w", err)
 	}
+	ct := g.Seal(nil, iv, plain, nil)
+	// ct 已含 tag;data = iv || ct
+	data := make([]byte, 0, ivLen+len(ct))
+	data = append(data, iv...)
+	data = append(data, ct...)
 	return Envelope{
-		V: SealVersion, KDF: SealKDF, Iter: iter,
-		Salt: b64.EncodeToString(sealSalt(routerID, nonce)),
-		IV:   b64.EncodeToString(iv),
-		CT:   b64.EncodeToString(g.Seal(nil, iv, plain, sealAAD(routerID, nonce))),
+		KDF:  KDFParams{Alg: SealKDF, Iterations: iter, Salt: b64.EncodeToString(salt)},
+		Data: b64.EncodeToString(data),
 	}, nil
 }
 
-// OpenEnvelope 用配对码解开封包。App 一侧的做法也是这样;本后端自己用在测试里,
-// 以后的公开同步接口收到 App 上传的东西时也用它。迭代次数低于 minIter(或高到离谱)的封包不认,
-// 防止被降级成秒破的参数,也防止被喂一个大迭代数拖死 CPU。
-func OpenEnvelope(e Envelope, pairCode, routerID, nonce string, minIter, maxIter int) ([]byte, error) {
-	if e.V != SealVersion || e.KDF != SealKDF || e.Iter < minIter || e.Iter > maxIter {
+// OpenEnvelope 用配对码解开封包。
+// 迭代次数低于 minIter(或高到离谱)的封包不认,防止被降级成秒破的参数。
+func OpenEnvelope(e Envelope, pairCode string, minIter, maxIter int) ([]byte, error) {
+	if e.KDF.Alg != SealKDF || e.KDF.Iterations < minIter || e.KDF.Iterations > maxIter {
 		return nil, ErrSealOpen
 	}
-	salt, err1 := b64.DecodeString(e.Salt)
-	iv, err2 := b64.DecodeString(e.IV)
-	ct, err3 := b64.DecodeString(e.CT)
-	if err1 != nil || err2 != nil || err3 != nil || len(iv) != ivLen || len(salt) != saltLen {
+	salt, err1 := b64.DecodeString(e.KDF.Salt)
+	raw, err2 := b64.DecodeString(e.Data)
+	if err1 != nil || err2 != nil || len(salt) != saltLen || len(raw) < ivLen+tagLen {
 		return nil, ErrSealOpen
 	}
-	key, err := pbkdf2.Key(sha256.New, pairCode, salt, e.Iter, sealKeyLen)
+	key, err := pbkdf2.Key(sha256.New, pairCode, salt, e.KDF.Iterations, sealKeyLen)
 	if err != nil {
 		return nil, ErrSealOpen
 	}
@@ -141,7 +142,8 @@ func OpenEnvelope(e Envelope, pairCode, routerID, nonce string, minIter, maxIter
 	if err != nil {
 		return nil, ErrSealOpen
 	}
-	plain, err := g.Open(nil, iv, ct, sealAAD(routerID, nonce))
+	iv, ct := raw[:ivLen], raw[ivLen:]
+	plain, err := g.Open(nil, iv, ct, nil)
 	if err != nil {
 		return nil, ErrSealOpen
 	}

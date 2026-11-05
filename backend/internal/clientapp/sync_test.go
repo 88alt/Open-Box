@@ -34,10 +34,10 @@ func TestSyncSuccessOpensAndRecordsLastSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Format != BundleFormat || res.V != BundleVersion || res.RouterID != is.RouterID || res.ExportedAt != 1760000000000 {
+	if res.Format != BundleFormat || res.Version != BundleVersion || res.Router.ID != is.RouterID || res.ExportedAt != 1760000000000 {
 		t.Fatalf("响应头: %+v", res)
 	}
-	plain, err := OpenEnvelope(res.Seal, is.PairCode, is.RouterID, is.Nonce, testIter, testIter)
+	plain, err := OpenEnvelope(res.Seal(), is.PairCode, testIter, testIter)
 	if err != nil {
 		t.Fatalf("配对码应能解开: %v", err)
 	}
@@ -162,10 +162,10 @@ func TestSyncAfterRotateOldNonceRejected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := OpenEnvelope(res.Seal, is.PairCode, is.RouterID, is.Nonce, testIter, testIter); err == nil {
+	if _, err := OpenEnvelope(res.Seal(), is.PairCode, testIter, testIter); err == nil {
 		t.Fatal("旧配对码不该解得开新封包")
 	}
-	if _, err := OpenEnvelope(res.Seal, is2.PairCode, is2.RouterID, is2.Nonce, testIter, testIter); err != nil {
+	if _, err := OpenEnvelope(res.Seal(), is2.PairCode, testIter, testIter); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -187,14 +187,15 @@ func TestSyncDoesNotRestoreLastSyncAfterRotate(t *testing.T) {
 }
 
 func TestWarmFillsCacheOnlyWhenPaired(t *testing.T) {
+	// salt 每个封包随机,启动时无法预派生;Warm 是空操作。
 	s := fileSvc(t)
 	s.Warm(context.Background())
 	if s.keys.key != nil {
-		t.Fatal("没有配对码不该派生")
+		t.Fatal("Warm 不应派生")
 	}
-	is, _ := s.ClientConfig(context.Background())
+	_, _ = s.ClientConfig(context.Background())
 	s.Warm(context.Background())
-	if s.keys.key == nil || s.keys.pair != is.PairCode {
-		t.Fatal("有配对码应预热")
+	if s.keys.key != nil {
+		t.Fatal("有配对码时 Warm 仍不派生(等第一次封包)")
 	}
 }

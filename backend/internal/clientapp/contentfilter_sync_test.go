@@ -29,7 +29,7 @@ func fakeSnapshot() contentfilter.Snapshot {
 // openPlain 解开封包并按「通用 JSON」读出,用来看键在不在。
 func openPlain(t *testing.T, env Envelope, is Issue) map[string]json.RawMessage {
 	t.Helper()
-	plain, err := OpenEnvelope(env, is.PairCode, is.RouterID, is.Nonce, testIter, testIter)
+	plain, err := OpenEnvelope(env, is.PairCode, testIter, testIter)
 	if err != nil {
 		t.Fatalf("配对码应能解开: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestExportCarriesContentFilterSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	is, _ := s.ClientConfig(ctx)
-	plain, err := OpenEnvelope(b.Seal, is.PairCode, is.RouterID, is.Nonce, testIter, testIter)
+	plain, err := OpenEnvelope(b.Seal(), is.PairCode, testIter, testIter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestSyncCarriesSameContentFilterSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := openPlain(t, res.Seal, is)
+	m := openPlain(t, res.Seal(), is)
 	var cf contentfilter.Snapshot
 	if err := json.Unmarshal(m["contentFilter"], &cf); err != nil || cf.SHA256 != "abc123" || len(cf.Sets) != 2 || cf.Sets[1].ID != "cf2" {
 		t.Fatalf("公开同步的明文也要带快照: %v %+v", err, cf)
@@ -94,7 +94,7 @@ func TestPayloadOmitsContentFilterWhenNotWired(t *testing.T) {
 		t.Fatal(err)
 	}
 	is, _ := s.ClientConfig(context.Background())
-	if _, ok := openPlain(t, b.Seal, is)["contentFilter"]; ok {
+	if _, ok := openPlain(t, b.Seal(), is)["contentFilter"]; ok {
 		t.Fatal("没接内容过滤服务时不该有 contentFilter 键")
 	}
 }
@@ -112,7 +112,7 @@ func TestPayloadEmptySnapshotIsEmptyArrayNotNull(t *testing.T) {
 	var raw struct {
 		Sets json.RawMessage `json:"sets"`
 	}
-	if err := json.Unmarshal(openPlain(t, b.Seal, is)["contentFilter"], &raw); err != nil || string(raw.Sets) != "[]" {
+	if err := json.Unmarshal(openPlain(t, b.Seal(), is)["contentFilter"], &raw); err != nil || string(raw.Sets) != "[]" {
 		t.Fatalf("没有启用的集合时 sets 应是 [],App 才能分清「路由器上一份都没有」和「旧路由器没这项」: %s %v", raw.Sets, err)
 	}
 }
@@ -174,7 +174,7 @@ func TestWithRealContentFilterService(t *testing.T) {
 	}
 	is, _ := s.ClientConfig(ctx)
 	var got contentfilter.Snapshot
-	if err := json.Unmarshal(openPlain(t, b.Seal, is)["contentFilter"], &got); err != nil {
+	if err := json.Unmarshal(openPlain(t, b.Seal(), is)["contentFilter"], &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.SHA256 != l.SHA256 || got.Size != l.Size || len(got.Sets) != 1 || got.Sets[0].Text != text || got.Sets[0].Name != "广告" {
@@ -186,7 +186,7 @@ func TestWithRealContentFilterService(t *testing.T) {
 	}
 	b2, _ := s.ExportFile(ctx, "", "")
 	var got2 contentfilter.Snapshot
-	if err := json.Unmarshal(openPlain(t, b2.Seal, is)["contentFilter"], &got2); err != nil || len(got2.Sets) != 0 || got2.SHA256 == got.SHA256 {
+	if err := json.Unmarshal(openPlain(t, b2.Seal(), is)["contentFilter"], &got2); err != nil || len(got2.Sets) != 0 || got2.SHA256 == got.SHA256 {
 		t.Fatalf("停用后快照应为空且摘要变了: %+v %v", got2, err)
 	}
 	// 真实服务的上限:用很小的上限走一遍 TooLargeError 的转换

@@ -246,8 +246,9 @@ func (f *fakeFile) ExportFile(_ context.Context, lan, pub string) (clientapp.Bun
 }
 
 func TestClientConfigFile(t *testing.T) {
-	f := &fakeFile{b: clientapp.Bundle{Format: clientapp.BundleFormat, V: 1, RouterID: "r", RouterName: "n", ImportCode: "openbox://import?v=2", ExportedAt: 7,
-		Seal: clientapp.Envelope{V: 1, KDF: clientapp.SealKDF, Iter: 600000, Salt: "s", IV: "i", CT: "c"}}}
+	f := &fakeFile{b: clientapp.Bundle{Format: clientapp.BundleFormat, Version: 1,
+		Router: clientapp.BundleRouter{ID: "r", Name: "n"},
+		KDF:    clientapp.KDFParams{Alg: clientapp.SealKDF, Iterations: 200000, Salt: "s"}, Data: "d", ExportedAt: 7}}
 	rec := callPath(t, Deps{File: f}, http.MethodPost, "/api/openbox/client-config/file", `{"lan":"192.168.5.1","publicBase":"https://h/"}`)
 	if rec.Code != 200 || !strings.Contains(rec.Header().Get("Cache-Control"), "no-store") {
 		t.Fatalf("%d %v %s", rec.Code, rec.Header(), rec.Body)
@@ -259,9 +260,9 @@ func TestClientConfigFile(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	seal, _ := got["seal"].(map[string]any)
-	if got["format"] != "open-box-client-config" || got["importCode"] != "openbox://import?v=2" || got["exportedAt"] != float64(7) ||
-		seal["kdf"] != "pbkdf2-sha256" || seal["iter"] != float64(600000) || seal["ct"] != "c" {
+	kdf, _ := got["kdf"].(map[string]any)
+	if got["format"] != "open-box-client-sealed" || got["version"] != float64(1) || got["exportedAt"] != float64(7) ||
+		got["data"] != "d" || kdf["alg"] != "pbkdf2-sha256" || kdf["iterations"] != float64(200000) || kdf["salt"] != "s" {
 		t.Fatalf("响应形状: %s", rec.Body)
 	}
 	// 两个参数都可以不传
@@ -330,8 +331,9 @@ func syncCall(t *testing.T, f *fakeSync, path string) *httptest.ResponseRecorder
 }
 
 func TestSyncConfigOK(t *testing.T) {
-	f := &fakeSync{res: clientapp.SyncResult{Format: "open-box-client-config", V: 1, RouterID: "r", ExportedAt: 9,
-		Seal: clientapp.Envelope{V: 1, KDF: "pbkdf2-sha256", Iter: 600000, Salt: "s", IV: "i", CT: "c"}}}
+	f := &fakeSync{res: clientapp.SyncResult{Format: clientapp.BundleFormat, Version: 1,
+		Router: clientapp.BundleRouter{ID: "r", Name: "n"},
+		KDF:    clientapp.KDFParams{Alg: clientapp.SealKDF, Iterations: 200000, Salt: "s"}, Data: "d", ExportedAt: 9}}
 	rec := syncCall(t, f, "/client/v1/config?p=0123456789abcdef")
 	if rec.Code != 200 || !strings.Contains(rec.Header().Get("Cache-Control"), "no-store") {
 		t.Fatalf("%d %v %s", rec.Code, rec.Header(), rec.Body)
@@ -341,7 +343,9 @@ func TestSyncConfigOK(t *testing.T) {
 	}
 	var got map[string]any
 	json.Unmarshal(rec.Body.Bytes(), &got)
-	if got["routerId"] != "r" || got["exportedAt"] != float64(9) || got["seal"].(map[string]any)["ct"] != "c" {
+	router, _ := got["router"].(map[string]any)
+	kdf, _ := got["kdf"].(map[string]any)
+	if router["id"] != "r" || got["exportedAt"] != float64(9) || got["data"] != "d" || kdf["alg"] != "pbkdf2-sha256" {
 		t.Fatalf("形状: %s", rec.Body)
 	}
 }

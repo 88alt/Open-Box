@@ -97,6 +97,9 @@ func TestBuiltinDefaultsParse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(ds) != 3 {
+		t.Fatalf("上游对齐应有三份默认规则,got %d", len(ds))
+	}
 	for _, d := range ds { // 以后往 defaults.json 里加数据,这里负责把关:每份都要合法、能数出内容
 		dl, ok := ParseDialect(string(d.Dialect))
 		if !ok || !idRe.MatchString(d.ID) {

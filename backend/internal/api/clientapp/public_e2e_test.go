@@ -78,7 +78,7 @@ func TestPublicSyncBypassesLoginButAPIDoesNot(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &res); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := clientapp.OpenEnvelope(res.Seal, is.PairCode, is.RouterID, is.Nonce, 1000, 1000); err != nil {
+	if _, err := clientapp.OpenEnvelope(res.Seal(), is.PairCode, 1000, 1000); err != nil {
 		t.Fatalf("配对码应能解开: %v", err)
 	}
 	if strings.Contains(body, is.PairCode) {

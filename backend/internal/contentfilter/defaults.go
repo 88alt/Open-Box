@@ -16,7 +16,8 @@ type Default struct {
 	Text      string  `json:"text"`
 }
 
-// 默认规则做成内嵌数据:以后只改 defaults.json,不改代码。现在是空的:没有可靠依据的规则不预置(DESIGN 第 8 节)。
+// 默认规则做成内嵌数据:以后只改 defaults.json,不改代码。
+// 内容对齐上游 v0.1.402 随包 panel/server/defaults/content-filter.json(三份:综合省流 / Youtube-Surge / Youtube-补丁)。
 //
 //go:embed defaults.json
 var defaultsJSON []byte

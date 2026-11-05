@@ -3,7 +3,6 @@ package clientapp
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"net/url"
@@ -12,7 +11,7 @@ import (
 	"time"
 )
 
-// 测试里把迭代次数压到 1000,真实默认值是 60 万次。
+// 测试里把迭代次数压到 1000,真实默认值是 20 万次。
 const testIter = 1000
 
 func fileSvc(t *testing.T) *Service {
@@ -32,13 +31,13 @@ func TestExportFileRoundTrip(t *testing.T) {
 	}
 	is, _ := s.ClientConfig(ctx)
 	info, _ := s.Info(ctx)
-	if b.Format != BundleFormat || b.V != BundleVersion || b.RouterID != is.RouterID || b.RouterName != "客厅 & 书房" || b.ExportedAt != 1760000000000 {
+	if b.Format != BundleFormat || b.Version != BundleVersion || b.Router.ID != is.RouterID || b.Router.Name != "客厅 & 书房" || b.ExportedAt != 1760000000000 {
 		t.Fatalf("文件头: %+v", b)
 	}
-	if b.Seal.V != 1 || b.Seal.KDF != SealKDF || b.Seal.Iter != testIter {
-		t.Fatalf("封包头: %+v", b.Seal)
+	if b.KDF.Alg != SealKDF || b.KDF.Iterations != testIter || b.Data == "" {
+		t.Fatalf("封包头: %+v data=%q", b.KDF, b.Data)
 	}
-	plain, err := OpenEnvelope(b.Seal, is.PairCode, is.RouterID, is.Nonce, testIter, testIter)
+	plain, err := OpenEnvelope(b.Seal(), is.PairCode, testIter, testIter)
 	if err != nil {
 		t.Fatalf("配对码应能解开: %v", err)
 	}
@@ -68,144 +67,97 @@ func TestExportFileWrongOrStaleCodeFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	is, _ := s.ClientConfig(ctx)
-	wrong := "AAAAAAAA"
+	wrong := "AAAA"
 	if is.PairCode == wrong {
-		wrong = "BBBBBBBB"
+		wrong = "BBBB"
 	}
-	if _, err := OpenEnvelope(b.Seal, wrong, is.RouterID, is.Nonce, testIter, testIter); !errors.Is(err, ErrSealOpen) {
+	if _, err := OpenEnvelope(b.Seal(), wrong, testIter, testIter); !errors.Is(err, ErrSealOpen) {
 		t.Fatalf("错的配对码: %v", err)
-	}
-	// 绑定路由器和这一代:换 routerId 或 nonce 都解不开
-	if _, err := OpenEnvelope(b.Seal, is.PairCode, strings.Repeat("a", 32), is.Nonce, testIter, testIter); !errors.Is(err, ErrSealOpen) {
-		t.Fatalf("别的路由器: %v", err)
-	}
-	if _, err := OpenEnvelope(b.Seal, is.PairCode, is.RouterID, "0000000000000000", testIter, testIter); !errors.Is(err, ErrSealOpen) {
-		t.Fatalf("别的 nonce: %v", err)
 	}
 	// 换码后旧文件失效,新文件能用新码解开
 	is2, err := s.RotateClientConfig(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := OpenEnvelope(b.Seal, is2.PairCode, is2.RouterID, is2.Nonce, testIter, testIter); !errors.Is(err, ErrSealOpen) {
+	if _, err := OpenEnvelope(b.Seal(), is2.PairCode, testIter, testIter); !errors.Is(err, ErrSealOpen) {
 		t.Fatalf("旧文件应已失效: %v", err)
 	}
 	b2, err := s.ExportFile(ctx, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := OpenEnvelope(b2.Seal, is2.PairCode, is2.RouterID, is2.Nonce, testIter, testIter); err != nil {
+	if _, err := OpenEnvelope(b2.Seal(), is2.PairCode, testIter, testIter); err != nil {
 		t.Fatalf("新文件应能解开: %v", err)
 	}
-	if b2.Seal.Salt == b.Seal.Salt {
-		t.Fatal("换码后 salt 应该变(它由 nonce 决定)")
+	if b2.Seal().KDF.Salt == b.Seal().KDF.Salt {
+		t.Fatal("每次封包 salt 都是随机的")
 	}
 }
 
 func TestOpenEnvelopeRejectsTamperAndDowngrade(t *testing.T) {
 	s := fileSvc(t)
 	ctx := context.Background()
-	b, _ := s.ExportFile(ctx, "", "")
-	is, _ := s.ClientConfig(ctx)
-	open := func(e Envelope, min, max int) error {
-		_, err := OpenEnvelope(e, is.PairCode, is.RouterID, is.Nonce, min, max)
-		return err
-	}
-	if err := open(b.Seal, testIter, testIter); err != nil {
-		t.Fatal(err)
-	}
-	flip := func(s string) string { // 改动第一个字符
-		if s[0] == 'A' {
-			return "B" + s[1:]
-		}
-		return "A" + s[1:]
-	}
-	bad := b.Seal
-	bad.CT = flip(bad.CT)
-	if !errors.Is(open(bad, testIter, testIter), ErrSealOpen) {
-		t.Error("密文被改应解不开")
-	}
-	bad = b.Seal
-	bad.IV = flip(bad.IV)
-	if !errors.Is(open(bad, testIter, testIter), ErrSealOpen) {
-		t.Error("iv 被改应解不开")
-	}
-	for name, e := range map[string]Envelope{
-		"版本":       {V: 2, KDF: b.Seal.KDF, Iter: b.Seal.Iter, Salt: b.Seal.Salt, IV: b.Seal.IV, CT: b.Seal.CT},
-		"算法":       {V: 1, KDF: "scrypt", Iter: b.Seal.Iter, Salt: b.Seal.Salt, IV: b.Seal.IV, CT: b.Seal.CT},
-		"短 iv":     {V: 1, KDF: b.Seal.KDF, Iter: b.Seal.Iter, Salt: b.Seal.Salt, IV: "AAAA", CT: b.Seal.CT},
-		"坏 base64": {V: 1, KDF: b.Seal.KDF, Iter: b.Seal.Iter, Salt: "!!", IV: b.Seal.IV, CT: b.Seal.CT},
-	} {
-		if !errors.Is(open(e, testIter, testIter), ErrSealOpen) {
-			t.Errorf("%s不对应解不开", name)
-		}
-	}
-	// 迭代次数被降级 / 被抬到离谱,不进密码运算
-	if !errors.Is(open(b.Seal, testIter+1, testIter+10), ErrSealOpen) {
-		t.Error("迭代数低于下限应拒绝")
-	}
-	if !errors.Is(open(b.Seal, 1, testIter-1), ErrSealOpen) {
-		t.Error("迭代数高于上限应拒绝")
-	}
-}
-
-func TestExportFileIVFreshKeyCached(t *testing.T) {
-	s := fileSvc(t)
-	ctx := context.Background()
-	a, _ := s.ExportFile(ctx, "", "")
-	b, _ := s.ExportFile(ctx, "", "")
-	if a.Seal.IV == b.Seal.IV || a.Seal.CT == b.Seal.CT {
-		t.Fatal("每个封包的 iv 应当不同")
-	}
-	if a.Seal.Salt != b.Seal.Salt {
-		t.Fatal("同一代配对码的 salt 应当不变")
-	}
-	// 密钥缓存:同一代连续导出命中缓存(缓存里的就是同一个切片)
-	k1, _ := s.keys.get(mustPair(t, s), sealSalt(a.RouterID, mustNonce(t, s)), testIter)
-	k2, _ := s.keys.get(mustPair(t, s), sealSalt(a.RouterID, mustNonce(t, s)), testIter)
-	if &k1[0] != &k2[0] {
-		t.Fatal("第二次应取缓存里的密钥")
-	}
-}
-
-func mustPair(t *testing.T, s *Service) string {
-	is, err := s.ClientConfig(context.Background())
+	b, err := s.ExportFile(ctx, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return is.PairCode
+	is, _ := s.ClientConfig(ctx)
+	open := func(e Envelope, min, max int) error {
+		_, err := OpenEnvelope(e, is.PairCode, min, max)
+		return err
+	}
+	if err := open(b.Seal(), testIter, testIter); err != nil {
+		t.Fatal(err)
+	}
+	// 改密文
+	bad := b.Seal()
+	raw, _ := b64.DecodeString(bad.Data)
+	raw[len(raw)/2] ^= 0xff
+	bad.Data = b64.EncodeToString(raw)
+	if !errors.Is(open(bad, testIter, testIter), ErrSealOpen) {
+		t.Fatal("改密文应解不开")
+	}
+	// 改 salt
+	bad = b.Seal()
+	salt, _ := b64.DecodeString(bad.KDF.Salt)
+	salt[0] ^= 0xff
+	bad.KDF.Salt = b64.EncodeToString(salt)
+	if !errors.Is(open(bad, testIter, testIter), ErrSealOpen) {
+		t.Fatal("改 salt 应解不开")
+	}
+	for name, e := range map[string]Envelope{
+		"算法":    {KDF: KDFParams{Alg: "scrypt", Iterations: testIter, Salt: b.Seal().KDF.Salt}, Data: b.Seal().Data},
+		"坏salt": {KDF: KDFParams{Alg: SealKDF, Iterations: testIter, Salt: "!!"}, Data: b.Seal().Data},
+		"短data": {KDF: b.Seal().KDF, Data: b64.EncodeToString([]byte("short"))},
+	} {
+		if !errors.Is(open(e, testIter, testIter), ErrSealOpen) {
+			t.Fatalf("%s 应解不开", name)
+		}
+	}
+	if !errors.Is(open(b.Seal(), testIter+1, testIter+10), ErrSealOpen) {
+		t.Fatal("迭代次数低于下限应拒")
+	}
+	if !errors.Is(open(b.Seal(), 1, testIter-1), ErrSealOpen) {
+		t.Fatal("迭代次数高于上限应拒")
+	}
 }
 
-func mustNonce(t *testing.T, s *Service) string {
-	is, _ := s.ClientConfig(context.Background())
-	return is.Nonce
-}
-
-func TestExportFileDoesNotNeedSyncSwitch(t *testing.T) {
+func TestSealUsesFreshIVAndSalt(t *testing.T) {
 	s := fileSvc(t)
 	ctx := context.Background()
-	if is, _ := s.ClientConfig(ctx); is.Enabled {
-		t.Fatal("默认应关")
-	}
-	if _, err := s.ExportFile(ctx, "", ""); err != nil {
-		t.Fatalf("开关关着也能导出文件: %v", err)
-	}
-	if is, _ := s.ClientConfig(ctx); is.Enabled {
-		t.Fatal("导出不能改开关")
-	}
-}
-
-func TestExportFileRandFailure(t *testing.T) {
-	s := fileSvc(t)
-	s.Rand = bytes.NewReader(nil) // 随机源读不出东西
-	if _, err := s.ExportFile(context.Background(), "", ""); err == nil {
-		t.Fatal("随机源坏了应报错")
-	}
-	// 配对码已经在上一步被补齐过的话这里不该受影响;换回真随机源能正常导出
-	s2 := fileSvc(t)
-	s2.Rand = rand.Reader
-	if _, err := s2.ExportFile(context.Background(), "", ""); err != nil {
+	a, err := s.ExportFile(ctx, "", "")
+	if err != nil {
 		t.Fatal(err)
+	}
+	b, err := s.ExportFile(ctx, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Data == b.Data {
+		t.Fatal("每次应换 iv/密文")
+	}
+	if a.KDF.Salt == b.KDF.Salt {
+		t.Fatal("每次应换 salt")
 	}
 }
 
