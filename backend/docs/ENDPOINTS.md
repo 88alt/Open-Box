@@ -503,6 +503,8 @@
 
 - `GET /client/v1/:routerId/pair` → `{nonce}`;routerId 不对 `404 {"error":"unpaired"}`;同步关 `403 {"error":"disabled"}`。
 - `POST /client/v1/:routerId/pair` body `{nonce,proof}` → `{sealed}`(base64url(iv||ct||tag),明文 `{token,key}`);proof 错 `403 {"error":"bad_code","remaining"}`;nonce 过期 `410 expired`;限速 `429 locked`。
-- `GET /client/v1/:routerId/config/:token` → `{v:1,iv,data}`(标准 base64,设备 key AES-GCM);token 未知 `404`。
+- `GET /client/v1/:routerId/config/:token` → `{v:1,iv,data}`(标准 base64,设备 key AES-GCM)。设备校验(本节 `config/:token` 及下面的子资源共用):路由器 ID 不对、token 格式不对、库里没有这个 token,一律 `404 {"error":"unpaired"}`;认出设备之后同步开关关着才回 `403 {"error":"disabled"}`(只有拿着有效 token 的看得到这个状态)。响应都带 `Cache-Control: no-store`。
+- `GET /client/v1/:routerId/config/:token/rule-set/:tag`(App 取规则集文件):`tag` 可带 `.srs` 后缀;只认随包规则库的 `geosite-*` / `geoip-*`(从规则库目录取)和用户规则集链接编出的 `list-<8 位十六进制>[-ip]`(从 `<数据目录>/rules` 取),别的名字(含路径穿越)和不存在的文件都是 `404 {"error":"not found"}`;成功回 `application/octet-stream`,支持 `Range`。
+- `GET /client/v1/:routerId/config/:token/background`(App 取面板背景图,就是 `/api/background-image` 存的那一张):成功回原图字节,`Content-Type` 取自 data URL(`image/<子类型>`),响应头 `X-Openbox-Background-Version` 是内容的 16 位十六进制摘要;没设置背景图 `404 {"error":"not found"}`。上游背景图还可以是一个远程链接(回 302),自研只存上传的图片,没有这一支。
 - 面板侧 `GET /client/v1/config?p=<nonce>` 暂留兼容。
 

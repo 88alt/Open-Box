@@ -74,7 +74,7 @@ func TestPairAndConfigByTokenRoundTrip(t *testing.T) {
 	} else {
 		badTok = "0" + badTok[1:]
 	}
-	if _, err := s.ConfigByToken(ctx, is.RouterID, badTok, "1.2.3.4"); !errors.Is(err, ErrTokenNotFound) {
+	if _, err := s.ConfigByToken(ctx, is.RouterID, badTok, "1.2.3.4"); !errors.Is(err, ErrPairUnpaired) {
 		t.Fatalf("bad token: %v", err)
 	}
 }

@@ -100,6 +100,11 @@ type Service struct {
 	// nil = 明文里不带 contentFilter 这一项;返回 *contentfilter.TooLargeError 时导出和同步如实报 *ContentFilterTooLargeError。
 	ContentFilter func(ctx context.Context) (contentfilter.Snapshot, error)
 
+	// GeoDir 是随包规则库目录(<分类名>.srs);RulesetDir 是用户规则集链接编出的本地规则集目录(list-<hash>.srs)。
+	// App 经 config/:token/rule-set/:tag 取规则集文件时按这两处找;空 = 对应的一类回 404。
+	GeoDir     string
+	RulesetDir string
+
 	// UpdateServer 在档案里原子地改一台共享服务器:读出 id 对应的那一台(副本)交给 change 修改再写回,没有这台回 ErrServerNotFound
 	// (profile.Service.UpdateServer 的包装,把它的错误换成本包的)。nil = 不支持,share-codes/{x}/rotate 回 503。
 	UpdateServer func(ctx context.Context, id string, change func(server map[string]any) error) (map[string]any, error)

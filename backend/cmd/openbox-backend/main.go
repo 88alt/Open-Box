@@ -637,7 +637,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 同一个实例既给 content-filter* 接口用,也给本地分流的同步明文取启用集合的快照(同一把锁,拿到的是同一时刻的内容)
 	contentFilterSvc := &contentfilter.Service{Store: st, Dir: filepath.Join(cfg.DataDir, "content-filter")}
 	clientAppSvc := &clientapp.Service{
-		Store: st, Profile: profileSvc.Get, LAN: system.LAN, PanelPort: clientapp.PortOf(cfg.Listen),
+		Store: st, GeoDir: cfg.GeoDir, RulesetDir: filepath.Join(cfg.DataDir, "rules"), Profile: profileSvc.Get, LAN: system.LAN, PanelPort: clientapp.PortOf(cfg.Listen),
 		ContentFilter: func(ctx context.Context) (contentfilter.Snapshot, error) { return contentFilterSvc.Snapshot(ctx, 0) },
 		// 共享服务器换配对码:密码在档案里原子地换(读改写在档案的存储锁里),再走部署让新密码生效;部署和面板的「部署」共用同一份「最近一次部署」记录
 		UpdateServer: func(ctx context.Context, id string, change func(map[string]any) error) (map[string]any, error) {

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -42,6 +43,9 @@ type PairService interface {
 	PairGet(ctx context.Context, routerID string) (nonce string, err error)
 	PairPost(ctx context.Context, routerID, nonce, proof string) (sealed string, err error)
 	ConfigByToken(ctx context.Context, routerID, token, ip string) (clientapp.TokenBundle, error)
+	// RuleSetPath / Background 是 config/:token 下面的子资源:规则集文件路径、面板背景图。
+	RuleSetPath(ctx context.Context, routerID, token, tag string) (string, error)
+	Background(ctx context.Context, routerID, token string) (*clientapp.BackgroundImage, error)
 }
 
 // ShareService 是共享网络服务器的 App 码要用的功能(*clientapp.Service 满足)。
@@ -101,6 +105,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	}))
 	mux.HandleFunc("/client/v1/{routerId}/config/{token}", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodGet: d.configByToken,
+	}))
+	mux.HandleFunc("/client/v1/{routerId}/config/{token}/rule-set/{tag}", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodGet: d.ruleSetGet,
+	}))
+	mux.HandleFunc("/client/v1/{routerId}/config/{token}/background", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodGet: d.backgroundGet,
 	}))
 	mux.HandleFunc("/client/v1/", httpx.NotFound) // 别的路径回 JSON 404,不落到前端的 index.html
 	mux.HandleFunc("/api/openbox/client-config/rotate", httpx.Methods(map[string]http.HandlerFunc{
@@ -432,6 +442,52 @@ func (d Deps) configByToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, out)
+}
+
+// ruleSetGet 给 App 一份规则集文件(.srs 二进制)。tag 可带 .srs 后缀;名字不合格、文件不存在都是 404 not found。
+func (d Deps) ruleSetGet(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Pair == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "客户端配置服务不可用")
+		return
+	}
+	path, err := d.Pair.RuleSetPath(r.Context(), r.PathValue("routerId"), r.PathValue("token"), r.PathValue("tag"))
+	if err != nil {
+		writePairErr(w, err)
+		return
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		httpx.Error(w, http.StatusNotFound, "not found")
+		return
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		httpx.Error(w, http.StatusNotFound, "not found")
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	http.ServeContent(w, r, "", fi.ModTime(), f)
+}
+
+// backgroundGet 给 App 面板背景图,响应头 X-Openbox-Background-Version 是内容摘要;没有设置背景图是 404 not found。
+func (d Deps) backgroundGet(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Pair == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "客户端配置服务不可用")
+		return
+	}
+	img, err := d.Pair.Background(r.Context(), r.PathValue("routerId"), r.PathValue("token"))
+	if err != nil {
+		writePairErr(w, err)
+		return
+	}
+	w.Header().Set("X-Openbox-Background-Version", img.Version)
+	w.Header().Set("Content-Type", img.Type)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(img.Bytes)
 }
 
 func writePairErr(w http.ResponseWriter, err error) {

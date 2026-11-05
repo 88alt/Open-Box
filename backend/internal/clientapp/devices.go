@@ -202,36 +202,46 @@ func (s *Service) PairPost(ctx context.Context, routerID string, nonce, proof st
 	return env, nil
 }
 
-// ConfigByToken:GET config/:token → TokenBundle。
-func (s *Service) ConfigByToken(ctx context.Context, routerID, token, ip string) (TokenBundle, error) {
+// authDevice 认设备:路由器 ID 不对、token 格式不对、库里没有这个 token,一律 ErrPairUnpaired(404 unpaired,App 据此提示重新配对);
+// 认出设备之后同步开关关着才回 ErrPairDisabled(403 disabled)——只有拿着有效 token 的才看得到这个状态,
+// 对齐上游 v0.1.402 的设备校验(先认设备、再看开关)。config/:token 和它下面的子资源共用这一处。
+func (s *Service) authDevice(ctx context.Context, routerID, token string) (Issue, *device, error) {
 	is, err := s.ClientConfig(ctx)
 	if err != nil {
-		return TokenBundle{}, err
+		return Issue{}, nil, err
 	}
-	if routerID != is.RouterID {
-		return TokenBundle{}, ErrPairUnpaired
-	}
-	if !is.Enabled {
-		return TokenBundle{}, ErrPairDisabled
-	}
-	if !validToken(token) {
-		return TokenBundle{}, ErrTokenNotFound
+	if routerID != is.RouterID || !validToken(token) {
+		return Issue{}, nil, ErrPairUnpaired
 	}
 	hash := sha256Hex(token)
 	var st state
 	if _, err := s.Store.Load(stateFile, &st); err != nil {
-		return TokenBundle{}, err
+		return Issue{}, nil, err
 	}
 	var dev *device
 	for _, d := range st.Devices {
 		if d != nil && subtle.ConstantTimeCompare([]byte(d.TokenHash), []byte(hash)) == 1 {
-			dev = d
-			break
+			c := *d
+			dev = &c
 		}
 	}
 	if dev == nil {
-		return TokenBundle{}, ErrTokenNotFound
+		return Issue{}, nil, ErrPairUnpaired
 	}
+	if !is.Enabled {
+		return Issue{}, nil, ErrPairDisabled
+	}
+	return is, dev, nil
+}
+
+// ConfigByToken:GET config/:token → TokenBundle。
+func (s *Service) ConfigByToken(ctx context.Context, routerID, token, ip string) (TokenBundle, error) {
+	is, dev, err := s.authDevice(ctx, routerID, token)
+	if err != nil {
+		return TokenBundle{}, err
+	}
+	hash := sha256Hex(token)
+	var st state
 	plain, now, err := s.plainConfig(ctx, is, "")
 	if err != nil {
 		return TokenBundle{}, err
