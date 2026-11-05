@@ -2,7 +2,7 @@
   <div class="ctrls-bar">
     <!-- 概览页顶栏:左边是面板版本号(加粗),右边是内核版本号(淡色、靠右)。
          两段文字都由后端给出(activation 接口的 defaults),不依赖是否「激活」。 -->
-    <div class="app-card-padding flex h-12 flex-row items-center gap-2 overflow-hidden text-sm">
+    <div class="app-card-padding flex min-h-[calc(var(--app-toolbar-control-height)+var(--app-card-space)*2)] flex-row items-center gap-2 overflow-hidden text-sm">
       <span class="truncate font-semibold">{{ left }}</span>
       <span class="text-base-content/70 ml-auto truncate">{{ right }}</span>
     </div>

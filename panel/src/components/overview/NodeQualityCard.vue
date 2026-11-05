@@ -74,7 +74,7 @@
               />
               <div class="min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
-                  <span class="text-base font-semibold break-all">{{ sub.name }}</span>
+                  <span class="text-sm font-normal break-all">{{ sub.name }}</span>
                   <span class="badge badge-ghost badge-sm">{{ $t(`qualityMode_${sub.mode}`) }}</span>
                 </div>
                 <p class="text-base-content/60 mt-1 text-xs">
