@@ -4,6 +4,11 @@
 标注「需真机」的条目,代码和单元测试做完后打 `[~]`(代码完成,待真机验证),由维护者真机验证后改成 `[x]`。沙盒里无法验证的云端项(例如 Actions 首次运行)同样先打 `[~]`,由维护者确认后改成 `[x]`。
 接口分组名对应 `docs/ENDPOINTS.md` 里的二级标题。
 
+## 先做
+- [x] App 在线配对与按 token 拉配置(对齐上游 v0.1.402:`GET/POST /client/v1/:routerId/pair`、`GET /client/v1/:routerId/config/:token`;设备表;proof=HMAC;token 封包 `{v,iv,data}`)。旧 `GET /client/v1/config?p=nonce` 暂留兼容。
+- [ ] App token 子资源(content-filter / rule-set / background)与分享 pair 路径对齐上游
+- [ ] 其它默认 JSON 与边角对账
+
 ## 对齐口径
 - **目标**:在无激活/授权的前提下,行为、默认值、校验、封包外形、接口字段尽量对齐上游同版本(以 catch-up-upstream / 上游发布对应版本为准)。细则见 `HANDOFF.md` 第五、六节。
 - **参考**:只读 catch-up-upstream 与随包默认、前端 `panel/src`、自研 `core/`(只读)、sing-box 等公开文档。实现全部写在 `backend/`,不把上游闭源程序当依赖。
@@ -143,6 +148,8 @@
 - [ ] 清理旧文件 `scripts/native-arm64/`(联调通过之后)
 
 ## 日志(新的在最上面)
+- 2026-11-05 backend: App 在线配对与 config/:token(对齐上游 v0.1.402;pair proof + 设备 token/key;`TokenBundle` {v,iv,data};换码清设备;旧 ?p=nonce 暂留;参考 catch-up panel/server 可读实现,自写代码)
+
 - 2026-11-05 backend: M2 `client-app/share-codes/{x}/rotate`(换这台服务器的配对码、密码一起换并部署;依据前端 `api/clientApp.ts` 对 `rotateShareCode` / `OpenboxShareCodeRotated` 的注释、`internal/shareservers` 的校验和 DESIGN 第 8 节;自己的设计,没有参照上游;只用标准库,无新依赖;对账:`git fetch` 后 origin/main 在 2265cda0,`git log -- backend` 最近的条目在日志里都有对应,没有「做了没打勾」或「打了勾找不到提交」的,补丁基于它生成)。新增 `shareservers.Rekey`(按协议换凭据:shadowsocks `password`(2022 系列生成对应字节数的 base64)、vless `uuid`(v4)、tuic / hysteria2 `password`、mixed 有认证才换 `password`;换完仍能过 `Normalize`)、`profile.Service.UpdateServer`(在档案存储锁里读出一台的副本交给回调修改再整份校验写回,没有这台回 `ErrServerNotFound`,不合格回 `*ValidationError` 且不落盘;并发改不同服务器不丢更新)、`clientapp.Service.RotateShare`(顺序:一、档案里换密码;二、存新配对码和 `gen` 加一、丢旧封包,旧代数取回立刻 404;三、锁外部署:服务器停用 / 没有可换的凭据 / 内核没运行 / 没有服务管理器 / 没接部署 → `saved`,内核在运行就走一次与面板「部署」同一条路径的部署,成功 `restarted`,失败 / 已有部署在进行 / 读不出内核状态 → `failed` + `message`,仍是 200,密码和配对码不回滚;`Service` 新增 `UpdateServer` / `Deploy` 两个注入点,`main.go` 接上 `profileSvc.UpdateServer` 和 `deploySvc.Run`)、`internal/api/clientapp` 的 `shareRotate`(`POST /api/openbox/client-app/share-codes/{id}/rotate`:404 / 503 / 400 / 500 分别对应服务器不存在 / 没接档案修改 / 别的服务器不合格 / 其它,响应 no-store;原先 `share-codes/` 下所有 POST 回 501 的兜底改为回 JSON 404)。测试:`Rekey` 逐协议、`UpdateServer`(含并发)、`RotateShare` 的完整流程(旧代数 404、重新出码沿用新配对码、别的服务器不动)、应用结果的各种组合、代数进位与溢出、并发 rotate(`-race`)、接口状态码与形状,以及用真实档案服务走一遍的端到端测试。ENDPOINTS 的 `rotate` 一节改为已做并写明口径(哪个字段算密码、saved / restarted / failed 的判定、不回滚)。**需真机**,打 `[~]`,验证方法见上面该条。
 
 - 2026-11-05 backend: 修 content-filter 接口测试 `TestFullFlow`(80efbf19 把「恢复默认」改成回到三份随包规则后,这个测试仍按「默认为空」断言,origin/main 2265cda0 上就是红的;改为断言三份随包规则(综合省流 / Youtube-Surge / Youtube-补丁)回来并启用、用户自加的保留原样,删除用户自加的返回 200 再删 404)。只改测试,无功能改动;对账:`git fetch` 后 origin/main 在 2265cda0。

@@ -57,7 +57,7 @@ func (s *Service) SetClientConfigEnabled(ctx context.Context, enabled bool) (boo
 // RotateClientConfig 更换配对码和 nonce(之前导入的设备、导出的文件随之失效),
 // 最后同步时刻清零(那是旧配对的记录),开关保持原样。返回换完的整份。
 func (s *Service) RotateClientConfig(ctx context.Context) (Issue, error) {
-	return s.configChange(ctx, func(c *configState) error {
+	is, err := s.configChange(ctx, func(c *configState) error {
 		old := c.PairCode
 		code := old
 		for i := 0; i < maxRotateTries && code == old; i++ {
@@ -76,6 +76,15 @@ func (s *Service) RotateClientConfig(ctx context.Context) (Issue, error) {
 		c.PairCode, c.Nonce, c.LastSyncAt = code, n, 0
 		return nil
 	})
+	if err != nil {
+		return is, err
+	}
+	var st state
+	_ = s.Store.Update(stateFile, &st, func() error {
+		clearDevices(&st)
+		return nil
+	})
+	return is, nil
 }
 
 // configChange 先把路由器标识等不会变的部分读出来(读不到就什么都不改),再在一次 store.Update 里

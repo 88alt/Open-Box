@@ -36,7 +36,7 @@ func TestPublicSyncBypassesLoginButAPIDoesNot(t *testing.T) {
 		KDFIter:   1000,
 	}
 	mux := http.NewServeMux()
-	Register(mux, Deps{Service: svc, Config: svc, File: svc, Sync: svc, Share: svc})
+	Register(mux, Deps{Service: svc, Config: svc, File: svc, Sync: svc, Pair: svc, Share: svc})
 	srv := httptest.NewServer(authapi.Require(m)(mux))
 	defer srv.Close()
 

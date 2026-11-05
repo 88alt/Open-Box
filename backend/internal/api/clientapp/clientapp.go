@@ -37,6 +37,13 @@ type SyncService interface {
 	Sync(ctx context.Context, nonce, ip string) (clientapp.SyncResult, error)
 }
 
+// PairService 是上游口径的 App 在线配对与按 token 拉配置(*clientapp.Service 满足)。
+type PairService interface {
+	PairGet(ctx context.Context, routerID string) (nonce string, err error)
+	PairPost(ctx context.Context, routerID, nonce, proof string) (sealed string, err error)
+	ConfigByToken(ctx context.Context, routerID, token, ip string) (clientapp.TokenBundle, error)
+}
+
 // ShareService 是共享网络服务器的 App 码要用的功能(*clientapp.Service 满足)。
 type ShareService interface {
 	ShareCodes(ctx context.Context, links map[string]string) (map[string]clientapp.ShareSeal, error)
@@ -55,6 +62,7 @@ type Deps struct {
 	Config  ConfigService
 	File    FileService
 	Sync    SyncService
+	Pair    PairService
 	Share   ShareService
 	Egress  EgressService
 }
@@ -85,6 +93,14 @@ func Register(mux *http.ServeMux, d Deps) {
 	}))
 	mux.HandleFunc("/client/v1/share", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodGet: d.shareGet,
+	}))
+	// 对齐上游 v0.1.402 App 路径
+	mux.HandleFunc("/client/v1/{routerId}/pair", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodGet:  d.pairGet,
+		http.MethodPost: d.pairPost,
+	}))
+	mux.HandleFunc("/client/v1/{routerId}/config/{token}", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodGet: d.configByToken,
 	}))
 	mux.HandleFunc("/client/v1/", httpx.NotFound) // 别的路径回 JSON 404,不落到前端的 index.html
 	mux.HandleFunc("/api/openbox/client-config/rotate", httpx.Methods(map[string]http.HandlerFunc{
@@ -367,4 +383,76 @@ func (d Deps) egressCountry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, e)
+}
+
+func (d Deps) pairGet(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Pair == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "客户端配置服务不可用")
+		return
+	}
+	nonce, err := d.Pair.PairGet(r.Context(), r.PathValue("routerId"))
+	if err != nil {
+		writePairErr(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]string{"nonce": nonce})
+}
+
+func (d Deps) pairPost(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Pair == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "客户端配置服务不可用")
+		return
+	}
+	var body struct {
+		Nonce string `json:"nonce"`
+		Proof string `json:"proof"`
+	}
+	if !httpx.DecodeJSON(w, r, &body, 2<<10) {
+		return
+	}
+	sealed, err := d.Pair.PairPost(r.Context(), r.PathValue("routerId"), body.Nonce, body.Proof)
+	if err != nil {
+		writePairErr(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]string{"sealed": sealed})
+}
+
+func (d Deps) configByToken(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Pair == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "客户端配置服务不可用")
+		return
+	}
+	out, err := d.Pair.ConfigByToken(r.Context(), r.PathValue("routerId"), r.PathValue("token"), peerIP(r))
+	if err != nil {
+		writePairErr(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, out)
+}
+
+func writePairErr(w http.ResponseWriter, err error) {
+	var locked *clientapp.PairLockedError
+	var bad *clientapp.PairBadCodeError
+	switch {
+	case errors.Is(err, clientapp.ErrPairUnpaired):
+		httpx.Error(w, http.StatusNotFound, "unpaired")
+	case errors.Is(err, clientapp.ErrPairDisabled):
+		httpx.Error(w, http.StatusForbidden, "disabled")
+	case errors.Is(err, clientapp.ErrPairExpired):
+		httpx.Error(w, http.StatusGone, "expired")
+	case errors.As(err, &locked):
+		secs := int((locked.After + time.Second - 1) / time.Second)
+		w.Header().Set("Retry-After", strconv.Itoa(max(secs, 1)))
+		httpx.Error(w, http.StatusTooManyRequests, "locked")
+	case errors.As(err, &bad):
+		httpx.JSON(w, http.StatusForbidden, map[string]any{"error": "bad_code", "remaining": bad.Remaining})
+	case errors.Is(err, clientapp.ErrTokenNotFound):
+		httpx.Error(w, http.StatusNotFound, "not found")
+	default:
+		httpx.Error(w, http.StatusInternalServerError, "同步失败")
+	}
 }

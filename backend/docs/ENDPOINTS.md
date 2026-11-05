@@ -497,3 +497,12 @@
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/health` | 健康检查,免登录,返回 `{ "ok": true, "version": "..." }`,给 procd / systemd / 监控用 |
+
+
+### App 在线配对与按 token 拉配置(对齐上游 v0.1.402)
+
+- `GET /client/v1/:routerId/pair` → `{nonce}`;routerId 不对 `404 {"error":"unpaired"}`;同步关 `403 {"error":"disabled"}`。
+- `POST /client/v1/:routerId/pair` body `{nonce,proof}` → `{sealed}`(base64url(iv||ct||tag),明文 `{token,key}`);proof 错 `403 {"error":"bad_code","remaining"}`;nonce 过期 `410 expired`;限速 `429 locked`。
+- `GET /client/v1/:routerId/config/:token` → `{v:1,iv,data}`(标准 base64,设备 key AES-GCM);token 未知 `404`。
+- 面板侧 `GET /client/v1/config?p=<nonce>` 暂留兼容。
+

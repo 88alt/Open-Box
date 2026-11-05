@@ -140,15 +140,10 @@ func (s *Service) ExportFile(ctx context.Context, lan, publicBase string) (Bundl
 
 // sealConfig 把此刻的本地分流配置按 is 里的配对码封好。导出文件和公开同步接口共用,返回封包和生成时刻(毫秒)。
 // importCode 非空时写入明文(导出文件需要;公开同步可空)。
-func (s *Service) sealConfig(ctx context.Context, is Issue, importCode string) (Envelope, int64, error) {
-	release, err := s.acquireSeal(ctx)
-	if err != nil {
-		return Envelope{}, 0, err
-	}
-	defer release()
+func (s *Service) plainConfig(ctx context.Context, is Issue, importCode string) ([]byte, int64, error) {
 	info, err := s.Info(ctx)
 	if err != nil {
-		return Envelope{}, 0, err
+		return nil, 0, err
 	}
 	var cf *contentfilter.Snapshot
 	if s.ContentFilter != nil {
@@ -156,9 +151,9 @@ func (s *Service) sealConfig(ctx context.Context, is Issue, importCode string) (
 		if err != nil {
 			var tl *contentfilter.TooLargeError
 			if errors.As(err, &tl) {
-				return Envelope{}, 0, &ContentFilterTooLargeError{Size: tl.Size, Max: tl.Max}
+				return nil, 0, &ContentFilterTooLargeError{Size: tl.Size, Max: tl.Max}
 			}
-			return Envelope{}, 0, fmt.Errorf("读取内容过滤失败: %w", err)
+			return nil, 0, fmt.Errorf("读取内容过滤失败: %w", err)
 		}
 		cf = &sn
 	}
@@ -174,14 +169,26 @@ func (s *Service) sealConfig(ctx context.Context, is Issue, importCode string) (
 		ImportCode:    importCode,
 	})
 	if err != nil {
-		return Envelope{}, 0, fmt.Errorf("编码配置失败: %w", err)
+		return nil, 0, fmt.Errorf("编码配置失败: %w", err)
+	}
+	return plain, now, nil
+}
+
+func (s *Service) sealConfig(ctx context.Context, is Issue, importCode string) (Envelope, int64, error) {
+	release, err := s.acquireSeal(ctx)
+	if err != nil {
+		return Envelope{}, 0, err
+	}
+	defer release()
+	plain, now, err := s.plainConfig(ctx, is, importCode)
+	if err != nil {
+		return Envelope{}, 0, err
 	}
 	iter := s.kdfIter()
 	env, err := seal(is.PairCode, iter, plain, s.Rand)
 	if err != nil {
 		return Envelope{}, 0, fmt.Errorf("封包失败: %w", err)
 	}
-	// 缓存这一代密钥(用封包里的 salt),公开同步接口热路径不再现算
 	if salt, err := b64.DecodeString(env.KDF.Salt); err == nil {
 		_, _ = s.keys.get(is.PairCode, salt, iter)
 	}

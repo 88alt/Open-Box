@@ -38,6 +38,8 @@ type state struct {
 	Egress *EgressCountry `json:"egressCountry,omitempty"`
 	// Shares 是共享网络服务器的 App 码状态(服务器 id → 配对码、代数、封好的节点分享链接),见 sharecodes.go。
 	Shares map[string]*shareState `json:"shareCodes,omitempty"`
+	// Devices 是 App 在线配对后的设备(token 哈希 + 密钥),见 devices.go。
+	Devices []*device `json:"clientDevices,omitempty"`
 }
 
 // ServerInfo 是档案里的路由器标识(serverInfo),四个字段都可以空。原样回给前端。
@@ -76,7 +78,8 @@ type serverDefault struct {
 
 // Service 组装 Info。字段都是依赖,测试里换假的。
 type Service struct {
-	Store *store.Store
+	pairLimit *pairLimiter
+	Store     *store.Store
 	// Profile 读完整档案(*profile.Service.Get 的包装)。
 	Profile func(ctx context.Context) (map[string]any, error)
 	// LAN 返回局域网地址和 IPv4 网段(system.LAN)。为空时两项都回空数组。
