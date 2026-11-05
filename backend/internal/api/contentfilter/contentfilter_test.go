@@ -88,14 +88,40 @@ func TestFullFlow(t *testing.T) {
 		t.Fatalf("停用: %d %v", code, m)
 	}
 
+	// 恢复默认(DESIGN 第 8 节):三份随包规则回来并启用,用户自己加的保留原样(这里是刚被停用的「甲」)
 	code, m = call(t, mux, "POST", "/api/openbox/content-filter/restore-defaults", "")
-	if code != 200 || len(m["sets"].([]any)) != 0 {
-		t.Fatalf("默认为空,恢复默认应清空: %d %v", code, m)
+	if code != 200 {
+		t.Fatalf("恢复默认: %d %v", code, m)
+	}
+	byID := map[string]map[string]any{}
+	for _, e := range m["sets"].([]any) {
+		set := e.(map[string]any)
+		byID[set["id"].(string)] = set
+	}
+	if len(byID) != 4 {
+		t.Fatalf("应是三份随包规则加用户自己的一份: %v", m)
+	}
+	for id, want := range map[string][2]string{
+		"2aec6f268d71d8f4": {"综合省流", "quantumultx"},
+		"7f19db176d8f1d7b": {"Youtube-Surge", "surge"},
+		"a08ac43e05eb8590": {"Youtube-补丁", "surge"},
+	} {
+		set := byID[id]
+		if set == nil || set["name"] != want[0] || set["dialect"] != want[1] || set["enabled"] != true {
+			t.Fatalf("随包规则 %s 应回来并启用: %v", id, set)
+		}
+	}
+	if mine := byID[id]; mine == nil || mine["name"] != "甲" || mine["enabled"] != false {
+		t.Fatalf("用户自己加的要保留原样(仍是停用): %v", mine)
 	}
 
+	code, m = call(t, mux, "DELETE", "/api/openbox/content-filter/"+id, "")
+	if code != 200 || len(m["sets"].([]any)) != 3 {
+		t.Fatalf("删除用户自己加的: %d %v", code, m)
+	}
 	code, _ = call(t, mux, "DELETE", "/api/openbox/content-filter/"+id, "")
 	if code != 404 {
-		t.Fatalf("已被清空,删除应 404: %d", code)
+		t.Fatalf("已删除,再删应 404: %d", code)
 	}
 }
 
