@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,6 +19,8 @@ type fakeShare struct {
 	gotSID, gotGen, gotIP string
 	out                   map[string]clientapp.ShareSeal
 	res                   clientapp.ShareResult
+	rotated               clientapp.ShareRotated
+	gotRotate             []string
 	err                   error
 }
 
@@ -29,6 +32,11 @@ func (f *fakeShare) ShareCodes(_ context.Context, links map[string]string) (map[
 func (f *fakeShare) Share(_ context.Context, sid, gen, ip string) (clientapp.ShareResult, error) {
 	f.gotSID, f.gotGen, f.gotIP = sid, gen, ip
 	return f.res, f.err
+}
+
+func (f *fakeShare) RotateShare(_ context.Context, sid string) (clientapp.ShareRotated, error) {
+	f.gotRotate = append(f.gotRotate, sid)
+	return f.rotated, f.err
 }
 
 func TestShareCodesOK(t *testing.T) {
@@ -93,10 +101,85 @@ func TestShareCodesErrors(t *testing.T) {
 	}
 }
 
-func TestShareCodesRotateNotImplemented(t *testing.T) {
-	rec := callPath(t, Deps{Share: &fakeShare{}}, http.MethodPost, "/api/openbox/client-app/share-codes/a/rotate", "")
-	if rec.Code != 501 || !strings.Contains(rec.Body.String(), `"error"`) || strings.Contains(rec.Body.String(), "<html") {
-		t.Fatalf("换码未实现应如实回 JSON 501: %d %s", rec.Code, rec.Body)
+func TestShareRotateOK(t *testing.T) {
+	f := &fakeShare{rotated: clientapp.ShareRotated{PairCode: "AB2D", Gen: "0000000000000002",
+		Server: map[string]any{"id": "a", "name": "A", "protocol": "hysteria2", "port": 7001, "password": "new"}, Applied: "restarted"}}
+	rec := callPath(t, Deps{Share: f}, http.MethodPost, "/api/openbox/client-app/share-codes/a/rotate", "")
+	if rec.Code != 200 || !strings.Contains(rec.Header().Get("Cache-Control"), "no-store") {
+		t.Fatalf("%d %v %s", rec.Code, rec.Header(), rec.Body)
+	}
+	if len(f.gotRotate) != 1 || f.gotRotate[0] != "a" {
+		t.Fatalf("路径里的 id 交给服务层: %v", f.gotRotate)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	// 形状与前端 OpenboxShareCodeRotated 一致:pairCode / gen / server / applied;没有 message 时不出现这个键
+	if got["pairCode"] != "AB2D" || got["gen"] != "0000000000000002" || got["applied"] != "restarted" || got["server"].(map[string]any)["password"] != "new" {
+		t.Fatalf("形状: %s", rec.Body)
+	}
+	if _, has := got["message"]; has {
+		t.Fatalf("没有 message 时不该出现: %s", rec.Body)
+	}
+	// 部署失败不是 HTTP 错误:200,applied=failed,message 写原因
+	f2 := &fakeShare{rotated: clientapp.ShareRotated{PairCode: "AB2D", Gen: "0000000000000002", Server: map[string]any{"id": "a"}, Applied: "failed", Message: "sing-box check 没通过"}}
+	rec = callPath(t, Deps{Share: f2}, http.MethodPost, "/api/openbox/client-app/share-codes/a/rotate", "")
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"applied":"failed"`) || !strings.Contains(rec.Body.String(), "sing-box check") {
+		t.Fatalf("部署失败也是 200: %d %s", rec.Code, rec.Body)
+	}
+	// id 在路径里是转义的:%2D 解码后交给服务层
+	f3 := &fakeShare{}
+	callPath(t, Deps{Share: f3}, http.MethodPost, "/api/openbox/client-app/share-codes/srv%2D1/rotate", "")
+	if len(f3.gotRotate) != 1 || f3.gotRotate[0] != "srv-1" {
+		t.Fatalf("id 应已解码: %v", f3.gotRotate)
+	}
+}
+
+func TestShareRotateErrors(t *testing.T) {
+	path := "/api/openbox/client-app/share-codes/a/rotate"
+	var ie error = &clientapp.InputError{Msg: "第 2 台服务器: 端口必须是 1–65535 的整数"}
+	for _, c := range []struct {
+		name string
+		err  error
+		code int
+		want string
+	}{
+		{"服务器不存在", clientapp.ErrServerNotFound, 404, "没有这台共享服务器"},
+		{"包了一层的不存在", fmt.Errorf("x: %w", clientapp.ErrServerNotFound), 404, "没有这台共享服务器"},
+		{"没接档案修改", clientapp.ErrUnavailable, 503, "不可用"},
+		{"别的服务器不合格", ie, 400, "第 2 台服务器"},
+		{"内部错误", errors.New("磁盘满了"), 500, "更换配对码失败"},
+	} {
+		rec := callPath(t, Deps{Share: &fakeShare{err: c.err}}, http.MethodPost, path, "")
+		if rec.Code != c.code || !strings.Contains(rec.Body.String(), c.want) || !strings.Contains(rec.Body.String(), `"error"`) {
+			t.Errorf("%s: %d %s", c.name, rec.Code, rec.Body)
+		}
+		if !strings.Contains(rec.Header().Get("Cache-Control"), "no-store") {
+			t.Errorf("%s: 错误响应也要 no-store", c.name)
+		}
+	}
+	if rec := callPath(t, Deps{}, http.MethodPost, path, ""); rec.Code != 503 {
+		t.Errorf("没接服务: %d", rec.Code)
+	}
+	f := &fakeShare{}
+	if rec := callPath(t, Deps{Share: f}, http.MethodGet, path, ""); rec.Code != 405 || len(f.gotRotate) != 0 {
+		t.Errorf("GET: %d", rec.Code)
+	}
+	// 别的子路径回 JSON 404,不落到前端页面,也不碰服务层
+	for _, p := range []string{
+		"/api/openbox/client-app/share-codes/a",
+		"/api/openbox/client-app/share-codes/a/rotate/x",
+		"/api/openbox/client-app/share-codes/a/other",
+		"/api/openbox/client-app/share-codes/",
+	} {
+		rec := callPath(t, Deps{Share: f}, http.MethodPost, p, "")
+		if rec.Code != 404 || !strings.Contains(rec.Body.String(), `"error"`) || strings.Contains(rec.Body.String(), "<html") {
+			t.Errorf("%s: %d %s", p, rec.Code, rec.Body)
+		}
+	}
+	if len(f.gotRotate) != 0 {
+		t.Errorf("别的路径不该走到服务层: %v", f.gotRotate)
 	}
 }
 

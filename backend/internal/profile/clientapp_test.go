@@ -6,6 +6,7 @@ import (
 	"errors"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
@@ -261,5 +262,67 @@ func TestPatchStoresNormalizedServers(t *testing.T) {
 	got, err = svc.Patch(ctx, j(t, `{"servers":[]}`))
 	if err != nil || len(got["servers"].([]any)) != 0 {
 		t.Fatalf("%v %v", got["servers"], err)
+	}
+}
+
+// UpdateServer:只改指定的那一台,别的服务器和档案其它字段原样;改完整份仍过 servers 校验。
+func TestUpdateServer(t *testing.T) {
+	svc, _ := newSvc(t, nil)
+	ctx := context.Background()
+	two := `[{"id":"a","name":"A","protocol":"hysteria2","port":7001,"password":"old","obfs":"keep"},{"id":"b","name":"B","protocol":"mixed","port":7002}]`
+	if _, err := svc.Patch(ctx, j(t, `{"ipv6":true,"servers":`+two+`}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := svc.UpdateServer(ctx, "a", func(s map[string]any) error { s["password"] = "new"; return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["id"] != "a" || got["password"] != "new" || got["obfs"] != "keep" {
+		t.Fatalf("返回改完的那一台: %v", got)
+	}
+	cur, _ := svc.Get(ctx)
+	list := cur["servers"].([]any)
+	if len(list) != 2 || list[0].(map[string]any)["password"] != "new" || list[1].(map[string]any)["id"] != "b" || cur["ipv6"] != true {
+		t.Fatalf("只该改 a,别的原样: %v", cur["servers"])
+	}
+
+	// 没有这台
+	if _, err := svc.UpdateServer(ctx, "zz", func(map[string]any) error { t.Fatal("不该调用"); return nil }); !errors.Is(err, ErrServerNotFound) {
+		t.Fatalf("应回 ErrServerNotFound: %v", err)
+	}
+	// change 报错:什么都不写
+	boom := errors.New("boom")
+	if _, err := svc.UpdateServer(ctx, "a", func(s map[string]any) error { s["password"] = "zzz"; return boom }); !errors.Is(err, boom) {
+		t.Fatalf("change 的错误原样返回: %v", err)
+	}
+	// 改成不合格:校验拒绝,不落盘
+	var ve *ValidationError
+	if _, err := svc.UpdateServer(ctx, "a", func(s map[string]any) error { delete(s, "password"); return nil }); !errors.As(err, &ve) {
+		t.Fatalf("应回 *ValidationError: %v", err)
+	}
+	cur, _ = svc.Get(ctx)
+	if cur["servers"].([]any)[0].(map[string]any)["password"] != "new" {
+		t.Fatalf("失败的修改不该落盘: %v", cur["servers"])
+	}
+	// change 里改的是副本:返回错误时不会污染档案(上面已验证);并发改不同服务器不丢更新
+	var wg sync.WaitGroup
+	for _, id := range []string{"a", "b"} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 20; i++ {
+				if _, err := svc.UpdateServer(ctx, id, func(s map[string]any) error { s["name"] = id + "-x"; return nil }); err != nil {
+					t.Error(err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	cur, _ = svc.Get(ctx)
+	for i, id := range []string{"a", "b"} {
+		if cur["servers"].([]any)[i].(map[string]any)["name"] != id+"-x" {
+			t.Fatalf("并发修改丢了更新: %v", cur["servers"])
+		}
 	}
 }

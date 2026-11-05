@@ -639,6 +639,22 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	clientAppSvc := &clientapp.Service{
 		Store: st, Profile: profileSvc.Get, LAN: system.LAN, PanelPort: clientapp.PortOf(cfg.Listen),
 		ContentFilter: func(ctx context.Context) (contentfilter.Snapshot, error) { return contentFilterSvc.Snapshot(ctx, 0) },
+		// 共享服务器换配对码:密码在档案里原子地换(读改写在档案的存储锁里),再走部署让新密码生效;部署和面板的「部署」共用同一份「最近一次部署」记录
+		UpdateServer: func(ctx context.Context, id string, change func(map[string]any) error) (map[string]any, error) {
+			out, err := profileSvc.UpdateServer(ctx, id, change)
+			var ve *profile.ValidationError
+			switch {
+			case errors.Is(err, profile.ErrServerNotFound):
+				return nil, clientapp.ErrServerNotFound
+			case errors.As(err, &ve):
+				return nil, &clientapp.InputError{Msg: ve.Msg}
+			}
+			return out, err
+		},
+		Deploy: func(ctx context.Context) clientapp.DeployResult {
+			r := deploySvc.Run(ctx)
+			return clientapp.DeployResult{OK: r.OK, Busy: r.Busy, Message: r.Message}
+		},
 		// 出口国家:内核在运行时才判(只查询,不改任何设置),结果缓存在状态目录里
 		DetectEgress: func(ctx context.Context) (string, string, error) {
 			r := egressDetector.Detect(ctx)

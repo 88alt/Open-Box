@@ -129,6 +129,56 @@ func (s *Service) Patch(ctx context.Context, patch map[string]any) (map[string]a
 	return result, nil
 }
 
+// ErrServerNotFound 表示档案 servers 里没有这个 id。
+var ErrServerNotFound = errors.New("档案里没有这台共享服务器")
+
+// UpdateServer 在存储锁里读出 servers 里 id 对应的那一台(深拷贝),交给 change 原地修改,再把整份 servers 按 Patch 的同一套校验写回。
+// 读、改、写在同一把锁里,不会和别处对档案的保存互相覆盖。change 返回错误就什么都不写;没有这台服务器回 ErrServerNotFound;
+// 改完的值不合格回 *ValidationError、不落盘。返回改完的那一台(规整后)。
+func (s *Service) UpdateServer(ctx context.Context, id string, change func(server map[string]any) error) (map[string]any, error) {
+	var out map[string]any
+	stored := map[string]any{}
+	err := s.st.Update(storeName, &stored, func() error {
+		cur := effective(stored)
+		s.migrate(ctx, cur)
+		list, _ := cur["servers"].([]any)
+		idx := -1
+		for i, e := range list {
+			if m, ok := e.(map[string]any); ok {
+				if got, _ := m["id"].(string); got == id {
+					idx = i
+					break
+				}
+			}
+		}
+		if idx < 0 {
+			return ErrServerNotFound
+		}
+		srv := Clone(list[idx]).(map[string]any)
+		if err := change(srv); err != nil {
+			return err
+		}
+		next := make([]any, len(list))
+		copy(next, list)
+		next[idx] = srv
+		clean := prepare(cur, map[string]any{"servers": next})
+		if err := normalizeServers(clean); err != nil {
+			return &ValidationError{Msg: err.Error()}
+		}
+		merged := Merge(cur, clean)
+		if err := Check(merged); err != nil {
+			return &ValidationError{Msg: err.Error()}
+		}
+		stored = merged
+		out, _ = clean["servers"].([]any)[idx].(map[string]any)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // normalizeClientApp 校验并规整补丁里的 shareRegions / serverInfo(规则见 clientapp.NormalizeShareRegions /
 // NormalizeServerInfo)。只在补丁带了这两个键时做:档案里已有的旧数据不会拦住不相关的保存。
 // serverInfo 是整份覆盖(传 {} = 全用默认),所以先把 cur 里的旧值摘掉,免得被深度合并留下旧字段。

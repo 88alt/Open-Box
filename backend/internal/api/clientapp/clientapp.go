@@ -41,6 +41,7 @@ type SyncService interface {
 type ShareService interface {
 	ShareCodes(ctx context.Context, links map[string]string) (map[string]clientapp.ShareSeal, error)
 	Share(ctx context.Context, sid, gen, ip string) (clientapp.ShareResult, error)
+	RotateShare(ctx context.Context, sid string) (clientapp.ShareRotated, error)
 }
 
 // EgressService 是按出口 IP 判国家要用的功能(*clientapp.Service 满足)。
@@ -48,7 +49,7 @@ type EgressService interface {
 	DetectEgressCountry(ctx context.Context) (clientapp.EgressCountry, error)
 }
 
-// Deps 是本分组的依赖。Config 为 nil 时 client-config* 回 503,File 为 nil 时 client-config/file 回 503,Sync 为 nil 时 /client/v1/config 回 503,Share 为 nil 时 share-codes 和 /client/v1/share 回 503,Egress 为 nil 时 egress-country 回 503。
+// Deps 是本分组的依赖。Config 为 nil 时 client-config* 回 503,File 为 nil 时 client-config/file 回 503,Sync 为 nil 时 /client/v1/config 回 503,Share 为 nil 时 share-codes(含 {id}/rotate)和 /client/v1/share 回 503,Egress 为 nil 时 egress-country 回 503。
 type Deps struct {
 	Service Service
 	Config  ConfigService
@@ -92,13 +93,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.HandleFunc("/api/openbox/client-app/share-codes", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodPost: d.shareCodes,
 	}))
-	// share-codes/{x}/rotate(换这台服务器的配对码和密码并部署)还没做:如实回 501,不落到前端的 index.html
-	mux.HandleFunc("/api/openbox/client-app/share-codes/", httpx.Methods(map[string]http.HandlerFunc{
-		http.MethodPost: func(w http.ResponseWriter, _ *http.Request) {
-			httpx.NoStore(w)
-			httpx.Error(w, http.StatusNotImplemented, "更换共享服务器的配对码暂未实现")
-		},
+	// share-codes/{id}/rotate:换这台服务器的配对码,密码一起换并立即应用(路径里的 id 已被 ServeMux 解码)。别的子路径回 JSON 404,不落到前端的 index.html
+	mux.HandleFunc("/api/openbox/client-app/share-codes/{id}/rotate", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodPost: d.shareRotate,
 	}))
+	mux.HandleFunc("/api/openbox/client-app/share-codes/", httpx.NotFound)
 }
 
 // info 对应前端 fetchClientAppInfo。路由器 ID 第一次读时生成并保存,所以这是个「读时可能写一次」的 GET,
@@ -273,6 +272,34 @@ func (d Deps) shareCodes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		httpx.Error(w, http.StatusInternalServerError, "生成共享服务器的配对码失败: "+err.Error())
+		return
+	}
+	httpx.JSON(w, http.StatusOK, out)
+}
+
+// shareRotate 对应前端 rotateShareCode:换这台服务器的配对码(代数加一,旧代数立刻失效),服务器密码一起换,并走部署让新密码生效。
+// 返回 {pairCode, gen, server, applied: saved|restarted|failed, message?}:部署失败时配对码和密码仍已换,applied 是 failed、message 写原因(200,不是错误)。
+// 服务器不存在 404;没接档案修改能力 503;档案里别的共享服务器有不合格的项(整份写回被校验拦下)400 带原因。
+// 配对码和新密码是凭据:响应 no-store,不写日志(访问日志只记方法、路径和状态)。
+func (d Deps) shareRotate(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Share == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "客户端配置服务不可用")
+		return
+	}
+	out, err := d.Share.RotateShare(r.Context(), r.PathValue("id"))
+	if err != nil {
+		var ie *clientapp.InputError
+		switch {
+		case errors.Is(err, clientapp.ErrServerNotFound):
+			httpx.Error(w, http.StatusNotFound, "没有这台共享服务器")
+		case errors.Is(err, clientapp.ErrUnavailable):
+			httpx.Error(w, http.StatusServiceUnavailable, "更换配对码不可用")
+		case errors.As(err, &ie):
+			httpx.Error(w, http.StatusBadRequest, ie.Msg)
+		default:
+			httpx.Error(w, http.StatusInternalServerError, "更换配对码失败: "+err.Error())
+		}
 		return
 	}
 	httpx.JSON(w, http.StatusOK, out)
