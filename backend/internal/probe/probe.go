@@ -35,6 +35,8 @@ const (
 	DefaultTimeout = 5 * time.Second
 	// MaxTimeout 是客户端能要求的最长等待。
 	MaxTimeout = 30 * time.Second
+	// MaxTimeoutDownload 是带宽测速(Discard)允许的最长等待。
+	MaxTimeoutDownload = 3 * time.Minute
 	// MaxJobs 是一次最多测多少个。
 	MaxJobs = 500
 	// Concurrency 是同时在测的任务数(路由器上不宜太大)。
@@ -56,8 +58,9 @@ type Result struct {
 	Reason string `json:"reason,omitempty"` // invalid / not-found / timeout / refused / failed
 
 	// 以下两项只在取回正文的任务(Job.Capture > 0)成功时才有,不进 JSON:由调用方自己决定怎么交给前端。
-	URL  string `json:"-"` // 实际答话的地址(回退时可能不是 Job.URL)
-	Body string `json:"-"` // 响应正文,最多 Job.Capture 字节,已规整成合法 UTF-8
+	URL   string `json:"-"` // 实际答话的地址(回退时可能不是 Job.URL)
+	Body  string `json:"-"` // 响应正文,最多 Job.Capture 字节,已规整成合法 UTF-8
+	Bytes int64  `json:"-"` // Discard 模式下实际读到的字节数
 }
 
 // Job 是一次测速任务。
@@ -70,6 +73,8 @@ type Job struct {
 	// 每一次尝试各有一份完整的超时。用于「经这条线路看出口 IP」,不是测速,Ms 只是这次请求的耗时。
 	Capture  int
 	Fallback []string
+	// Discard > 0:带宽测速——最多读 Discard 字节后丢掉,记 Result.Bytes,不进 Body。
+	Discard int64
 }
 
 // Material 是从完整配置里摘出的、测速要用的部分。
@@ -249,8 +254,18 @@ func (r *Runner) Run(ctx context.Context, m *Material, jobs []Job, opt Options) 
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
-	if timeout > MaxTimeout {
-		timeout = MaxTimeout
+	maxTO := MaxTimeout
+	for _, j := range jobs {
+		if j.Discard > 0 {
+			maxTO = MaxTimeoutDownload
+			if timeout <= 0 || timeout == DefaultTimeout {
+				timeout = MaxTimeoutDownload
+			}
+			break
+		}
+	}
+	if timeout > maxTO {
+		timeout = maxTO
 	}
 	results := make([]Result, len(jobs))
 	users := make([]string, len(jobs))
@@ -366,6 +381,9 @@ func (r *Runner) Run(ctx context.Context, m *Material, jobs []Job, opt Options) 
 
 // runJob 跑一个任务:普通测速只请求一次;取回正文的任务按 URL、Fallback 的顺序试到第一个成功。
 func runJob(ctx context.Context, proxyAddr, user string, j Job, timeout time.Duration) Result {
+	if j.Discard > 0 {
+		return fetchDiscard(ctx, proxyAddr, user, j.URL, timeout, j.Discard)
+	}
 	if j.Capture <= 0 {
 		return fetch(ctx, proxyAddr, user, j.URL, timeout, 0)
 	}
@@ -513,6 +531,47 @@ func fetch(ctx context.Context, proxyAddr, user, target string, timeout time.Dur
 		return Result{Error: "响应是空的", Reason: "failed"}
 	}
 	return Result{OK: true, Ms: msOf(time.Since(start)), Body: strings.ToValidUTF8(string(buf), "\uFFFD")}
+}
+
+func fetchDiscard(ctx context.Context, proxyAddr, user, target string, timeout time.Duration, maxBytes int64) Result {
+	cctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(cctx, http.MethodGet, target, nil)
+	if err != nil {
+		return Result{Error: "测速地址不合法", Reason: "invalid"}
+	}
+	req.Header.Set("User-Agent", "openbox-probe/1")
+	tr := &http.Transport{
+		DisableKeepAlives:     true,
+		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+		ResponseHeaderTimeout: timeout,
+		DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
+			return connectDial(ctx, proxyAddr, user, addr)
+		},
+	}
+	defer tr.CloseIdleConnections()
+	start := time.Now()
+	resp, err := (&http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}).Do(req)
+	if err != nil {
+		return classify(err, cctx)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return Result{Error: fmt.Sprintf("HTTP %d", resp.StatusCode), Reason: "failed"}
+	}
+	n, err := io.Copy(io.Discard, io.LimitReader(resp.Body, maxBytes+1))
+	elapsed := time.Since(start)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return classify(err, cctx)
+	}
+	lower := n > maxBytes
+	if lower {
+		n = maxBytes
+	}
+	if n == 0 {
+		return Result{Error: "响应是空的", Reason: "failed"}
+	}
+	return Result{OK: true, Ms: msOf(elapsed), Bytes: n}
 }
 
 func msOf(d time.Duration) int {

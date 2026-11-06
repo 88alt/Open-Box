@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/probe"
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
 )
 
@@ -90,5 +91,21 @@ func TestEnqueueDueAndPersist(t *testing.T) {
 	svc2.mu.Unlock()
 	if m.Mbps != 1 {
 		t.Fatalf("%+v", m)
+	}
+}
+
+func TestProbeMeasurerNotFound(t *testing.T) {
+	m := NewProbeMeasurer(
+		MaterialFunc(func(ctx context.Context, tags []string) (*probe.Material, error) {
+			return probe.Subset(map[string]any{"outbounds": []any{}}, tags), nil
+		}),
+		RunnerFunc(func(ctx context.Context, m *probe.Material, jobs []probe.Job, opt probe.Options) ([]probe.Result, error) {
+			return []probe.Result{{Error: "找不到这个节点", Reason: "not-found"}}, nil
+		}),
+		nil,
+	)
+	r := m(context.Background(), "missing", 1024)
+	if !r.Failed || r.Reason != "not-found" {
+		t.Fatalf("%+v", r)
 	}
 }

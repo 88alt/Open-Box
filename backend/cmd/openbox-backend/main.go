@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -308,6 +309,24 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			}
 			return out, nil
 		},
+		Measure: bandwidth.NewProbeMeasurer(
+			bandwidth.MaterialFunc(func(ctx context.Context, tags []string) (*probe.Material, error) {
+				built, err := gen.Build(ctx)
+				if err != nil {
+					return nil, err
+				}
+				return probe.Subset(built.Config, tags), nil
+			}),
+			probeRunner,
+			func(ctx context.Context) string {
+				if p, err := profileSvc.Get(ctx); err == nil {
+					if u, _ := p["testUrl"].(string); strings.TrimSpace(u) != "" {
+						return strings.TrimSpace(u)
+					}
+				}
+				return ""
+			},
+		),
 	}
 	bandwidthapi.Register(srv.Mux(), bandwidthapi.Deps{Service: bandwidthSvc})
 
