@@ -41,6 +41,8 @@
   "config/low-latency": "500",
   "config/bandwidth-poor-threshold": "5",
   "config/bandwidth-adequate-threshold": "20",
+  "config/cpu-load-low-threshold": "50",
+  "config/cpu-load-medium-threshold": "90",
   "config/manage-hidden-group-mode": "false",
   "config/medium-latency": "1000",
   "config/node-card-min-width": "155",
