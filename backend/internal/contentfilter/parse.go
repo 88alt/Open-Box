@@ -3,6 +3,7 @@
 //
 // 自己的设计,依据前端 api/clientApp.ts 的 OpenboxContentFilter* 类型、ContentFilterCard.vue 的用法,
 // 以及 Surge / Loon / Shadowrocket 各自公开的配置文档;没有参照上游。口径见 docs/ENDPOINTS.md 的 content-filter 一节。
+// (说明:本文件的计数口径是第一版自己的设计,与上游不同;给 App 的结构化规则见 rules.go,计数换成「结构化规则条数」是 STATUS 里内容过滤第五步。)
 //
 // 计数口径(逐行、按段落,认不出的行不报错):
 //   - ruleCount:规则段里认得出的规则行(含各种重写条目);
