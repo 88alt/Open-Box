@@ -41,6 +41,7 @@ import (
 	serviceapi "github.com/timeflysoon/Open-Box/backend/internal/api/service"
 	sitelatencyapi "github.com/timeflysoon/Open-Box/backend/internal/api/sitelatency"
 	storageapi "github.com/timeflysoon/Open-Box/backend/internal/api/storage"
+	subpublicapi "github.com/timeflysoon/Open-Box/backend/internal/api/subpublic"
 	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
 	subsharesapi "github.com/timeflysoon/Open-Box/backend/internal/api/subshares"
 	terminaltestapi "github.com/timeflysoon/Open-Box/backend/internal/api/terminaltest"
@@ -638,7 +639,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	contentFilterSvc := &contentfilter.Service{Store: st, Dir: filepath.Join(cfg.DataDir, "content-filter")}
 	clientAppSvc := &clientapp.Service{
 		Store: st, GeoDir: cfg.GeoDir, RulesetDir: filepath.Join(cfg.DataDir, "rules"), Profile: profileSvc.Get, LAN: system.LAN, PanelPort: clientapp.PortOf(cfg.Listen),
-		ContentFilter: func(ctx context.Context) (contentfilter.Snapshot, error) { return contentFilterSvc.Snapshot(ctx, 0) },
+		ContentFilter:      func(ctx context.Context) (contentfilter.Snapshot, error) { return contentFilterSvc.Snapshot(ctx, 0) },
 		ContentFilterBuilt: func(ctx context.Context) (*contentfilter.Built, error) { return contentFilterSvc.BuiltSnapshot(ctx, 0) },
 		// 共享服务器换配对码:密码在档案里原子地换(读改写在档案的存储锁里),再走部署让新密码生效;部署和面板的「部署」共用同一份「最近一次部署」记录
 		UpdateServer: func(ctx context.Context, id string, change func(map[string]any) error) (map[string]any, error) {
@@ -677,8 +678,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 
 	contentfilterapi.Register(srv.Mux(), contentfilterapi.Deps{Service: contentFilterSvc})
 
-	// 订阅分享(只管记录和 token;对外的 /sub/<token> 下发内容是另一条,还没做):新选的订阅必须存在
-	subsharesapi.Register(srv.Mux(), subsharesapi.Deps{Service: &subshare.Service{
+	// 订阅分享记录 + 公开 /sub/<token> 下发
+	subShareSvc := &subshare.Service{
 		Store: st,
 		SubscriptionIDs: func(ctx context.Context) ([]string, error) {
 			recs, err := subsSvc.List(ctx)
@@ -691,6 +692,11 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			}
 			return ids, nil
 		},
+	}
+	subsharesapi.Register(srv.Mux(), subsharesapi.Deps{Service: subShareSvc})
+	subpublicapi.Register(srv.Mux(), subpublicapi.Deps{Public: &subshare.Public{
+		Shares: subShareSvc,
+		Nodes:  subsSvc.NodesForShare,
 	}})
 
 	// 前端静态文件与前端路由回落;最后挂,/api 下的路径由各接口分组优先处理

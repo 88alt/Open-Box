@@ -415,7 +415,7 @@
 
 ## `/api/openbox/subscription-shares`
 
-实现约定(M2,管理部分):记录存 `subscription-shares.json`;列表 `{ shares }`,新建 / 修改 / 换 token `{ share }`,删除 `{ ok: true }`。新建带的 `token` 合格(32–128 位字母数字 `-` `_`)且没被占用才用,否则换新;PATCH 只改传了的字段,`regenerate: true` 才换 token,不收客户端指定的 token;新选的订阅必须存在,这条分享里已有的订阅 id 照旧保留。对外的 `/sub/<token>` 下发不在本分组,尚未实现(见 STATUS.md)。
+实现约定(M2,管理部分):记录存 `subscription-shares.json`;列表 `{ shares }`,新建 / 修改 / 换 token `{ share }`,删除 `{ ok: true }`。新建带的 `token` 合格(32–128 位字母数字 `-` `_`)且没被占用才用,否则换新;PATCH 只改传了的字段,`regenerate: true` 才换 token,不收客户端指定的 token;新选的订阅必须存在,这条分享里已有的订阅 id 照旧保留。对外的 `GET /sub/<token>` 已实现:按 User-Agent 或 `?format=` 选 base64/singbox/clash;token 存 SHA-256 查找;失败统一 404;IP 限速 429;ETag/304;`Subscription-Userinfo`;`Cache-Control: no-store`。
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|

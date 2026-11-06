@@ -801,3 +801,60 @@ func (s *Service) Reorder(ctx context.Context, ids []string) ([]Record, bool, er
 	}
 	return out, true, nil
 }
+
+// NodesForShare 按订阅 id 列表收集**启用**订阅的节点,并合并 usage(给 /sub/<token> 用)。
+func (s *Service) NodesForShare(ctx context.Context, ids []string) ([]sub.Node, *sub.Usage, error) {
+	recs, nodes, err := s.loadAll()
+	if err != nil {
+		return nil, nil, err
+	}
+	want := map[string]bool{}
+	for _, id := range ids {
+		want[id] = true
+	}
+	out := []sub.Node{}
+	var usage *sub.Usage
+	for _, r := range recs {
+		if !want[r.ID] || !r.Enabled {
+			continue
+		}
+		out = append(out, nodes[r.ID]...)
+		if r.Usage != nil {
+			usage = mergeUsage(usage, r.Usage)
+		}
+	}
+	return out, usage, nil
+}
+
+func mergeUsage(a, b *sub.Usage) *sub.Usage {
+	if a == nil {
+		if b == nil {
+			return nil
+		}
+		c := *b
+		return &c
+	}
+	if b == nil {
+		return a
+	}
+	c := *a
+	add := func(dst **int64, src *int64) {
+		if src == nil {
+			return
+		}
+		if *dst == nil {
+			v := *src
+			*dst = &v
+			return
+		}
+		**dst += *src
+	}
+	add(&c.Upload, b.Upload)
+	add(&c.Download, b.Download)
+	add(&c.Total, b.Total)
+	if b.Expire != nil && (c.Expire == nil || *b.Expire < *c.Expire) {
+		v := *b.Expire
+		c.Expire = &v
+	}
+	return &c
+}
