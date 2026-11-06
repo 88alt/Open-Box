@@ -38,9 +38,8 @@ func humanSize(n int) string {
 	return fmt.Sprintf("%d KiB", (n+1023)>>10)
 }
 
-// Snapshot 返回启用集合合并后的文档。limit <= 0 用 MaxSnapshotSize。
-// 没有结构化文件的集合会按原文现场 Analyze(不抓脚本),脚本 sha 可能空。
-func (s *Service) Snapshot(ctx context.Context, limit int) (Snapshot, error) {
+// BuiltSnapshot 返回合并文档(元数据 + 正文字节)。limit <= 0 用 MaxSnapshotSize。
+func (s *Service) BuiltSnapshot(ctx context.Context, limit int) (*Built, error) {
 	if limit <= 0 {
 		limit = MaxSnapshotSize
 	}
@@ -48,7 +47,7 @@ func (s *Service) Snapshot(ctx context.Context, limit int) (Snapshot, error) {
 	defer s.mu.Unlock()
 	f, err := s.load()
 	if err != nil {
-		return Snapshot{}, err
+		return nil, err
 	}
 	on := make([]Set, 0)
 	for _, st := range f.Sets {
@@ -61,19 +60,28 @@ func (s *Service) Snapshot(ctx context.Context, limit int) (Snapshot, error) {
 	for _, st := range on {
 		sd, err := s.setDataLocked(ctx, st)
 		if err != nil {
-			return Snapshot{}, err
+			return nil, err
 		}
 		data = append(data, sd)
 	}
 	built, err := BuildDocument(data)
 	if err != nil {
 		if err == ErrDocTooLarge {
-			return Snapshot{}, &TooLargeError{Size: MaxDocBytes + 1, Max: limit}
+			return nil, &TooLargeError{Size: MaxDocBytes + 1, Max: limit}
 		}
-		return Snapshot{}, err
+		return nil, err
 	}
 	if built.Metadata.Size > limit {
-		return Snapshot{}, &TooLargeError{Size: built.Metadata.Size, Max: limit}
+		return nil, &TooLargeError{Size: built.Metadata.Size, Max: limit}
+	}
+	return built, nil
+}
+
+// Snapshot 返回启用集合合并后的文档。limit <= 0 用 MaxSnapshotSize。
+func (s *Service) Snapshot(ctx context.Context, limit int) (Snapshot, error) {
+	built, err := s.BuiltSnapshot(ctx, limit)
+	if err != nil {
+		return Snapshot{}, err
 	}
 	return Snapshot{
 		SHA256: built.Metadata.SHA256, Size: built.Metadata.Size,

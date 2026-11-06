@@ -5,11 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/contentfilter"
 	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
 )
 
@@ -109,4 +112,100 @@ func parseImageDataURL(u string) (typ string, data []byte, ok bool) {
 		return "", nil, false
 	}
 	return "image/" + strings.ToLower(sub), b, true
+}
+
+// ErrSnapshotChanged 表示 App 带的 hash 与当前快照不一致。
+var ErrSnapshotChanged = errors.New("snapshot changed")
+
+// TokenContentFilterMeta:GET .../content-filter → 用设备 key 封 `{contentFilter: 元数据}`。
+func (s *Service) TokenContentFilterMeta(ctx context.Context, routerID, token string) (TokenBundle, error) {
+	_, dev, err := s.authDevice(ctx, routerID, token)
+	if err != nil {
+		return TokenBundle{}, err
+	}
+	if s.ContentFilter == nil {
+		return TokenBundle{}, ErrTokenNotFound
+	}
+	sn, err := s.ContentFilter(ctx)
+	if err != nil {
+		return TokenBundle{}, err
+	}
+	meta := contentfilter.Metadata{
+		Version: sn.Version, SHA256: sn.SHA256, Size: sn.Size,
+		Hostnames: sn.Hostnames, Sets: sn.Sets,
+	}
+	if meta.Version == 0 {
+		meta.Version = 1
+	}
+	if meta.Hostnames == nil {
+		meta.Hostnames = []string{}
+	}
+	if meta.Sets == nil {
+		meta.Sets = []contentfilter.SetMeta{}
+	}
+	plain, err := json.Marshal(map[string]any{"contentFilter": meta})
+	if err != nil {
+		return TokenBundle{}, err
+	}
+	return sealToken(dev.Key, plain, s.Rand)
+}
+
+// TokenContentFilterDoc:GET .../content-filter/:hash → 封 `{document: 文档}`。
+// hash 对不上当前 sha256 回 ErrSnapshotChanged。
+func (s *Service) TokenContentFilterDoc(ctx context.Context, routerID, token, hash string) (TokenBundle, error) {
+	_, dev, err := s.authDevice(ctx, routerID, token)
+	if err != nil {
+		return TokenBundle{}, err
+	}
+	if s.ContentFilterBuilt == nil && s.ContentFilter == nil {
+		return TokenBundle{}, ErrTokenNotFound
+	}
+	var body []byte
+	var sha string
+	if s.ContentFilterBuilt != nil {
+		built, err := s.ContentFilterBuilt(ctx)
+		if err != nil {
+			return TokenBundle{}, err
+		}
+		body, sha = built.Body, built.Metadata.SHA256
+	} else {
+		// 退回 Snapshot:没有正文 JSON 时无法按上游给 document,只校验 sha 后重编码文档字段
+		sn, err := s.ContentFilter(ctx)
+		if err != nil {
+			return TokenBundle{}, err
+		}
+		sha = sn.SHA256
+		doc := contentfilter.Document{
+			Version: sn.Version, Hostnames: sn.Hostnames, Rules: sn.Rules, Scripts: sn.Scripts,
+		}
+		if doc.Version == 0 {
+			doc.Version = 1
+		}
+		if doc.Hostnames == nil {
+			doc.Hostnames = []string{}
+		}
+		if doc.Rules == nil {
+			doc.Rules = []contentfilter.Rule{}
+		}
+		if doc.Scripts == nil {
+			doc.Scripts = map[string]string{}
+		}
+		body, err = json.Marshal(doc)
+		if err != nil {
+			return TokenBundle{}, err
+		}
+	}
+	if hash != sha {
+		return TokenBundle{}, ErrSnapshotChanged
+	}
+	// 上游回 {document: <已解析对象>},这里封进 JSON 对象,App 解开后拿 document
+	var doc any
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return TokenBundle{}, err
+	}
+	plain, err := json.Marshal(map[string]any{"document": doc})
+	if err != nil {
+		return TokenBundle{}, err
+	}
+	return sealToken(dev.Key, plain, s.Rand)
 }

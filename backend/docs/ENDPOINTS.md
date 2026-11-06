@@ -508,3 +508,10 @@
 - `GET /client/v1/:routerId/config/:token/background`(App 取面板背景图,就是 `/api/background-image` 存的那一张):成功回原图字节,`Content-Type` 取自 data URL(`image/<子类型>`),响应头 `X-Openbox-Background-Version` 是内容的 16 位十六进制摘要;没设置背景图 `404 {"error":"not found"}`。上游背景图还可以是一个远程链接(回 302),自研只存上传的图片,没有这一支。
 - 面板侧 `GET /client/v1/config?p=<nonce>` 暂留兼容。
 
+
+
+### App token 内容过滤子资源(对齐上游 v0.1.402)
+
+- `GET /client/v1/:routerId/config/:token/content-filter` → `{v,iv,data}`(设备 key 封),明文 `{contentFilter: 元数据}`。
+- `GET /client/v1/:routerId/config/:token/content-filter/:hash` → 同上封包,明文 `{document: 文档}`;hash 不等于当前 sha256 时 `404 {"error":"snapshot changed"}`。
+- 设备不认得 `404 unpaired`;同步关 `403 disabled`。

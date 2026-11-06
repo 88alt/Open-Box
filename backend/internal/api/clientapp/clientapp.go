@@ -46,6 +46,8 @@ type PairService interface {
 	// RuleSetPath / Background 是 config/:token 下面的子资源:规则集文件路径、面板背景图。
 	RuleSetPath(ctx context.Context, routerID, token, tag string) (string, error)
 	Background(ctx context.Context, routerID, token string) (*clientapp.BackgroundImage, error)
+	TokenContentFilterMeta(ctx context.Context, routerID, token string) (clientapp.TokenBundle, error)
+	TokenContentFilterDoc(ctx context.Context, routerID, token, hash string) (clientapp.TokenBundle, error)
 }
 
 // ShareService 是共享网络服务器的 App 码要用的功能(*clientapp.Service 满足)。
@@ -111,6 +113,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	}))
 	mux.HandleFunc("/client/v1/{routerId}/config/{token}/background", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodGet: d.backgroundGet,
+	}))
+	mux.HandleFunc("/client/v1/{routerId}/config/{token}/content-filter", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodGet: d.contentFilterMeta,
+	}))
+	mux.HandleFunc("/client/v1/{routerId}/config/{token}/content-filter/{hash}", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodGet: d.contentFilterDoc,
 	}))
 	mux.HandleFunc("/client/v1/", httpx.NotFound) // 别的路径回 JSON 404,不落到前端的 index.html
 	mux.HandleFunc("/api/openbox/client-config/rotate", httpx.Methods(map[string]http.HandlerFunc{
@@ -508,7 +516,37 @@ func writePairErr(w http.ResponseWriter, err error) {
 		httpx.JSON(w, http.StatusForbidden, map[string]any{"error": "bad_code", "remaining": bad.Remaining})
 	case errors.Is(err, clientapp.ErrTokenNotFound):
 		httpx.Error(w, http.StatusNotFound, "not found")
+	case errors.Is(err, clientapp.ErrSnapshotChanged):
+		httpx.Error(w, http.StatusNotFound, "snapshot changed")
 	default:
 		httpx.Error(w, http.StatusInternalServerError, "同步失败")
 	}
+}
+
+func (d Deps) contentFilterMeta(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Pair == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "客户端配置服务不可用")
+		return
+	}
+	out, err := d.Pair.TokenContentFilterMeta(r.Context(), r.PathValue("routerId"), r.PathValue("token"))
+	if err != nil {
+		writePairErr(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, out)
+}
+
+func (d Deps) contentFilterDoc(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Pair == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "客户端配置服务不可用")
+		return
+	}
+	out, err := d.Pair.TokenContentFilterDoc(r.Context(), r.PathValue("routerId"), r.PathValue("token"), r.PathValue("hash"))
+	if err != nil {
+		writePairErr(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, out)
 }

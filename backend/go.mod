@@ -1,3 +1,3 @@
 module github.com/timeflysoon/Open-Box/backend
 
-go 1.25.12
+go 1.25.4
