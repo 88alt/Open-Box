@@ -65,7 +65,7 @@ tun 入站(排除表挖洞、MAC 过滤、dns_mode)、入口原生旁路与热�
 - 变异测试 40 个抓到 38 个:漏网的是空变异(预期)和「自定义规则与排除段有无交集」的判断(等价变异:落在排除表之外的洞不影响挖洞结果)。
 - **阶段 D**:`testdata/tools/sbcheck.py` 用官方 sing-box 1.13.14 对金标准里的配置跑 `sing-box check`,300 条全过。检查前要剥掉官方版不认的字段(1.14 才有的 `dns_mode` / `dns_address` / `*_mac_address` / `source_mac_address`,以及上游补丁字段 `expected_status`),并把语料里的假 uuid / 密钥 / 证书换成合法值 —— 这是语料和版本差异,不是装配错误。
 - **已知缺口**(基线里没有、只能从 Node 消费处推断,没有明文可对照):
-  1. `clientBindings`:新版 Node 调 `normalizeClientRoutes(..., {ipv6Bindings})`(IPv6 开着且模式不是 bypass 时带上),核心现在收下但不用,终端分流不按 IPv6 绑定扩展来源。
+  1. `clientBindings`:新版 Node 调 `normalizeClientRoutes(..., {ipv6Bindings})`(IPv6 开着且模式不是 bypass 时带上);核心已按绑定表把 IPv4 来源扩展出对应 IPv6 /128（见 `clientroutes.ExpandSourcesWithBindings`）。绑定形状 `{ "192.168.1.10": ["fd00::10"] }` 或值单字符串。
   2. `platform`:只有 `container` 有行为(2026-10 已对官方 v0.1.353 的 openbox-core 差分核对):`dns-in` 后面多一个监听 `0.0.0.0:53` 的 `dns-in-lan` 入站,`route.rules[0]` 是 `{"action":"hijack-dns","inbound":["dns-in-lan"]}`(在 guardTerminalRules 之后插入);`openwrt` / `systemd` 和不传一样。
   3. `ignoreProxyClients`(bypassPlan 选项)已对官方包核对:有终端走代理时不再关旁路,reason 末尾补一句「有终端被指定走代理:这些集合只用于入口按来源旁路,代理终端本身由入口 guard 拦下」(排在 FakeIP / DNS 提示之后)。
   4. 上游 sing-box 补丁字段(如 urltest 的 `expected_status`)按基线 / groups 对齐的输出写,**不在核心里按内核版本降级**(已定):需要配套的 Open-Box 内核;换成原版 sing-box 时遇到不认识的字段,内核会在启动 / `check` 时直接报错。以后要支持其他内核,再单独做内核版本探测,不改现有输出。

@@ -17,7 +17,7 @@ import (
 
 // 对应基线 engine/config.mjs 的 buildConfigDetailed(逐段对照,注释里写了对应的基线段落)。
 // 入参是新版 Node 发给核心的那一份:除基线的解构参数外,多了 platform、chainNodes(链式代理候选,Node 解析好的)、
-// filterExpectedKey,profile 里多了 clashApiSecret。clientBindings 基线里没有对应逻辑,目前只收下不用;platform 只有 container 有行为(dns-in-lan,见 README)。
+// filterExpectedKey,profile 里多了 clashApiSecret。clientBindings 用于按 IPv6 绑定扩展终端分流来源(见 clientroutes.ExpandSourcesWithBindings);platform 只有 container 有行为(dns-in-lan,见 README)。
 
 const defaultCachePath = "/opt/open-box/data/cache.db"
 
@@ -227,7 +227,12 @@ func BuildDetailed(args any) (map[string]any, error) {
 	}
 
 	// ---- 终端分流 / 出口类别 ----
-	clientRoutes := clientroutes.NormalizeClientRoutes(jsx.Get(profile, "clientRoutes"), b.Direct())
+	// clientBindings: Node 在 IPv6 开启且模式非 bypass 时传入,用于把 IPv4 终端来源扩展出绑定的 IPv6
+	clientRoutes := clientroutes.NormalizeClientRoutes(jsx.Get(profile, "clientRoutes"), map[string]any{
+		"directTag":      b.Direct(),
+		"ipv6Bindings":   jsx.Get(args, "clientBindings"),
+		"clientBindings": jsx.Get(args, "clientBindings"),
+	})
 	knownOutbounds := map[string]bool{}
 	for _, o := range append(append([]any{}, outbounds...), endpoints...) {
 		if t, ok := jsx.Get(o, "tag").(string); ok {

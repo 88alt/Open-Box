@@ -128,7 +128,21 @@ func cleanMacs(r any) []string {
 
 // NormalizeClientRoutes:只留启用的、来源合法的;admit(只让这些进内核)不是分流规则,在这里直接跳过;
 // bypass=true 时出口取内置直连的 tag。mac 模式没有合法 MAC、ip 模式没有合法网段的整条丢弃。
-func NormalizeClientRoutes(list any, directTag any) []Route {
+//
+// opts 兼容两种传法:
+//   - 字符串 / 其它标量:当作 directTag(旧调用);
+//   - map:取 directTag,以及 ipv6Bindings(clientBindings)——按绑定表把 IPv4 来源扩展出对应 IPv6 /128。
+func NormalizeClientRoutes(list any, opts any) []Route {
+	directTag := opts
+	var bindings any
+	if m, ok := opts.(map[string]any); ok {
+		directTag = jsx.Get(m, "directTag")
+		// 兼容 Node 的 { ipv6Bindings } 与顶层 clientBindings 两种键名
+		bindings = jsx.Get(m, "ipv6Bindings")
+		if jsx.IsUndefined(bindings) || bindings == nil {
+			bindings = jsx.Get(m, "clientBindings")
+		}
+	}
 	arr, ok := list.([]any)
 	if !ok {
 		return []Route{}
@@ -180,7 +194,7 @@ func NormalizeClientRoutes(list any, directTag any) []Route {
 			if len(sources) == 0 {
 				continue
 			}
-			route.Sources = sources
+			route.Sources = ExpandSourcesWithBindings(sources, bindings)
 		}
 		out = append(out, route)
 	}

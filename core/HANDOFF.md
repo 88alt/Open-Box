@@ -59,14 +59,15 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
 [x] go.mod 对齐 Go 1.25.12
 [x] idna / urlx UTS46 轻量映射表（内置忽略字符 + 兼容映射 + 简易双向；覆盖 gen-urlx --wide 语料主要条目）
 [~] 真机验证:真实路由器上经后端调用 core、sing-box 启动成功(由维护者做,记录在 backend/STATUS.md 的真机条目)
-[ ] 第四节里的后续工作（clientBindings 仍待做）
+[x] clientBindings：按 IPv6 绑定扩展终端分流来源（NormalizeClientRoutes + ExpandSourcesWithBindings）
+[ ] 第四节里其余后续工作
 
 
 # 四、后续工作(按顺序)
 
 1. 补已知缺口(都影响小):
    - ~~idna / urlx 没有 UTS46 字符映射表~~（已做轻量内置表，见 idna/uts46.go；完整 NFKC 全表不做）。
-   - clientBindings:核心收下但不用,终端分流不按 IPv6 绑定扩展来源。
+   - ~~clientBindings:核心收下但不用~~（已做：args.clientBindings / opts.ipv6Bindings 扩展 IPv4 来源为绑定的 IPv6 /128）。
    - 有意保留的差异,不算缺口:BOM、__proto__ 键、非 ASCII 主机转 punycode。
 2. 整理测试数据的来源(见第六节):把现有金标准逐步换成"自己写的测试向量 + 真实 sing-box check",让今后改核心不再依赖别的程序的输出。
    做法:按方法逐个来,新向量由自己设计的输入加人工核对过的期望输出组成;配置类输出再用公开发布的 sing-box 跑 check。每换一个模块,变异测试照旧做。
