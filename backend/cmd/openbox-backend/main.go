@@ -835,6 +835,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		}
 		done := make(chan struct{})
 		go func() { defer close(done); subs.NewScheduler(subsSvc).Run(ctx) }()
+		go bandwidthSvc.Loop(ctx)
 		return func() { wait(); <-done }
 	}
 

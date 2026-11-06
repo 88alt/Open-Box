@@ -125,4 +125,7 @@ func (s *Service) record(name string, item queueItem, res MeasureResult) {
 	} else {
 		s.lastErr = ""
 	}
+	s.updated = ts
+	s.pruneHistoryLocked(context.Background())
+	s.saveHistoryLocked()
 }

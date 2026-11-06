@@ -3,6 +3,8 @@ package bandwidth
 import (
 	"context"
 	"testing"
+
+	"github.com/timeflysoon/Open-Box/backend/internal/store"
 )
 
 func TestNormalizeSettings(t *testing.T) {
@@ -49,6 +51,44 @@ func TestRunOnceWithMeasurer(t *testing.T) {
 	st, _ := svc.Status(context.Background())
 	m := st.Measurements["n1"]
 	if m.Pending || m.Mbps != 12.5 || m.CompletedAt == 0 {
+		t.Fatalf("%+v", m)
+	}
+}
+
+func TestEnqueueDueAndPersist(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{
+		Store: st,
+		Profile: func(ctx context.Context) (map[string]any, error) {
+			return map[string]any{
+				"bandwidth": map[string]any{
+					"intervalHours": float64(1),
+					"maxDownloadMB": float64(10),
+				},
+			}, nil
+		},
+		Nodes: func(ctx context.Context) ([]NodeRef, error) {
+			return []NodeRef{{Name: "n1", SubscriptionID: "s1", Enabled: true}}, nil
+		},
+		Measure: func(ctx context.Context, node string, maxBytes int64) MeasureResult {
+			return MeasureResult{Mbps: 1}
+		},
+	}
+	n, err := svc.EnqueueDue(context.Background())
+	if err != nil || n != 1 {
+		t.Fatalf("%d %v", n, err)
+	}
+	svc.RunOnce(context.Background())
+	svc2 := &Service{Store: st}
+	svc2.LoadHistory()
+	svc2.mu.Lock()
+	m := svc2.measures["n1"]
+	svc2.mu.Unlock()
+	if m.Mbps != 1 {
 		t.Fatalf("%+v", m)
 	}
 }
