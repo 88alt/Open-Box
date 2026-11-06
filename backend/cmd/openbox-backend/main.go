@@ -305,7 +305,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			}
 			out := make([]bandwidth.NodeRef, 0, len(cat))
 			for _, c := range cat {
-				out = append(out, bandwidth.NodeRef{Name: c.Node.Tag, SubscriptionID: c.SubscriptionID, Enabled: true})
+				out = append(out, bandwidth.NodeRef{Name: c.Node.Tag, SubscriptionID: c.SubscriptionID, Enabled: c.BandwidthCheck})
 			}
 			return out, nil
 		},

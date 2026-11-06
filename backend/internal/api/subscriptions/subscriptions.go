@@ -134,6 +134,13 @@ func parse(w http.ResponseWriter, raw map[string]any) (subs.Input, subs.Source, 
 		}
 		in.Enabled = &b
 	}
+	if v, has := raw["bandwidthCheck"]; has && v != nil {
+		b, isBool := v.(bool)
+		if !isBool {
+			return fail("bandwidthCheck 必须是布尔值")
+		}
+		in.BandwidthCheck = &b
+	}
 	return in, src, true
 }
 
