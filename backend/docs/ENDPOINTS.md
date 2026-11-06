@@ -515,3 +515,10 @@
 - `GET /client/v1/:routerId/config/:token/content-filter` → `{v,iv,data}`(设备 key 封),明文 `{contentFilter: 元数据}`。
 - `GET /client/v1/:routerId/config/:token/content-filter/:hash` → 同上封包,明文 `{document: 文档}`;hash 不等于当前 sha256 时 `404 {"error":"snapshot changed"}`。
 - 设备不认得 `404 unpaired`;同步关 `403 disabled`。
+
+
+### App 分享配对路径(对齐上游 v0.1.402)
+
+- `GET /client/v1/:routerId/share/:serverId/pair` → `{nonce}`(当前代数 gen)。
+- `POST .../pair` body `{nonce,proof}` → `{sealed}`(base64url,明文 `{link,gen}`);proof 用 `openbox-share:routerId:serverId` 派生密钥。
+- 与 `GET /client/v1/share?sid=&g=` 并存。router/服务器不存在 → `404 unpaired`。

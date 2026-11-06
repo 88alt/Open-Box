@@ -79,6 +79,7 @@ type serverDefault struct {
 // Service 组装 Info。字段都是依赖,测试里换假的。
 type Service struct {
 	pairLimit *pairLimiter
+	sharePairLimit *pairLimiter
 	Store     *store.Store
 	// Profile 读完整档案(*profile.Service.Get 的包装)。
 	Profile func(ctx context.Context) (map[string]any, error)

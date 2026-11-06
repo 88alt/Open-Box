@@ -55,6 +55,8 @@ type ShareService interface {
 	ShareCodes(ctx context.Context, links map[string]string) (map[string]clientapp.ShareSeal, error)
 	Share(ctx context.Context, sid, gen, ip string) (clientapp.ShareResult, error)
 	RotateShare(ctx context.Context, sid string) (clientapp.ShareRotated, error)
+	SharePairGet(ctx context.Context, routerID, serverID string) (nonce string, err error)
+	SharePairPost(ctx context.Context, routerID, serverID, nonce, proof string) (sealed string, err error)
 }
 
 // EgressService 是按出口 IP 判国家要用的功能(*clientapp.Service 满足)。
@@ -99,6 +101,10 @@ func Register(mux *http.ServeMux, d Deps) {
 	}))
 	mux.HandleFunc("/client/v1/share", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodGet: d.shareGet,
+	}))
+	mux.HandleFunc("/client/v1/{routerId}/share/{serverId}/pair", httpx.Methods(map[string]http.HandlerFunc{
+		http.MethodGet:  d.sharePairGet,
+		http.MethodPost: d.sharePairPost,
 	}))
 	// 对齐上游 v0.1.402 App 路径
 	mux.HandleFunc("/client/v1/{routerId}/pair", httpx.Methods(map[string]http.HandlerFunc{
@@ -549,4 +555,39 @@ func (d Deps) contentFilterDoc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, out)
+}
+
+func (d Deps) sharePairGet(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Share == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "客户端配置服务不可用")
+		return
+	}
+	nonce, err := d.Share.SharePairGet(r.Context(), r.PathValue("routerId"), r.PathValue("serverId"))
+	if err != nil {
+		writePairErr(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]string{"nonce": nonce})
+}
+
+func (d Deps) sharePairPost(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	if d.Share == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "客户端配置服务不可用")
+		return
+	}
+	var body struct {
+		Nonce string `json:"nonce"`
+		Proof string `json:"proof"`
+	}
+	if !httpx.DecodeJSON(w, r, &body, 2<<10) {
+		return
+	}
+	sealed, err := d.Share.SharePairPost(r.Context(), r.PathValue("routerId"), r.PathValue("serverId"), body.Nonce, body.Proof)
+	if err != nil {
+		writePairErr(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]string{"sealed": sealed})
 }

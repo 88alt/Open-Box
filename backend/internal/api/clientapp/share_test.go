@@ -34,6 +34,12 @@ func (f *fakeShare) Share(_ context.Context, sid, gen, ip string) (clientapp.Sha
 	return f.res, f.err
 }
 
+func (f *fakeShare) SharePairGet(context.Context, string, string) (string, error) {
+	return "", f.err
+}
+func (f *fakeShare) SharePairPost(context.Context, string, string, string, string) (string, error) {
+	return "", f.err
+}
 func (f *fakeShare) RotateShare(_ context.Context, sid string) (clientapp.ShareRotated, error) {
 	f.gotRotate = append(f.gotRotate, sid)
 	return f.rotated, f.err

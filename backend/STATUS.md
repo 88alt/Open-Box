@@ -15,7 +15,7 @@
 - [x] 内容过滤第五步 b-1:抓取组件(`internal/contentfilter/sourcefetch.go` 的 `FetchSource` / `SourceError` / `FetchOptions`,纯函数、还没接进 Service):只收 https;主机名是本机 / 内网就拒绝(`localhost`、`0.0.0.0`、`::`、`::1`、`.localhost` / `.internal`、IPv4 的 0/8 127/8 10/8 172.16/12 192.168/16 169.254/16、IPv6 回环 / `fc00::/7` / `fe80::/10`、IPv4 映射地址按里面的 IPv4 算,和上游同一张表);最多跟 3 次重定向、每一跳重新校验;10 秒;512 KiB(先看 Content-Length 再按实际读到的字节数,超了报错不截断);Content-Type 没有或为空放行,否则要 `text/*` 或 octet-stream / javascript / x-javascript / yaml / x-yaml;原因码 `source_url_invalid` / `_not_https` / `_private`、`source_redirect_*`、`source_too_many_redirects`、`source_fetch_failed[:状态码]`、`source_content_type_unsupported:<类型>`、`source_too_large`、`source_fetch_timeout`;非法 UTF-8 换成 U+FFFD。**比上游多做的一件事**:连接时再校验实际 IP(上游只看 URL 里的主机名,解析到内网的域名拦不住),且不走环境代理
 - [x] 内容过滤第五步 b(余下部分):把 5a 接进 Service。保存时 `Analyze` → 无规则且无主机名 400;原文落盘 `.txt`、结构落盘 `.json`;`FetchSource` 抓脚本写 sha256;列表 `hostnames` / `arguments.declared` / `incomplete`;`sha256`/`size` 改文档口径;`Snapshot` 改合并文档(上限 2 MiB);旧集合无 `.json` 时按文本重建(不联网);来源默认 `FetchSource`;`source_*` 中文提示。RestoreDefaults 走同一套分析。
 - [x] App token 子资源第二部分:`.../config/:token/content-filter`(回 `{contentFilter: 元数据}`,用设备 key 封)和 `.../content-filter/:hash`(`:hash` 不等于当前快照的 sha256 回 `404 snapshot changed`,否则回 `{document: 快照正文}`);依赖上面第五步
-- [ ] 分享码的 App 路径对齐上游:`/client/v1/:routerId/share/:serverId/pair`(GET / POST),与现在的 `GET /client/v1/share?sid=&g=` 并存一段时间
+- [x] 分享码的 App 路径对齐上游:`/client/v1/:routerId/share/:serverId/pair`(GET / POST),与现在的 `GET /client/v1/share?sid=&g=` 并存一段时间
 - [ ] 其它默认 JSON 与边角对账
 
 ## 对齐口径
@@ -157,6 +157,8 @@
 - [ ] 清理旧文件 `scripts/native-arm64/`(联调通过之后)
 
 ## 日志(新的在最上面)
+- 2026-11-06 backend: 分享码 App 路径 GET/POST /client/v1/:routerId/share/:serverId/pair(与 ?sid=&g= 并存;对齐上游 v0.1.402)
+
 - 2026-11-06 backend: App token content-filter 子资源(meta + :hash;设备 key 封;对齐上游 v0.1.402)
 
 - 2026-11-06 backend: 内容过滤第五步 b(Analyze/结构落盘/文档 Snapshot/FetchSource;对齐上游文档口径;自写实现)
