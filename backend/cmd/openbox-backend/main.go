@@ -520,6 +520,22 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		},
 		Sets: func(c map[string]any) routedecide.Sets { return penetrationSets.Bind(dnsdecide.SetDefsFromConfig(c)) },
 		DNS:  dnsPredictor,
+		// 命中前置自定义分流时要它的名字:取档案的路由交给核心规范化(和 policies/entries 同一条路径);核心不可用就不给 owner
+		CustomName: func(ctx context.Context) string {
+			if peCore == nil {
+				return ""
+			}
+			prof, err := profileSvc.Get(ctx)
+			if err != nil {
+				return ""
+			}
+			routing, _ := prof["routing"].(map[string]any)
+			rt, err := peCore.NormalizeRouting(ctx, routing)
+			if err != nil {
+				return ""
+			}
+			return rt.Custom.Name
+		},
 		// 域名目标先经内核的 DNS 入站解析:给 resolved 字段用,真实地址当作终端会连的目的 IP 去比 IP 规则
 		Resolver: routeSvc,
 		Proxies: func(ctx context.Context) ([]singbox.KernelProxy, error) {

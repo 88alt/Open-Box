@@ -8,7 +8,7 @@
 // 域名目标:终端自己解析后按真实地址连进内核、内核再嗅探出域名,所以连接同时带域名和目的 IP;推算按「第一个真实 IPv4(没有就第一个 IPv6)」
 // 当目的 IP,去比不带「连接没有域名」前提的 IP 规则(私网直连、节点服务器直连、内核占位段等)。解析到的是占位地址(fake-ip)、
 // 解析失败时没有目的 IP,IP 条件仍记成前提。
-// 还没做:preMatch、firstLayer(这些要内核侧的部署元数据),前置自定义分流的 ownerName(要知道它的名字);见 STATUS.md。
+// 还没做:preMatch、firstLayer(这些要内核侧的部署元数据),不在范围内;见 STATUS.md。
 package penetration
 
 import (
@@ -54,6 +54,9 @@ type Service struct {
 	Proxies func(ctx context.Context) ([]singbox.KernelProxy, error)
 	// Stale 报告「内核还在跑旧的分流配置」;nil = 否。
 	Stale func(ctx context.Context) bool
+	// CustomName 返回前置自定义分流(固定置顶那一条)的名字。只在命中的规则落在自定义分流那一段时才调用;
+	// nil 或返回空 = 不知道名字,这时不给 owner(不猜)。
+	CustomName func(ctx context.Context) string
 }
 
 type Matched struct {
@@ -66,6 +69,8 @@ type Matched struct {
 	// Entries 是具体命中的条目(最多 maxEntries 条),EntriesTotal 是命中的总数;Source 是规则集名,规则自己写的条件是 "custom"。
 	Entries      []Entry `json:"entries,omitempty"`
 	EntriesTotal int     `json:"entriesTotal,omitempty"`
+	// OwnerName 只在命中前置自定义分流时给(它的出站是具体节点或直连,名字对不上,界面不能拿出站名当归属)。
+	OwnerName string `json:"ownerName,omitempty"`
 }
 
 // Entry 对应前端 matched.entries 的一项。
@@ -195,7 +200,15 @@ func (s *Service) Query(ctx context.Context, raw string) (*Result, error) {
 			res.Matched.Entries = all
 		}
 	}
-	res.Owner = ownerOf(d, v)
+	res.Owner = ownerOf(d, v, func() string {
+		if s.CustomName == nil {
+			return ""
+		}
+		return s.CustomName(ctx)
+	})
+	if res.Owner != nil && res.Owner.Kind == "custom" && res.Matched != nil {
+		res.Matched.OwnerName = res.Owner.Name
+	}
 
 	// 线路:从命中的出站(没命中是 final)出发,顺着内核当前选中的节点走到叶子;reject 没有线路
 	if d.Action == "reject" || d.Outbound == "" {
@@ -282,11 +295,22 @@ func drill(name string, now map[string]string, known map[string]bool) []string {
 	return chain
 }
 
-// ownerOf 判断命中的规则属于谁:内置规则按它的形状认(私网、NTP、节点站点、终端、内核占位段),
-// 出站是站点集分组的算站点集;认不出的(前置自定义分流等)不给,不猜。没有规则命中走 final = 内置的「其他」。
-func ownerOf(d *routedecide.Decision, v *routedecide.View) *Owner {
+// ownerOf 判断命中的规则属于谁:先看是不是前置自定义分流(按它在配置里的位置认,见 inCustomSpan),
+// 再按内置规则的形状认(私网、NTP、节点站点、终端、内核占位段),出站是站点集分组的算站点集;
+// 认不出的不给,不猜。没有规则命中走 final = 内置的「其他」。customName 取前置自定义分流的名字(只在命中它时才调用)。
+func ownerOf(d *routedecide.Decision, v *routedecide.View, customName func() string) *Owner {
 	if d.Index == nil {
 		return &Owner{Kind: "builtin", Name: "other"}
+	}
+	if inCustomSpan(v, *d.Index) {
+		// 自定义分流的规则形状和别的规则撞得上(例如它的 IP 段拒绝版带 ip_cidr),所以位置优先于形状;
+		// 不知道名字就不给 owner,不退回去按形状猜
+		if customName != nil {
+			if name := customName(); name != "" {
+				return &Owner{Kind: "custom", Name: name}
+			}
+		}
+		return nil
 	}
 	r := d.Rule
 	switch {
@@ -308,6 +332,48 @@ func ownerOf(d *routedecide.Decision, v *routedecide.View) *Owner {
 		}
 	}
 	return nil
+}
+
+// inCustomSpan 判断第 idx 条规则是不是前置自定义分流生成的。core 生成路由时的顺序是固定的:
+// 入口预判放行(bypass)→ sniff → DNS 劫持 → tun 防回环拒绝 / dnsmasq 转发 → 前置自定义分流 → 私网直连(ip_is_private)→ ……。
+// 所以「开头那串基础设施规则之后、第一条私网直连之前」就是自定义分流那一段;段是空的说明没有启用(或没有规则)。
+// 找不到私网直连(配置不是 core 生成的)就不认,不猜。
+func inCustomSpan(v *routedecide.View, idx int) bool {
+	hi := -1
+	for i, x := range v.Rules {
+		if m, ok := x.(map[string]any); ok && m["ip_is_private"] == true {
+			hi = i
+			break
+		}
+	}
+	if hi < 0 || idx >= hi {
+		return false
+	}
+	lo := 0
+	for lo < hi {
+		m, ok := v.Rules[lo].(map[string]any)
+		if !ok || !isInfraRule(m) {
+			break
+		}
+		lo++
+	}
+	return idx >= lo
+}
+
+// isInfraRule 认 core 放在自定义分流前面的那几种基础规则的形状(都不是用户写的)。
+func isInfraRule(r map[string]any) bool {
+	if _, ok := r["override_address"]; ok { // dnsmasq 模式:tun 网段 53 端口转给 dnsmasq
+		return true
+	}
+	switch r["action"] {
+	case "sniff", "hijack-dns", "bypass":
+		return true
+	case "reject":
+		// tun 防回环:恰好只有 ip_cidr 和 action 两个键;自定义分流的拒绝版还带 ip_version / 域名等别的键
+		_, hasCIDR := r["ip_cidr"]
+		return hasCIDR && len(r) == 2
+	}
+	return false
 }
 
 func hasKey(r map[string]any, k string) bool {

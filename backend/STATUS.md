@@ -125,7 +125,8 @@
 - [ ] `/api/openbox/terminal-test` 的 POST 剩下的部分:dhclient / dhcpcd 的取址(udhcpc 已做,见上一条)、旁路由场景的网关和 DNS 改指(`source.override`)、在命名空间里发探测(GET / HEAD / TCP / TLS)、conntrack 取证(`entry`、`dnsEvidence`)、内核 DNS 追踪(`kernelDns`)、`dnsForward` / `firstLayer`;(`VTermNet.Ensure` 和 `AcquireDHCP` 已接进 POST、空闲自动拆除已做,见上一条;启动 `Recover` 和退出 `Teardown` 已接进 `main.go`);**需真机**
 - [~] `/api/openbox/penetration` 第一部分(`internal/routedecide`、`internal/penetration`、`internal/api/penetration`):按已部署 `config.json` 的 `route.rules` 对域名 / IP 推算命中哪条规则和出站,给 `matched` / `owner` / `assumed`(带 `leaf` / `sameOutcome`)/ `preResolve` / `dns`(复用 DNSPredictor)/ `chain` / `finalOutbound` / `chainError` / `matchError` / `routingStale`。**需真机**
 - [~] `/api/openbox/penetration` 的 `resolved` 与 `matched.viaIp`(`internal/routedecide` 的 `Target.DestIP` / `Decision.ViaIP`、`internal/penetration` 的 `Resolver`、`internal/routetest` 的 `Service.ResolveName`):域名目标先经内核 DNS 入站解析,把第一个真实 IPv4(没有就第一个 IPv6)当终端会连的目的 IP,去比 `ip_is_private` / `ip_cidr` / `ip_version` / 规则集里的 IP 条目,命中靠地址时 `viaIp` 是那个地址、`entries` 也带 IP 条目;占位地址(fake-ip)或解析失败时仍记成前提。**需真机**:见日志「真机怎么验」
-- [ ] `/api/openbox/penetration` 剩下的部分(`entries` / `entriesTotal`、`resolved` / `viaIp` 已做,见下面日志):`preMatch`、`firstLayer`、前置自定义分流的 `ownerName`、热切换开关的准确性(要等 core 配合)
+- [x] `/api/openbox/penetration` 的前置自定义分流归属(`internal/penetration` 的 `ownerOf` / `inCustomSpan` / `isInfraRule`、`Service.CustomName`、`Matched.OwnerName`;`main.go` 接 `profileSvc` + core `normalizeRouting` 取名字):命中规则落在 core 固定顺序里「基础规则之后、私网直连之前」那一段时 `owner` = `{kind:custom, name}` 且 `matched.ownerName` 同名;位置优先于形状(顺带避免自定义分流的 IP 段拒绝版被认成 `kernel`);取不到名字不给 `owner`、不猜
+- [ ] `/api/openbox/penetration` 剩下的部分(`entries` / `entriesTotal`、`resolved` / `viaIp`、前置自定义分流的 `ownerName` 已做,见上一条和日志):热切换开关的准确性(要等 core 配合)。`preMatch`、`firstLayer` 按 DESIGN 第 8 节不做
 - [x] `/api/controller/*`(REST 转发,前端 axios 的 `baseURL`;原先 STATUS 和 ENDPOINTS 都漏了这一项,因为接口表只收字面路径)和 `/api/controller-ws/{x}`(WebSocket 转发):`internal/controllerproxy`、`internal/api/controller`,标准库反向代理,已用真实 sing-box 1.14.4 验证 REST 与 WebSocket 都通。前端联调归第 44 行
 - [~] `GET /api/openbox/diagnostics`(诊断包;`internal/diagnostics`、`internal/api/diagnostics`、`system.ExecRunnerCap`):版本 / 固件 / 服务状态 / 脱敏的运行配置和档案 / 最近日志。**需真机**确认:真实路由器上 `logread -e` 和 `journalctl` 的输出能读到、脱敏后的运行配置里没有漏网的凭据
 
@@ -158,6 +159,8 @@
 - [ ] 清理旧文件 `scripts/native-arm64/`(联调通过之后)
 
 ## 日志(新的在最上面)
+- 2026-11-07 backend: penetration 前置自定义分流归属(owner.kind=custom 与 matched.ownerName;自己的设计,依据前端 `OpenboxPenetrationMatched.ownerName` / `owner` 的类型注释与 `RouteComparison.vue` 的用法、自研 `core/internal/routing/route.go` 的规则顺序(只读),没有参照上游;对账:`git fetch` 后 origin/main 在 1eda2b1e,`git log -- backend` 最新 a2b58862(带宽第五刀)在日志里有对应条目,「先做」小节全部已打勾且都找得到提交,没有「做了没打勾」或「打了勾找不到提交」的;其余未打勾条目要么需 core / 真机 / 维护者确认(M6.md 未确认,不动 `update*` 第二部分和打包),要么 DESIGN 已定不做,所以取了 128 里唯一能独立做的 ownerName)。不需要真机。`gofmt`、`go vet ./...`、`go test ./...` 全绿(沙箱 Go 1.25.14)。已知与本补丁无关:`internal/clientapp/clientapp.go` 现状 gofmt 有差异,未动
+
 - 2026-11-06 backend: 带宽第五刀(订阅 bandwidthCheck 落盘,自动入队只测开了定期检查的订阅)
 
 - 2026-11-06 backend: 带宽第四刀(经节点 probe Discard 测速)
