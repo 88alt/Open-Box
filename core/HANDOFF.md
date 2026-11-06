@@ -1,7 +1,7 @@
 openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
 
 写给下一位接手 core 的 AI。读完这份和 core/README.md,就可以接着做,不用反复问维护者。
-进度要对账:main 下的提交记录(git log -- core)是实时来源,本文第三节是 2026-10-26 的快照;两者冲突时以提交记录为准,并在补丁里顺手更新第三节。
+进度要对账:main 下的提交记录(git log -- core)是实时来源,本文第三节已按 2026-11-06 对账更新;两者冲突时以提交记录为准,并在补丁里顺手更新第三节。
 
 
 # 零、先读这一节
@@ -44,27 +44,28 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
   不要依赖 release.yml(它是上游版本,会被同步覆盖)。
 
 
-# 三、进度标记(2026-10-26 快照)
+# 三、进度标记(2026-11-06 对账更新)
 
 图例:[x] 完成  [~] 代码完成、待真机或待云端确认  [ ] 未做
 
 [x] 协议、hello、大小限制、panic 恢复
 [x] routing:normalizePolicy、normalizeRouting、routingFingerprint、migrateStoredRouting、classes、forwardPlan、bypassPlan、entryPlan
-[x] groups:normalizeGroups、builtinTags、emitGroups
+[x] groups:normalizeGroups、builtinTags、emitGroups（含 loadbalance，与上游 v0.1.387 行为对齐）
 [x] emit(节点转 sing-box 出站 / endpoint)、clientroutes、dns(含 upstream 与热切换 flip)、route
 [x] 叶子模块:dnsfilter、ipx、servers、directhosts、dnsrewrite、idna、urlx
 [x] config:configDetailed 装配(站点直连、链式节点核对、节点组 / 站点集、dns / route / tun 入站、入口旁路、共享网络、FakeIP 缓存)
 [x] 带宽择优(core 层):组的 bandwidth 开关 → urltest / loadbalance 出站和故障转移多节点自动页签的内部 urltest 写 bandwidth:true;选项 disableBandwidth(客户端配置)不写。测速调度、校验、接口在后端,见 backend/STATUS.md
 [x] 授权三个方法(checkActivationCode、activationState、authorizationState):固定的"未限制"返回
 [x] go.mod 对齐 Go 1.25.12
+[x] idna / urlx UTS46 轻量映射表（内置忽略字符 + 兼容映射 + 简易双向；覆盖 gen-urlx --wide 语料主要条目）
 [~] 真机验证:真实路由器上经后端调用 core、sing-box 启动成功(由维护者做,记录在 backend/STATUS.md 的真机条目)
-[ ] 第四节里的后续工作
+[ ] 第四节里的后续工作（clientBindings 仍待做）
 
 
 # 四、后续工作(按顺序)
 
 1. 补已知缺口(都影响小):
-   - idna / urlx 没有 UTS46 字符映射表:含特殊字符的主机名在站点直连里可能多收或漏收一个域名;补齐需要引入 Unicode 映射表(标准库没有,自己内置一份)。
+   - ~~idna / urlx 没有 UTS46 字符映射表~~（已做轻量内置表，见 idna/uts46.go；完整 NFKC 全表不做）。
    - clientBindings:核心收下但不用,终端分流不按 IPv6 绑定扩展来源。
    - 有意保留的差异,不算缺口:BOM、__proto__ 键、非 ASCII 主机转 punycode。
 2. 整理测试数据的来源(见第六节):把现有金标准逐步换成"自己写的测试向量 + 真实 sing-box check",让今后改核心不再依赖别的程序的输出。

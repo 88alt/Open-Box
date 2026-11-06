@@ -1,6 +1,6 @@
 // Package urlx 按 WHATWG URL 规则解析主机部分,相当于 Node 的 new URL(x).hostname。
 // Go 的 net/url 与 WHATWG 在主机上差别很大(0x7f.1、反斜杠、IPv6 压缩、百分号编码等),所以自己实现。
-// 已知差异:域名转 ASCII 沿用 internal/idna(没有完整 UTS46)。
+// 域名转 ASCII 走 internal/idna（内置 UTS46 轻量映射 + 简易双向）。
 package urlx
 
 import (
@@ -171,7 +171,8 @@ func parseURLHost(host string, special bool) (string, bool) {
 			return "", false
 		}
 	}
-	ascii, ok := idna.ToASCII(strings.ToLower(strings.ReplaceAll(uts46Lite(domain), "\u0130", "i\u0307")))
+	// idna.ToASCII 内部已做 Map（忽略 + 兼容映射）+ 小写 + punycode + 简易双向
+	ascii, ok := idna.ToASCII(domain)
 	if !ok || ascii == "" {
 		return "", false
 	}
@@ -368,18 +369,4 @@ func parseIPv4Host(domain string) (string, bool) {
 	return fmt.Sprintf("%d.%d.%d.%d", ipv4>>24&255, ipv4>>16&255, ipv4>>8&255, ipv4&255), true
 }
 
-// uts46Lite 补 UTS46 映射里最常见的几条(完整的 NFKC 仍是已知差异):
-// 全角 ASCII → 半角,全角 / 表意 / 半角句号 → '.',不换行空格 → 空格(随后被禁用字符检查挡掉)。
-func uts46Lite(s string) string {
-	return strings.Map(func(r rune) rune {
-		switch {
-		case r >= 0xFF01 && r <= 0xFF5E:
-			return r - 0xFEE0
-		case r == 0x3002 || r == 0xFF61:
-			return '.'
-		case r == 0x00A0:
-			return ' '
-		}
-		return r
-	}, s)
-}
+

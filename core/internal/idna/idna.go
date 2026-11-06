@@ -1,12 +1,9 @@
-// Package idna 提供「小写 + 逐标签 punycode」的域名转 ASCII。
+// Package idna 提供 UTS46 轻量映射 + 逐标签 punycode 的域名转 ASCII。
 //
-// 已知差异:Node 的 domainToASCII 是完整的 UTS46,这里只做逐标签 punycode,并补了 xn-- 标签的校验
-// (必须是合法 punycode、解出非空、不含最常见的几类禁用字符;解出来只有 ASCII 的如 xn--a- Node 照收;
-// 含非 ASCII 字符的 xn-- 标签直接拒绝)。
-// 没有的:需要字符映射表的写法(NFKC 兼容分解如 ﬁ → fi、² → 2,大小写折叠如 ǅ,忽略字符如软连字符 / 零宽字符,
-// 全角句号以外的标点)和双向规则(同一标签里混希伯来 / 阿拉伯字母和拉丁字母要拒绝)。
-// 中文 / 日文 / 西里尔字母 / emoji / 带音标的拉丁字母 / 全角字母这类常见写法与 Node 一致。
-// 要补齐只能引入 Unicode 映射表(golang.org/x/net/idna + x/text 的 norm、bidi,约 4 MB 表数据),目前没做。
+// 映射表内置（uts46.go）：覆盖软连字符 / 零宽 / 全角 / ﬁ ǆ ẞ ² 等常见写法，以及简易双向检查。
+// 不做完整 NFKC 全表。xn-- 标签校验与原先一致（合法 punycode、解出非空、无常见禁用字符；
+// 解出来只有 ASCII 的如 xn--a- 照收；含非 ASCII 的 xn-- 直接拒绝）。
+// 中文 / 日文 / 西里尔 / emoji / 带音标拉丁 / 全角字母与 Node 一致。
 package idna
 
 import (
@@ -14,10 +11,21 @@ import (
 	"unicode/utf8"
 )
 
-// ToASCII 逐标签做 punycode。含空白 / 控制字符的标签原样保留(后面的标签检查会把它挡掉)。
+// ToASCII 先做 Map（忽略 + 兼容映射），再逐标签小写 + punycode。
+// 含空白 / 控制字符的标签原样保留（后面的标签检查会挡掉）。
 func ToASCII(d string) (string, bool) {
-	labels := strings.Split(d, ".")
+	mapped, ok := Map(d)
+	if !ok {
+		return "", false
+	}
+	labels := strings.Split(mapped, ".")
 	for i, l := range labels {
+		if hasMixedBidi(l) {
+			return "", false
+		}
+		// 标签级小写（ASCII 范围）
+		l = strings.ToLower(l)
+		labels[i] = l
 		ascii := true
 		for _, r := range l {
 			if r > 0x7e {
