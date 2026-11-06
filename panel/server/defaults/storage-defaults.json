@@ -73,5 +73,6 @@
   "config/use-smart-group-sort": "false",
   "config/proxy-group-columns": "1",
   "config/proxy-group-columns-mobile": "1",
+  "config/sidebar-display": "both",
   "config/hide-dns-connections": "true"
 }
