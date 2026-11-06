@@ -219,7 +219,7 @@ func TestSectionsAndIDs(t *testing.T) {
 }
 
 func TestParseRulesOtherDialects(t *testing.T) {
-	for _, d := range []Dialect{Stash} {
+	for _, d := range []Dialect{"nope"} {
 		if _, err := ParseRules(d, "x", nil); !errors.Is(err, ErrUnsupported) {
 			t.Errorf("%s: %v", d, err)
 		}
