@@ -1,5 +1,10 @@
 package clientapp
 
+import (
+	_ "embed"
+	"encoding/json"
+)
+
 // 地区分流(档案 shareRegions)的形状,取自前端 api/clientApp.ts 的 OpenboxShareRegionGroup 等类型。
 // 共享网络的手机客户端按所在地区选一组:命中规则的按规则走(direct 本地直连 / proxy 经路由器),其余按 catchAll 走。
 
@@ -44,8 +49,17 @@ type Group struct {
 
 const wanUpstream = "wan"
 
+//go:embed share-regions-default.json
+var shareRegionsDefaultJSON []byte
+
+type shareRegionsFile struct {
+	Version int     `json:"version"`
+	Groups  []Group `json:"groups"`
+}
+
 // regionDNS 是一组的 DNS 默认值,与前端 constant/shareRegionDns.ts 的 regionDnsDefaults 一致:
 // 含中国大陆——直连系统 DNS、代理 TCP 1.1.1.1;不含——两侧都是系统 DNS。
+// 随包 JSON 已自带 dns;本函数仅供测试或补缺。
 func regionDNS(inCN bool) GroupDNS {
 	d := GroupDNS{
 		Direct: wanUpstream, DirectProtocol: "udp", DirectPort: 53, DirectExtras: []DNSUpstream{},
@@ -57,35 +71,37 @@ func regionDNS(inCN bool) GroupDNS {
 	return d
 }
 
-// DefaultShareRegions 是「恢复默认」的三组:中国大陆 / 港澳 / 其他地区。
-//
-// 自己的设计,没有参照上游(前端只说了有这三组,没说内容)。思路是「人在哪就按哪的网络环境来」:
-//   - 中国大陆:国内的站点(geosite cn、geoip cn)本地直连,其余经路由器出去;DNS 用含大陆的默认值。
-//   - 港澳、其他地区:没有大陆那样的网络限制,默认本地直连;只把国内的站点(geosite cn、geoip cn)送回路由器,
-//     这样在外面也能用到只认国内出口的服务;DNS 两侧都用手机当前网络的系统 DNS。
-//     「其他地区」是默认组(定位不到、或不在任何一组里时用),写成「中国大陆 / 港澳之外」。
-//
+// DefaultShareRegions 是「恢复默认」的三组,内容对齐上游 v0.1.412 随包
+// panel/server/defaults/share-regions-default.json(维护者授权只读参考;实现自写)。
 // 每次返回新的切片,调用方可以随意改。
 func DefaultShareRegions() []Group {
-	cnRules := func(action string) []Rule {
-		return []Rule{
-			{Type: "geosite", Value: "cn", Action: action},
-			{Type: "geoip", Value: "cn", Action: action},
+	var f shareRegionsFile
+	if err := json.Unmarshal(shareRegionsDefaultJSON, &f); err != nil {
+		panic("内嵌 share-regions-default.json 损坏: " + err.Error())
+	}
+	out := make([]Group, len(f.Groups))
+	copy(out, f.Groups)
+	for i := range out {
+		if out[i].Rules == nil {
+			out[i].Rules = []Rule{}
+		}
+		if out[i].DNS.DirectExtras == nil {
+			out[i].DNS.DirectExtras = []DNSUpstream{}
+		}
+		if out[i].DNS.ProxyExtras == nil {
+			out[i].DNS.ProxyExtras = []DNSUpstream{}
+		}
+		// 深拷贝 rules/regions,避免调用方改到内嵌数据
+		if len(out[i].Rules) > 0 {
+			r := make([]Rule, len(out[i].Rules))
+			copy(r, out[i].Rules)
+			out[i].Rules = r
+		}
+		if len(out[i].Regions) > 0 {
+			reg := make([]string, len(out[i].Regions))
+			copy(reg, out[i].Regions)
+			out[i].Regions = reg
 		}
 	}
-	return []Group{
-		{
-			ID: "cn", Name: "中国大陆", Description: "国内网站本地直连,其余回路由器",
-			Regions: []string{"CN"}, Rules: cnRules("direct"), CatchAll: "proxy", DNS: regionDNS(true),
-		},
-		{
-			ID: "hkmo", Name: "港澳", Description: "本地直连,国内网站回路由器",
-			Regions: []string{"HK", "MO"}, Rules: cnRules("proxy"), CatchAll: "direct", DNS: regionDNS(false),
-		},
-		{
-			ID: "other", Name: "其他地区", Description: "本地直连,国内网站回路由器",
-			Regions: []string{"CN", "HK", "MO"}, RegionMatch: "outside", Default: true,
-			Rules: cnRules("proxy"), CatchAll: "direct", DNS: regionDNS(false),
-		},
-	}
+	return out
 }

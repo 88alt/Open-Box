@@ -341,8 +341,13 @@ func TestDefaultShareRegions(t *testing.T) {
 		}
 	}
 	// 每次返回新的切片,改了不影响下次
+	orig := DefaultShareRegions()[0].Rules[0].Value
 	gs[0].Rules[0].Value = "changed"
-	if DefaultShareRegions()[0].Rules[0].Value != "cn" {
+	if DefaultShareRegions()[0].Rules[0].Value != orig {
 		t.Error("默认值被共享了")
+	}
+	// 对齐上游:中国大陆为 default 组
+	if !DefaultShareRegions()[0].Default {
+		t.Error("中国大陆组应为 default")
 	}
 }
