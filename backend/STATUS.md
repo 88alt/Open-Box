@@ -16,6 +16,7 @@
 - [x] 内容过滤第五步 b(余下部分):把 5a 接进 Service。保存时 `Analyze` → 无规则且无主机名 400;原文落盘 `.txt`、结构落盘 `.json`;`FetchSource` 抓脚本写 sha256;列表 `hostnames` / `arguments.declared` / `incomplete`;`sha256`/`size` 改文档口径;`Snapshot` 改合并文档(上限 2 MiB);旧集合无 `.json` 时按文本重建(不联网);来源默认 `FetchSource`;`source_*` 中文提示。RestoreDefaults 走同一套分析。
 - [x] App token 子资源第二部分:`.../config/:token/content-filter`(回 `{contentFilter: 元数据}`,用设备 key 封)和 `.../content-filter/:hash`(`:hash` 不等于当前快照的 sha256 回 `404 snapshot changed`,否则回 `{document: 快照正文}`);依赖上面第五步
 - [x] 分享码的 App 路径对齐上游:`/client/v1/:routerId/share/:serverId/pair`(GET / POST),与现在的 `GET /client/v1/share?sid=&g=` 并存一段时间
+- [x] App 公开路由补齐(对齐上游 v0.1.412):`GET /client/v1/home/:routerId` → `{ok:true}`;`GET /client/v1/:routerId/regions` → groups/nodes/server/background/testSites; `GET /client/v1/:routerId/background`; `GET /client/v1/:routerId/geodata/:tag`(只校验 routerId,不要求 token)
 - [x] 其它默认 JSON 与边角对账:content-filter 三份已对齐;地区分流 DefaultShareRegions 改为内嵌上游 share-regions-default.json(v0.1.412);tutorial-videos 仍固定空列表(有意,与激活一致);profile/routing 等其余默认仍以 STATUS/前端契约为准,未整包替换 profile-defaults
 
 ## 对齐口径
@@ -157,6 +158,8 @@
 - [ ] 清理旧文件 `scripts/native-arm64/`(联调通过之后)
 
 ## 日志(新的在最上面)
+- 2026-11-06 backend: App 公开路由 home/regions/background/geodata(只校验 routerId;对齐上游)
+
 - 2026-11-06 backend: 地区分流默认对齐上游 share-regions-default.json(内嵌;与 content-filter 默认一并完成「其它默认 JSON」对账)
 
 - 2026-11-06 backend: 分享码 App 路径 GET/POST /client/v1/:routerId/share/:serverId/pair(与 ?sid=&g= 并存;对齐上游 v0.1.402)

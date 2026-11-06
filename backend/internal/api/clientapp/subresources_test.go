@@ -32,6 +32,16 @@ func (f *fakePair) Background(_ context.Context, routerID, token string) (*clien
 	f.gotRouter, f.gotToken = routerID, token
 	return f.img, f.err
 }
+func (f *fakePair) Home(context.Context, string) error { return f.err }
+func (f *fakePair) Regions(context.Context, string) (clientapp.RegionsPayload, error) {
+	return clientapp.RegionsPayload{}, f.err
+}
+func (f *fakePair) PublicBackground(context.Context, string) (*clientapp.BackgroundImage, error) {
+	return f.img, f.err
+}
+func (f *fakePair) PublicGeoPath(context.Context, string, string) (string, error) {
+	return f.path, f.err
+}
 
 func subGet(t *testing.T, d Deps, path string, hdr map[string]string) *http.Response {
 	t.Helper()
