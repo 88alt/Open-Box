@@ -3,7 +3,6 @@ package contentfilter
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -17,7 +16,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/timeflysoon/Open-Box/backend/internal/rulelist"
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
 )
 
@@ -45,9 +43,10 @@ func (e *InputError) Error() string { return e.Msg }
 // ErrNotFound 是没有这份规则集(404)。
 var ErrNotFound = errors.New("没有这份内容过滤规则")
 
-// Arguments 是规则集的参数值({{{名字}}} 的替换值)。
+// Arguments 是规则集的参数值({{{名字}}} 的替换值)和声明列表。
 type Arguments struct {
-	Values map[string]any `json:"values,omitempty"`
+	Values   map[string]any `json:"values,omitempty"`
+	Declared []Argument     `json:"declared,omitempty"`
 }
 
 // Set 是一份规则集的记录(文本另存文件,不在这里)。
@@ -60,8 +59,11 @@ type Set struct {
 	RuleCount   int        `json:"ruleCount"`
 	ScriptCount int        `json:"scriptCount"`
 	Skipped     int        `json:"skipped,omitempty"`
+	Hostnames   []string   `json:"hostnames,omitempty"`
 	UpdatedAt   string     `json:"updatedAt"`
 	Arguments   *Arguments `json:"arguments,omitempty"`
+	// Incomplete:结构化里脚本抓不全,面板可提示「立即更新」。
+	Incomplete bool `json:"incomplete,omitempty"`
 }
 
 // List 是整份列表;sha256 / size 对「启用的集合按 id 排序后的规范化内容」算。
@@ -96,7 +98,6 @@ type PreviewInput struct {
 type Service struct {
 	Store *store.Store
 	Dir   string // 每份规则文本一个文件 <Dir>/<id>.txt
-	// Fetch 抓取链接;nil 用 rulelist.Fetch(只收 http(s),8 MiB 上限,超限报错不截断)。
 	Fetch func(ctx context.Context, rawURL string) ([]byte, error)
 	// Defaults 随包默认规则;nil 用内嵌的 defaults.json。
 	Defaults func() ([]Default, error)
@@ -135,7 +136,11 @@ func (s *Service) fetch(ctx context.Context, u string) ([]byte, error) {
 	if s.Fetch != nil {
 		return s.Fetch(ctx, u)
 	}
-	return rulelist.Fetch(ctx, nil, u)
+	text, err := FetchSource(ctx, u, nil)
+	if err != nil {
+		return nil, &InputError{Msg: sourceErrMsg(err)}
+	}
+	return []byte(text), nil
 }
 
 func (s *Service) textPath(id string) string { return filepath.Join(s.Dir, id+".txt") }
@@ -197,20 +202,24 @@ func (s *Service) listLocked() (List, error) {
 		fmt.Fprintf(&kb, "%s|%s|%s;", st.ID, st.Dialect, st.UpdatedAt)
 	}
 	key := kb.String()
-	if s.cache == nil || s.cache.key != key { // 外部清数据(恢复出厂)后集合变了,key 也跟着变
-		h := sha256.New()
-		size := 0
+	if s.cache == nil || s.cache.key != key {
+		data := make([]SetData, 0, len(on))
 		for _, st := range on {
-			text, err := s.readText(st.ID)
+			sd, err := s.setDataLocked(context.Background(), st)
 			if err != nil {
 				return List{}, err
 			}
-			head := fmt.Sprintf("%d:%s|%s|%d:", len(st.ID), st.ID, st.Dialect, len(text))
-			h.Write([]byte(head))
-			h.Write([]byte(text))
-			size += len(head) + len(text)
+			data = append(data, sd)
 		}
-		s.cache = &digest{key: key, sha: hex.EncodeToString(h.Sum(nil)), size: size}
+		built, err := BuildDocument(data)
+		if err != nil && err != ErrDocTooLarge {
+			return List{}, err
+		}
+		if built != nil {
+			s.cache = &digest{key: key, sha: built.Metadata.SHA256, size: built.Metadata.Size}
+		} else {
+			s.cache = &digest{key: key, sha: "", size: MaxDocBytes + 1}
+		}
 	}
 	return List{Sets: sets, SHA256: s.cache.sha, Size: s.cache.size}, nil
 }
@@ -317,8 +326,23 @@ func (s *Service) Preview(ctx context.Context, in PreviewInput) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	text, _, err := prepare(d, Substitute(string(body), args))
-	return text, err
+	raw := Normalize(string(body))
+	vals := map[string]string{}
+	for k, v := range args {
+		vals[k] = fmt.Sprint(v)
+	}
+	a, err := Analyze(d, raw, vals, u)
+	if err != nil {
+		var pe *ParseError
+		if errors.As(err, &pe) {
+			return "", &InputError{Msg: "规则解析失败: " + pe.Reason}
+		}
+		return "", err
+	}
+	if len(a.Rules) == 0 && len(a.Hostnames) == 0 {
+		return "", &InputError{Msg: "没有认得出的规则或脚本,请检查所选格式和内容"}
+	}
+	return Substitute(raw, args), nil
 }
 
 // Save 新建(ID 为空)或更新一份规则集,返回整份最新列表。
@@ -360,7 +384,7 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (List, error) {
 		}
 	}
 
-	// 文本来源:填了文本用文本(编辑框里的内容,不再代入);否则抓链接(代入参数);否则更新时沿用旧文本
+	// 文本来源:填了文本用原文;否则抓链接(存原文,参数在 Analyze 时再代入);否则更新时沿用旧文本
 	var raw string
 	switch {
 	case in.Text != nil && strings.TrimSpace(*in.Text) != "":
@@ -370,7 +394,7 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (List, error) {
 		if err != nil {
 			return List{}, err
 		}
-		raw = Substitute(string(body), args)
+		raw = string(body)
 	case old != nil:
 		if raw, err = s.readText(old.ID); err != nil {
 			return List{}, err
@@ -378,8 +402,24 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (List, error) {
 	default:
 		return List{}, &InputError{"请填写规则文本或规则链接"}
 	}
-	text, counts, err := prepare(d, raw)
+	if len(raw) > MaxTextBytes {
+		return List{}, &InputError{fmt.Sprintf("规则文本最长 %d 字节", MaxTextBytes)}
+	}
+	// 先定 id 再分析/抓脚本(脚本写入 structured)
+	id := in.ID
+	if id == "" {
+		id = s.newID()
+	}
+	valStr := map[string]string{}
+	for k, v := range args {
+		valStr[k] = fmt.Sprint(v)
+	}
+	stored, analysis, err := s.buildStored(ctx, id, name, d, raw, u, valStr)
 	if err != nil {
+		var pe *ParseError
+		if errors.As(err, &pe) {
+			return List{}, &InputError{Msg: "规则解析失败: " + pe.Reason}
+		}
 		return List{}, err
 	}
 
@@ -399,17 +439,31 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (List, error) {
 			if len(f.Sets) >= MaxSets {
 				return &InputError{fmt.Sprintf("最多 %d 份规则集", MaxSets)}
 			}
-			set.ID = s.newID()
+			set.ID = id
 			for slices.ContainsFunc(f.Sets, func(st Set) bool { return st.ID == set.ID }) {
 				set.ID = s.newID()
 			}
+			stored.ID = set.ID
 		}
-		set.RuleCount, set.ScriptCount, set.Skipped = counts.Rules, counts.Scripts, counts.Skipped
+		set.RuleCount = len(analysis.Rules)
+		set.ScriptCount = 0
+		for _, r := range analysis.Rules {
+			if r.Action == "script" {
+				set.ScriptCount++
+			}
+		}
+		set.Skipped = analysis.Skipped()
+		set.Hostnames = analysis.Hostnames
+		set.Incomplete = stored.Incomplete
 		set.UpdatedAt = s.now().UTC().Format(time.RFC3339)
-		if len(args) > 0 {
-			set.Arguments = &Arguments{Values: args}
+		if len(args) > 0 || len(analysis.Declared) > 0 {
+			set.Arguments = &Arguments{Values: args, Declared: analysis.Declared}
 		}
-		if err := s.writeText(set.ID, text); err != nil {
+		if err := s.writeText(set.ID, raw); err != nil {
+			return err
+		}
+		stored.ID = set.ID
+		if err := s.writeStruct(stored); err != nil {
 			return err
 		}
 		if idx < 0 {
@@ -420,8 +474,9 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (List, error) {
 		}
 		return nil
 	}, func() {
-		if wroteNew != "" { // 记录没写成:新建的文本文件不留孤儿
+		if wroteNew != "" {
 			_ = os.Remove(s.textPath(wroteNew))
+			s.removeStruct(wroteNew)
 		}
 	})
 	if err != nil {
@@ -487,6 +542,7 @@ func (s *Service) Delete(_ context.Context, id string) (List, error) {
 	if err := os.Remove(s.textPath(id)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return List{}, fmt.Errorf("删除规则文本失败: %w", err)
 	}
+	s.removeStruct(id)
 	s.cache = nil
 	return s.listLocked()
 }
@@ -503,22 +559,24 @@ func (s *Service) RestoreDefaults(context.Context) (List, error) {
 		return List{}, err
 	}
 	type prepared struct {
-		d      Default
-		text   string
-		counts Counts
+		d    Default
+		text string
+		st   storedSet
+		a    *Analysis
 	}
 	var ps []prepared
+	ctx := context.Background()
 	for _, d := range ds {
 		dl, ok := ParseDialect(string(d.Dialect))
 		if !ok || !idRe.MatchString(d.ID) {
 			return List{}, fmt.Errorf("内嵌的默认规则「%s」不合法", d.ID)
 		}
-		text, c, err := prepare(dl, d.Text)
+		d.Dialect = dl
+		st, a, err := s.buildStored(ctx, d.ID, d.Name, dl, d.Text, d.SourceURL, nil)
 		if err != nil {
 			return List{}, fmt.Errorf("内嵌的默认规则「%s」不合法: %w", d.ID, err)
 		}
-		d.Dialect = dl
-		ps = append(ps, prepared{d, text, c})
+		ps = append(ps, prepared{d, d.Text, st, a})
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -535,10 +593,20 @@ func (s *Service) RestoreDefaults(context.Context) (List, error) {
 			if err := s.writeText(p.d.ID, p.text); err != nil {
 				return err
 			}
+			p.st.ID = p.d.ID
+			if err := s.writeStruct(p.st); err != nil {
+				return err
+			}
+			sc := 0
+			for _, r := range p.a.Rules {
+				if r.Action == "script" {
+					sc++
+				}
+			}
 			set := Set{
 				ID: p.d.ID, Name: p.d.Name, Dialect: p.d.Dialect, SourceURL: p.d.SourceURL, Enabled: p.d.Enabled,
-				RuleCount: p.counts.Rules, ScriptCount: p.counts.Scripts, Skipped: p.counts.Skipped,
-				UpdatedAt: s.now().UTC().Format(time.RFC3339),
+				RuleCount: len(p.a.Rules), ScriptCount: sc, Skipped: p.a.Skipped(), Hostnames: p.a.Hostnames,
+				UpdatedAt: s.now().UTC().Format(time.RFC3339), Incomplete: p.st.Incomplete,
 			}
 			if i := slices.IndexFunc(f.Sets, func(st Set) bool { return st.ID == p.d.ID }); i >= 0 {
 				f.Sets[i] = set
@@ -552,7 +620,8 @@ func (s *Service) RestoreDefaults(context.Context) (List, error) {
 		return List{}, err
 	}
 	for _, id := range gone {
-		_ = os.Remove(s.textPath(id)) // 孤儿文本留着也无害,删不掉不算失败
+		_ = os.Remove(s.textPath(id))
+		s.removeStruct(id)
 	}
 	s.cache = nil
 	return s.listLocked()

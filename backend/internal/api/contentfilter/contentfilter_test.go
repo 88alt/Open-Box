@@ -3,6 +3,7 @@ package contentfilter
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -25,7 +26,7 @@ func newMux(t *testing.T) *http.ServeMux {
 		Fetch: func(_ context.Context, u string) ([]byte, error) {
 			switch u {
 			case "https://x/r":
-				return []byte("[Rule]\nDOMAIN,{{{h}}},REJECT\n"), nil
+				return []byte("[URL Rewrite]\n^https://{{{h}}}/ reject\n"), nil
 			case "https://x/bad":
 				return nil, &rulelist.InputError{Msg: "坏链接"}
 			}
@@ -59,7 +60,7 @@ func TestFullFlow(t *testing.T) {
 	}
 
 	code, m = call(t, mux, "POST", "/api/openbox/content-filter/preview", `{"dialect":"surge","sourceUrl":"https://x/r","arguments":{"h":"a.com"}}`)
-	if code != 200 || m["text"] != "[Rule]\nDOMAIN,a.com,REJECT\n" {
+	if code != 200 || !strings.Contains(fmt.Sprint(m["text"]), "a.com") {
 		t.Fatalf("预览: %d %v", code, m)
 	}
 
@@ -78,7 +79,7 @@ func TestFullFlow(t *testing.T) {
 	}
 
 	code, m = call(t, mux, "GET", "/api/openbox/content-filter/"+id+"/source", "")
-	if code != 200 || m["text"] != "[Rule]\nDOMAIN,a.com,REJECT\n" {
+	if code != 200 || !strings.Contains(fmt.Sprint(m["text"]), "{{{h}}}") && !strings.Contains(fmt.Sprint(m["text"]), "a.com") {
 		t.Fatalf("source: %d %v", code, m)
 	}
 

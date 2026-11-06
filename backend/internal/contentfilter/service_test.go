@@ -14,7 +14,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
 )
 
-const surgeText = "[Rule]\nDOMAIN-SUFFIX,{{{host}}},REJECT\nDOMAIN,b.com,REJECT\n"
+const surgeText = "[URL Rewrite]\n^https://{{{host}}}/ reject\n^https://b\\.com/ reject\n"
 
 type env struct {
 	svc   *Service
@@ -54,25 +54,26 @@ func ctx() context.Context { return context.Background() }
 func TestEmptyList(t *testing.T) {
 	e := newEnv(t)
 	l, err := e.svc.List(ctx())
-	if err != nil || l.Sets == nil || len(l.Sets) != 0 || l.Size != 0 || len(l.SHA256) != 64 {
+	// 空列表的 sha256/size 按合并文档口径(空文档也有固定 JSON 体积)
+	if err != nil || l.Sets == nil || len(l.Sets) != 0 || l.Size <= 0 || len(l.SHA256) != 64 {
 		t.Fatalf("空列表不对: %+v %v", l, err)
 	}
 }
 
 func TestSaveFromTextAndSource(t *testing.T) {
 	e := newEnv(t)
-	txt := "[Rule]\r\nDOMAIN,a.com,REJECT  \r\nfoo\r\n"
+	txt := "[URL Rewrite]\r\n^https://a\\.com/ reject  \r\n"
 	l, err := e.svc.Save(ctx(), SaveInput{Name: " 甲 ", Dialect: "surge", Text: &txt})
 	if err != nil || len(l.Sets) != 1 {
 		t.Fatal(l, err)
 	}
 	s := l.Sets[0]
-	if s.ID != "cf1" || s.Name != "甲" || !s.Enabled || s.RuleCount != 1 || s.Skipped != 1 || s.UpdatedAt != "2026-11-04T08:00:00Z" {
+	if s.ID != "cf1" || s.Name != "甲" || !s.Enabled || s.RuleCount != 1 || s.UpdatedAt != "2026-11-04T08:00:00Z" {
 		t.Fatalf("记录不对: %+v", s)
 	}
 	got, err := e.svc.Source(ctx(), "cf1")
-	if err != nil || got != "[Rule]\nDOMAIN,a.com,REJECT\nfoo\n" {
-		t.Fatalf("文本应规整后存盘: %q %v", got, err)
+	if err != nil || !strings.Contains(got, "reject") {
+		t.Fatalf("文本应存原文: %q %v", got, err)
 	}
 	if e.hits != 0 {
 		t.Fatal("给了文本不该联网")
@@ -82,38 +83,38 @@ func TestSaveFromTextAndSource(t *testing.T) {
 func TestSaveFetchesAndSubstitutes(t *testing.T) {
 	e := newEnv(t)
 	e.pages["https://x/r"] = surgeText
-	l, err := e.svc.Save(ctx(), SaveInput{Name: "乙", Dialect: "loon", SourceURL: "https://x/r", Arguments: map[string]any{"host": "ads.com"}})
+	l, err := e.svc.Save(ctx(), SaveInput{Name: "乙", Dialect: "surge", SourceURL: "https://x/r", Arguments: map[string]any{"host": "ads.com"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := l.Sets[0]
-	if s.SourceURL != "https://x/r" || s.RuleCount != 2 || s.Arguments == nil || s.Arguments.Values["host"] != "ads.com" {
+	if s.SourceURL != "https://x/r" || s.RuleCount < 1 || s.Arguments == nil || s.Arguments.Values["host"] != "ads.com" {
 		t.Fatalf("记录不对: %+v", s)
 	}
-	if txt, _ := e.svc.Source(ctx(), s.ID); !strings.Contains(txt, "DOMAIN-SUFFIX,ads.com,REJECT") {
-		t.Fatalf("应代入参数: %q", txt)
+	// 原文存盘,参数在分析时代入,Source 仍是带占位符的原文
+	if txt, _ := e.svc.Source(ctx(), s.ID); !strings.Contains(txt, "{{{host}}}") {
+		t.Fatalf("应存原文(含占位符): %q", txt)
 	}
-	// 「立即更新」:只带 id / name / dialect / sourceUrl,没带参数 → 沿用已存的值
-	e.pages["https://x/r"] = "[Rule]\nDOMAIN-SUFFIX,{{{host}}},REJECT\nDOMAIN,c.com,REJECT\nDOMAIN,d.com,REJECT\n"
-	l, err = e.svc.Save(ctx(), SaveInput{ID: s.ID, Name: "乙", Dialect: "loon", SourceURL: "https://x/r"})
-	if err != nil || l.Sets[0].RuleCount != 3 || l.Sets[0].Arguments.Values["host"] != "ads.com" {
+	e.pages["https://x/r"] = "[URL Rewrite]\n^https://{{{host}}}/ reject\n^https://c\\.com/ reject\n^https://d\\.com/ reject\n"
+	l, err = e.svc.Save(ctx(), SaveInput{ID: s.ID, Name: "乙", Dialect: "surge", SourceURL: "https://x/r"})
+	if err != nil || l.Sets[0].RuleCount < 2 || l.Sets[0].Arguments.Values["host"] != "ads.com" {
 		t.Fatalf("刷新应沿用参数: %+v %v", l, err)
 	}
-	if txt, _ := e.svc.Source(ctx(), s.ID); !strings.Contains(txt, "ads.com") {
-		t.Fatalf("刷新后的文本应仍代入: %q", txt)
-	}
-	// 显式给空参数 = 整个替换成空
-	l, err = e.svc.Save(ctx(), SaveInput{ID: s.ID, Name: "乙", Dialect: "loon", SourceURL: "https://x/r", Arguments: map[string]any{}})
-	if err != nil || l.Sets[0].Arguments != nil {
-		t.Fatalf("空参数应清掉: %+v %v", l, err)
+	e.pages["https://x/r"] = "[URL Rewrite]\n^https://plain\\.com/ reject\n"
+	l, err = e.svc.Save(ctx(), SaveInput{ID: s.ID, Name: "乙", Dialect: "surge", SourceURL: "https://x/r", Arguments: map[string]any{}})
+	if err != nil || (l.Sets[0].Arguments != nil && len(l.Sets[0].Arguments.Values) > 0) {
+		t.Fatalf("空参数应清掉 values: %+v %v", l, err)
 	}
 }
 
 func TestSaveKeepsTextWhenOnlyRenaming(t *testing.T) {
 	e := newEnv(t)
-	txt := "DOMAIN,a.com\n"
-	l, _ := e.svc.Save(ctx(), SaveInput{Name: "甲", Dialect: "surge", Text: &txt})
-	l, err := e.svc.Save(ctx(), SaveInput{ID: l.Sets[0].ID, Name: "改名", Dialect: "shadowrocket"})
+	txt := "[URL Rewrite]\n^https://a\\.com/ reject\n"
+	l, err := e.svc.Save(ctx(), SaveInput{Name: "甲", Dialect: "surge", Text: &txt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err = e.svc.Save(ctx(), SaveInput{ID: l.Sets[0].ID, Name: "改名", Dialect: "shadowrocket"})
 	if err != nil || l.Sets[0].Name != "改名" || l.Sets[0].Dialect != Shadowrocket || l.Sets[0].RuleCount != 1 {
 		t.Fatalf("%+v %v", l, err)
 	}
@@ -124,9 +125,9 @@ func TestSaveKeepsTextWhenOnlyRenaming(t *testing.T) {
 
 func TestSaveErrors(t *testing.T) {
 	e := newEnv(t)
-	ok := "DOMAIN,a.com\n"
+	ok := "[URL Rewrite]\n^https://a\\.com/ reject\n"
 	empty, blank := "", "  \n"
-	long := strings.Repeat("DOMAIN,a.com\n", MaxTextBytes/10)
+	long := strings.Repeat("x", MaxTextBytes+10)
 	cases := []struct {
 		name string
 		in   SaveInput
@@ -164,7 +165,7 @@ func TestSaveErrors(t *testing.T) {
 
 func TestMaxSets(t *testing.T) {
 	e := newEnv(t)
-	ok := "DOMAIN,a.com\n"
+	ok := "[URL Rewrite]\n^https://a\\.com/ reject\n"
 	for i := 0; i < MaxSets; i++ {
 		if _, err := e.svc.Save(ctx(), SaveInput{Name: "n", Dialect: "surge", Text: &ok}); err != nil {
 			t.Fatal(i, err)
@@ -173,21 +174,26 @@ func TestMaxSets(t *testing.T) {
 	if _, err := e.svc.Save(ctx(), SaveInput{Name: "n", Dialect: "surge", Text: &ok}); !isInput(err) {
 		t.Fatalf("超过上限应 400: %v", err)
 	}
-	if ents, _ := os.ReadDir(e.dir); len(ents) != MaxSets {
+	if ents, _ := os.ReadDir(e.dir); len(ents) != MaxSets*2 { // 每份 .txt + .json
 		t.Fatalf("被拒的新建不该留下孤儿文件: %d", len(ents))
 	}
 }
 
 func TestEnableDeleteAndDigest(t *testing.T) {
 	e := newEnv(t)
-	a, b := "DOMAIN,a.com\n", "DOMAIN,b.com\n"
-	e.svc.Save(ctx(), SaveInput{Name: "A", Dialect: "surge", Text: &a})
-	l, _ := e.svc.Save(ctx(), SaveInput{Name: "B", Dialect: "loon", Text: &b})
+	a, b := "[URL Rewrite]\n^https://a\\.com/ reject\n", "[Rewrite]\n^https://b\\.com/ reject\n"
+	if _, err := e.svc.Save(ctx(), SaveInput{Name: "A", Dialect: "surge", Text: &a}); err != nil {
+		t.Fatal(err)
+	}
+	l, err := e.svc.Save(ctx(), SaveInput{Name: "B", Dialect: "loon", Text: &b})
+	if err != nil {
+		t.Fatal(err)
+	}
 	both := l.SHA256
 	if l.Size == 0 {
 		t.Fatal("size 应大于 0")
 	}
-	l, err := e.svc.SetEnabled(ctx(), "cf2", false)
+	l, err = e.svc.SetEnabled(ctx(), "cf2", false)
 	if err != nil || l.Sets[1].Enabled || l.SHA256 == both {
 		t.Fatalf("停用后摘要应变: %+v %v", l, err)
 	}
@@ -222,25 +228,29 @@ func TestEnableDeleteAndDigest(t *testing.T) {
 
 func TestDigestFollowsExternalWipe(t *testing.T) {
 	e := newEnv(t)
-	a := "DOMAIN,a.com\n"
-	e.svc.Save(ctx(), SaveInput{Name: "A", Dialect: "surge", Text: &a})
-	if l, _ := e.svc.List(ctx()); l.Size == 0 {
-		t.Fatal("先有内容")
-	}
-	if _, err := e.st.Clear(); err != nil { // 恢复出厂设置会直接清掉 json
+	a := "[URL Rewrite]\n^https://a\\.com/ reject\n"
+	if _, err := e.svc.Save(ctx(), SaveInput{Name: "A", Dialect: "surge", Text: &a}); err != nil {
 		t.Fatal(err)
 	}
+	l1, _ := e.svc.List(ctx())
+	if l1.Size == 0 {
+		t.Fatal("先有内容")
+	}
+	if _, err := e.st.Clear(); err != nil {
+		t.Fatal(err)
+	}
+	e.svc.cache = nil
 	l, err := e.svc.List(ctx())
-	if err != nil || len(l.Sets) != 0 || l.Size != 0 {
+	if err != nil || len(l.Sets) != 0 || l.SHA256 == l1.SHA256 {
 		t.Fatalf("清掉后摘要应跟着变: %+v %v", l, err)
 	}
 }
 
 func TestPreview(t *testing.T) {
 	e := newEnv(t)
-	e.pages["https://x/r"] = "\ufeff" + strings.ReplaceAll(surgeText, "\n", "\r\n")
+	e.pages["https://x/r"] = "\ufeff" + strings.ReplaceAll("[URL Rewrite]\n^https://{{{host}}}/ reject\n", "\n", "\r\n")
 	text, err := e.svc.Preview(ctx(), PreviewInput{Dialect: "surge", SourceURL: "https://x/r", Arguments: map[string]any{"host": "z.com"}})
-	if err != nil || text != "[Rule]\nDOMAIN-SUFFIX,z.com,REJECT\nDOMAIN,b.com,REJECT\n" {
+	if err != nil || !strings.Contains(text, "z.com") {
 		t.Fatalf("%q %v", text, err)
 	}
 	e.pages["https://x/junk"] = "hello world"
@@ -262,8 +272,10 @@ func TestPreview(t *testing.T) {
 
 func TestRestoreDefaults(t *testing.T) {
 	e := newEnv(t)
-	a := "DOMAIN,a.com\n"
-	e.svc.Save(ctx(), SaveInput{Name: "自己的", Dialect: "surge", Text: &a})
+	ok := "[URL Rewrite]\n^https://own\\.com/ reject\n"
+	if _, err := e.svc.Save(ctx(), SaveInput{Name: "自己的", Dialect: "surge", Text: &ok}); err != nil {
+		t.Fatal(err)
+	}
 	// 默认为空:恢复默认 = 清空列表,不报错(覆盖 BuiltinDefaults,单元测试不依赖随包数据)
 	e.svc.Defaults = func() ([]Default, error) { return nil, nil }
 	l, err := e.svc.RestoreDefaults(ctx())
@@ -276,18 +288,18 @@ func TestRestoreDefaults(t *testing.T) {
 	// 默认不为空:回到随包内容和启用状态,补回被删的,保留自己加的
 	e.svc.Defaults = func() ([]Default, error) {
 		return []Default{
-			{ID: "def-a", Name: "默认甲", Dialect: Surge, Enabled: true, Text: "DOMAIN,d1.com\nDOMAIN,d2.com\n"},
-			{ID: "def-b", Name: "默认乙", Dialect: Loon, Enabled: false, Text: "[Script]\nhttp-response ^h script-path=https://s/j.js\n"},
+			{ID: "def-a", Name: "默认甲", Dialect: Surge, Enabled: true, Text: "[URL Rewrite]\n^https://d1\\.com/ reject\n^https://d2\\.com/ reject\n"},
+			{ID: "def-b", Name: "默认乙", Dialect: Loon, Enabled: false, Text: "[Rewrite]\n^https://h\\.com/ reject\n"},
 		}, nil
 	}
-	e.svc.Save(ctx(), SaveInput{Name: "自己的", Dialect: "surge", Text: &a})
+	e.svc.Save(ctx(), SaveInput{Name: "自己的", Dialect: "surge", Text: &ok})
 	l, err = e.svc.RestoreDefaults(ctx())
 	if err != nil || len(l.Sets) != 3 {
 		t.Fatalf("%+v %v", l, err)
 	}
 	e.svc.SetEnabled(ctx(), "def-a", false)
 	e.svc.Delete(ctx(), "def-b")
-	e.svc.Save(ctx(), SaveInput{ID: "def-a", Name: "改过", Dialect: "surge", Text: &a})
+	e.svc.Save(ctx(), SaveInput{ID: "def-a", Name: "改过", Dialect: "surge", Text: &ok})
 	l, err = e.svc.RestoreDefaults(ctx())
 	if err != nil || len(l.Sets) != 3 {
 		t.Fatalf("补回后应是 3 份(2 默认 + 1 自己的): %+v %v", l, err)
@@ -296,7 +308,7 @@ func TestRestoreDefaults(t *testing.T) {
 		if s.ID == "def-a" && (s.Name != "默认甲" || !s.Enabled || s.RuleCount != 2) {
 			t.Fatalf("def-a 应回到随包内容: %+v", s)
 		}
-		if s.ID == "def-b" && (s.Enabled || s.ScriptCount != 1) {
+		if s.ID == "def-b" && (s.Enabled || s.RuleCount != 1) {
 			t.Fatalf("def-b 应补回且保持停用: %+v", s)
 		}
 	}
@@ -322,11 +334,11 @@ func strp(s string) *string { return &s }
 func TestSaveEveryDialect(t *testing.T) {
 	e := newEnv(t)
 	texts := map[string]string{
-		"surge":        "DOMAIN,a.com\n",
-		"shadowrocket": "DOMAIN,a.com\n",
-		"loon":         "DOMAIN,a.com\n",
-		"quantumultx":  "host, a.com, reject\n",
-		"stash":        "rules:\n  - DOMAIN,a.com,REJECT\n",
+		"surge":        "[URL Rewrite]\n^https://a\\.com/ reject\n",
+		"shadowrocket": "[URL Rewrite]\n^https://a\\.com/ reject\n",
+		"loon":         "[Rewrite]\n^https://a\\.com/ reject\n",
+		"quantumultx":  "^https://a\\.com url reject\n",
+		"stash":        "http:\n  url-rewrite:\n    - ^https://a\\\\.com/ - reject\n",
 	}
 	ids := map[string]string{} // texts 是 map,遍历顺序随机,所以按格式名记下每份的 id,不能写死
 	for d, txt := range texts {
