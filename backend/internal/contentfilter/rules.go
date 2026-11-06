@@ -33,11 +33,12 @@ import (
 //	replace   {search, replacement, maxBytes}    (只对响应体)
 //	script    {phase, sourceUrl, sha256, requiresBody, timeoutMs?, maxBytes?, argument?, binaryBodyMode?}
 type Rule struct {
-	ID      string         `json:"id"`
-	Dialect Dialect        `json:"dialect"`
-	Pattern string         `json:"pattern"`
-	Action  string         `json:"action"`
-	Params  map[string]any `json:"params"`
+	ID        string         `json:"id"`
+	RuleSetID string         `json:"ruleSetId,omitempty"` // 合并成快照文档时才有
+	Dialect   Dialect        `json:"dialect"`
+	Pattern   string         `json:"pattern"`
+	Action    string         `json:"action"`
+	Params    map[string]any `json:"params,omitempty"`
 }
 
 // ParseError 是解析一行时的失败:Reason 是机器可读的原因码(前端和日志用),Line 从 1 起。
