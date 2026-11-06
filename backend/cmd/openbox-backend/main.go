@@ -17,6 +17,7 @@ import (
 	activationapi "github.com/timeflysoon/Open-Box/backend/internal/api/activation"
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
 	backupapi "github.com/timeflysoon/Open-Box/backend/internal/api/backup"
+	bandwidthapi "github.com/timeflysoon/Open-Box/backend/internal/api/bandwidth"
 	clientappapi "github.com/timeflysoon/Open-Box/backend/internal/api/clientapp"
 	clientsapi "github.com/timeflysoon/Open-Box/backend/internal/api/clients"
 	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
@@ -50,6 +51,7 @@ import (
 	updateapi "github.com/timeflysoon/Open-Box/backend/internal/api/update"
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/backup"
+	"github.com/timeflysoon/Open-Box/backend/internal/bandwidth"
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
 	"github.com/timeflysoon/Open-Box/backend/internal/contentfilter"
 	"github.com/timeflysoon/Open-Box/backend/internal/controllerproxy"
@@ -292,6 +294,23 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
 		},
 	}
+	bandwidthSvc := &bandwidth.Service{
+		Store:   st,
+		Profile: func(ctx context.Context) (map[string]any, error) { return profileSvc.Get(ctx) },
+		Nodes: func(ctx context.Context) ([]bandwidth.NodeRef, error) {
+			_, cat, err := subsSvc.Catalog(ctx)
+			if err != nil {
+				return nil, err
+			}
+			out := make([]bandwidth.NodeRef, 0, len(cat))
+			for _, c := range cat {
+				out = append(out, bandwidth.NodeRef{Name: c.Node.Tag, SubscriptionID: c.SubscriptionID, Enabled: true})
+			}
+			return out, nil
+		},
+	}
+	bandwidthapi.Register(srv.Mux(), bandwidthapi.Deps{Service: bandwidthSvc})
+
 	latencyapi.Register(srv.Mux(), latencyapi.Deps{Gen: gen, Subs: subsSvc, Profiles: profileSvc, Runner: probeRunner, History: nodeHistory})
 	// 节点信息:类型 / 协议层 / 服务器 / 链式上游 / 入口地址解析 / 入口国家 / 出口归属和风控值
 	entryDetector := &regiondetect.Detector{} // 只用它的按 IP 查国家,不占用其它两处的「判断中」状态

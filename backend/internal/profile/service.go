@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/bandwidth"
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
 	"github.com/timeflysoon/Open-Box/backend/internal/shareservers"
@@ -108,6 +109,9 @@ func (s *Service) Patch(ctx context.Context, patch map[string]any) (map[string]a
 		s.migrate(ctx, cur)
 		clean := prepare(cur, patch)
 		if err := normalizeClientApp(cur, clean); err != nil {
+			return &ValidationError{Msg: err.Error()}
+		}
+		if err := normalizeBandwidth(clean); err != nil {
 			return &ValidationError{Msg: err.Error()}
 		}
 		if err := normalizeServers(clean); err != nil {
@@ -295,4 +299,20 @@ func (a CoreAdapter) NormalizeGroups(ctx context.Context, groups []any) ([]any, 
 		return nil, err
 	}
 	return out, nil
+}
+
+func normalizeBandwidth(clean map[string]any) error {
+	v, ok := clean["bandwidth"]
+	if !ok {
+		return nil
+	}
+	norm, err := bandwidth.NormalizeSettings(v)
+	if err != nil {
+		return err
+	}
+	clean["bandwidth"] = map[string]any{
+		"intervalHours": float64(norm.IntervalHours),
+		"maxDownloadMB": float64(norm.MaxDownloadMB),
+	}
+	return nil
 }
