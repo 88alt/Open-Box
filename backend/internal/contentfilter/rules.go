@@ -8,7 +8,7 @@ package contentfilter
 // 有意的差异:正则合法性直接用 Go 的 regexp(就是 RE2,App 执行用的那一套),上游是自己写了一个检查器去近似 RE2,
 // 所以 `regex_unsupported_by_re2:<字段>:<原因>` 里「原因」那一段的措辞不同,前缀和字段名一样。
 //
-// 本文件做 Surge / Shadowrocket(QuantumultX 在 rules_qx.go);Loon / Stash 各是一个后续条目(见 STATUS.md)。
+// 本文件做 Surge / Shadowrocket(QuantumultX 在 rules_qx.go);Loon 在 rules_loon.go;Stash 是后续条目(见 STATUS.md)。
 
 import (
 	"crypto/sha256"
@@ -86,6 +86,8 @@ func ParseRules(d Dialect, text string, skip SkipFunc) ([]Rule, error) {
 		return parseSurgeLike(text, d, skip)
 	case QuantumultX:
 		return parseQuantumultX(text, skip)
+	case Loon:
+		return parseLoon(text, skip)
 	}
 	return nil, ErrUnsupported
 }
