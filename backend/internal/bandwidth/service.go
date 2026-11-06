@@ -67,6 +67,7 @@ type Service struct {
 	Profile ProfileReader
 	Nodes   NodeLister
 	Now     func() time.Time
+	Measure Measurer
 
 	mu       sync.Mutex
 	running  bool

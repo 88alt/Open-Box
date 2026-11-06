@@ -34,3 +34,21 @@ func TestQueue(t *testing.T) {
 		t.Fatalf("%+v", st)
 	}
 }
+
+func TestRunOnceWithMeasurer(t *testing.T) {
+	svc := &Service{
+		Nodes: func(ctx context.Context) ([]NodeRef, error) {
+			return []NodeRef{{Name: "n1", SubscriptionID: "s1"}}, nil
+		},
+		Measure: func(ctx context.Context, node string, maxBytes int64) MeasureResult {
+			return MeasureResult{Mbps: 12.5}
+		},
+	}
+	_, _ = svc.QueueNode(context.Background(), "n1")
+	svc.RunOnce(context.Background())
+	st, _ := svc.Status(context.Background())
+	m := st.Measurements["n1"]
+	if m.Pending || m.Mbps != 12.5 || m.CompletedAt == 0 {
+		t.Fatalf("%+v", m)
+	}
+}

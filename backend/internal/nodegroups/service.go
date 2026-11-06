@@ -337,6 +337,9 @@ func (s *Service) checkedGroups(ctx context.Context, in []any, tags func() (map[
 	if err := checkLoadBalance(in, tagSet, prev); err != nil {
 		return nil, nil, err
 	}
+	if err := checkBandwidthField(in); err != nil {
+		return nil, nil, err
+	}
 
 	// 名字校验:非空、不超长、组与组不重名、不与节点重名(sing-box 出站 tag 全局唯一)。
 	byName := map[string]bool{}
@@ -595,6 +598,28 @@ func checkLoadBalance(in []any, tagSet map[string]bool, prev []any) error {
 			if !tagSet[ms] && !old[ms] {
 				return bad("负载均衡「%s」只能添加真实节点：%s", name, ms)
 			}
+		}
+	}
+	return nil
+}
+
+// checkBandwidthField:组上的 bandwidth 必须是布尔(启用带宽择优);没有该键也可以。
+func checkBandwidthField(in []any) error {
+	for i, g := range in {
+		m, ok := g.(map[string]any)
+		if !ok {
+			continue
+		}
+		v, has := m["bandwidth"]
+		if !has || v == nil {
+			continue
+		}
+		if _, ok := v.(bool); !ok {
+			name, _ := m["name"].(string)
+			if name == "" {
+				name = fmt.Sprintf("#%d", i+1)
+			}
+			return bad("节点组 %s 的 bandwidth 必须是布尔", name)
 		}
 	}
 	return nil
