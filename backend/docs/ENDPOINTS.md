@@ -256,7 +256,7 @@
 顺序:一、同一时刻只做一次,并且和部署互斥(另一次在进行 / 部署在进行 → 409,什么都没动);二、**先停内核**:先撤销 DNS 接管,再停服务,再确认真的停了,任何一步不成功就**一份数据都不删**,回 500「为安全起见没有清除任何数据:…」,数据和密码原样,可以排查后重试(读不到服务管理器 = 没有 procd / systemd 时跳过这一步);三、逐项清:DNS 查询记录、每日流量、故障转移(检测管理器的计划和 `failover.json`)、生成的内核配置(`config.json`、`config.prev.json`)、规则集目录和 DNS 过滤名单缓存(目录本身留着)、内核缓存 `cache.db`、状态目录里全部 `.json`(订阅、节点、节点组、档案、面板设置、背景图、共享网络、客户端 App、延迟历史、部署记录……;新增的状态文件自动包含)。一项失败不拦后面的;四、**访问密码和登录会话放最后**:前面只要有一项失败就不清密码,回 500 并写明已清和失败的项(面板不能在旧数据还留着时变成没有密码,再点一次即可重试)。
 不删:`dns-takeover.json`(DNS 接管的撤销记录)、`certs/`(自签证书和密钥,是设备身份,不是用户设置)、内核服务的开机自启设置、后端自己的程序和随包规则库。重置完内核是停止状态,配置文件已删,要「部署」一次才会重新生成并启动。整个过程不随请求断开而中断(总时限 5 分钟)。
 
-## `/api/openbox/bandwidth`(未实现)
+## `/api/openbox/bandwidth`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
@@ -264,7 +264,27 @@
 | POST | `/api/openbox/bandwidth/subscriptions/{id}` | `queueSubscriptionBandwidth` (api/openbox.ts) | OpenboxBandwidthQueueResult | (id) |
 | POST | `/api/openbox/bandwidth/nodes/{name}` | `queueNodeBandwidth` (api/openbox.ts) | OpenboxBandwidthQueueResult | (name) |
 
-**目前后端没有这些路由,一律 404**(2026-11-04 维护者授权:带宽择优整体回退,按前端 `BandwidthSettingsCard` 和 sing-box 公开文档重写,见 STATUS 的 M4「带宽择优」条目)。回退期间带宽卡片不可用;前端已存的档案 `bandwidth` 键作为未知键保留,不校验范围。重写时在这一节写实现约定。
+实现约定(`internal/bandwidth`、`internal/api/bandwidth`;2026-11-04 回退旧实现后按前端 `BandwidthSettingsCard`、`OpenboxBandwidth*` 类型和 sing-box 公开文档重写,STATUS 的 M4「带宽择优」条目记着前五刀)。三个接口都需要登录,响应都带 `no-store`。
+
+- **`GET`**:返回 `{settings, nodes, dailyBytes, running, lastError, updatedAt, measurements, pendingBySubscription}`。`settings` 是档案 `bandwidth` 规整后的值(没设就用默认);`nodes` 是「所在订阅启用、且开了定期带宽检查」的节点数;`dailyBytes` 是估算的每日用量 = `24 / intervalHours × maxDownloadMB × nodes`(换成字节);`measurements` 以节点名为键,含最近一次样本(`at`、`mbps`、`failed`、`lowerBound`)、`enabled`(订阅开了定期检查)、`pending`、`requestedAt`、`completedAt`、`error`、`reason` 和 `history`;排队中的节点会合并进来并标 `pending`。读档案或节点列表出错回 500。
+- **`POST /subscriptions/{id}`**:把这个订阅下的全部节点排进队(不看订阅有没有开定期检查,手动触发都算)。已经在队里的不重复排,计入 `joined`。响应 `{queued, joined, requestedAt, pendingBySubscription}`。订阅 id 不存在时不报错,`queued` 是 0。
+- **`POST /nodes/{name}`**:把单个节点排进队,响应同上。**节点名在节点列表里找不到时也照样排队**(订阅 id 记为空串),为的是前端不空转;真正测的时候才会失败。
+- 方法不对由 `httpx.Methods` 回 405;带宽服务没装配时三个接口回 503「带宽服务不可用」。
+
+测速与调度:
+
+- 排队只是记在内存里,真正测速由后台循环做:`Loop` 每 15 秒一轮,先按周期入队、再取队里一个节点测一次(同一时刻只测一个)。进程启动时先读回上次保存的测量。
+- **按周期入队**(`EnqueueDue`):只排「订阅启用 + 订阅开了 `bandwidthCheck`」的节点,且距上次完成已超过 `intervalHours`(从没测过的直接排);已在队里的跳过。
+- **怎么测**:临时起一个 sing-box 出站,经被测节点下载,读满 `maxDownloadMB` 就停;下载地址取档案 `testUrl`,没有就用默认的 Cloudflare 测速地址。超时按上限估算,最少 30 秒、最多 3 分钟。读满上限时 `lowerBound` 为 true,表示真实速度不低于 `mbps`。节点找不到、配置生成失败、探测失败都记成一次失败样本(`failed`,带 `error` 和 `reason`),并写进 `lastError`;下一次成功会清掉 `lastError`。没有装配测速器时一律记失败(`measurer not configured`),不会悄悄直连外网。
+- **历史**:每个节点最多保留 48 条样本,落盘到状态目录的 `bandwidth-history.json`。保留时长跟随档案 `traffic.keepMonths`(按每月 30 天,取 1~24 个月,最少 24 小时),不写死 24 小时(对齐上游 v0.1.405 的口径)。
+
+相关的校验和字段(不在这三个接口里,但配套):
+
+- **档案 `bandwidth`**:`{intervalHours, maxDownloadMB}`,`intervalHours` 是 1~24 的整数、`maxDownloadMB` 是 1~1024 的整数,默认 6 小时和 50 MB;缺哪个键就补默认;不是对象或超出范围回 400。保存时会规整成这两个键。这个键是测速参数,不进 sing-box 配置,已列入 `profileKeyIgnored`,改它不会让服务状态误报「需要重启」。
+- **节点组 `bandwidth`**:必须是布尔(启用带宽择优),可以不带;其他类型回 400「节点组 … 的 bandwidth 必须是布尔」。组上为真时由 core 把 `bandwidth: true` 写进 urltest / loadbalance 出站(和故障转移多节点自动页签里的内部 urltest),内核自己择优,**后端不改组成员顺序**。客户端配置的 `disableBandwidth` 选项不写。
+- **订阅 `bandwidthCheck`**:创建和修改订阅时落盘,只决定自动入队,不进 sing-box 配置。
+
+没做、需真机:测速经临时 sing-box 出站走节点,沙箱里没法验真实速度;`lowerBound`、超时和失败样本的表现、`dailyBytes` 的估算是否合理,都要在路由器上挂一个开了带宽择优的组、再给订阅打开定期检查后观察。
 
 ## `/api/openbox/failover`
 
