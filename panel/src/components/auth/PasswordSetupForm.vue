@@ -12,38 +12,20 @@
 
     <div class="flex flex-col gap-2">
       <label class="text-sm">{{ $t('newPassword') }}</label>
-      <label class="input input-sm flex w-full items-center gap-2">
-        <input
-          v-model="newPassword"
-          :type="showPassword ? 'text' : 'password'"
-          class="grow"
-          autocomplete="new-password"
-          autofocus
-        />
-        <button
-          type="button"
-          class="text-base-content/60 hover:text-base-content flex items-center"
-          @click="showPassword = !showPassword"
-        >
-          <EyeIcon
-            v-if="showPassword"
-            class="h-4 w-4"
-          />
-          <EyeSlashIcon
-            v-else
-            class="h-4 w-4"
-          />
-        </button>
-      </label>
+      <PasswordInput
+        v-model="newPassword"
+        class="w-full"
+        autocomplete="new-password"
+        autofocus
+      />
       <p class="text-base-content/60 text-xs">{{ $t('passwordMinLengthHint') }}</p>
     </div>
 
     <div class="flex flex-col gap-2">
       <label class="text-sm">{{ $t('confirmNewPassword') }}</label>
-      <input
+      <PasswordInput
         v-model="confirmPassword"
-        :type="showPassword ? 'text' : 'password'"
-        class="input input-sm w-full"
+        class="w-full"
         autocomplete="new-password"
       />
     </div>
@@ -62,7 +44,7 @@
 <script setup lang="ts">
 import { showNotification } from '@/helper/notification'
 import { PASSWORD_ALREADY_SET_CODE, PASSWORD_TOO_SHORT_CODE, setupPassword } from '@/store/auth'
-import { EyeIcon, EyeSlashIcon } from '@heroicons/vue/24/outline'
+import PasswordInput from '@/components/common/PasswordInput.vue'
 import { ref } from 'vue'
 
 // The standalone /setup route's form (SetupPasswordPage.vue, forced by the router guard
@@ -77,7 +59,6 @@ const MIN_PASSWORD_LENGTH = 4
 
 const newPassword = ref('')
 const confirmPassword = ref('')
-const showPassword = ref(false)
 const loading = ref(false)
 
 const handleSubmit = async () => {

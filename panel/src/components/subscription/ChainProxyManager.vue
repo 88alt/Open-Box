@@ -223,12 +223,11 @@
                 class="input input-sm w-full font-mono"
                 :placeholder="$t('chainProxyUserLabel')"
               />
-              <input
+              <PasswordInput
                 v-model="fields.password"
-                type="text"
                 autocomplete="off"
                 spellcheck="false"
-                class="input input-sm w-full font-mono"
+                class="w-full font-mono"
                 :placeholder="$t('chainProxyPassLabel')"
               />
             </div>
@@ -350,6 +349,7 @@ import type { OpenboxChainLatencyResult, OpenboxChainProxy } from '@/api/openbox
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import LatencyPill from '@/components/common/LatencyPill.vue'
 import OutboundPicker from '@/components/common/OutboundPicker.vue'
+import PasswordInput from '@/components/common/PasswordInput.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import { showNotification } from '@/helper/notification'
 import { speedtestTimeout, speedtestUrl } from '@/store/settings'

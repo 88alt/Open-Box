@@ -13,10 +13,9 @@
 
       <div class="flex flex-col gap-1">
         <label class="text-sm">{{ $t('currentPassword') }}</label>
-        <input
+        <PasswordInput
           v-model="currentPassword"
-          type="password"
-          class="input input-sm w-full"
+          class="w-full"
           autocomplete="current-password"
           autofocus
         />
@@ -24,10 +23,9 @@
 
       <div class="flex flex-col gap-1">
         <label class="text-sm">{{ $t('newPassword') }}</label>
-        <input
+        <PasswordInput
           v-model="newPassword"
-          type="password"
-          class="input input-sm w-full"
+          class="w-full"
           autocomplete="new-password"
         />
         <p class="text-base-content/60 text-xs">{{ $t('passwordMinLengthHint') }}</p>
@@ -35,10 +33,9 @@
 
       <div class="flex flex-col gap-1">
         <label class="text-sm">{{ $t('confirmNewPassword') }}</label>
-        <input
+        <PasswordInput
           v-model="confirmPassword"
-          type="password"
-          class="input input-sm w-full"
+          class="w-full"
           autocomplete="new-password"
         />
       </div>
@@ -58,6 +55,7 @@
 <script setup lang="ts">
 import { showNotification } from '@/helper/notification'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
+import PasswordInput from '@/components/common/PasswordInput.vue'
 import {
   ACCESS_PASSWORD_INVALID_CODE,
   changePassword,

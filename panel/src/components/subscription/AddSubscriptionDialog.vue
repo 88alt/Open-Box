@@ -160,10 +160,9 @@
                 </label>
                 <label class="flex flex-col gap-1 text-xs font-medium">
                   {{ $t('subscriptionLoginPassword') }}
-                  <input
+                  <PasswordInput
                     v-model="loginForm.password"
-                    type="password"
-                    class="input input-sm w-full"
+                    class="w-full"
                     :placeholder="loginId ? $t('subscriptionLoginPasswordSaved') : ''"
                     :disabled="loggingIn"
                     autocomplete="current-password"
@@ -487,6 +486,7 @@ import type {
 import { createSubscription, fetchProfile, loginSubscription, previewSubscription, updateSubscription } from '@/api/openbox'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import ExpandTransition from '@/components/common/ExpandTransition.vue'
+import PasswordInput from '@/components/common/PasswordInput.vue'
 import { ChevronDownIcon, InformationCircleIcon, PlusIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { debounce } from 'lodash'
 import { showNotification } from '@/helper/notification'

@@ -13,10 +13,9 @@
 
       <div class="flex flex-col gap-2">
         <label class="text-sm">{{ $t('accessPassword') }}</label>
-        <input
+        <PasswordInput
           v-model="password"
-          type="password"
-          class="input input-sm w-full"
+          class="w-full"
           autofocus
         />
       </div>
@@ -33,6 +32,7 @@
 </template>
 
 <script setup lang="ts">
+import PasswordInput from '@/components/common/PasswordInput.vue'
 import { showNotification } from '@/helper/notification'
 import { ROUTE_NAME } from '@/constant'
 import router from '@/router'

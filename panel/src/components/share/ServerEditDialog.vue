@@ -120,10 +120,9 @@
         >
           <label class="text-xs font-medium">{{ $t('serverPasswordLabel') }}</label>
           <div class="join w-full">
-            <input
+            <PasswordInput
               v-model="form.password"
-              type="text"
-              class="input input-sm join-item w-full font-mono"
+              class="join-item w-full font-mono"
               :placeholder="form.protocol === 'mixed' ? $t('serverAuthOptional') : ''"
               autocomplete="off"
             />
@@ -144,10 +143,9 @@
         >
           <label class="text-xs font-medium">{{ $t('serverObfsLabel') }}</label>
           <div class="join w-full">
-            <input
+            <PasswordInput
               v-model="form.obfs"
-              type="text"
-              class="input input-sm join-item w-full font-mono"
+              class="join-item w-full font-mono"
               :placeholder="$t('serverObfsPlaceholder')"
               autocomplete="off"
             />
@@ -253,6 +251,7 @@
 import { checkServerPort, type OpenboxServer, type OpenboxServerProtocol } from '@/api/openbox'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import OutboundPicker, { type OutboundPickerOptions } from '@/components/common/OutboundPicker.vue'
+import PasswordInput from '@/components/common/PasswordInput.vue'
 import { copyText as copyToClipboard } from '@/helper/clipboard'
 import { showNotification } from '@/helper/notification'
 import {
