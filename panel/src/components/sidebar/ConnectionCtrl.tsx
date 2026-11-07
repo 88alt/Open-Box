@@ -3,6 +3,7 @@ import { normalizeRuleTarget } from '@/store/rules'
 import { useCtrlsBar } from '@/composables/useCtrlsBar'
 import { SORT_DIRECTION, SORT_TYPE } from '@/constant'
 import { useTooltip } from '@/helper/tooltip'
+import { isMiddleScreen } from '@/helper/utils'
 import {
   connectionFilter,
   connections,
@@ -57,14 +58,27 @@ export default defineComponent({
     const { isLargeCtrlsBar } = useCtrlsBar(useConnectionCard.value ? 860 : 720)
 
     return () => {
+      // 窄屏用「排序」,宽屏用「排序方式」;窄屏的紧凑样式与上游 v0.1.413 一致
+      const sortLabel = t(isMiddleScreen.value ? 'connectionSort' : 'sortBy')
       const sortForCards = (
         <div
-          class={`flex items-center gap-1 text-sm ${isLargeCtrlsBar.value ? 'w-auto' : 'w-full'}`}
+          class={[
+            'flex items-center gap-1 text-sm',
+            isMiddleScreen.value
+              ? 'min-w-0 flex-1 max-[360px]:gap-0.5 max-[360px]:text-xs'
+              : isLargeCtrlsBar.value
+                ? 'w-auto'
+                : 'w-full',
+          ]}
         >
-          <span class="shrink-0">{t('sortBy')}</span>
-          <div class={`join flex-1 ${isLargeCtrlsBar.value ? 'min-w-46' : ''}`}>
+          <span class="shrink-0">{sortLabel}</span>
+          <div class={`join min-w-0 flex-1 ${isLargeCtrlsBar.value ? 'min-w-46' : ''}`}>
             <select
-              class="join-item select select-sm flex-1"
+              class={[
+                'join-item select select-sm min-w-0 flex-1',
+                isMiddleScreen.value && 'px-2 max-[360px]:ps-1 max-[360px]:pe-5 max-[360px]:text-xs!',
+              ]}
+              aria-label={sortLabel}
               v-model={connectionSortType.value}
             >
               {(Object.values(SORT_TYPE) as string[]).map((opt) => (
@@ -77,7 +91,7 @@ export default defineComponent({
               ))}
             </select>
             <button
-              class="btn join-item btn-sm"
+              class={['btn join-item btn-sm shrink-0', isMiddleScreen.value && 'btn-square']}
               onClick={() => {
                 connectionSortDirection.value =
                   connectionSortDirection.value === SORT_DIRECTION.ASC

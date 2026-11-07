@@ -1,9 +1,9 @@
-// 文案对齐上游 v0.1.391(中 / 繁 / 英),并入原先拆在 dns-filter / dns-page / client-app-page 等文件里的补充文案。
+// 文案对齐上游 v0.1.413(中 / 繁 / 英),并入原先拆在 dns-filter / dns-page / client-app-page 等文件里的补充文案。
 // 键名与键值和上游 panel/dist 逐键一致,不另设 main 自有键。
 import type { LANG_MESSAGE } from './en'
 
 const zhTW: LANG_MESSAGE = {
-  // ===== 上游 v0.1.391 文案(取自上游 panel/dist,逐键与上游一致)=====
+  // ===== 上游 v0.1.413 文案(取自上游 panel/dist,逐键与上游一致)=====
   cfTitle: '內容過濾',
   cfDescription:
     '在路由器管理規則與腳本快照，同步到 iOS 後在手機執行。離線仍可使用；HTTPS 過濾需在手機安裝並信任憑證。',
@@ -285,7 +285,7 @@ const zhTW: LANG_MESSAGE = {
   clientConfigSyncDisabled: '本地分流同步已關閉,要同步時再開啟',
   clientConfigSyncOffHint: '同步已關閉:App 掃碼匯入、同步前,先點電源圖示開啟。',
   clientConfigPowerFailed: '開關本地分流同步失敗:{message}',
-  clientConfigScanHint: '用 Open-Box App 掃碼匯入,或把連結複製到手機上匯入;匯入時輸入下面的配對碼。',
+  clientConfigScanHint: '用 Open-Box App 掃碼或複製連結匯入，並輸入下方的配對碼。請連接路由器所在的區域網路，或確認可透過網際網路存取路由器面板。',
   clientConfigNoLan:
     '沒讀到路由器的區域網路位址:請用公網位址(網域)開啟面板再掃碼,不然 App 連不上面板。',
   clientConfigExportFile: '匯出設定檔',
@@ -305,7 +305,7 @@ const zhTW: LANG_MESSAGE = {
   pairCodeApplyFailed: '配對碼已更換為 {code},但新密碼沒能生效:{message}',
   pairCodeLoadFailed: '沒讀到配對碼:{message}',
   trafficRetentionDescription:
-    '每日流量記錄在路由器上存多久,超期每天清理一次;按小時的明細只留最近 7 天。超過 30 天的日子只保留當天流量最大的 300 個存取目標,其餘合併成一行「其他」(總量、終端、節點不受影響)。',
+    '每日流量記錄和節點頻寬檢測歷史在路由器上存多久,超期每天清理一次;按小時的明細只留最近 7 天。超過 30 天的日子只保留當天流量最大的 300 個存取目標,其餘合併成一行「其他」(總量、終端、節點不受影響)。',
   trafficOtherMerged: '其他(較早的資料已合併)',
   trafficRetentionUnit: '個月',
   trafficRetentionRange: '1 ~ 36,預設 3',
@@ -408,7 +408,7 @@ const zhTW: LANG_MESSAGE = {
   siteLatencyVia: '經 {chain}',
   siteLatencyAutoTest: '開啟概覽自動測速',
   siteLatencyAutoTestHint:
-    '開啟概覽頁時自動測一遍這四個站點的延時。和面板設定裡的「自動檢查連線」是同一個開關。',
+    '開啟概覽頁時自動測一遍這四個站點的延時。和常用設定裡的「自動檢查連線」是同一個開關。',
   siteLatencyTestAll: '重測這四個站點',
   testSitesSettings: '測試站點',
   testSitesTip:
@@ -450,7 +450,6 @@ const zhTW: LANG_MESSAGE = {
   nodeInfoTrust: '信任評分',
   bandwidthPoorDesc: '頻寬不足（紅色）',
   bandwidthAdequateDesc: '頻寬一般（橙黃色）',
-  bandwidthExcellentDesc: '頻寬優秀（綠色）',
   nodeInfoCoffeeReport: 'Net.Coffee 完整報告',
   qualityNodeLatency: '節點延遲',
   qualityEntry: '入口',
@@ -1905,7 +1904,7 @@ const zhTW: LANG_MESSAGE = {
   trafficDrillUnrecorded: '未記錄構成',
   trafficDrillUnrecordedHint:
     '這部分流量記錄時還沒有交叉明細（舊版本記下的）,或沒取樣到;只有當天總量,拆不出來',
-  trafficOthersCount: '其他（{n} 條）',
+  trafficOthersCount: '其它（{n}條）',
   trafficExpandRest: '展開',
   trafficCollapseRest: '收起',
   trafficName: '名稱',
@@ -1966,7 +1965,7 @@ const zhTW: LANG_MESSAGE = {
   serverPortCheckFailed: '連接埠檢測失敗:{message}',
   shareCodeButton: '掃碼',
   shareCodeTitle: '掃碼連線「{name}」',
-  shareCodeAppHint: '用新版 Open-Box App 掃:依本頁「地區分流」分流。匯入時需能存取路由器面板,輸入配對碼取得設定。',
+  shareCodeAppHint: '用新版 Open-Box App 掃碼，輸入配對碼後依「地區分流」使用。請連接路由器所在的區域網路，或確認可透過網際網路存取路由器面板。',
   shareCodeLinkHint: '一般節點連結,給其他客戶端用。',
   shareCodeLocalAddress: '連線位址 {address} 只在家裡能用,在外面連不上;要填公網 IP 或網域。',
   shareCodeNoLan:
@@ -2245,36 +2244,6 @@ const zhTW: LANG_MESSAGE = {
   qualityTitle: '節點品質',
 
   // ===== 对齐上游 catch-up v0.1.412 缺失键 =====
-  backupImportedNeedRestart: '匯入成功,重啟核心生效',
-  clientRouteMacsLabel: 'MAC 位址',
-  dfPending: '待重啟',
-  dfApply: '立即重新啟動核心',
-  dfApplyHint: '有變更已儲存但尚未生效,重新啟動核心後生效。',
-  dfApplying: '正在重新啟動核心…',
-  failoverThreshold: '連續失敗輪數',
-  failoverThresholdHint: '目前頁籤連續這麼多輪確認沒有任何可用節點,才轉移到下一個候選;一輪沒測完、探測服務報錯都不算失敗',
-  failoverUnitRound: '輪',
-  ipv6OffWarning: '關閉中:DNS 只解析 IPv4,IPv6 對外流量直接封鎖——它繞不過通道。',
-  ipv6OnNote: '開啟後,你的裝置可以和 IPv4 一樣使用 IPv6,同樣遵循分流頁的規則。',
-  nodeDirectOffNote: '關閉中:這些位址和普通流量一樣按站點集分流——節點伺服器可能被路由進代理。',
-  nodeDirectOnNote: '開啟中:這些位址走直連、用本地解析;重啟核心後生效。',
-  obUpdateTitle: 'Open-Box 更新',
-  proxyGroupColumns: '代理組分欄',
-  routeDnsRecords: '解析記錄',
-  routeDnsRuleDetail: '規則詳情',
-  routeEntryBypassConfigured: '入口旁路已設定:{sets}',
-  routeEntryInboundDiff: '入站差異',
-  routeEntryReason: '原因',
-  routeExitDetails: '連線詳情',
-  routeRuleDetail: '規則詳情',
-  routeStartSourceTitle: '測試來源',
-  routeTermEvidence: '轉發證據',
-  ruleLookupNoMatch: '沒有規則命中,走兜底站點集',
-  splitOverviewPage: '分離概覽頁',
-  subscriptionLatencyFailed: '失敗',
-  subscriptionRefreshedNeedRestart: '重新整理成功,重啟核心生效',
-  subscriptionSavedNeedRestart: '儲存成功,重啟核心生效',
-  testFailedTip: '{name}\n測速超時',
 
 }
 

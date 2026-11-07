@@ -1,9 +1,9 @@
-// 文案对齐上游 v0.1.391(中 / 繁 / 英),并入原先拆在 dns-filter / dns-page / client-app-page 等文件里的补充文案。
+// 文案对齐上游 v0.1.413(中 / 繁 / 英),并入原先拆在 dns-filter / dns-page / client-app-page 等文件里的补充文案。
 // 键名与键值和上游 panel/dist 逐键一致,不另设 main 自有键。
 import type { LANG_MESSAGE } from './en'
 
 const zh: LANG_MESSAGE = {
-  // ===== 上游 v0.1.391 文案(取自上游 panel/dist,逐键与上游一致)=====
+  // ===== 上游 v0.1.413 文案(取自上游 panel/dist,逐键与上游一致)=====
   cfTitle: '内容过滤',
   cfDescription:
     '在路由器管理规则和脚本快照，同步到 iOS 后在手机执行。手机离线仍可使用，开启 HTTPS 过滤需在手机安装并信任证书。',
@@ -285,7 +285,7 @@ const zh: LANG_MESSAGE = {
   clientConfigSyncDisabled: '本地分流同步已关闭,要同步时再打开',
   clientConfigSyncOffHint: '同步已关闭:App 扫码导入、同步前,先点电源图标打开。',
   clientConfigPowerFailed: '开关本地分流同步失败:{message}',
-  clientConfigScanHint: '用 Open-Box App 扫码导入,或把链接复制到手机上导入;导入时输入下面的配对码。',
+  clientConfigScanHint: '用 Open-Box App 扫码或复制链接导入，并输入下方的配对码。请连接路由器所在的局域网，或确认可通过公网访问路由器面板。',
   clientConfigNoLan:
     '没读到路由器的局域网地址:请用公网地址(域名)打开面板再扫码,不然 App 连不上面板。',
   clientConfigExportFile: '导出配置文件',
@@ -304,7 +304,7 @@ const zh: LANG_MESSAGE = {
   pairCodeApplyFailed: '配对码已更换为 {code},但新密码没能生效:{message}',
   pairCodeLoadFailed: '没读到配对码:{message}',
   trafficRetentionDescription:
-    '每日流量记录在路由器上存多久,超期每天清理一次;按小时的明细只留最近 7 天。超过 30 天的日子只保留当天流量最大的 300 个访问目标,其余合并成一行「其他」(总量、终端、节点不受影响)。',
+    '每日流量记录和节点带宽检测历史在路由器上存多久,超期每天清理一次;按小时的明细只留最近 7 天。超过 30 天的日子只保留当天流量最大的 300 个访问目标,其余合并成一行「其他」(总量、终端、节点不受影响)。',
   trafficOtherMerged: '其他(较早的数据已合并)',
   trafficRetentionUnit: '个月',
   trafficRetentionRange: '1 ~ 36,默认 3',
@@ -407,7 +407,7 @@ const zh: LANG_MESSAGE = {
   siteLatencyVia: '经 {chain}',
   siteLatencyAutoTest: '打开概览自动测速',
   siteLatencyAutoTestHint:
-    '打开概览页时自动测一遍这四个站点的延时。和面板设置里的「自动检查连接」是同一个开关。',
+    '打开概览页时自动测一遍这四个站点的延时。和常用设置里的「自动检查连接」是同一个开关。',
   siteLatencyTestAll: '重测这四个站点',
   testSitesSettings: '测试站点',
   testSitesTip:
@@ -449,7 +449,6 @@ const zh: LANG_MESSAGE = {
   nodeInfoTrust: '信任评分',
   bandwidthPoorDesc: '带宽不够（红色）',
   bandwidthAdequateDesc: '带宽一般（橙黄色）',
-  bandwidthExcellentDesc: '带宽优秀（绿色）',
   nodeInfoCoffeeReport: 'Net.Coffee 完整报告',
   qualityNodeLatency: '节点延时',
   qualityEntry: '入口',
@@ -1904,7 +1903,7 @@ const zh: LANG_MESSAGE = {
   trafficDrillUnrecorded: '未记录构成',
   trafficDrillUnrecordedHint:
     '这部分流量记录时还没有交叉明细（旧版本记下的）,或没采样到;只有当天总量,拆不出来',
-  trafficOthersCount: '其他（{n} 条）',
+  trafficOthersCount: '其它（{n}条）',
   trafficExpandRest: '展开',
   trafficCollapseRest: '收起',
   trafficName: '名称',
@@ -1965,7 +1964,7 @@ const zh: LANG_MESSAGE = {
   serverPortCheckFailed: '端口检测失败:{message}',
   shareCodeButton: '扫码',
   shareCodeTitle: '扫码连接「{name}」',
-  shareCodeAppHint: '用新版 Open-Box App 扫:按本页「地区分流」分流。导入时需能访问路由器面板,输入配对码获取配置。',
+  shareCodeAppHint: '用新版 Open-Box App 扫码，输入配对码后按「地区分流」使用。请连接路由器所在的局域网，或确认可通过公网访问路由器面板。',
   shareCodeLinkHint: '普通节点链接,给其他客户端用。',
   shareCodeLocalAddress: '连接地址 {address} 只在家里能用,在外面连不上;要填公网 IP 或域名。',
   shareCodeNoLan:
@@ -2244,36 +2243,6 @@ const zh: LANG_MESSAGE = {
   qualityTitle: '节点质量',
 
   // ===== 对齐上游 catch-up v0.1.412 缺失键 =====
-  backupImportedNeedRestart: '导入成功,重启内核生效',
-  clientRouteMacsLabel: 'MAC 地址',
-  dfPending: '待重启',
-  dfApply: '立即重启内核',
-  dfApplyHint: '有改动已保存但还没生效,重启内核后生效。',
-  dfApplying: '正在重启内核…',
-  failoverThreshold: '连续失败轮数',
-  failoverThresholdHint: '当前页签连续这么多轮确认没有任何可用节点,才转移到下一个候选;一轮没测完、探测服务报错都不算失败',
-  failoverUnitRound: '轮',
-  ipv6OffWarning: '关闭中:DNS 只解析 IPv4,IPv6 出站流量直接拦掉——它绕不开隧道。',
-  ipv6OnNote: '开启后,你的设备可以和 IPv4 一样使用 IPv6,同样遵循分流页的规则。',
-  nodeDirectOffNote: '关闭中:这些地址和普通流量一样按站点集分流——节点服务器可能被路由进代理。',
-  nodeDirectOnNote: '开启中:这些地址走直连、用本地解析;重启内核后生效。',
-  obUpdateTitle: 'Open-Box 更新',
-  proxyGroupColumns: '代理组分列',
-  routeDnsRecords: '解析记录',
-  routeDnsRuleDetail: '规则详情',
-  routeEntryBypassConfigured: '入口旁路已配置:{sets}',
-  routeEntryInboundDiff: '入站差异',
-  routeEntryReason: '原因',
-  routeExitDetails: '连接详情',
-  routeRuleDetail: '规则详情',
-  routeStartSourceTitle: '测试来源',
-  routeTermEvidence: '转发证据',
-  ruleLookupNoMatch: '没有规则命中,走兜底站点集',
-  splitOverviewPage: '分离概览页',
-  subscriptionLatencyFailed: '失败',
-  subscriptionRefreshedNeedRestart: '刷新成功,重启内核生效',
-  subscriptionSavedNeedRestart: '保存成功,重启内核生效',
-  testFailedTip: '{name}\n测速超时',
 
 }
 
