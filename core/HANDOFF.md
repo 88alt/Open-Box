@@ -60,7 +60,7 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
 [x] idna / urlx UTS46 轻量映射表（内置忽略字符 + 兼容映射 + 简易双向；覆盖 gen-urlx --wide 语料主要条目）
 [~] 真机验证:真实路由器上经后端调用 core、sing-box 启动成功(由维护者做,记录在 backend/STATUS.md 的真机条目)
 [x] clientBindings：按 IPv6 绑定扩展终端分流来源（NormalizeClientRoutes + ExpandSourcesWithBindings）
-[~] 整理测试数据来源(全部叶子模块已换自写向量:ipx、dnsrewrite、servers、directhosts、dnsfilter、clientroutes;routing 里 dnsupstream 已换,flip、rulesets 等其余 routing / groups / config 金标准待换)
+[~] 整理测试数据来源(全部叶子模块已换自写向量:ipx、dnsrewrite、servers、directhosts、dnsfilter、clientroutes;routing 里 dnsupstream、flip、rulesets 已换,其余 routing / groups / config 金标准待换)
 [ ] 第四节里其余后续工作
 
 
@@ -80,8 +80,8 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
    - [x] clientroutes: `internal/clientroutes/normalize_test.go` + `sources_test.go` 自写向量(NormalizeCidr / NormalizeMac 写法边界、NormalizeClientRoutes 的丢弃规则与 JSON 键序、bypass 出口的取法、老档案推算 mac、绑定表两种键名、SourceMatch、IsDirect / IsProxy、TerminalDNSRedirected 全部分支、Bypass / Admit 来源收集、AdmitDNSDirect 缺省值、GuardTerminalRules 的拆分与不写穿入参);变异测试 89 个抓到 82 个,存活 7 个里 4 个是等价变异(空变异、空串本来就不是 IP、前缀长度正则已保证非负、非对象取不到出口本来就被丢),另外 3 个(出口为空且两个 tag 都有值、invert 归条件那份、不写穿入参切片)原本漏网,已补手写用例并重跑抓到;bindings.go 沿用已有的 bindings_test.go;leaf_golden 仍作回归。
    - [x] routing/dnsupstream: `internal/routing/dnsupstream_test.go` 自写向量(isValidDNSUpstream 的 IPv4 / IPv6 / 非法写法边界、normalizeDNSUpstream 的协议头 / 方括号 / 端口账号路径处理与方括号内空白原样带出、协议与端口校验、dnsRegionOf 与 wan 退回地区默认、wanServer 取第一个真值、serverKey 不撞键、upstreamOf 的 wan 固定 udp 53 与 invalid 退回、directUpstream / proxyUpstream 各自的键与默认协议、extraUpstreams 先截前 3 个再筛 / 跳过非法 / 与主上游及彼此去重 / wan 备用、dnsServerEntry 的 server_port 与 detour);变异测试 103 个抓到 94,存活 9 个里 1 个是空变异、8 个是等价变异(非字符串本来就取空串、空串本来就不合法、wan 本来就折不出 IP、URL 解析失败时主机本来就是空串、非数组与空切片遍历结果相同、假值取不到 server、非法地址已被前置判断挡掉所以 invalid 实参用不到);方括号只去一层、协议头必须带 `//`、serverKey 前缀防撞键这三处原本漏网,已补手写用例并重跑抓到;dns_golden 仍作回归。
    - [x] routing/flip: `internal/routing/flip_test.go` 自写向量(开关 / 旁路 / 动态集 tag 常量与三个前缀判断互不串、FlipFlagTag 取 id 的 SHA-256 前 12 位(哈希前缀用 Python hashlib 独立算,id 优先于名字、无 id 退到名字、不去空白、只出十六进制)、FlipFlags 保插入顺序且同名只改值不换位、FlipFlagMap 只看生效站点集且兜底在最后与同名覆盖、开关文件两种内容、旁路占位地址与占位规则集源码、占位 .srs 46 字节与官方 sing-box 1.13.14 `rule-set compile` 编出来的逐字节相同、andRule 丢空子规则 / rules 为 [] / 动作后写覆盖 / 不改入参、FlipFlagStates 直连 OFF 其余 ON 且不在 classes 里按 OFF、FlipBypassCandidates 只收 geoip- 前缀并去重保序);变异测试 58 个抓到 56,存活 2 个是空变异和等价变异(tags 为 nil 时 names 本来就是空,置空不影响);dns_golden 里的 flip 条目仍作回归。
-   - [ ] routing/rulesets(下一步,每块一个补丁)。
-   - [ ] routing 其余零件(dns、route、plans、entry、migrate、fingerprint 等)/ groups / config 金标准待换。
+   - [x] routing/rulesets: `internal/routing/rulesets_test.go` 自写向量(parseRuleLists 只收真值项且按 JS 真假判断、routeRulesetTags 按形状引用域名 / IP 两份且两份都没有时一份也不引用、dnsRulesetTags 排除 geoip-* 与只有 IP 那份的链接、policyOutboundOptions 按启用状态过滤并回落直连(含改名后与直连被停用的情形)、splitRuleSetConditions 的触发条件(只看五种目的条件的键在不在、rule_set 取 JS 真值)与两条规则带的键、不改入参、DomainPresentRegex 的正反例与 noDomainGuard、isIPRuleSetTag、policyRouteMatches 把站点集条件分成看域名 / 看 IP 两份并保序、空的一边是 nil);变异测试 85 个抓到 81,存活 4 个是空变异和 3 个等价变异(非对象时空 map 遍历结果相同、空成员表本来就不会被返回、没有 rule_set 键时取到 nil 本来就是假值);dns_golden / route_golden 仍作回归。
+   - [ ] routing 其余零件(urlhost、dnsnames、geo、export 等小的先做,再到 dns、route、plans、entry、migrate、fingerprint、model)/ groups / config 金标准待换。
 3. 跟着 sing-box 更新(见第五节):sing-box 发新版、配置格式变化时,更新 core 输出和对应测试。backend 的工作流里固定了一个 sing-box 版本(现为 1.14.4),升级时一起改。
 4. 授权三个方法:新后端不调用,先保留,等后端稳定后再决定是否删除。
 5. core/UPSTREAM_VERSION(现为 v0.1.354):原本记录"最后对齐的上游版本"。按第五节的规则不再按上游版本推进,默认不再改动,处理方式由维护者定。
