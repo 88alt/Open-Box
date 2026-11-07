@@ -448,7 +448,7 @@ const zh: LANG_MESSAGE = {
   nodeTipBandwidth: '带宽检测',
   nodeInfoTrust: '信任评分',
   bandwidthPoorDesc: '带宽不够（红色）',
-  bandwidthAdequateDesc: '带宽一般（橙色）',
+  bandwidthAdequateDesc: '带宽一般（橙黄色）',
   bandwidthExcellentDesc: '带宽优秀（绿色）',
   nodeInfoCoffeeReport: 'Net.Coffee 完整报告',
   qualityNodeLatency: '节点延时',

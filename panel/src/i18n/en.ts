@@ -473,7 +473,7 @@ const en = {
   nodeTipBandwidth: 'Bandwidth',
   nodeInfoTrust: 'Trust score',
   bandwidthPoorDesc: 'Insufficient bandwidth (red)',
-  bandwidthAdequateDesc: 'Moderate bandwidth (orange)',
+  bandwidthAdequateDesc: 'Moderate bandwidth (amber)',
   bandwidthExcellentDesc: 'Excellent bandwidth (green)',
   nodeInfoCoffeeReport: 'Net.Coffee report',
   qualityNodeLatency: 'Node latency',

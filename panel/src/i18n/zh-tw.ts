@@ -449,7 +449,7 @@ const zhTW: LANG_MESSAGE = {
   nodeTipBandwidth: '頻寬檢測',
   nodeInfoTrust: '信任評分',
   bandwidthPoorDesc: '頻寬不足（紅色）',
-  bandwidthAdequateDesc: '頻寬一般（橙色）',
+  bandwidthAdequateDesc: '頻寬一般（橙黃色）',
   bandwidthExcellentDesc: '頻寬優秀（綠色）',
   nodeInfoCoffeeReport: 'Net.Coffee 完整報告',
   qualityNodeLatency: '節點延遲',
