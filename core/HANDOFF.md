@@ -60,7 +60,7 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
 [x] idna / urlx UTS46 轻量映射表（内置忽略字符 + 兼容映射 + 简易双向；覆盖 gen-urlx --wide 语料主要条目）
 [~] 真机验证:真实路由器上经后端调用 core、sing-box 启动成功(由维护者做,记录在 backend/STATUS.md 的真机条目)
 [x] clientBindings：按 IPv6 绑定扩展终端分流来源（NormalizeClientRoutes + ExpandSourcesWithBindings）
-[~] 整理测试数据来源(ipx、dnsrewrite 已换自写向量;其余模块待换)
+[~] 整理测试数据来源(ipx、dnsrewrite、servers 已换自写向量;其余模块待换)
 [ ] 第四节里其余后续工作
 
 
@@ -74,7 +74,8 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
    做法:按方法逐个来,新向量由自己设计的输入加人工核对过的期望输出组成;配置类输出再用公开发布的 sing-box 跑 check。每换一个模块,变异测试照旧做。
    - [x] ipx: `internal/ipx/ipx_test.go` 自写向量(IsIPv4/IsIPv6/IsIP/CidrsOverlap/CidrContains/SubtractCidrs);leaf_golden 仍作回归,不再作为唯一来源。
    - [x] dnsrewrite: `internal/dnsrewrite/dnsrewrite_test.go` 自写向量(NormalizeDomain 标签/长度边界、NormalizeDnsRewrite 默认值与开关、规则归一化、备注 200 单位截断、RewriteDnsRules、RewriteDnsServer);变异测试 28 个抓到 24 个,存活 4 个是等价变异(空变异、输入已先转小写所以大写分支到不了、`*` 本来就过不了标签校验、数组当对象取键也是缺省);leaf_golden 仍作回归。
-   - [ ] 其余叶子(servers、directhosts、dnsfilter、clientroutes)与 routing/groups/config 金标准待换。
+   - [x] servers: `internal/servers/servers_test.go` 自写向量(shadowsocks / vless / tuic / hysteria2 / mixed 五种入站的字段、TLS 开关与证书路径、obfs、mixed 认证与空密码、启用过滤与顺序、缺端口);变异测试 27 个抓到 24 个,存活 3 个是等价变异(空变异、空项或假值不跳过也会因没有 protocol 被 default 丢弃、非数组返回 nil 与空切片遍历结果相同);leaf_golden 仍作回归。
+   - [ ] 其余叶子(directhosts、dnsfilter、clientroutes)与 routing/groups/config 金标准待换。
 3. 跟着 sing-box 更新(见第五节):sing-box 发新版、配置格式变化时,更新 core 输出和对应测试。backend 的工作流里固定了一个 sing-box 版本(现为 1.14.4),升级时一起改。
 4. 授权三个方法:新后端不调用,先保留,等后端稳定后再决定是否删除。
 5. core/UPSTREAM_VERSION(现为 v0.1.354):原本记录"最后对齐的上游版本"。按第五节的规则不再按上游版本推进,默认不再改动,处理方式由维护者定。
