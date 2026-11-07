@@ -1,6 +1,6 @@
 <template>
   <!-- 测试站点:概览「站点延迟」按这里的站点测速。图标 / 名称 / 地址都能改,右上角恢复默认的四个。 -->
-  <div class="settings-section relative flex flex-col gap-2 app-card-inset text-sm">
+  <div class="settings-section relative flex flex-col app-card-gap app-card-inset text-sm">
     <div class="settings-title">
       {{ $t('testSitesSettings') }}
       <QuestionMarkCircleIcon

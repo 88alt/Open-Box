@@ -758,10 +758,10 @@ div::-webkit-scrollbar-thumb:hover {
 }
 
 .settings-title {
-  @apply flex items-center gap-2 pb-2 text-base font-semibold;
+  @apply flex items-center gap-2 text-base font-semibold;
 }
 .settings-grid {
-  @apply grid max-w-7xl grid-cols-1 gap-x-4 gap-y-1 lg:grid-cols-2 lg:gap-x-8 xl:gap-x-12 2xl:gap-x-16;
+  @apply grid max-w-7xl grid-cols-1 gap-x-4 gap-y-2 lg:grid-cols-2 lg:gap-x-8 xl:gap-x-12 2xl:gap-x-16;
 }
 .sidebar-collapsed .settings-grid {
   @apply md:grid-cols-2;
@@ -910,7 +910,7 @@ div::-webkit-scrollbar-thumb:hover {
 }
 
 .setting-item {
-  @apply border-base-300/80 flex h-10 items-center gap-2 border-b;
+  @apply border-base-300/80 flex items-center gap-2 border-b pb-1;
   .setting-item-label {
     @apply flex-1 text-sm font-medium;
     svg {

@@ -1,5 +1,5 @@
 <template>
-  <div class="settings-section flex flex-col gap-2 app-card-inset text-sm">
+  <div class="settings-section flex flex-col app-card-gap app-card-inset text-sm">
     <template v-if="hasVisibleLatencyItems">
       <div class="settings-title">
         {{ $t('latencyThresholds') }}
