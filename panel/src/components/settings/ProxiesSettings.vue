@@ -60,16 +60,6 @@
             v-model="IPv6test"
           />
         </div>
-        <div class="setting-item">
-          <div class="setting-item-label">
-            {{ $t('hideUnavailableProxies') }}
-          </div>
-          <input
-            class="toggle"
-            type="checkbox"
-            v-model="hideUnavailableProxies"
-          />
-        </div>
       </div>
     </template>
     <!-- 带宽着色阈值:不足(红)/一般(橙)可改,高于两者为绿 -->
@@ -151,56 +141,6 @@
         </div>
       </div>
     </template>
-    <!-- 布局:代理组分几列(GitHub #10) -->
-    <template v-if="isVisibleProxyGroupColumnsPC || isVisibleProxyGroupColumnsMobile">
-      <div class="settings-title">
-        {{ $t('proxyGroupLayout') }}
-      </div>
-      <div class="settings-grid">
-        <div
-          v-if="isVisibleProxyGroupColumnsPC"
-          class="setting-item"
-        >
-          <div class="setting-item-label">
-            {{ $t('proxyGroupColumnsPC') }}
-          </div>
-          <select
-            class="select select-sm w-28"
-            :aria-label="$t('proxyGroupColumnsPC')"
-            v-model.number="proxyGroupColumnsPC"
-          >
-            <option
-              v-for="n in [1, 2, 3]"
-              :key="n"
-              :value="n"
-            >
-              {{ $t(`proxyGroupColumns${n}`) }}
-            </option>
-          </select>
-        </div>
-        <div
-          v-if="isVisibleProxyGroupColumnsMobile"
-          class="setting-item"
-        >
-          <div class="setting-item-label">
-            {{ $t('proxyGroupColumnsMobile') }}
-          </div>
-          <select
-            class="select select-sm w-28"
-            :aria-label="$t('proxyGroupColumnsMobile')"
-            v-model.number="proxyGroupColumnsMobile"
-          >
-            <option
-              v-for="n in [1, 2]"
-              :key="n"
-              :value="n"
-            >
-              {{ $t(`proxyGroupColumns${n}`) }}
-            </option>
-          </select>
-        </div>
-      </div>
-    </template>
   </div>
 </template>
 
@@ -211,12 +151,9 @@ import {
   bandwidthAdequateThreshold,
   cpuLoadThresholds,
   bandwidthPoorThreshold,
-  hideUnavailableProxies,
   IPv6test,
   lowLatency,
   mediumLatency,
-  proxyGroupColumnsMobile,
-  proxyGroupColumnsPC,
   setCpuLoadThreshold,
   speedtestTimeout,
 } from '@/store/settings'
@@ -229,8 +166,6 @@ const isVisibleMediumLatency = useIsSettingVisible(k.mediumLatencyDesc)
 const isVisibleIpv6Test = useIsSettingVisible(k.ipv6Test)
 const isVisibleCpuLoadLow = useIsSettingVisible(k.cpuLoadLowDesc)
 const isVisibleCpuLoadMedium = useIsSettingVisible(k.cpuLoadMediumDesc)
-const isVisibleProxyGroupColumnsPC = useIsSettingVisible(k.proxyGroupColumnsPC)
-const isVisibleProxyGroupColumnsMobile = useIsSettingVisible(k.proxyGroupColumnsMobile)
 
 // 输入框改完后按合法范围写回(0 ≤ 低 < 高 ≤ 100),再把框里的值同步成实际存下的值
 const onCpuThresholdChange = (index: 0 | 1, event: Event) => {

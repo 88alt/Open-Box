@@ -829,7 +829,7 @@ const en = {
   geoUpdateEvery: 'every',
   geoUpdateDays: '{days} days',
   geoUpdateHours: '{hours} hours',
-  zashboardSettings: 'Dashboard Settings',
+  zashboardSettings: 'Common Settings',
   backendSettings: 'Backend Settings',
   generalSettings: 'General Settings',
   overviewCard: 'Overview Card',

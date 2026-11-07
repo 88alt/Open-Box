@@ -6,7 +6,7 @@
       @menu-click="handleTabClick"
     />
 
-    <!-- 「面板设置」仍是一列堆叠的卡片,分组与顺序由 settingsMenuOrder 决定、可在
+    <!-- 「常用设置」仍是一列堆叠的卡片,分组与顺序由 settingsMenuOrder 决定、可在
          齿轮里的可见性弹窗中调整——这部分和改版前一致,只是它们从"顶部页签各占一格"
          变成了同一个页签里的若干张卡片。 -->
     <div
@@ -99,7 +99,6 @@ const route = useRoute()
 // 订阅管理 / 节点管理 各是一个一级页签(同一个 SubscriptionsPage,靠 tab 属性切内容),
 // 不再套一层「订阅与节点」再分子页签。
 const tabItems: { key: SETTINGS_TAB; label: string; icon: Component }[] = [
-  { key: SETTINGS_TAB.panel, label: 'zashboardSettings', icon: HomeIcon },
   { key: SETTINGS_TAB.subscriptions, label: 'subscriptionsManageTab', icon: RssIcon },
   { key: SETTINGS_TAB.groups, label: 'groupsTab', icon: RectangleStackIcon },
   { key: SETTINGS_TAB.routing, label: 'routingSettings', icon: MapIcon },
@@ -108,6 +107,7 @@ const tabItems: { key: SETTINGS_TAB; label: string; icon: Component }[] = [
   { key: SETTINGS_TAB.share, label: 'shareNetworkTab', icon: ShareIcon },
   { key: SETTINGS_TAB.clientApp, label: 'clientAppsTab', icon: Squares2X2Icon },
   { key: SETTINGS_TAB.dns, label: 'dnsSettingsTab', icon: ServerStackIcon },
+  { key: SETTINGS_TAB.panel, label: 'zashboardSettings', icon: HomeIcon },
   { key: SETTINGS_TAB.kernel, label: 'kernelSettings', icon: CpuChipIcon },
 ]
 
@@ -153,9 +153,9 @@ const handleTabClick = (key: string) => {
   activeTab.value = key as SETTINGS_TAB
 }
 
-// 滚到面板设置里的某一组。代理页/连接页的「设置」入口是带 ?scrollTo= 跳过来的
+// 滚到常用设置里的某一组。代理页/连接页的「设置」入口是带 ?scrollTo= 跳过来的
 // (见 ProxiesCtrl / ConnectionCtrl),改版后那几组卡片不再各占一个页签,所以要先
-// 切回面板设置页签,等卡片渲染出来再滚——否则元素还不在 DOM 里,滚了个寂寞。
+// 切回常用设置页签,等卡片渲染出来再滚——否则元素还不在 DOM 里,滚了个寂寞。
 const scrollToSection = async (key: SETTINGS_MENU_KEY) => {
   activeTab.value = SETTINGS_TAB.panel
   await nextTick()

@@ -797,7 +797,7 @@ const zhTW: LANG_MESSAGE = {
   geoUpdateEvery: '每',
   geoUpdateDays: '{days} 天',
   geoUpdateHours: '{hours} 小時',
-  zashboardSettings: '面板設置',
+  zashboardSettings: '常用設定',
   backendSettings: '後端設置',
   generalSettings: '常規設置',
   overviewCard: '概覽卡片',

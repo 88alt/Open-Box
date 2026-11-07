@@ -99,18 +99,100 @@
         class="toggle"
       />
     </div>
+    <!-- 布局:代理组分几列(GitHub #10)、左侧栏显示、隐藏不可用节点。v0.1.413 把它们放在「通用」下面、同一张卡片里 -->
+    <template #layout>
+      <div class="settings-title">
+        {{ $t('proxyGroupLayout') }}
+      </div>
+      <div class="settings-grid">
+        <div
+          v-if="isVisibleProxyGroupColumnsPC"
+          class="setting-item"
+        >
+          <div class="setting-item-label">
+            {{ $t('proxyGroupColumnsPC') }}
+          </div>
+          <select
+            class="select select-sm w-28"
+            :aria-label="$t('proxyGroupColumnsPC')"
+            v-model.number="proxyGroupColumnsPC"
+          >
+            <option
+              v-for="n in [1, 2, 3]"
+              :key="n"
+              :value="n"
+            >
+              {{ $t(`proxyGroupColumns${n}`) }}
+            </option>
+          </select>
+        </div>
+        <div
+          v-if="isVisibleProxyGroupColumnsMobile"
+          class="setting-item"
+        >
+          <div class="setting-item-label">
+            {{ $t('proxyGroupColumnsMobile') }}
+          </div>
+          <select
+            class="select select-sm w-28"
+            :aria-label="$t('proxyGroupColumnsMobile')"
+            v-model.number="proxyGroupColumnsMobile"
+          >
+            <option
+              v-for="n in [1, 2]"
+              :key="n"
+              :value="n"
+            >
+              {{ $t(`proxyGroupColumns${n}`) }}
+            </option>
+          </select>
+        </div>
+        <div
+          v-if="isVisibleSidebarDisplay"
+          class="setting-item"
+        >
+          <div class="setting-item-label">
+            {{ $t('sidebarDisplay') }}
+          </div>
+          <select
+            class="select select-sm w-48 min-w-0"
+            v-model="sidebarDisplay"
+            :aria-label="$t('sidebarDisplay')"
+          >
+            <option value="off">{{ $t('sidebarDisplayOff') }}</option>
+            <option value="hardware">{{ $t('hardwareLoad') }}</option>
+            <option value="network">{{ $t('overviewCardTitle') }}</option>
+            <option value="both">{{ $t('hardwareLoad') }} + {{ $t('overviewCardTitle') }}</option>
+          </select>
+        </div>
+        <div class="setting-item">
+          <div class="setting-item-label">
+            {{ $t('hideUnavailableProxies') }}
+          </div>
+          <input
+            class="toggle"
+            type="checkbox"
+            v-model="hideUnavailableProxies"
+          />
+        </div>
+      </div>
+    </template>
   </ZashboardSettings>
 </template>
 
 <script setup lang="ts">
 import { useIsSettingVisible } from '@/composables/settings'
-import { GENERAL_ITEM_KEYS } from '@/config/settingsItems'
+import { GENERAL_ITEM_KEYS, PROXIES_ITEM_KEYS } from '@/config/settingsItems'
 import { IP_INFO_API } from '@/constant'
 import { useTooltip } from '@/helper/tooltip'
 import {
   disablePullToRefresh,
+  hideUnavailableProxies,
   IPInfoAPI,
+  proxyGroupColumnsMobile,
+  proxyGroupColumnsPC,
   scrollAnimationEffect,
+  sidebarDisplay,
   swipeInPages,
   swipeInTabs,
 } from '@/store/settings'
@@ -129,4 +211,10 @@ const isVisibleSwipeInPages = useIsSettingVisible(k.swipeInPages)
 const isVisibleSwipeInTabs = useIsSettingVisible(k.swipeInTabs)
 const isVisibleDisablePullToRefresh = useIsSettingVisible(k.disablePullToRefresh)
 const isChangePasswordDialogOpen = ref(false)
+
+// 布局小节:代理组列数 / 左侧栏显示有可见性开关,「隐藏不可用节点」一直显示
+const p = PROXIES_ITEM_KEYS
+const isVisibleProxyGroupColumnsPC = useIsSettingVisible(p.proxyGroupColumnsPC)
+const isVisibleProxyGroupColumnsMobile = useIsSettingVisible(p.proxyGroupColumnsMobile)
+const isVisibleSidebarDisplay = useIsSettingVisible(p.sidebarDisplay)
 </script>
