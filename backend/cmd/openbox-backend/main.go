@@ -46,6 +46,7 @@ import (
 	subpublicapi "github.com/timeflysoon/Open-Box/backend/internal/api/subpublic"
 	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
 	subsharesapi "github.com/timeflysoon/Open-Box/backend/internal/api/subshares"
+	sysresapi "github.com/timeflysoon/Open-Box/backend/internal/api/sysres"
 	terminaltestapi "github.com/timeflysoon/Open-Box/backend/internal/api/terminaltest"
 	timezoneapi "github.com/timeflysoon/Open-Box/backend/internal/api/timezone"
 	trafficapi "github.com/timeflysoon/Open-Box/backend/internal/api/traffic"
@@ -88,6 +89,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
 	"github.com/timeflysoon/Open-Box/backend/internal/subs"
 	"github.com/timeflysoon/Open-Box/backend/internal/subshare"
+	"github.com/timeflysoon/Open-Box/backend/internal/sysres"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
 	"github.com/timeflysoon/Open-Box/backend/internal/timezone"
 	"github.com/timeflysoon/Open-Box/backend/internal/traffic"
@@ -460,6 +462,23 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Checker: &update.Checker{MirrorPrefix: cfg.UpdateMirror},
 		Version: version, BuiltAt: builtAt,
 		KernelVersion: func(ctx context.Context) string { return singbox.ReadKernelVersion(ctx, cfg.SingBox).Version },
+	}})
+
+	// 系统资源(概览页「硬件负载」、侧边栏卡片、概览的「活跃终端」):CPU / 内存读 /proc,活跃终端取内核连接的来源 IP 并按邻居表的 MAC 合并
+	sysresapi.Register(srv.Mux(), sysresapi.Deps{Service: &sysres.Service{
+		Sources: func(ctx context.Context) ([]string, error) {
+			snap, err := singbox.KernelConnections(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
+			if err != nil {
+				return nil, err
+			}
+			out := make([]string, 0, len(snap.Conns))
+			for _, c := range snap.Conns {
+				out = append(out, c.Source)
+			}
+			return out, nil
+		},
+		Neighbors:  sysres.Neighbors("/proc", system.ExecRunner),
+		LocalAddrs: sysres.LocalAddrs,
 	}})
 
 	// 站点延迟(概览页):请求经内核的面板入站走一遍路由,从内核连接列表认出线路;历史单独存 site-latency-history,不和节点历史混

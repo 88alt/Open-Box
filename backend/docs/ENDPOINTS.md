@@ -448,6 +448,9 @@
 |---|---|---|---|---|
 | GET | `/api/openbox/system/timezone` | `fetchTimezone` (api/openbox.ts:1680) | OpenboxTimezoneState | () |
 | PUT | `/api/openbox/system/timezone` | `saveTimezone` (api/openbox.ts:1683) | OpenboxTimezoneState | (zone: string) |
+| GET | `/api/openbox/system/resources` | `fetchSystemResources` (api/openbox.ts:2063) | SystemResources | (signal?: AbortSignal) |
+
+`system/resources`(概览页「硬件负载」、侧边栏卡片、概览的「活跃终端」共用,前端每 2 秒取一次,取不到就当没有):响应 `{at, cpu:{usage, cores:[{id, usage}]}, memory?:{total, available, used, openbox?}, activeTerminals?}`,`at` 毫秒,CPU 单位 % 一位小数,内存单位字节。实现约定(`internal/sysres`,自己的设计,形状取自前端 `SystemResources` 和各组件的用法,没有参照上游):CPU 读 `/proc/stat`,用两次采样的差算(第一次调用隔 200ms 再采;距上一次采样不到 500ms 的调用直接用上一次的结果),`cores[].id` 形如 `cpu0`;内存读 `/proc/meminfo`,`used = total − available`(没有 `MemAvailable` 的老内核用 `MemFree + Buffers + Cached`),`openbox` = 后端自己 + comm 为 `sing-box` 的内核进程的 `VmRSS` 之和,读不到就不给;`activeTerminals` = 内核当前连接里出现的来源 IP 去掉本机地址 / 回环 / 未指定地址,已知 MAC 的(IPv4 读 `/proc/net/arp`,IPv6 读 `ip -6 neigh show`)合并成一个,没有邻居表项的各算一个;内核没在运行(读不到连接)就不给这个字段。读不到 `/proc/stat`(不是 Linux)回 503;内存 / 终端读不到只是少对应字段。**没做**:从终端里排除「真实路由测试」的虚拟终端地址(测试进行的几秒里它会多算一台)。需要在真机上核对:每核和总负载的读数、内存三项、`activeTerminals` 和路由器后台里的在线设备数是否合理。
 
 实现约定(M5,仅时区):`zones` / `countries` 来自内置的 IANA 时区表(419 个时区,国家代码取自 `zone.tab`,UTC 没有);`zone` 读不到(没有服务管理器、命令失败)是空串,名单照给,不报错;`offset`(+08:00)和 `local`(路由器本地时间)问系统的 `date`,读不到也是空串;`platform` 是 `openwrt` / `systemd` / `none`。`PUT` 请求体 `{ zone }`:别名先换成名单里的名字(如 `Asia/Chongqing` → `Asia/Shanghai`,`Etc/UTC` / `GMT` → `UTC`),不认识 400;OpenWrt 上 system 配置里有别人暂存的修改时拒绝(500,说明原因),改失败会恢复原值;没有受支持的服务管理器 501;改完读回来与请求不一致 500。
 
