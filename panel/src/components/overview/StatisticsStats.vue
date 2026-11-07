@@ -5,7 +5,12 @@
       :key="stat"
       :class="className.item"
     >
-      <div :class="className.label">{{ $t(labelKey(stat)) }}</div>
+      <div
+        :class="className.label"
+        v-tip="stat === STATISTICS_TYPE.ACTIVE_TERMINALS ? $t('statActiveTerminalsHint') : ''"
+      >
+        {{ $t(labelKey(stat)) }}
+      </div>
       <div :class="className.value">{{ statisticsMap[stat] }}</div>
     </div>
   </div>
@@ -13,6 +18,7 @@
 
 <script setup lang="ts">
 import { STATISTICS_TYPE, statisticsMap } from '@/composables/statistics'
+import { useSystemResources } from '@/composables/systemResources'
 import { computed } from 'vue'
 
 const props = defineProps<{
@@ -44,11 +50,11 @@ const classMap = {
 const orderMap = {
   overview: [
     STATISTICS_TYPE.CONNECTIONS,
-    STATISTICS_TYPE.MEMORY_USAGE,
-    STATISTICS_TYPE.DOWNLOAD,
+    STATISTICS_TYPE.ACTIVE_TERMINALS,
     STATISTICS_TYPE.DL_SPEED,
-    STATISTICS_TYPE.UPLOAD,
+    STATISTICS_TYPE.DOWNLOAD,
     STATISTICS_TYPE.UL_SPEED,
+    STATISTICS_TYPE.UPLOAD,
   ],
   settings: [
     STATISTICS_TYPE.CONNECTIONS,
@@ -60,13 +66,16 @@ const orderMap = {
   ],
   ctrl: [
     STATISTICS_TYPE.CONNECTIONS,
-    STATISTICS_TYPE.MEMORY_USAGE,
-    STATISTICS_TYPE.DOWNLOAD,
+    STATISTICS_TYPE.ACTIVE_TERMINALS,
     STATISTICS_TYPE.DL_SPEED,
-    STATISTICS_TYPE.UPLOAD,
+    STATISTICS_TYPE.DOWNLOAD,
     STATISTICS_TYPE.UL_SPEED,
+    STATISTICS_TYPE.UPLOAD,
   ],
 }
+
+// 「活跃终端」来自系统资源快照;设置页那一份不显示它,不用开轮询
+if (props.type !== 'settings') useSystemResources()
 
 const className = computed(() => classMap[props.type])
 const order = computed(() => orderMap[props.type])

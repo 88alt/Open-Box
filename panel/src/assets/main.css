@@ -1011,3 +1011,22 @@ dialog .overflow-y-scroll,
 [data-theme='emerald'] .btn-neutral.btn-outline:not(:hover, :active, :disabled, .btn-disabled, [disabled]) {
   --btn-fg: var(--color-base-content);
 }
+
+/* 概览页的实时图小卡:最小高度 = 图 7rem + 三份卡片间距 + 边框;图区占满剩余高度,圆角跟面板,图画布铺满 */
+.app-overview-chart-card {
+  min-block-size: calc(7rem + 3 * var(--app-card-space, 12px) + 2px);
+  min-inline-size: 0;
+}
+.app-overview-chart-plot {
+  border-end-end-radius: var(--app-radius-panel, 1.25rem);
+  border-end-start-radius: var(--app-radius-panel, 1.25rem);
+  flex: 1;
+  min-block-size: 3rem;
+  position: relative;
+  overflow: hidden;
+}
+.app-overview-chart-plot > * {
+  height: 100%;
+  position: absolute;
+  inset: 0;
+}

@@ -2051,3 +2051,14 @@ export const fetchNodeQuality = (query: OpenboxNodeQualityQuery, signal?: AbortS
     )}`,
     { signal },
   )
+
+// 概览页「硬件负载」和侧边栏用的系统资源快照:CPU(总 + 每核)、内存(总 / 可用 / 已用 / Open-Box 常驻)、活跃终端数
+export interface SystemResources {
+  // 采样时间(毫秒时间戳)
+  at?: number
+  cpu: { usage: number; cores: { id: string; usage: number }[] }
+  memory?: { total: number; available: number; used: number; openbox?: number }
+  activeTerminals?: number
+}
+export const fetchSystemResources = (signal?: AbortSignal) =>
+  requestJson<SystemResources>('/api/openbox/system/resources', { signal })

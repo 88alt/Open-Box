@@ -39,6 +39,18 @@ export const theme = computed(() => {
 export const language = useStorage<LANG>('config/language', detectDefaultLanguage(navigator.language))
 // 首次进面板侧边栏默认展开(窄屏仍强制折叠,见下方 isMiddleScreen)
 export const isSidebarCollapsedConfig = useStorage('config/is-sidebar-collapsed', false)
+// 左侧栏下方显示什么:off 都不显示 / hardware 硬件负载 / network 网络状态 / both 两个都显示(默认)
+export type SidebarDisplay = 'off' | 'hardware' | 'network' | 'both'
+const sidebarDisplayConfig = useStorage<string>('config/sidebar-display', 'both')
+export const sidebarDisplay = computed<SidebarDisplay>({
+  get: () => {
+    const value = sidebarDisplayConfig.value
+    return value === 'off' || value === 'network' || value === 'hardware' ? value : 'both'
+  },
+  set: (value) => {
+    sidebarDisplayConfig.value = value
+  },
+})
 // 概览「每日流量」的「统计直连流量」开关:关掉后走内置直连出站的流量不计入(服务端查询时扣掉,库里数据不动)
 export const trafficCountDirect = useStorage('config/traffic-count-direct', true)
 export const isSidebarCollapsed = computed({
@@ -188,6 +200,35 @@ export const mediumLatency = useStorage('config/medium-latency', 1000)
 // 带宽(Mbps)着色阈值:≤ poor 红,≤ adequate 橙,更高为绿
 export const bandwidthPoorThreshold = useStorage('config/bandwidth-poor-threshold', 5)
 export const bandwidthAdequateThreshold = useStorage('config/bandwidth-adequate-threshold', 20)
+// CPU 负载着色阈值(%):低于 low 绿,低于 medium 橙,更高红;默认 50 / 90(与上游 v0.1.413 一致)
+const CPU_LOAD_DEFAULTS = [50, 90]
+export const cpuLoadLowThreshold = useStorage('config/cpu-load-low-threshold', CPU_LOAD_DEFAULTS[0])
+export const cpuLoadMediumThreshold = useStorage(
+  'config/cpu-load-medium-threshold',
+  CPU_LOAD_DEFAULTS[1],
+)
+const clampInt = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, Math.round(value)))
+// 读出来时保证 0 ≤ low < medium ≤ 100;存的值不合法(被手改过)就退回默认
+export const cpuLoadThresholds = computed<[number, number]>(() => {
+  const medium = clampInt(
+    Number.isFinite(cpuLoadMediumThreshold.value) ? cpuLoadMediumThreshold.value : CPU_LOAD_DEFAULTS[1],
+    1,
+    100,
+  )
+  const low = clampInt(
+    Number.isFinite(cpuLoadLowThreshold.value) ? cpuLoadLowThreshold.value : CPU_LOAD_DEFAULTS[0],
+    0,
+    medium - 1,
+  )
+  return [low, medium]
+})
+export const setCpuLoadThreshold = (index: 0 | 1, value: number) => {
+  if (!Number.isFinite(value)) return
+  const [low, medium] = cpuLoadThresholds.value
+  if (index === 0) cpuLoadLowThreshold.value = clampInt(value, 0, medium - 1)
+  else cpuLoadMediumThreshold.value = clampInt(value, low + 1, 100)
+}
 export const IPv6test = useStorage('config/ipv6-test', false)
 export const proxyCardSize = useStorage<PROXY_CARD_SIZE>(
   'config/proxy-card-size',

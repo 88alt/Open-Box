@@ -144,6 +144,24 @@
           </option>
         </select>
       </div>
+      <div
+        v-if="isVisibleSidebarDisplay"
+        class="setting-item"
+      >
+        <div class="setting-item-label">
+          {{ $t('sidebarDisplay') }}
+        </div>
+        <select
+          class="select select-sm w-48 min-w-0"
+          v-model="sidebarDisplay"
+          :aria-label="$t('sidebarDisplay')"
+        >
+          <option value="off">{{ $t('sidebarDisplayOff') }}</option>
+          <option value="hardware">{{ $t('hardwareLoad') }}</option>
+          <option value="network">{{ $t('overviewCardTitle') }}</option>
+          <option value="both">{{ $t('hardwareLoad') }} + {{ $t('overviewCardTitle') }}</option>
+        </select>
+      </div>
       <!-- GeneralSettings 把它的几行(空闲 UDP / 修改密码 / IP 信息 API)放进来,和上面同一个网格 -->
       <slot />
     </div>
@@ -154,7 +172,7 @@
 <script setup lang="ts">
 import LanguageSelect from '@/components/settings/LanguageSelect.vue'
 import { useIsSettingVisible } from '@/composables/settings'
-import { GENERAL_ITEM_KEYS } from '@/config/settingsItems'
+import { GENERAL_ITEM_KEYS, PROXIES_ITEM_KEYS } from '@/config/settingsItems'
 import { deleteBase64FromIndexedDB, LOCAL_IMAGE, saveBase64ToIndexedDB } from '@/helper/indexeddb'
 import { isPWA } from '@/helper/utils'
 import {
@@ -164,6 +182,7 @@ import {
   customBackgroundURL,
   dashboardTransparent,
   globalRadius,
+  sidebarDisplay,
 } from '@/store/settings'
 import { AdjustmentsHorizontalIcon, ArrowPathIcon, ArrowUpTrayIcon } from '@heroicons/vue/24/outline'
 import { computed, ref, watch } from 'vue'
@@ -176,6 +195,7 @@ const isVisibleTransparent = useIsSettingVisible(k.transparent)
 const isVisibleBlurIntensity = useIsSettingVisible(k.blurIntensity)
 const isVisibleGlobalRadius = useIsSettingVisible(k.globalRadius)
 const isVisibleTheme = useIsSettingVisible(k.defaultTheme)
+const isVisibleSidebarDisplay = useIsSettingVisible(PROXIES_ITEM_KEYS.sidebarDisplay)
 
 const displayBgProperty = ref(false)
 const isBackgroundDragOver = ref(false)
@@ -187,6 +207,7 @@ const hasVisibleItems = computed(() => {
     (customBackgroundURL.value && displayBgProperty.value && isVisibleTransparent.value) ||
     (customBackgroundURL.value && displayBgProperty.value && isVisibleBlurIntensity.value) ||
     isVisibleGlobalRadius.value ||
+    isVisibleSidebarDisplay.value ||
     isVisibleTheme.value
   )
 })

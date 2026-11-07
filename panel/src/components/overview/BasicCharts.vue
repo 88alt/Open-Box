@@ -65,17 +65,40 @@ import { font, theme } from '@/store/settings'
 import { PauseCircleIcon, PlayCircleIcon } from '@heroicons/vue/24/outline'
 import { useElementSize } from '@vueuse/core'
 import { LineChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import {
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+  VisualMapComponent,
+} from 'echarts/components'
 import * as echarts from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { debounce } from 'lodash'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
-echarts.use([LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
+echarts.use([
+  LineChart,
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+  VisualMapComponent,
+  CanvasRenderer,
+])
 
 // 布尔 prop 不传时 Vue 会当成 false,所以「不传就有暂停键」得靠 withDefaults 写成 true
 const props = withDefaults(defineProps<{
-  data: { name: string; color?: number; data: { name: number; value: number }[] }[]
+  // tone 单条曲线指定颜色;solidStroke 曲线用不透明的实色(默认是 60% 透明)
+  data: {
+    name: string
+    color?: number
+    tone?: 'primary' | 'info' | 'warning'
+    solidStroke?: boolean
+    data: { name: number; value: number }[]
+  }[]
+  // 两个分界值:低于第一个画绿,低于第二个画橙,更高画红(CPU 负载用),图例固定关掉时配合 legend=false
+  valueThresholds?: [number, number]
+  // 要不要画图例;不传就画(带标题的卡片不画)
+  legend?: boolean
   // 右下角要不要放暂停键;不传就有
   pausable?: boolean
   // 带标题时画成独立卡片:标题在左上、暂停键在右上、不画图例
@@ -93,10 +116,18 @@ const colorRef = ref()
 const chart = ref()
 const isPaused = ref(false)
 const colorSet = {
+  primary: '',
   primary30: '',
   primary60: '',
+  info: '',
   info30: '',
   info60: '',
+  warning: '',
+  warning30: '',
+  warning60: '',
+  thresholdLow: '',
+  thresholdMedium: '',
+  thresholdHigh: '',
   baseContent10: '',
   baseContent: '',
   base70: '',
@@ -114,6 +145,15 @@ const updateColorSet = () => {
   colorSet.primary60 = cssColorToRgb(colorStyle.borderBottomColor)
   colorSet.info30 = cssColorToRgb(colorStyle.borderLeftColor)
   colorSet.info60 = cssColorToRgb(colorStyle.borderRightColor)
+  colorSet.primary = cssColorToRgb(colorStyle.getPropertyValue('--color-primary'))
+  colorSet.info = cssColorToRgb(colorStyle.getPropertyValue('--color-info'))
+  const warning = colorStyle.getPropertyValue('--color-warning')
+  colorSet.warning = cssColorToRgb(warning)
+  colorSet.warning30 = cssColorToRgb(`color-mix(in oklab, ${warning} 30%, transparent)`)
+  colorSet.warning60 = cssColorToRgb(`color-mix(in oklab, ${warning} 60%, transparent)`)
+  colorSet.thresholdLow = cssColorToRgb(colorStyle.getPropertyValue('--app-latency-low'))
+  colorSet.thresholdMedium = cssColorToRgb(colorStyle.getPropertyValue('--app-latency-medium'))
+  colorSet.thresholdHigh = cssColorToRgb(colorStyle.getPropertyValue('--app-latency-high'))
 }
 const updateFontFamily = () => {
   const baseColorStyle = getComputedStyle(colorRef.value)
@@ -126,12 +166,23 @@ const { width: chartWidth } = useElementSize(chart)
 
 const options = computed(() => {
   const narrow = chartWidth.value > 0 && chartWidth.value < 240
-  const labelSpace = narrow ? 40 : 52
+  const thresholds = props.valueThresholds
+  const showLegend = props.legend !== false && !props.title
+  const bare = !showLegend
   return {
-    // 画布本身已经离卡片边 8px(卡片 p-2),画布里的东西一律贴边:图例不留内边距、绘图区右边不留、
-    // 纵轴标签从画布最左边开始。这样上下左右到卡片边都是 8px。
+    // 按值分段着色(CPU 负载):线和面积都按分界值变色,面积淡一点
+    visualMap: thresholds && {
+      type: 'piecewise',
+      show: false,
+      pieces: [
+        { lt: thresholds[0], color: colorSet.thresholdLow },
+        { gte: thresholds[0], lt: thresholds[1], color: colorSet.thresholdMedium },
+        { gte: thresholds[1], color: colorSet.thresholdHigh },
+      ],
+    },
+    // 画布贴着卡片:图例不留内边距、绘图区四边不留,纵轴标签压在绘图区里面(inside),和 v0.1.413 一样
     legend: {
-      show: !props.title,
+      show: showLegend,
       bottom: 0,
       padding: 0,
       left: narrow ? 0 : 'center',
@@ -142,12 +193,10 @@ const options = computed(() => {
       },
     },
     grid: {
-      left: labelSpace + 8,
-      // 绘图区上边距 8px,和卡片内边距一个数;最上面那个刻度标签半个字高在这 8px 里放得下
+      left: 0,
       top: 8,
       right: 0,
-      // 图例没了 5px 内边距,绘图区和图例之间的间距保持原样
-      bottom: props.title ? 0 : 20,
+      bottom: bare ? 0 : 20,
     },
     tooltip: {
       show: props.tooltip !== false,
@@ -164,6 +213,7 @@ const options = computed(() => {
     },
     xAxis: {
       type: 'category',
+      boundaryGap: false,
       axisLine: { show: false },
       axisLabel: { show: false },
       splitLine: { show: false },
@@ -171,6 +221,7 @@ const options = computed(() => {
     },
     yAxis: {
       type: 'value',
+      z: 5,
       splitNumber: 4,
       max: (value: { max: number }) => {
         return Math.max(value.max, props.min)
@@ -185,10 +236,10 @@ const options = computed(() => {
       },
       axisLabel: {
         align: 'left',
-        // 带标题的卡片不画最底下那个 0 刻度,曲线直接贴卡片底边(和 v0.1.308 一致)
-        showMinLabel: props.title ? false : null,
-        // 标签锚点在 grid.left - 8 = 52,往左推满 52 就贴到画布左边
-        padding: [0, 0, 0, -labelSpace],
+        inside: true,
+        margin: 4,
+        // 不画图例(带标题或 legend=false)时不画最底下那个 0 刻度,曲线直接贴卡片底边
+        showMinLabel: bare ? false : undefined,
         formatter: props.labelFormatter,
         color: colorSet.baseContent,
         fontFamily,
@@ -196,9 +247,11 @@ const options = computed(() => {
       },
     },
     series: props.data.map((item, index) => {
-      const usePrimary = props.tone ? props.tone === 'primary' : index === props.data.length - 1
-      const seriesColor = usePrimary ? colorSet.primary60 : colorSet.info60
-      const areaColor = usePrimary ? colorSet.primary30 : colorSet.info30
+      const tone =
+        item.tone ??
+        (props.tone ? props.tone : index === props.data.length - 1 ? 'primary' : 'info')
+      const seriesColor = colorSet[`${tone}60`]
+      const areaColor = colorSet[`${tone}30`]
 
       return {
         name: item.name,
@@ -210,20 +263,22 @@ const options = computed(() => {
           width: 1,
         },
         data: item.data,
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            {
-              offset: 0,
-              color: seriesColor,
+        areaStyle: thresholds
+          ? { opacity: 0.22 }
+          : {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                {
+                  offset: 0,
+                  color: seriesColor,
+                },
+                {
+                  offset: 1,
+                  color: areaColor,
+                },
+              ]),
             },
-            {
-              offset: 1,
-              color: areaColor,
-            },
-          ]),
-        },
         type: 'line',
-        color: seriesColor,
+        color: item.solidStroke ? colorSet[tone] : seriesColor,
         smooth: true,
       }
     }),

@@ -5,8 +5,9 @@
       class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
       :style="padding"
     >
-      <!-- 概览几张卡片:面板概览(站点延迟 + 汇总 + 四张实时图)、流量洞察和节点质量。网络信息、连接拓扑、连接统计已去掉。 -->
+      <!-- 概览几张卡片:硬件负载、网络状态(站点延迟 + 汇总 + 四张实时图)、流量洞察和节点质量。网络信息、连接拓扑、连接统计已去掉。 -->
       <div class="flex flex-col app-page-content app-card-gap">
+        <HardwareLoadCard />
         <PanelOverviewCard />
         <DnsFilterOverview />
         <!-- 手机屏太窄放不下 31 根柱子和明细表,每日流量只在桌面显示 -->
@@ -18,6 +19,7 @@
 </template>
 
 <script setup lang="ts">
+import HardwareLoadCard from '@/components/overview/HardwareLoadCard.vue'
 import DnsFilterOverview from '@/components/overview/DnsFilterOverview.vue'
 import DailyTrafficCard from '@/components/overview/DailyTrafficCard.vue'
 import NodeQualityCard from '@/components/overview/NodeQualityCard.vue'

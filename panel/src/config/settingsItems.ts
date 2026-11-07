@@ -131,7 +131,8 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
       { key: `${SETTINGS_MENU_KEY.proxies}.mediumLatency`, label: 'mediumLatencyDesc' },
       { key: `${SETTINGS_MENU_KEY.proxies}.bandwidthPoor`, label: 'bandwidthPoorDesc' },
       { key: `${SETTINGS_MENU_KEY.proxies}.bandwidthAdequate`, label: 'bandwidthAdequateDesc' },
-      { key: `${SETTINGS_MENU_KEY.proxies}.bandwidthExcellent`, label: 'bandwidthExcellentDesc' },
+      { key: `${SETTINGS_MENU_KEY.proxies}.cpuLoadLow`, label: 'cpuLoadLowDesc' },
+      { key: `${SETTINGS_MENU_KEY.proxies}.cpuLoadMedium`, label: 'cpuLoadMediumDesc' },
       { key: `${SETTINGS_MENU_KEY.proxies}.ipv6Test`, label: 'ipv6Test' },
       {
         key: `${SETTINGS_MENU_KEY.proxies}.independentLatencyTest`,
@@ -143,6 +144,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
         key: `${SETTINGS_MENU_KEY.proxies}.proxyGroupColumnsMobile`,
         label: 'proxyGroupColumnsMobile',
       },
+      { key: `${SETTINGS_MENU_KEY.proxies}.sidebarDisplay`, label: 'sidebarDisplay' },
       { key: `${SETTINGS_MENU_KEY.proxies}.truncateProxyName`, label: 'truncateProxyName' },
       {
         key: `${SETTINGS_MENU_KEY.proxies}.displayGlobalByMode`,

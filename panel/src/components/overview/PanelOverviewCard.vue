@@ -1,5 +1,5 @@
 <template>
-  <!-- 面板概览:一张大卡,从上到下是站点延迟小卡、六项汇总、四张实时图(进站速率 / 出站速率 / 内存 / 连接数) -->
+  <!-- 网络状态:一张大卡,从上到下是站点延迟小卡、六项汇总、四张实时图(连接数 / 活跃终端 / 进站速率 / 出站速率) -->
   <div class="card w-full">
     <div class="card-body gap-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -36,6 +36,22 @@
       <StatisticsStats type="overview" />
       <div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <BasicCharts
+          :title="$t('statConnections')"
+          tone="primary"
+          :data="connectionsData"
+          :label-formatter="connectionsLabel"
+          :tool-tip-formatter="connectionsTip"
+          :min="100"
+        />
+        <BasicCharts
+          :title="$t('statActiveTerminals')"
+          tone="primary"
+          :data="devicesData"
+          :label-formatter="connectionsLabel"
+          :tool-tip-formatter="connectionsTip"
+          :min="4"
+        />
+        <BasicCharts
           :title="$t('dlSpeed')"
           tone="primary"
           :data="dlData"
@@ -51,22 +67,6 @@
           :tool-tip-formatter="speedTip"
           :min="60 * 1000"
         />
-        <BasicCharts
-          :title="$t('memoryUsage')"
-          tone="primary"
-          :data="memoryData"
-          :label-formatter="memoryLabel"
-          :tool-tip-formatter="memoryTip"
-          :min="100 * 1024 * 1024"
-        />
-        <BasicCharts
-          :title="$t('statConnections')"
-          tone="primary"
-          :data="connectionsData"
-          :label-formatter="connectionsLabel"
-          :tool-tip-formatter="connectionsTip"
-          :min="100"
-        />
       </div>
     </div>
   </div>
@@ -76,13 +76,13 @@
 import BasicCharts from '@/components/overview/BasicCharts.vue'
 import SiteLatencyTiles from '@/components/overview/SiteLatencyTiles.vue'
 import StatisticsStats from '@/components/overview/StatisticsStats.vue'
+import { systemResourcesHistory, useSystemResources } from '@/composables/systemResources'
 import { autoSiteLatencyTest, runSiteLatencyTest, siteLatencyLoading } from '@/composables/siteLatency'
 import { getToolTipForParams } from '@/helper'
 import { prettyBytesHelper } from '@/helper/utils'
 import {
   connectionsHistory,
   downloadSpeedHistory,
-  memoryHistory,
   timeSaved,
   uploadSpeedHistory,
 } from '@/store/overview'
@@ -93,20 +93,25 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
+useSystemResources()
+
 const dlData = computed(() => [{ name: t('dlSpeed'), data: downloadSpeedHistory.value }])
 const ulData = computed(() => [{ name: t('ulSpeed'), data: uploadSpeedHistory.value }])
-const memoryData = computed(() => [{ name: t('memoryUsage'), data: memoryHistory.value }])
 const connectionsData = computed(() => [{ name: t('connections'), data: connectionsHistory.value }])
+// 活跃终端的曲线取自系统资源快照的历史,没带这个字段的采样点跳过
+const devicesData = computed(() => [
+  {
+    name: t('statActiveTerminals'),
+    data: systemResourcesHistory.value.flatMap(({ at, snapshot }) =>
+      snapshot.activeTerminals == null ? [] : [{ name: at, value: snapshot.activeTerminals }],
+    ),
+  },
+])
 
 const speedLabel = (value: number) =>
   `${prettyBytesHelper(value, { maximumFractionDigits: 0, binary: false })}/s`
 const speedTip = (value: ToolTipParams[]) =>
   value.map((item) => getToolTipForParams(item, { binary: false, suffix: '/s' })).join('')
-
-const memoryLabel = (value: number) =>
-  `${prettyBytesHelper(value, { maximumFractionDigits: 0, binary: true })}`
-const memoryTip = (value: ToolTipParams[]) =>
-  getToolTipForParams(value[0], { binary: true, suffix: '' })
 
 const connectionsLabel = (value: number) => `       ${value}`
 const connectionsTip = (value: ToolTipParams[]) =>
