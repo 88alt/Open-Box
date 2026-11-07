@@ -15,8 +15,9 @@ import (
 //
 // 键可以是裸 IPv4 或带前缀的 CIDR;值是字符串或字符串数组。
 // 只扩展 IPv4 来源;已有的 IPv6 来源原样保留。查表时依次试:
-//  1) 规范化后的整段 (192.168.1.10/32)
-//  2) 裸地址 (192.168.1.10)
+//  1. 规范化后的整段 (192.168.1.10/32)
+//  2. 裸地址 (192.168.1.10)
+//
 // 找不到绑定的来源不变。去重且保持原顺序,新 IPv6 跟在对应 IPv4 后面。
 func ExpandSourcesWithBindings(sources []string, bindings any) []string {
 	if len(sources) == 0 || bindings == nil {

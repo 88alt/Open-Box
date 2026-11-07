@@ -7,10 +7,10 @@ import (
 
 func TestExpandSourcesWithBindings(t *testing.T) {
 	bindings := map[string]any{
-		"192.168.1.10":     []any{"fd00::10", "fe80::abcd"},
-		"10.0.0.5/32":      "fd00::5",
-		"bad":              "not-ip",
-		"192.168.1.99":     []any{"%invalid", "2001:db8::1"},
+		"192.168.1.10": []any{"fd00::10", "fe80::abcd"},
+		"10.0.0.5/32":  "fd00::5",
+		"bad":          "not-ip",
+		"192.168.1.99": []any{"%invalid", "2001:db8::1"},
 	}
 	got := ExpandSourcesWithBindings([]string{"192.168.1.10/32", "10.0.0.5/32", "fd00::99/128"}, bindings)
 	want := []string{"192.168.1.10/32", "fd00::10/128", "fe80::abcd/128", "10.0.0.5/32", "fd00::5/128", "fd00::99/128"}

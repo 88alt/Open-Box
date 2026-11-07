@@ -368,5 +368,3 @@ func parseIPv4Host(domain string) (string, bool) {
 	}
 	return fmt.Sprintf("%d.%d.%d.%d", ipv4>>24&255, ipv4>>16&255, ipv4>>8&255, ipv4&255), true
 }
-
-
