@@ -267,7 +267,7 @@
 实现约定(`internal/bandwidth`、`internal/api/bandwidth`;2026-11-04 回退旧实现后按前端 `BandwidthSettingsCard`、`OpenboxBandwidth*` 类型和 sing-box 公开文档重写,STATUS 的 M4「带宽择优」条目记着前五刀)。三个接口都需要登录,响应都带 `no-store`。
 
 - **`GET`**:返回 `{settings, nodes, dailyBytes, running, lastError, updatedAt, measurements, pendingBySubscription}`。`settings` 是档案 `bandwidth` 规整后的值(没设就用默认);`nodes` 是「所在订阅启用、且开了定期带宽检查」的节点数;`dailyBytes` 是估算的每日用量 = `24 / intervalHours × maxDownloadMB × nodes`(换成字节);`measurements` 以节点名为键,含最近一次样本(`at`、`mbps`、`failed`、`lowerBound`)、`enabled`(订阅开了定期检查)、`pending`、`requestedAt`、`completedAt`、`error`、`reason` 和 `history`;排队中的节点会合并进来并标 `pending`。读档案或节点列表出错回 500。
-- **`POST /subscriptions/{id}`**:把这个订阅下的全部节点排进队(不看订阅有没有开定期检查,手动触发都算)。已经在队里的不重复排,计入 `joined`。响应 `{queued, joined, requestedAt, pendingBySubscription}`。订阅 id 不存在时不报错,`queued` 是 0。
+- **`POST /subscriptions/{id}`**:把这个订阅下的全部节点排进队(不看订阅有没有开定期检查,手动触发都算)。已经在队里的不重复排,计入 `joined`。响应 `{queued, joined, requestedAt, pendingBySubscription}`。**只认已启用订阅的节点**:订阅 id 不存在或订阅已停用时不报错,`queued` 都是 0。
 - **`POST /nodes/{name}`**:把单个节点排进队,响应同上。**节点名在节点列表里找不到时也照样排队**(订阅 id 记为空串),为的是前端不空转;真正测的时候才会失败。
 - 方法不对由 `httpx.Methods` 回 405;带宽服务没装配时三个接口回 503「带宽服务不可用」。
 
