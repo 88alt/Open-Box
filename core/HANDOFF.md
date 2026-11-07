@@ -60,7 +60,7 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
 [x] idna / urlx UTS46 轻量映射表（内置忽略字符 + 兼容映射 + 简易双向；覆盖 gen-urlx --wide 语料主要条目）
 [~] 真机验证:真实路由器上经后端调用 core、sing-box 启动成功(由维护者做,记录在 backend/STATUS.md 的真机条目)
 [x] clientBindings：按 IPv6 绑定扩展终端分流来源（NormalizeClientRoutes + ExpandSourcesWithBindings）
-[~] 整理测试数据来源(全部叶子模块已换自写向量:ipx、dnsrewrite、servers、directhosts、dnsfilter、clientroutes;routing 里 dnsupstream、flip、rulesets、urlhost、dnsnames、geo 已换,其余 routing / groups / config 金标准待换)
+[~] 整理测试数据来源(全部叶子模块已换自写向量:ipx、dnsrewrite、servers、directhosts、dnsfilter、clientroutes;routing 里 dnsupstream、flip、rulesets、urlhost、dnsnames、geo、outbound(含 export 的出口)已换,其余 routing / groups / config 金标准待换)
 [ ] 第四节里其余后续工作
 
 
@@ -83,7 +83,8 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
    - [x] routing/rulesets: `internal/routing/rulesets_test.go` 自写向量(parseRuleLists 只收真值项且按 JS 真假判断、routeRulesetTags 按形状引用域名 / IP 两份且两份都没有时一份也不引用、dnsRulesetTags 排除 geoip-* 与只有 IP 那份的链接、policyOutboundOptions 按启用状态过滤并回落直连(含改名后与直连被停用的情形)、splitRuleSetConditions 的触发条件(只看五种目的条件的键在不在、rule_set 取 JS 真值)与两条规则带的键、不改入参、DomainPresentRegex 的正反例与 noDomainGuard、isIPRuleSetTag、policyRouteMatches 把站点集条件分成看域名 / 看 IP 两份并保序、空的一边是 nil);变异测试 85 个抓到 81,存活 4 个是空变异和 3 个等价变异(非对象时空 map 遍历结果相同、空成员表本来就不会被返回、没有 rule_set 键时取到 nil 本来就是假值);dns_golden / route_golden 仍作回归。
    - [x] routing/urlhost + routing/dnsnames: `internal/routing/urlhost_test.go`(extractHost 只在纯字母协议头加 `://` 时取 URL 主机:大小写、端口账号路径、IPv6 保留方括号、非 ASCII 转 punycode;带加号 / 数字 / 横线 / 前导空白的协议头不算;解析失败和非字符串都原样返回原值,含数组转串后像 URL 的情形)与 `internal/routing/dnsnames_test.go`(jsLen 按 UTF-16 码元、domainLabelOK 的长度与横线规则、dnsmasqSafeDomain 的去通配 / 前后点 / JS trim、253 与 63 的边界、非法字符、IDN 转 punycode,期望值取自公开 IDN 例子);变异测试 45 个抓到 35,存活 10 个是 2 个空变异和 8 个等价变异(协议名允许零长时 `://x` 主机解析本来就失败、空串本来过不了标签检查、ASCII 范围判断被标签字符集重复把关、ToASCII 失败时得到空串过不了标签检查);plans_test 里原有的 TestDnsmasqSafeDomain 保留。
    - [x] routing/geo: `internal/routing/geo_test.go` 自写向量(setAvailableGeoTags / geoRulesetAvailable: nil 名单不过滤、有名单只放行名单内 geoip-/geosite- 前缀、空名单 geo 前缀全挡、非前缀一律放行; sliceUTF16 按 UTF-16 码元截断含代理对中间替换符; normalizeNotes 非空字符串键值、跳过 __proto__、值截 60 码元、非字符串丢掉; nilIfEmpty 空变 nil); export 为纯导出无逻辑。
-   - [ ] routing 其余零件(export 已薄、再到 dns、route、plans、entry、migrate、fingerprint、model)/ groups / config 金标准待换。
+   - [x] routing/outbound + export: `internal/routing/outbound_test.go` 自写向量(parseBuiltin 非对象回落默认、对象缺键不补默认且开关按 JS 真假; parseMembers 缺省按 direct、非字符串成员占位空串; effectiveOutbound 含改名、proxy 取首个非内置、空成员、空名字; resolveSelectionLeaf 含环、自指、非字符串占位、16 层封顶; policyChosenOutbound / policyGoesDirect; customPolicyActive / customOutboundTag / customRuleTag, ruleUrl 的 FNV-1a 标签值用独立 Python 另算核对; export 的 NewBuiltin / Direct / Block 与各出口手写期望点一遍)。变异 31 个全部被抓住,空变异漏网。
+   - [ ] routing 其余零件(dns、route、plans、entry、migrate、fingerprint、model、bypass、jsval)/ groups / config 金标准待换。
 3. 跟着 sing-box 更新(见第五节):sing-box 发新版、配置格式变化时,更新 core 输出和对应测试。backend 的工作流里固定了一个 sing-box 版本(现为 1.14.4),升级时一起改。
 4. 授权三个方法:新后端不调用,先保留,等后端稳定后再决定是否删除。
 5. core/UPSTREAM_VERSION(现为 v0.1.354):原本记录"最后对齐的上游版本"。按第五节的规则不再按上游版本推进,默认不再改动,处理方式由维护者定。
