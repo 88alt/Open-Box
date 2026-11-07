@@ -1,9 +1,10 @@
 import { isSingBox } from '@/api'
-import { normalizeRuleTarget } from '@/store/rules'
 import { useCtrlsBar } from '@/composables/useCtrlsBar'
 import { LOG_LEVEL } from '@/constant'
 import { useTooltip } from '@/helper/tooltip'
+import { isMiddleScreen } from '@/helper/utils'
 import { initLogs, isPaused, logFilter, logLevel, logTypeFilter, logs } from '@/store/logs'
+import { normalizeRuleTarget } from '@/store/rules'
 import { logSearchHistory } from '@/store/settings'
 import {
   ArrowDownTrayIcon,
@@ -17,6 +18,93 @@ import { debounce } from 'lodash'
 import { computed, defineComponent, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TextInput from '../common/TextInput.vue'
+
+const logLevels = computed(() => {
+  if (isSingBox.value) {
+    return Object.values(LOG_LEVEL)
+  }
+  return [LOG_LEVEL.Debug, LOG_LEVEL.Info, LOG_LEVEL.Warning, LOG_LEVEL.Error, LOG_LEVEL.Silent]
+})
+
+const downloadAllLogs = () => {
+  const blob = new Blob(
+    [
+      logs.value
+        .map((log) =>
+          [log.seq.toString().padEnd(5, ' '), log.time, log.type.padEnd(7, ' '), log.payload].join(
+            '\t',
+          ),
+        )
+        .join('\n'),
+    ],
+    {
+      type: 'text/plain',
+    },
+  )
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = dayjs().format('YYYY-MM-DD HH-mm-ss') + '.log'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// 日志级别下拉:宽屏在控制栏里,窄屏挪到页签行右侧(连接页的 mobile-actions 插槽),两处共用这一个组件
+export const LogLevelSelect = defineComponent({
+  setup() {
+    const { t } = useI18n()
+
+    return () => (
+      <select
+        class={[
+          'select select-sm',
+          isMiddleScreen.value ? 'max-w-24 min-w-0 flex-1' : 'join-item w-24 shrink-0',
+        ]}
+        aria-label={t('logLevel')}
+        title={logLevel.value}
+        v-model={logLevel.value}
+        onChange={initLogs}
+      >
+        {logLevels.value.map((opt) => (
+          <option
+            key={opt}
+            value={opt}
+          >
+            {opt}
+          </option>
+        ))}
+      </select>
+    )
+  },
+})
+
+// 下载 / 暂停 / 清空三个按钮,同样两处共用
+export const LogActionButtons = defineComponent({
+  setup() {
+    return () => (
+      <div class="flex shrink-0 items-center gap-2">
+        <button
+          class="btn btn-circle btn-sm"
+          onClick={downloadAllLogs}
+        >
+          <ArrowDownTrayIcon class="h-4 w-4" />
+        </button>
+        <button
+          class="btn btn-circle btn-sm"
+          onClick={() => (isPaused.value = !isPaused.value)}
+        >
+          {isPaused.value ? <PlayIcon class="h-4 w-4" /> : <PauseIcon class="h-4 w-4" />}
+        </button>
+        <button
+          class="btn btn-circle btn-sm"
+          onClick={() => (logs.value = [])}
+        >
+          <XMarkIcon class="h-4 w-4" />
+        </button>
+      </div>
+    )
+  },
+})
 
 export default defineComponent({
   setup() {
@@ -41,13 +129,6 @@ export default defineComponent({
     }, 1500)
 
     watch(logFilter, insertLogSearchHistory)
-
-    const logLevels = computed(() => {
-      if (isSingBox.value) {
-        return Object.values(LOG_LEVEL)
-      }
-      return [LOG_LEVEL.Debug, LOG_LEVEL.Info, LOG_LEVEL.Warning, LOG_LEVEL.Error, LOG_LEVEL.Silent]
-    })
 
     const logFilterOptions = computed(() => {
       const types: string[] = []
@@ -92,49 +173,8 @@ export default defineComponent({
       }
     })
 
-    const downloadAllLogs = () => {
-      const blob = new Blob(
-        [
-          logs.value
-            .map((log) =>
-              [
-                log.seq.toString().padEnd(5, ' '),
-                log.time,
-                log.type.padEnd(7, ' '),
-                log.payload,
-              ].join('\t'),
-            )
-            .join('\n'),
-        ],
-        {
-          type: 'text/plain',
-        },
-      )
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = dayjs().format('YYYY-MM-DD HH-mm-ss') + '.log'
-      a.click()
-      URL.revokeObjectURL(url)
-    }
-
     return () => {
-      const levelSelect = (
-        <select
-          class={['join-item select select-sm w-24 shrink-0']}
-          v-model={logLevel.value}
-          onChange={initLogs}
-        >
-          {logLevels.value.map((opt) => (
-            <option
-              key={opt}
-              value={opt}
-            >
-              {opt}
-            </option>
-          ))}
-        </select>
-      )
+      const levelSelect = <LogLevelSelect />
       const searchInput = (
         <div class="flex min-w-0 flex-1 items-center gap-2">
           <TextInput
@@ -150,7 +190,9 @@ export default defineComponent({
           <button
             class="btn btn-circle btn-sm shrink-0"
             // 和连接页一样:整条 URL 整理成主机名(不带端口)再搜
-            onClick={() => (logFilter.value = normalizeRuleTarget(logFilter.value).replace(/:\d+$/, ''))}
+            onClick={() =>
+              (logFilter.value = normalizeRuleTarget(logFilter.value).replace(/:\d+$/, ''))
+            }
             onMouseenter={(e) => showTip(e, t('ruleFormatQuery'))}
           >
             <SparklesIcon class="h-4 w-4" />
@@ -187,52 +229,35 @@ export default defineComponent({
         </select>
       )
 
-      const buttons = (
-        <div class="flex items-center gap-2">
-          <button
-            class="btn btn-circle btn-sm"
-            onClick={downloadAllLogs}
-          >
-            <ArrowDownTrayIcon class="h-4 w-4" />
-          </button>
-          <button
-            class="btn btn-circle btn-sm"
-            onClick={() => (isPaused.value = !isPaused.value)}
-          >
-            {isPaused.value ? <PlayIcon class="h-4 w-4" /> : <PauseIcon class="h-4 w-4" />}
-          </button>
-          <button
-            class="btn btn-circle btn-sm"
-            onClick={() => (logs.value = [])}
-          >
-            <XMarkIcon class="h-4 w-4" />
-          </button>
-        </div>
-      )
+      const buttons = <LogActionButtons />
 
-      const content = !isLargeCtrlsBar.value ? (
-        <div class="app-card-padding flex flex-col gap-2">
-          <div class="flex w-full justify-between gap-2">
-            <div class="join flex-1">{levelSelect}</div>
-            {buttons}
-          </div>
-          <div class="flex w-full items-center gap-2">
-            {logTypeSelect}
-            {searchInput}
-          </div>
-        </div>
-      ) : (
-        <div class="app-card-padding flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2">
-            {levelSelect}
-            <div class="flex w-96 items-center gap-2">
+      // 窄屏:级别下拉和三个按钮已经在页签行右侧(ConnectionsPage 的 mobile-actions 插槽),这里只留类型筛选和搜索
+      const content =
+        isMiddleScreen.value || !isLargeCtrlsBar.value ? (
+          <div class="app-card-padding app-card-gap flex flex-col">
+            {!isMiddleScreen.value && (
+              <div class="flex w-full justify-between gap-2">
+                <div class="join flex-1">{levelSelect}</div>
+                {buttons}
+              </div>
+            )}
+            <div class="flex w-full items-center gap-2">
               {logTypeSelect}
               {searchInput}
             </div>
           </div>
-          {buttons}
-        </div>
-      )
+        ) : (
+          <div class="app-card-padding flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              {levelSelect}
+              <div class="flex w-96 items-center gap-2">
+                {logTypeSelect}
+                {searchInput}
+              </div>
+            </div>
+            {buttons}
+          </div>
+        )
 
       return <div class="ctrls-bar">{content}</div>
     }

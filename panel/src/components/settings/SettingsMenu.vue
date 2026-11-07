@@ -40,6 +40,14 @@
           </button>
         </li>
       </ul>
+      <!-- 窄屏专用:页签行右侧的小工具(连接页放「活跃 / 已关闭」页签、日志页放级别和按钮)。
+           只有页面传了 mobile-actions 插槽才渲染,显不显示由页面自己的样式决定,和上游 v0.1.413 一致 -->
+      <div
+        v-if="$slots['mobile-actions']"
+        class="settings-menu-mobile-actions"
+      >
+        <slot name="mobile-actions" />
+      </div>
       <div
         id="settings-header-actions"
         class="ml-auto flex shrink-0 items-center gap-2"
