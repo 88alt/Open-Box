@@ -60,7 +60,7 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
 [x] idna / urlx UTS46 轻量映射表（内置忽略字符 + 兼容映射 + 简易双向；覆盖 gen-urlx --wide 语料主要条目）
 [~] 真机验证:真实路由器上经后端调用 core、sing-box 启动成功(由维护者做,记录在 backend/STATUS.md 的真机条目)
 [x] clientBindings：按 IPv6 绑定扩展终端分流来源（NormalizeClientRoutes + ExpandSourcesWithBindings）
-[~] 整理测试数据来源(ipx、dnsrewrite、servers、directhosts、dnsfilter 已换自写向量;其余模块待换)
+[~] 整理测试数据来源(全部叶子模块已换自写向量:ipx、dnsrewrite、servers、directhosts、dnsfilter、clientroutes;routing / groups / config 金标准待换)
 [ ] 第四节里其余后续工作
 
 
@@ -77,7 +77,8 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
    - [x] servers: `internal/servers/servers_test.go` 自写向量(shadowsocks / vless / tuic / hysteria2 / mixed 五种入站的字段、TLS 开关与证书路径、obfs、mixed 认证与空密码、启用过滤与顺序、缺端口);变异测试 27 个抓到 24 个,存活 3 个是等价变异(空变异、空项或假值不跳过也会因没有 protocol 被 default 丢弃、非数组返回 nil 与空切片遍历结果相同);leaf_golden 仍作回归。
    - [x] directhosts: `internal/directhosts/directhosts_test.go` 自写向量(节点服务器地址的清洗与分类、订阅链接主机按 WHATWG 取法、urls 优先于 url、跨来源去重与顺序、共用 CDN 段判定与表内容、节点直连规则集名称与路径);变异测试 35 个抓到 28 个,存活 7 个是等价变异(空变异、localhost 与空串本来就因无点被丢弃、假值转字符串后无点被丢弃、URL 解析自己会去首尾空白、空 URL 无主机、无效 URL 返回空串被 add 跳过);其中 IPv6 判定的冒号前提原本漏网,已补手写用例;leaf_golden 仍作回归。
    - [x] dnsfilter: `internal/dnsfilter/dnsfilter_test.go` 自写向量(关闭时返回非 nil 空切片、开启的真假判定、未就绪的各种情形与固定报错文字、五个数组字段的类型校验与校验顺序、sets 原样带出、重要封锁在前、放行名单按重要性拼进排除项并保持顺序、important 非布尔的封锁整条跳过、单条与 and 两种规则形态);变异测试 38 个抓到 35 个,存活 3 个是等价变异(空变异、产物为假值时取不到 key 本来就报未就绪、单条规则的拷贝对象是函数内部新建的);leaf_golden 与 dnsfilter_golden 仍作回归。
-   - [ ] 其余叶子(clientroutes)与 routing/groups/config 金标准待换。
+   - [x] clientroutes: `internal/clientroutes/normalize_test.go` + `sources_test.go` 自写向量(NormalizeCidr / NormalizeMac 写法边界、NormalizeClientRoutes 的丢弃规则与 JSON 键序、bypass 出口的取法、老档案推算 mac、绑定表两种键名、SourceMatch、IsDirect / IsProxy、TerminalDNSRedirected 全部分支、Bypass / Admit 来源收集、AdmitDNSDirect 缺省值、GuardTerminalRules 的拆分与不写穿入参);变异测试 89 个抓到 82 个,存活 7 个里 4 个是等价变异(空变异、空串本来就不是 IP、前缀长度正则已保证非负、非对象取不到出口本来就被丢),另外 3 个(出口为空且两个 tag 都有值、invert 归条件那份、不写穿入参切片)原本漏网,已补手写用例并重跑抓到;bindings.go 沿用已有的 bindings_test.go;leaf_golden 仍作回归。
+   - [ ] routing / groups / config 金标准待换(下一步从 routing 里较小的零件开始:dnsupstream、flip、rulesets)。
 3. 跟着 sing-box 更新(见第五节):sing-box 发新版、配置格式变化时,更新 core 输出和对应测试。backend 的工作流里固定了一个 sing-box 版本(现为 1.14.4),升级时一起改。
 4. 授权三个方法:新后端不调用,先保留,等后端稳定后再决定是否删除。
 5. core/UPSTREAM_VERSION(现为 v0.1.354):原本记录"最后对齐的上游版本"。按第五节的规则不再按上游版本推进,默认不再改动,处理方式由维护者定。
