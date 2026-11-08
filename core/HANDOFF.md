@@ -60,7 +60,7 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
 [x] idna / urlx UTS46 轻量映射表（内置忽略字符 + 兼容映射 + 简易双向；覆盖 gen-urlx --wide 语料主要条目）
 [~] 真机验证:真实路由器上经后端调用 core、sing-box 启动成功(由维护者做,记录在 backend/STATUS.md 的真机条目)
 [x] clientBindings：按 IPv6 绑定扩展终端分流来源（NormalizeClientRoutes + ExpandSourcesWithBindings）
-[~] 整理测试数据来源(全部叶子模块已换自写向量:ipx、dnsrewrite、servers、directhosts、dnsfilter、clientroutes;routing 里 dnsupstream、flip、rulesets、urlhost、dnsnames、geo、outbound(含 export 的出口)、fingerprint 已换,其余 routing / groups / config 金标准待换)
+[~] 整理测试数据来源(全部叶子模块已换自写向量:ipx、dnsrewrite、servers、directhosts、dnsfilter、clientroutes;routing 里 dnsupstream、flip、rulesets、urlhost、dnsnames、geo、outbound(含 export 的出口)、fingerprint、dns 的辅助函数部分已换,其余 routing / groups / config 金标准待换)
 [ ] 第四节里其余后续工作
 
 
@@ -85,7 +85,8 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
    - [x] routing/geo: `internal/routing/geo_test.go` 自写向量(setAvailableGeoTags / geoRulesetAvailable: nil 名单不过滤、有名单只放行名单内 geoip-/geosite- 前缀、空名单 geo 前缀全挡、非前缀一律放行; sliceUTF16 按 UTF-16 码元截断含代理对中间替换符; normalizeNotes 非空字符串键值、跳过 __proto__、值截 60 码元、非字符串丢掉; nilIfEmpty 空变 nil); export 为纯导出无逻辑。
    - [x] routing/outbound + export: `internal/routing/outbound_test.go` 自写向量(parseBuiltin 非对象回落默认、对象缺键不补默认且开关按 JS 真假; parseMembers 缺省按 direct、非字符串成员占位空串; effectiveOutbound 含改名、proxy 取首个非内置、空成员、空名字; resolveSelectionLeaf 含环、自指、非字符串占位、16 层封顶; policyChosenOutbound / policyGoesDirect; customPolicyActive / customOutboundTag / customRuleTag, ruleUrl 的 FNV-1a 标签值用独立 Python 另算核对; export 的 NewBuiltin / Direct / Block 与各出口手写期望点一遍)。变异 31 个全部被抓住,空变异漏网。
    - [x] routing/fingerprint: `internal/routing/fingerprint_test.go` 自写向量(quote 逐个转义字符、0x20 以下写小写十六进制、U+2028/2029 与 emoji 原样、非法 UTF-8 按替换符是有意保留的差异; writeStrs / writeBool / writeField / writePolicy / writePolicies / stringify 的手写 JSON 文本,键序固定,default / notes / 规则备注 / fallback.default 不进输出,三处 missingRulesets 非空才带; iconScale 整数写法含 -5、2^53、1e18; routingFingerprint 的十六进制值用独立 Python 对手写 JSON 另算 sha256 前 16 位核对,不影响指纹的改动与每个会影响指纹的改动逐个比对且互不相撞,顺序也算)。变异 41 个,40 个被抓住;漏网的 1 个是等价变异(高半字节查表改大写,控制符高半字节只会是 0 或 1,输出不可能变),空变异也漏网。
-   - [ ] routing 其余零件(dns、route、plans、entry、migrate、model、bypass、jsval)/ groups / config 金标准待换。
+   - [x] routing/dns 辅助函数部分(BuildDNS 本体见下一条未做项): `internal/routing/dns_helpers_test.go` 自写向量(常量与固定 tag、FakeIPCachePath 的 `_` 替换、DNSStrategy / DNSFakeIPEnabled / IPv6ProxyMode / IPv6InTun / DNSMode 按 JS 真假与严格相等读 profile,含 null、非对象、空数组、非字符串模式的占位; customDnsMatch 各类型与 geoip / ipCidr / port 不进 DNS、规则集链接按形状表只留域名那份; policyDnsRule 与 hasDomainCondition 的键名与条件、ip_cidr 不进来; withKeys / merge 不改入参、后写的赢、落单键忽略; extraTag、httpsRRRule、localNameRules 逐字)。变异 60 个,55 个被抓住;漏网的 5 个都是等价变异:DNSFakeIPEnabled 里 dns 为假值时的早退(往下走 Get 得 undefined,结果同样是 false)、IPv6ProxyMode 里 profile 为假值时的早退(同理得 off)、customDnsMatch 开头对 ipCidr / port / geoip 的早退(ipCidr、port 的规则名为空串且字段映射为空,geoip 的 geoip- 规则集被 dnsRulesetTags 滤掉,同样返回 nil)。
+   - [ ] routing 其余零件(dns 的 BuildDNS 本体、route、plans、entry、migrate、model、bypass、jsval)/ groups / config 金标准待换。
 3. 跟着 sing-box 更新(见第五节):sing-box 发新版、配置格式变化时,更新 core 输出和对应测试。backend 的工作流里固定了一个 sing-box 版本(现为 1.14.4),升级时一起改。
 4. 授权三个方法:新后端不调用,先保留,等后端稳定后再决定是否删除。
 5. core/UPSTREAM_VERSION(现为 v0.1.354):原本记录"最后对齐的上游版本"。按第五节的规则不再按上游版本推进,默认不再改动,处理方式由维护者定。
