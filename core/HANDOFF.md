@@ -1,7 +1,7 @@
 openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
 
 写给下一位接手 core 的 AI。读完这份和 core/README.md,就可以接着做,不用反复问维护者。
-进度要对账:main 下的提交记录(git log -- core)是实时来源,本文第三节已按 2026-11-07 对账更新;两者冲突时以提交记录为准,并在补丁里顺手更新第三节。
+进度要对账:main 下的提交记录(git log -- core)是实时来源,本文第三节已按 2026-11-08 对账更新;两者冲突时以提交记录为准,并在补丁里顺手更新第三节。
 
 
 # 零、先读这一节
@@ -44,7 +44,7 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
   不要依赖 release.yml(它是上游版本,会被同步覆盖)。
 
 
-# 三、进度标记(2026-11-07 对账更新)
+# 三、进度标记(2026-11-08 对账更新)
 
 图例:[x] 完成  [~] 代码完成、待真机或待云端确认  [ ] 未做
 
@@ -60,7 +60,7 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
 [x] idna / urlx UTS46 轻量映射表（内置忽略字符 + 兼容映射 + 简易双向；覆盖 gen-urlx --wide 语料主要条目）
 [~] 真机验证:真实路由器上经后端调用 core、sing-box 启动成功(由维护者做,记录在 backend/STATUS.md 的真机条目)
 [x] clientBindings：按 IPv6 绑定扩展终端分流来源（NormalizeClientRoutes + ExpandSourcesWithBindings）
-[~] 整理测试数据来源(全部叶子模块已换自写向量:ipx、dnsrewrite、servers、directhosts、dnsfilter、clientroutes;routing 里 dnsupstream、flip、rulesets、urlhost、dnsnames、geo、outbound(含 export 的出口)、fingerprint、dns 的辅助函数与 BuildDNS 的错误路径 / 分流关短路径 / 分流开着的骨架(没有站点集、自定义分流、终端分流)、站点集成对规则、前置自定义分流块、订阅 / 节点站点直连块与终端分流块(含名单外终端)已换,BuildDNS 到此全部换完,route(BuildRoute 与 PreMatchBypassRules)已换,plans 的 classes 与 forwardPlan 已换,entryPlan 已换,bypassPlan(含 planOpts 解析)已换,其余 routing(migrate、model、jsval)/ groups / config 金标准待换)
+[~] 整理测试数据来源(全部叶子模块已换自写向量:ipx、dnsrewrite、servers、directhosts、dnsfilter、clientroutes;routing 里 dnsupstream、flip、rulesets、urlhost、dnsnames、geo、outbound(含 export 的出口)、fingerprint、dns 的辅助函数与 BuildDNS 的错误路径 / 分流关短路径 / 分流开着的骨架(没有站点集、自定义分流、终端分流)、站点集成对规则、前置自定义分流块、订阅 / 节点站点直连块与终端分流块(含名单外终端)已换,BuildDNS 到此全部换完,route(BuildRoute 与 PreMatchBypassRules)已换,plans 的 classes 与 forwardPlan 已换,entryPlan 已换,bypassPlan(含 planOpts 解析)已换,migrate(含地区层迁移与 policyToAny)已换,其余 routing(model、jsval)/ groups / config 金标准待换)
 [ ] 第四节里其余后续工作
 
 
@@ -96,7 +96,8 @@ openbox-core 交接笔记(第 5 版,只管 core;后端另见 backend/HANDOFF.md)
    - [x] routing/plans(classes 与 forwardPlan;bypassPlan 在 bypass.go,归「bypass」那一项): `internal/routing/plans_classes_test.go` + `plans_forward_test.go` 自写向量,期望值人工推算(classOf 先判直连再判拒绝、改名后只认新名字、内置对象缺键时两个名字都是空串;policyClasses 的键是生效站点集加兜底名,停用 / 没条件 / 叫「其他」或叫兜底名的不在里面,同名后写的赢,选择顺着 selector 链下钻、成环与非字符串按 proxy,成员为空一律 proxy;forwardPlan:兜底不走直连整体退成 all 且别的都不看,default 空着 / 指向不存在的组落到成员第一项,proxy 记号取第一个非内置成员;前置自定义分流启用且有规则才看,出口先换成当前名字再比,直连的行跳过,域名 / 后缀进名单(转小写、去通配、IDN 转 punycode、去重),geosite / 规则集链接进展开表(规则集链接的 list- 标签用 Python 按 FNV-1a 另算),域名关键词 / 规则集展不开退成 all,ipCidr / geoip / port 跳过,出口为拒绝的所属多一句「要拒绝的」(写不进的报错因此读作「要拒绝的的域名」,有意保留原文);站点集此刻走直连的跳过,先判域名关键词再收 domain 后 domainSuffix 再展开非 geoip- 规则集,展开表不去重,只有 ipCidr / geoip- 的站点集什么都不进;写不进 / 展不开时之前攒的域名一概不带,自定义分流先于站点集报错;rewriteDomains 只收非空字符串、原样追加不转小写、只与完全相同的去重、自身不做合法性检查;名单和展开表为空 → none,JSON 键序与空数组逐字节比;不写穿入参;classes / forwardPlan 经协议入口的缺省参数与非法形状参数(planArgs);jsTruthy / cloneStrs 的真假表与拷贝)。变异 66 个(含 1 个空变异和 1 个空操作变异),63 个被抓住;漏网的 3 个是空变异、空操作变异和 1 个等价变异(planArgs 里成员参数为 null 时总去解析:parseMembers(nil) 本来就返回 [direct],与缺省相同);plans_golden 与 plans_test 里原有的 TestBypassPlanIgnoreProxyClients / TestDnsmasqSafeDomain 保留作回归。
    - [x] routing/entry(entryPlan): `internal/routing/entry_plan_test.go` 自写向量,期望值人工推算(选项缺省与 JS 真假:enabled 缺省为开、null 也算关,members / builtin / selections 传 null 当没传,dnsMode 只有恰好是字符串 off 才算 DNS 禁用,选项不是对象全取缺省;退回 blacklist 的前提按固定顺序取第一条:直连不进内核关着 → 没开 FakeIP → DNS 禁用 → 兜底不走直连 → 有终端走代理 → 前置自定义分流的端口行 / 规则集行(先出现的先报,在它前面的行什么都不留);blacklist 的 fakeIp 是「FakeIP 开着且 DNS 没禁用」,needSets / needCidrs 恒为 [];directAnswer 看选项开关 / FakeIP / DNS 模式 / 是否有出口非内置直连的端口行,因 whitelist 里它恒为 true,单独用「兜底走代理」把结果钉在 blacklist 上验证改名后端口行的出口判定;proxyClient 只看出口(真值且不是当前直连名),按现有实现停用的终端分流也算;whitelist:自定义分流里出口非直连的行,ipCidr 不去重、geoip 去重并原样拼值,域名类行不管;站点集按序、走代理 / 拒绝的收 geoip- 与 ipCidr(与已有的完全相同才去重,含自定义分流那几条),geosite- / 规则集链接不管;内置改名后老记号与新名字的判定;JSON 键序与空数组逐字节比;不写穿入参;协议入口缺省参数)。变异 49 个(含 1 个空变异),48 个里 47 个被抓住;漏网的 1 个是等价变异(whitelist 的 directAnswer 写死 true:能走到那里说明没有非直连的端口行,变量本来也是 true)和空变异;其中「directAnswer 对端口行出口只认老记号 direct」原本漏网,已补手写用例(TestEntryPlanDirectAnswerPortRowRenamed)并重跑抓到。另对 bypass.go 里 entry 依赖的选项解析(parsePlanOpts / dnsOff / proxyClient)试了 9 个变异,7 个被抓住,2 个等价(clientRoutes 非数组时 asArray 失败本来就得到 nil、selections 为 null 时 parseSelections(nil) 得空表);这些解析函数本身的向量归下面「bypass」那一项。plans_golden 里 entryPlan 的条目与 entry_test.go 原有两条测试保留作回归。
    - [x] routing/bypass(bypassPlan 与 planOpts 选项解析): `internal/routing/bypass_plan_test.go` 自写向量,期望值人工推算(总开关关着直接返回关闭原因且不带提示、fakeIp 取 FakeIP 开着且 DNS 没禁用;sets 只收走直连站点集的 geoip- 规则集并去重保序;走代理的站点集记成在前规则(geoip / ipCidr / 规则集链接名,lists 没有就不带键),走直连的站点集排在其后变成待核对项并带当时在前规则的拷贝;前置自定义分流各类行(port 一律关、ipCidr / geoip 收进「前置自定义分流」在前规则、ruleUrl 只在 FakeIP 开着时收规则集名否则关、ruleset 一律关、域名 / 后缀 / 关键词 / geosite 不是 FakeIP 开着就关,出口是内置直连的跳过,改名后老记号与新名字都认);有终端走代理关旁路,ignoreProxyClients 只补一句提示;不是 FakeIP 开着时走代理的域名类站点集与兜底走代理都关;提示与原因的先后与分号连接;选项缺省与 JS 真假;JSON 键序与空数组逐字节比;不写穿入参;协议入口缺省参数)。变异 75 个(含 1 个空变异),71 个被抓住;漏网的 4 个是空变异和 3 个等价变异(members / builtin / selections 传 null 当传了:解析函数对 null 本来就回落默认)。「只有 geoip 行的自定义分流」「只有规则集链接的走代理站点集」「改名后终端出口的直连判定」三处原本漏网,已补手写用例并重跑抓到;plans_test 里原有的 TestBypassPlanIgnoreProxyClients 保留。
-   - [ ] routing 其余零件(migrate、model、jsval)/ groups / config 金标准待换。
+   - [x] routing/migrate(migrateStoredRouting、地区层迁移 migrateRegion / normalizeRegion / normalizeRegionRule / targetOf、老档案翻译 migrateLegacy、policyToAny): `internal/routing/migrate_vectors_test.go` 自写向量,期望值人工推算(没有老字段原样返回 changed 为假,非对象当 {};十个老字段各自单独出现都触发迁移、值是 null 也算在、近似键名不算,迁完老字段全删、别的键带走;categories 逐条一个站点集(id 为 legacy-+规则集名、default 取 target、废项跳过)、directRulesets 去掉 geosite-cn / geoip-cn 后合成「始终直连」、两者同在时 categories 在前;空 policies 加非空 categories(或带 cn 之外项的 directRulesets)才翻译,用户自己的 policies 原样保留且不归一化,空数组保持空数组;地区层:fallbackDefault 是非空字符串就当已迁过,空白 / 非字符串当没写;内置三个地区、regionId 优先于 regionMode(前后空白去掉、查不到退第一个、大小写敏感)、regionMode 映射 CN / HKMO / OTHER 且在自定义地区里按 id 找、重复 id 取第一个、没写 id 的地区对不上 regionId、选中的地区缺 id 和名字用缺省(region-region-0-direct / 地区-1·直连);直连 / 代理各拆至多一个站点集、直连在前、域名不去重规则集去重、图标为地球、地区兜底写进 fallbackDefault(catchAll 与 fallback 的取法含写错的真值按直连、空串 / 0 / false 当没写、空数组空对象是真值);老式地区的 rulesets 加 target 按前缀拆 geosite / geoip(geoip 必须带横线、target 写错或带空白按直连、rules 是数组时不再看它);翻译出的站点集排在 categories / 用户站点集后面;规则库名单里缺的规则集进 missingRulesets;迁完再迁一次 changed 为假且内容不变;不写穿入参;协议入口缺参数 / null / 数组 / 带 geoTags 且不串到下一次调用;policyToAny 的键、空列表是 [] 不是 null、notes 是拷贝、缺规则集非空才带键)。变异 89 个(含 1 个空变异),82 个被抓住;漏网的 7 个是空变异和 6 个等价变异(directRulesets 里非字符串项:断言失败得到的空串本来就不在 cn 名单里;空 policies 且没有 categories 时是否翻译:migrateLegacy 在这种输入下本来就译不出东西,hasLegacy 的门槛是冗余的;原有的空 policies 不重写:res 已经带着原来的空数组;legacy 的 target 不 trim:normalizePolicy 的 default 自己会 trim;regionMode 不判空白:外层已按非空判断、空白串查映射表同样得到空串;按任一前缀去前缀:geosite 的标签不可能以 geoip- 开头)。「写错的真值时不再看 fallback」「regionMode CN / HKMO 在自定义地区里按 id 找」「geoip 前缀必须带横线」三处原本漏网,已补手写用例并重跑抓到;migrate_test.go 里原有的性质测试与 routing_golden 里 migrateStoredRouting 的条目保留作回归。
+   - [ ] routing 其余零件(model、jsval)/ groups / config 金标准待换。
 3. 跟着 sing-box 更新(见第五节):sing-box 发新版、配置格式变化时,更新 core 输出和对应测试。backend 的工作流里固定了一个 sing-box 版本(现为 1.14.4),升级时一起改。
 4. 授权三个方法:新后端不调用,先保留,等后端稳定后再决定是否删除。
 5. core/UPSTREAM_VERSION(现为 v0.1.354):原本记录"最后对齐的上游版本"。按第五节的规则不再按上游版本推进,默认不再改动,处理方式由维护者定。
