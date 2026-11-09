@@ -3,6 +3,7 @@ package routing
 import (
 	"fmt"
 	"github.com/timeflysoon/Open-Box/core/internal/jsx"
+	"net/netip"
 	"regexp"
 	"strconv"
 	"strings"
@@ -193,11 +194,26 @@ func normalizeCustomRule(raw any) (CustomRule, bool) {
 			return CustomRule{}, false
 		}
 	}
+	// 网段写错的 ipCidr 行整理时丢掉(与 ruleUrl / port 同):原样写进配置会让 sing-box 启动失败。
+	if typ == "ipCidr" && !validIPCidr(value) {
+		return CustomRule{}, false
+	}
 	note := ""
 	if n, ok := nonEmpty(m["note"]); ok {
 		note = sliceUTF16(n, noteMax)
 	}
 	return CustomRule{Type: typ, Value: value, Outbound: outbound, Note: note}, true
+}
+
+// validIPCidr 与 sing-box 对 ip_cidr 的取法一致:带 "/" 按网段(netip.ParsePrefix),否则按单个地址(netip.ParseAddr)。
+// 前导零(01.2.3.4、/024)、地址带区域(%eth0)都不认;入参已去掉首尾空白。
+func validIPCidr(v string) bool {
+	if strings.Contains(v, "/") {
+		_, err := netip.ParsePrefix(v)
+		return err == nil
+	}
+	a, err := netip.ParseAddr(v)
+	return err == nil && a.Zone() == ""
 }
 
 func normalizeCustomPolicy(raw any) CustomPolicy {
