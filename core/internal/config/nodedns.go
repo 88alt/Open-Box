@@ -51,7 +51,8 @@ func strField(m map[string]any, key string) (string, bool) {
 	return s, ok
 }
 
-// ValidateNodeDNS 是保存前的校验:返回错误信息,合法返回 ""。nodeDns 为空(null / 缺失 / url 空)表示不用专用解析器。
+// ValidateNodeDNS 是保存前的校验:返回错误信息,合法返回 ""。nodeDns 为空表示不用专用解析器。
+// protocol 缺省或 https → DoH(url 或 server);tls → DoT(server 为主,兼容把 host 写在 url 里)。
 func ValidateNodeDNS(raw any) string {
 	if raw == nil || jsx.IsUndefined(raw) {
 		return ""
@@ -60,22 +61,71 @@ func ValidateNodeDNS(raw any) string {
 	if !isObj {
 		return "nodeDns must be an object"
 	}
-	url, bootstrap := "", ""
-	if s, ok := strField(m, "url"); ok {
-		url = jsx.Trim(s)
-	}
-	if s, ok := strField(m, "bootstrap"); ok {
-		bootstrap = jsx.Trim(s)
-	}
-	if _, has := m["url"]; has {
-		if _, ok := m["url"].(string); !ok {
-			return "nodeDns.url must be a string"
+	for _, key := range []string{"url", "bootstrap", "server", "protocol"} {
+		if _, has := m[key]; has {
+			if _, ok := m[key].(string); !ok {
+				return "nodeDns." + key + " must be a string"
+			}
 		}
 	}
-	if _, has := m["bootstrap"]; has {
-		if _, ok := m["bootstrap"].(string); !ok {
-			return "nodeDns.bootstrap must be a string"
+	proto, _ := strField(m, "protocol")
+	proto = strings.ToLower(jsx.Trim(proto))
+	if proto == "" {
+		proto = "https"
+	}
+	if proto != "https" && proto != "tls" {
+		return "nodeDns.protocol must be https or tls"
+	}
+	url, _ := strField(m, "url")
+	url = jsx.Trim(url)
+	server, _ := strField(m, "server")
+	server = jsx.Trim(server)
+	bootstrap, _ := strField(m, "bootstrap")
+	bootstrap = jsx.Trim(bootstrap)
+
+	if proto == "tls" {
+		host := server
+		if host == "" {
+			host = url
 		}
+		if host == "" {
+			if bootstrap != "" {
+				return "nodeDns.server is required when bootstrap is set"
+			}
+			return ""
+		}
+		if utf16Len(host) > 2048 {
+			return "nodeDns.server is too long"
+		}
+		// 允许裸 host 或 tls://host[:port]
+		if strings.Contains(host, "://") {
+			u, ok := urlx.Parse(host)
+			if !ok || u.Hostname == "" {
+				return "nodeDns.server must be a DoT host"
+			}
+			host = strings.TrimPrefix(strings.TrimSuffix(u.Hostname, "]"), "[")
+			if u.Port != "" {
+				if n, err := strconv.Atoi(u.Port); err != nil || n < 1 || n > 65535 {
+					return "nodeDns.server must be a DoT host"
+				}
+			}
+		}
+		// 裸 host 不能带端口、路径等(端口走 port 字段或 tls://host:port);IPv6 字面量含 ":" 但 isIP 放行
+		if host == "" || (!isIP(host) && strings.ContainsAny(host, " /\\:?#@")) {
+			return "nodeDns.server must be a DoT host"
+		}
+		if bootstrap != "" && !isIP(bootstrap) {
+			return "nodeDns.bootstrap must be an IP address"
+		}
+		if bootstrap == "" && !isIP(host) {
+			return "nodeDns.bootstrap is required when the DoT address is a domain"
+		}
+		return ""
+	}
+
+	// https / DoH
+	if url == "" {
+		url = server
 	}
 	if url == "" {
 		if bootstrap != "" {
@@ -101,7 +151,11 @@ func ValidateNodeDNS(raw any) string {
 
 // NodeDNSConf 是存下来的样子:没配就是 nil。
 type NodeDNSConf struct {
-	URL       string
+	Protocol  string // https | tls
+	URL       string // DoH 完整 URL(https)
+	Server    string // DoT 主机或 DoH 解析出的 host
+	Port      int    // 0 表示默认
+	Path      string // DoH path
 	Bootstrap string
 }
 
@@ -110,13 +164,61 @@ func NormalizeNodeDNS(raw any) *NodeDNSConf {
 	if !ok {
 		return nil
 	}
-	url, _ := strField(m, "url")
-	url = jsx.Trim(url)
-	if url == "" || ValidateNodeDNS(raw) != "" {
+	if ValidateNodeDNS(raw) != "" {
 		return nil
 	}
+	proto, _ := strField(m, "protocol")
+	proto = strings.ToLower(jsx.Trim(proto))
+	if proto == "" {
+		proto = "https"
+	}
+	url, _ := strField(m, "url")
+	url = jsx.Trim(url)
+	server, _ := strField(m, "server")
+	server = jsx.Trim(server)
 	bootstrap, _ := strField(m, "bootstrap")
-	return &NodeDNSConf{URL: url, Bootstrap: jsx.Trim(bootstrap)}
+	bootstrap = jsx.Trim(bootstrap)
+
+	if proto == "tls" {
+		host := server
+		if host == "" {
+			host = url
+		}
+		if host == "" {
+			return nil
+		}
+		port := 853
+		if strings.Contains(host, "://") {
+			u, ok := urlx.Parse(host)
+			if !ok {
+				return nil
+			}
+			host = strings.TrimPrefix(strings.TrimSuffix(u.Hostname, "]"), "[")
+			if u.Port != "" {
+				if n, err := strconv.Atoi(u.Port); err == nil {
+					port = n
+				}
+			}
+		}
+		if v, ok := m["port"].(float64); ok {
+			if int(v) >= 1 && int(v) <= 65535 && v == float64(int(v)) {
+				port = int(v)
+			}
+		}
+		return &NodeDNSConf{Protocol: "tls", Server: host, Port: port, Bootstrap: bootstrap}
+	}
+
+	if url == "" {
+		url = server
+	}
+	if url == "" {
+		return nil
+	}
+	parsed, ok := parseDohURL(url)
+	if !ok {
+		return nil
+	}
+	return &NodeDNSConf{Protocol: "https", URL: url, Server: parsed.host, Port: parsed.port, Path: parsed.path, Bootstrap: bootstrap}
 }
 
 // safeID:非 [A-Za-z0-9_-] 的字符(按 UTF-16 码元,和 JS 的不带 u 标志的正则一致)换成 _,最长 40。
@@ -141,27 +243,29 @@ func safeID(id any) string {
 	return b.String()
 }
 
-// NodeDNSServers:一份 nodeDns → 内核的 DNS 服务器(DoH 一台,地址是域名时再加一台 bootstrap)。tag 按订阅 id 取,稳定。
+// NodeDNSServers:一份 nodeDns → 内核的 DNS 服务器(DoH 或 DoT 一台,地址是域名时再加一台 udp bootstrap)。tag 按订阅 id 取,稳定。
 func NodeDNSServers(nodeDns any, id any) (tag string, servers []map[string]any, ok bool) {
 	conf := NormalizeNodeDNS(nodeDns)
 	if conf == nil {
 		return "", nil, false
 	}
-	d, _ := parseDohURL(conf.URL)
 	tag = NodeDNSTagPrefix + safeID(id)
-	needsBootstrap := !isIP(d.host)
-	doh := map[string]any{"type": "https", "tag": tag, "server": d.host}
-	if d.port != 443 {
-		doh["server_port"] = d.port
+	typ, defaultPort := "https", 443
+	if conf.Protocol == "tls" {
+		typ, defaultPort = "tls", 853
 	}
-	if d.path != "" && d.path != "/dns-query" {
-		doh["path"] = d.path
+	entry := map[string]any{"type": typ, "tag": tag, "server": conf.Server}
+	if conf.Port != defaultPort {
+		entry["server_port"] = conf.Port
 	}
-	if needsBootstrap {
-		doh["domain_resolver"] = tag + "-bootstrap"
-		return tag, []map[string]any{doh, {"type": "udp", "tag": tag + "-bootstrap", "server": conf.Bootstrap}}, true
+	if typ == "https" && conf.Path != "" && conf.Path != "/dns-query" {
+		entry["path"] = conf.Path
 	}
-	return tag, []map[string]any{doh}, true
+	if !isIP(conf.Server) {
+		entry["domain_resolver"] = tag + "-bootstrap"
+		return tag, []map[string]any{entry, {"type": "udp", "tag": tag + "-bootstrap", "server": conf.Bootstrap}}, true
+	}
+	return tag, []map[string]any{entry}, true
 }
 
 // NodeDNSPlan 是 planNodeDns 的结果:Servers 是全部要加的 DNS 服务器,BySubscription 是 订阅 id → DoH 的 tag

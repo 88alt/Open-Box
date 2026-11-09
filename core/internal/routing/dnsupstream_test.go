@@ -97,7 +97,7 @@ func TestNormalizeDNSUpstream(t *testing.T) {
 }
 
 func TestDNSProtocolAndPort(t *testing.T) {
-	for _, p := range []string{"udp", "tcp"} {
+	for _, p := range []string{"udp", "tcp", "tls"} {
 		if !isDNSProtocol(p) {
 			t.Errorf("%q 应是合法协议", p)
 		}
@@ -105,7 +105,7 @@ func TestDNSProtocolAndPort(t *testing.T) {
 			t.Errorf("dnsProtocolOr(%q) = %q", p, got)
 		}
 	}
-	for _, v := range []any{"UDP", "Tcp", "tls", "https", "", " udp", nil, 1.0, true, []any{"udp"}} {
+	for _, v := range []any{"UDP", "Tcp", "TLS", "https", "", " udp", nil, 1.0, true, []any{"udp"}} {
 		if isDNSProtocol(v) {
 			t.Errorf("%#v 不应是合法协议", v)
 		}
@@ -119,17 +119,23 @@ func TestDNSProtocolAndPort(t *testing.T) {
 		if p, ok := isValidDNSPort(f); !ok || p != want {
 			t.Errorf("端口 %v:got (%d,%v)", f, p, ok)
 		}
-		if got := dnsPortOr(f); got != want {
-			t.Errorf("dnsPortOr(%v) = %d", f, got)
+		if got := dnsPortOr(f, "udp"); got != want {
+			t.Errorf("dnsPortOr(%v,udp) = %d", f, got)
 		}
 	}
 	for _, v := range []any{0.0, -1.0, 65536.0, 100000.0, 53.5, 0.1, "53", "", nil, true, []any{53.0}} {
 		if _, ok := isValidDNSPort(v); ok {
 			t.Errorf("端口 %#v 应不合法", v)
 		}
-		if got := dnsPortOr(v); got != DefaultDNSPort {
-			t.Errorf("dnsPortOr(%#v) = %d,想要默认 53", v, got)
+		if got := dnsPortOr(v, "udp"); got != DefaultDNSPort {
+			t.Errorf("dnsPortOr(%#v,udp) = %d,想要默认 53", v, got)
 		}
+		if got := dnsPortOr(v, "tls"); got != DefaultDoTPort {
+			t.Errorf("dnsPortOr(%#v,tls) = %d,想要默认 853", v, got)
+		}
+	}
+	if dnsDefaultPort("tls") != 853 || dnsDefaultPort("udp") != 53 || dnsDefaultPort("tcp") != 53 {
+		t.Fatal("dnsDefaultPort")
 	}
 }
 
@@ -236,7 +242,8 @@ func TestUpstreamOf(t *testing.T) {
 		{"wan 读不到系统上游按 intl 退回", intlProfile, "wan", nil, nil, "udp", "wan", nil, up("udp", "1.1.1.1", 53, true)},
 		{"普通地址", cnProfile, "8.8.8.8", "tcp", 5353.0, "udp", "wan", sys, up("tcp", "8.8.8.8", 5353, false)},
 		{"地址从 URL 折出来", cnProfile, "https://9.9.9.9/dns-query", nil, nil, "udp", "wan", sys, up("udp", "9.9.9.9", 53, false)},
-		{"协议非法退回 fallback", cnProfile, "8.8.8.8", "tls", nil, "tcp", "wan", sys, up("tcp", "8.8.8.8", 53, false)},
+		{"协议非法退回 fallback", cnProfile, "8.8.8.8", "https", nil, "tcp", "wan", sys, up("tcp", "8.8.8.8", 53, false)},
+		{"tls 合法,默认端口 853", cnProfile, "8.8.8.8", "tls", nil, "tcp", "wan", sys, up("tls", "8.8.8.8", 853, false)},
 		{"端口非法退回 53", cnProfile, "8.8.8.8", "udp", 70000.0, "tcp", "wan", sys, up("udp", "8.8.8.8", 53, false)},
 		{"地址非法且 invalid=wan:退成 wan", cnProfile, "dns.google", "tcp", 5353.0, "udp", "wan", sys, up("udp", "192.168.1.1", 53, true)},
 		{"地址缺失且 invalid=wan:退成 wan", cnProfile, nil, nil, nil, "udp", "wan", sys, up("udp", "192.168.1.1", 53, true)},
@@ -400,12 +407,19 @@ func TestExtraUpstreams(t *testing.T) {
 	})
 
 	t.Run("协议端口非法时退回各自默认", func(t *testing.T) {
-		p := build(`{"direct":"1.1.1.1","proxy":"2.2.2.2","directExtras":[{"server":"3.3.3.3","protocol":"tls","port":0}],"proxyExtras":[{"server":"4.4.4.4","protocol":"tls","port":70000}]}`)
+		p := build(`{"direct":"1.1.1.1","proxy":"2.2.2.2","directExtras":[{"server":"3.3.3.3","protocol":"https","port":0}],"proxyExtras":[{"server":"4.4.4.4","protocol":"https","port":70000}]}`)
 		if got := directExtraUpstreams(p, sys); !reflect.DeepEqual(got, []upstream{up("udp", "3.3.3.3", 53, false)}) {
 			t.Errorf("直连:%+v", got)
 		}
 		if got := proxyExtraUpstreams(p, sys); !reflect.DeepEqual(got, []upstream{up("tcp", "4.4.4.4", 53, false)}) {
 			t.Errorf("代理:%+v", got)
+		}
+	})
+
+	t.Run("tls 备用上游合法,默认端口 853", func(t *testing.T) {
+		p := build(`{"direct":"1.1.1.1","directExtras":[{"server":"3.3.3.3","protocol":"tls"}]}`)
+		if got := directExtraUpstreams(p, sys); !reflect.DeepEqual(got, []upstream{up("tls", "3.3.3.3", 853, false)}) {
+			t.Errorf("直连 tls:%+v", got)
 		}
 	})
 
@@ -445,5 +459,65 @@ func TestDNSServerEntry(t *testing.T) {
 		if got := enc(dnsServerEntry(c.up, c.tag, c.detour)); got != c.want {
 			t.Errorf("%s:\n got  %s\n want %s", c.name, got, c.want)
 		}
+	}
+}
+
+func TestDoTUpstreamAndDomain(t *testing.T) {
+	for _, h := range []string{"dns.google", "one.one.one.one", "DNS.Google"} {
+		if !isDNSDomainHost(h) {
+			t.Errorf("%q 应是域名主机", h)
+		}
+	}
+	for _, h := range []string{"1.1.1.1", "wan", "", "localhost", "a..b", "-a.com", "a-.com", "a b.com", "a.com/x", "a.com:853", "例子.com"} {
+		if isDNSDomainHost(h) {
+			t.Errorf("%q 不应是域名主机", h)
+		}
+	}
+	if got := normalizeDNSDomain("tls://DNS.Google:853"); got != "dns.google" {
+		t.Errorf("带协议头折域名:%q", got)
+	}
+
+	prof := map[string]any{"dns": map[string]any{"direct": "dns.google", "directProtocol": "tls"}}
+	up := directUpstream(prof, []any{"8.8.8.8"})
+	if up.Protocol != "tls" || up.Server != "dns.google" || !up.Domain || up.Port != 853 {
+		t.Fatalf("直连 DoT 域名:%+v", up)
+	}
+	ents := dnsServerEntries(up, "dns-direct", "", prof, []any{"8.8.8.8"})
+	if len(ents) != 2 {
+		t.Fatalf("条目数 %d", len(ents))
+	}
+	if ents[0]["type"] != "tls" || ents[0]["domain_resolver"] != "dns-direct-bootstrap" || ents[0]["server"] != "dns.google" {
+		t.Fatalf("主条目 %+v", ents[0])
+	}
+	if _, has := ents[0]["server_port"]; has {
+		t.Fatalf("默认 853 不应写 server_port:%+v", ents[0])
+	}
+	if ents[1]["type"] != "udp" || ents[1]["tag"] != "dns-direct-bootstrap" || ents[1]["server"] != "8.8.8.8" {
+		t.Fatalf("bootstrap %+v", ents[1])
+	}
+
+	// 非默认端口 + detour:bootstrap 不带 detour
+	up3 := upstream{Protocol: "tls", Server: "dns.example", Port: 8853, Domain: true}
+	e3 := dnsServerEntries(up3, "dns-proxy", "proxy", prof, []any{"8.8.8.8"})
+	if e3[0]["server_port"] != 8853 || e3[0]["detour"] != "proxy" {
+		t.Fatalf("端口与 detour:%+v", e3[0])
+	}
+	if _, has := e3[1]["detour"]; has {
+		t.Fatalf("bootstrap 不应带 detour:%+v", e3[1])
+	}
+
+	// IP + tls:不带 bootstrap
+	up2 := upstreamOf(prof, "1.1.1.1", "tls", nil, "udp", "1.1.1.1", nil)
+	if up2.Domain || up2.Port != 853 {
+		t.Fatalf("tls IP:%+v", up2)
+	}
+	if n := len(dnsServerEntries(up2, "t", "", prof, nil)); n != 1 {
+		t.Fatalf("tls IP 条目数 %d", n)
+	}
+
+	// 域名但协议不是 tls:仍按非法退回(直连退成上游 DNS)
+	prof2 := map[string]any{"dns": map[string]any{"direct": "dns.google", "directProtocol": "udp"}}
+	if u := directUpstream(prof2, []any{"8.8.8.8"}); !u.Wan || u.Domain {
+		t.Fatalf("udp + 域名应退成 wan:%+v", u)
 	}
 }

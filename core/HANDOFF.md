@@ -133,6 +133,7 @@ openbox-core 交接笔记(第 6 版,只管 core;后端另见 backend/HANDOFF.md)
   - 概览顶栏改为「Open-Box Latest」与魔改 sing-box 版本号。
 
 维护者记录
+- (2026-11-08)DNS 上游(直连 / 代理 / 备用)与订阅的节点专用解析(nodeDns)支持 DoT:协议加 tls,默认端口 853,地址是域名时生成 domain_resolver 加 udp bootstrap;nodeDns 的 protocol 取 https 或 tls。对齐上游 v0.1.422 的公开能力,按 sing-box 1.12+ DNS server 文档(type:tls / type:https)自写。dns_golden 里档案带 tls 协议的 buildDns 旧用例(基线把 tls 当非法协议退回默认)按有意差异跳过,新行为由 dnsupstream_test.go、builddns_dot_test.go、nodedns_dot_test.go 覆盖。
 - (2026-11-08)对齐限制尽量放开:闭源对齐靠看行为,不必在文档里给自己加禁止条款。
 - (2026-11-02)loadbalance 按上游 v0.1.387 行为对齐(字段、默认 120s、成员只收节点、上限 64、空 outbounds 照写);自研实现与测试。
 - (2026-11-02)前端 i18n 对齐上游 v0.1.388;有意例外见上。

@@ -9,17 +9,20 @@ import (
 	"github.com/timeflysoon/Open-Box/core/internal/urlx"
 )
 
-// 对应上游 engine/dns-upstream.mjs(基线 v0.1.318 快照)。档案里的两个 DNS 上游(dns.direct / dns.proxy)和各自的
-// 协议、端口、备用上游:
-//   - 地址只收 IPv4 / IPv6 或「上游 DNS」记号 wan,不收域名(带域名的上游还得另找一个 DNS 去解析它)
-//   - 协议只有 udp / tcp;端口默认 53,等于 53 时生成配置不写 server_port
+// 对应上游 engine/dns-upstream.mjs(基线 v0.1.318 快照,v0.1.422 起另加 DoT)。档案里的两个 DNS 上游
+// (dns.direct / dns.proxy)和各自的协议、端口、备用上游:
+//   - 协议:udp / tcp / tls(DoT)。udp / tcp 默认端口 53;tls 默认 853(sing-box type:tls 的默认端口)
+//   - 地址:IPv4 / IPv6 或「上游 DNS」记号 wan;tls 另收域名(生成时带 domain_resolver + udp bootstrap,见 dnsServerEntries)
+//   - 端口等于该协议的默认值时,生成配置不写 server_port
 //
+// DoT 部分按 sing-box 1.12+ DNS server 文档(type:tls)自写,行为目标来自维护者对 v0.1.422 的功能说明。
 // 这里只移植 configDetailed 用得到的部分。下面这些只有面板的 Node 进程用,不属于 core,没有移植:
 // regionDnsDefaults / regionDnsError(地区页签与档案校验)、directResolverServers(面板自己做直连解析)、
 // isProxyResolverTag / applyProxyUpstreamRoutes(部署后处理)、dnsPolicyClasses(部署流程)。
 
 const (
 	DefaultDNSPort        = 53
+	DefaultDoTPort        = 853 // sing-box type:tls 的默认端口
 	DefaultDirectUpstream = "223.5.5.5"
 	DefaultProxyUpstream  = "1.1.1.1"
 	// MaxDNSExtras:每一侧最多几个备用上游(和主上游一起并发竞速)。
@@ -94,7 +97,10 @@ func normalizeDNSUpstream(value any) string {
 	return ""
 }
 
-func isDNSProtocol(v any) bool { s, ok := v.(string); return ok && (s == "udp" || s == "tcp") }
+func isDNSProtocol(v any) bool {
+	s, ok := v.(string)
+	return ok && (s == "udp" || s == "tcp" || s == "tls")
+}
 
 func isValidDNSPort(v any) (int, bool) {
 	f, ok := v.(float64)
@@ -104,11 +110,19 @@ func isValidDNSPort(v any) (int, bool) {
 	return int(f), true
 }
 
-func dnsPortOr(v any) int {
+// dnsDefaultPort:协议默认端口(udp / tcp → 53,tls → 853)。
+func dnsDefaultPort(protocol string) int {
+	if protocol == "tls" {
+		return DefaultDoTPort
+	}
+	return DefaultDNSPort
+}
+
+func dnsPortOr(v any, protocol string) int {
 	if p, ok := isValidDNSPort(v); ok {
 		return p
 	}
-	return DefaultDNSPort
+	return dnsDefaultPort(protocol)
 }
 
 func dnsProtocolOr(v any, fallback string) string {
@@ -118,13 +132,57 @@ func dnsProtocolOr(v any, fallback string) string {
 	return fallback
 }
 
+// isDNSDomainHost:DoT 允许的域名主机(非 IP、含点、各标签只含 ASCII 字母数字和连字符)。
+func isDNSDomainHost(host string) bool {
+	host = jsx.Trim(host)
+	if host == "" || isValidDNSUpstream(host) || isWanUpstream(host) {
+		return false
+	}
+	if len(host) > 253 || !strings.Contains(host, ".") {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for i := 0; i < len(label); i++ {
+			c := label[i]
+			if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// normalizeDNSDomain:从原始值取出可作 DoT server 的域名(统一小写);带协议头时取 hostname。不是域名返回 ""。
+func normalizeDNSDomain(value any) string {
+	s, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	host := jsx.Trim(s)
+	if dnsSchemeRe.MatchString(host) {
+		h, ok := urlx.Hostname(host)
+		if !ok {
+			return ""
+		}
+		host = h
+	}
+	if isDNSDomainHost(host) {
+		return strings.ToLower(host)
+	}
+	return ""
+}
+
 // upstream 是档案里的一条上游整理后的样子。Server 是 any:「上游 DNS」取的是部署时读到的系统上游,JS 里不做类型检查,
-// 测试里喂过非字符串,保持原样带出去。
+// 测试里喂过非字符串,保持原样带出去。Domain 为 true 表示 Server 是域名(仅 tls),生成配置要带 domain_resolver + bootstrap。
 type upstream struct {
 	Protocol string
 	Server   any
 	Port     int
 	Wan      bool
+	Domain   bool
 }
 
 // serverKey 对应 JS Set 的 SameValueZero:同一台上游去重用。
@@ -149,11 +207,18 @@ func wanServer(profile any, systemDNS []any) any {
 }
 
 // upstreamOf:档案里的一条上游 → upstream。上游 DNS 固定 UDP 53(协议跟着上游,档案里存的协议不看),wan 标出来
-// (代理侧不给它写 detour);地址折不出合法 IP 的(手改库)按 invalid 退:直连侧退成上游 DNS,代理侧退成 1.1.1.1。
+// (代理侧不给它写 detour);地址折不出合法 IP 的(tls 再试域名;手改库)按 invalid 退:直连侧退成上游 DNS,代理侧退成 1.1.1.1。
 func upstreamOf(profile, raw, protocol, port any, fallbackProtocol, invalid string, systemDNS []any) upstream {
+	proto := dnsProtocolOr(protocol, fallbackProtocol)
 	server := ""
+	domain := false
 	if !isWanUpstream(raw) {
 		server = normalizeDNSUpstream(raw)
+		if server == "" && proto == "tls" {
+			if d := normalizeDNSDomain(raw); d != "" {
+				server, domain = d, true
+			}
+		}
 	}
 	if server == "" && (isWanUpstream(raw) || invalid == WanUpstream) {
 		return upstream{Protocol: "udp", Server: wanServer(profile, systemDNS), Port: DefaultDNSPort, Wan: true}
@@ -161,7 +226,7 @@ func upstreamOf(profile, raw, protocol, port any, fallbackProtocol, invalid stri
 	if server == "" {
 		server = invalid
 	}
-	return upstream{Protocol: dnsProtocolOr(protocol, fallbackProtocol), Server: server, Port: dnsPortOr(port)}
+	return upstream{Protocol: proto, Server: server, Port: dnsPortOr(port, proto), Domain: domain}
 }
 
 // directUpstream:直连侧实际用哪台。默认是上游 DNS。
@@ -193,7 +258,8 @@ func extraUpstreams(profile, list any, primary upstream, fallbackProtocol string
 			continue
 		}
 		server := jsx.Get(item, "server")
-		if !(isWanUpstream(server) || normalizeDNSUpstream(server) != "") {
+		itemProto := dnsProtocolOr(jsx.Get(item, "protocol"), fallbackProtocol)
+		if !(isWanUpstream(server) || normalizeDNSUpstream(server) != "" || (itemProto == "tls" && normalizeDNSDomain(server) != "")) {
 			continue
 		}
 		up := upstreamOf(profile, server, jsx.Get(item, "protocol"), jsx.Get(item, "port"), fallbackProtocol, WanUpstream, systemDNS)
@@ -215,14 +281,30 @@ func proxyExtraUpstreams(profile any, systemDNS []any) []upstream {
 	return extraUpstreams(profile, jsx.Get(jsx.Get(profile, "dns"), "proxyExtras"), proxyUpstream(profile, systemDNS), "tcp", systemDNS)
 }
 
-// dnsServerEntry:生成配置里的一条 DNS server(sing-box 1.12+ 的 server 对象)。端口是默认 53 就不写 server_port。
+// dnsServerEntry:生成配置里的一条 DNS server(sing-box 1.12+ 的 server 对象)。
+// 端口等于该协议默认值(udp / tcp 53,tls 853)就不写 server_port;域名 DoT 的 bootstrap 由 dnsServerEntries 补。
 func dnsServerEntry(up upstream, tag, detour string) map[string]any {
 	m := map[string]any{"type": up.Protocol, "tag": tag, "server": up.Server}
-	if up.Port != DefaultDNSPort {
+	if up.Port != dnsDefaultPort(up.Protocol) {
 		m["server_port"] = up.Port
 	}
 	if detour != "" {
 		m["detour"] = detour
 	}
 	return m
+}
+
+// dnsServerEntries:主 server;若是域名 DoT,再附一台 udp bootstrap(「上游 DNS」此刻的那台)。
+// bootstrap 的 tag 为 tag+"-bootstrap",主条目写 domain_resolver 指向它;bootstrap 不走 detour。
+func dnsServerEntries(up upstream, tag, detour string, profile any, systemDNS []any) []map[string]any {
+	main := dnsServerEntry(up, tag, detour)
+	if !up.Domain {
+		return []map[string]any{main}
+	}
+	bootTag := tag + "-bootstrap"
+	main["domain_resolver"] = bootTag
+	return []map[string]any{
+		main,
+		{"type": "udp", "tag": bootTag, "server": wanServer(profile, systemDNS)},
+	}
 }

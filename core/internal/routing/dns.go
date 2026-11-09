@@ -249,7 +249,7 @@ func BuildDNS(profile any, o DNSOptions) (DNSResult, error) {
 	dnsMode := DNSMode(profile)
 	b := o.Builtin
 	directUp := directUpstream(profile, o.SystemDNS)
-	directServer := dnsServerEntry(directUp, "dns-direct", "")
+	directEntries := dnsServerEntries(directUp, "dns-direct", "", profile, o.SystemDNS)
 	localRules := localNameRules(dnsMode)
 	localServers := []any{}
 	if len(localRules) > 0 {
@@ -306,7 +306,10 @@ func BuildDNS(profile any, o DNSOptions) (DNSResult, error) {
 	}
 
 	if !split {
-		servers := []any{directServer}
+		servers := []any{}
+		for _, e := range directEntries {
+			servers = append(servers, e)
+		}
 		servers = append(servers, rewriteServers...)
 		servers = append(servers, localServers...)
 		only := map[string]any{"servers": servers, "final": "dns-direct", "strategy": strategy, "reverse_mapping": true}
@@ -332,14 +335,22 @@ func BuildDNS(profile any, o DNSOptions) (DNSResult, error) {
 		}
 		return conf.Fallback.Name
 	}
-	servers := []any{directServer}
+	servers := []any{}
+	appendEntries := func(up upstream, tag, detour string) {
+		for _, e := range dnsServerEntries(up, tag, detour, profile, o.SystemDNS) {
+			servers = append(servers, e)
+		}
+	}
+	for _, e := range directEntries {
+		servers = append(servers, e)
+	}
 	for i, up := range directExtras {
-		servers = append(servers, dnsServerEntry(up, extraTag("dns-direct", i), ""))
+		appendEntries(up, extraTag("dns-direct", i), "")
 	}
 	servers = append(servers, rewriteServers...)
-	servers = append(servers, dnsServerEntry(proxyUp, ProxyResolverTag, proxyDetour(proxyUp)))
+	appendEntries(proxyUp, ProxyResolverTag, proxyDetour(proxyUp))
 	for i, up := range proxyExtras {
-		servers = append(servers, dnsServerEntry(up, extraTag(ProxyResolverTag, i), proxyDetour(up)))
+		appendEntries(up, extraTag(ProxyResolverTag, i), proxyDetour(up))
 	}
 
 	// 规则顺序和连接侧(routing)对齐:DNS 重写 → 本地主机名 → 前置自定义分流 → 订阅 / 节点站点直连 → 终端分流 → 站点集 → 兜底。
@@ -363,9 +374,9 @@ func BuildDNS(profile any, o DNSOptions) (DNSResult, error) {
 	terminalDirect := func() string {
 		if !terminalDirectServers {
 			terminalDirectServers = true
-			servers = append(servers, merge(directServer, map[string]any{"tag": TerminalDirectTag}))
+			appendEntries(directUp, TerminalDirectTag, "")
 			for i, up := range directExtras {
-				servers = append(servers, dnsServerEntry(up, extraTag(TerminalDirectTag, i), ""))
+				appendEntries(up, extraTag(TerminalDirectTag, i), "")
 			}
 		}
 		return TerminalDirectTag
