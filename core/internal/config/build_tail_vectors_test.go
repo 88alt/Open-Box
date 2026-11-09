@@ -137,7 +137,7 @@ func TestBuildTailDNSDirectInbound(t *testing.T) {
 		t.Errorf("dnsmasq 模式入站: %s", got)
 	}
 	// 容器部署:dns-in-lan 在 dns-in 后面、dns-in-direct 前面;共享网络入站排最后
-	res = tl(t, `{"dns":{"split":true},"tun":{"autoRedirect":true},"clientRoutes":[`+admitIP+`],"servers":[{"id":"a1","protocol":"shadowsocks","port":8388,"method":"m","password":"p"}]}`, `,"platform":"container"`)
+	res = tl(t, `{"dns":{"split":true},"tun":{"autoRedirect":true},"clientRoutes":[`+admitIP+`],"servers":[{"id":"a1","protocol":"shadowsocks","port":8388,"method":"aes-128-gcm","password":"p"}]}`, `,"platform":"container"`)
 	if got := strings.Join(tlInboundTags(res), ","); got != "tun-in,panel-in,dns-in,dns-in-lan,dns-in-direct,share-a1" {
 		t.Errorf("容器入站顺序: %s", got)
 	}
@@ -259,13 +259,15 @@ func TestBuildTailNativeBypass(t *testing.T) {
 
 	// nativeBypass 对象(没开 auto_redirect):整份在前、裁剪过的换成 obflip-byp- 在后;trimmed 取真假;非字符串的 set 丢掉
 	nb := func(s string) string { return `,"nativeBypass":` + s }
-	res = tl(t, `{"dns":{}}`, nb(`{"enabled":true,"sets":["geoip-cn","geoip-private",7,"geoip-us"],"trimmed":{"geoip-private":true,"geoip-us":1,"geoip-cn":0}}`))
+	// 覆盖用的集合要在路由里有对应的规则集(真实场景里它们来自站点集),这样产出才能过官方 sing-box check
+	all3 := `{"dns":{},` + routing(`{"id":"p9","name":"全","default":"direct","rulesets":["geoip-cn","geoip-private","geoip-us"]}`) + `}`
+	res = tl(t, all3, nb(`{"enabled":true,"sets":["geoip-cn","geoip-private",7,"geoip-us"],"trimmed":{"geoip-private":true,"geoip-us":1,"geoip-cn":0}}`))
 	if got := bhJSON(t, tunOf(t, res)["route_exclude_address_set"]); got != `["geoip-cn","obflip-byp-geoip-private","obflip-byp-geoip-us"]` {
 		t.Errorf("nativeBypass 对象: %s", got)
 	}
 	eq("裁剪过的追加规则集", tlRuleSets(res, "obflip-byp-"), needSets("/opt/open-box/data/flip", "obflip-byp-geoip-private", "obflip-byp-geoip-us"))
 	// 没写 trimmed 时都是整份
-	res = tl(t, `{"dns":{}}`, nb(`{"enabled":1,"sets":["geoip-cn"]}`))
+	res = tl(t, all3, nb(`{"enabled":1,"sets":["geoip-cn"]}`))
 	if got := bhJSON(t, tunOf(t, res)["route_exclude_address_set"]); got != `["geoip-cn"]` {
 		t.Errorf("无 trimmed: %s", got)
 	}
@@ -417,7 +419,7 @@ func TestBuildTailClientRoutesWiring(t *testing.T) {
 	}
 
 	// 有共享网络入站:按来源认终端的规则(路由和 DNS 两处)带「入站不是共享网络」
-	share := `"servers":[{"id":"a1","protocol":"shadowsocks","port":8388,"method":"m","password":"p"}]`
+	share := `"servers":[{"id":"a1","protocol":"shadowsocks","port":8388,"method":"aes-128-gcm","password":"p"}]`
 	prof := `{"dns":{"split":true},` + share + `,"clientRoutes":[{"id":"r","name":"R","match":"ip","outbound":"S","sources":["192.168.1.0/24"]}]}`
 	res = build(prof, "")
 	guard := `{"inbound":["share-a1"],"invert":true}`
@@ -433,7 +435,7 @@ func TestBuildTailClientRoutesWiring(t *testing.T) {
 		t.Errorf("没有共享网络入站不该有保护: %s", routeRules(res))
 	}
 	// 共享网络入站停用时也不加
-	res = build(`{"dns":{},"servers":[{"id":"a1","enabled":false,"protocol":"shadowsocks","port":8388,"method":"m","password":"p"}],"clientRoutes":[{"id":"r","name":"R","match":"ip","outbound":"S","sources":["192.168.1.0/24"]}]}`, "")
+	res = build(`{"dns":{},"servers":[{"id":"a1","enabled":false,"protocol":"shadowsocks","port":8388,"method":"aes-128-gcm","password":"p"}],"clientRoutes":[{"id":"r","name":"R","match":"ip","outbound":"S","sources":["192.168.1.0/24"]}]}`, "")
 	if strings.Contains(routeRules(res), `"invert":true`) {
 		t.Errorf("共享网络停用不该有保护")
 	}

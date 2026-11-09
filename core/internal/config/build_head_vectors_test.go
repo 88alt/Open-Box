@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 )
@@ -33,8 +34,29 @@ func bhRun(t *testing.T, argsJSON string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return toAny(out).(map[string]any), nil
+	res := toAny(out).(map[string]any)
+	dumpConfig(t, res)
+	return res, nil
 }
+
+// 设了 OPENBOX_DUMP_DIR 时,把每份产出的配置落盘,供 testdata/tools/sbcheck.py 用官方 sing-box 跑 check(平时不设,不写盘)。
+func dumpConfig(t *testing.T, res map[string]any) {
+	dir := os.Getenv("OPENBOX_DUMP_DIR")
+	if dir == "" {
+		return
+	}
+	dumpSeq++
+	b, err := json.Marshal(res["config"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := fmt.Sprintf("%s/%05d.json", dir, dumpSeq)
+	if err := os.WriteFile(name, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+var dumpSeq int
 
 func bhMust(t *testing.T, argsJSON string) map[string]any {
 	t.Helper()
