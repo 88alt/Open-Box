@@ -265,6 +265,9 @@ type setMatcher struct {
 	keyword []string
 	regex   []*regexp.Regexp
 	partial bool
+	// all 为真表示有一条规则对任何 TCP / UDP 连接都成立(只写了 network: [tcp, udp]):热切换开关「开」时落盘的内容就是这个,
+	// 见 singbox 的 flipFlagOnSource。命中它的规则集对任何域名、任何 IP 都算包含。
+	all bool
 	// 按 IP 判断用:只含 ip_cidr 的规则合在一起;ipPartial 为真表示还有对 IP 判断不了的规则
 	cidrs     []netip.Prefix
 	ipPartial bool
@@ -335,6 +338,34 @@ func RuleEntries(rule map[string]any, domain string, ip netip.Addr) []Entry {
 // 规则集规则里属于「域名这一组」的键;其余键(ip_cidr、port、process_name 等)出现就判断不了。
 var addrKeys = map[string]bool{"domain": true, "domain_suffix": true, "domain_keyword": true, "domain_regex": true}
 
+// isMatchAll:规则只有 network 一个条件、且同时列了 tcp 和 udp(顺序、大小写不论)。连接要么是 TCP 要么是 UDP,所以恒成立;
+// 只列一个(例如只有 udp)取决于连接本身的协议,这里不知道,不算。
+func isMatchAll(rule map[string]any) bool {
+	n := 0
+	for k, v := range rule {
+		if k == "type" || empty(v) {
+			continue
+		}
+		if k != "network" {
+			return false
+		}
+		n++
+	}
+	if n != 1 {
+		return false
+	}
+	tcp, udp := false, false
+	for _, x := range strs(rule["network"]) {
+		switch strings.ToLower(x) {
+		case "tcp":
+			tcp = true
+		case "udp":
+			udp = true
+		}
+	}
+	return tcp && udp
+}
+
 func compile(rules []any) *setMatcher {
 	m := &setMatcher{exact: map[string]struct{}{}}
 	for _, r := range rules {
@@ -348,6 +379,10 @@ func compile(rules []any) *setMatcher {
 		}
 		if inv, _ := rule["invert"].(bool); inv {
 			m.partial, m.ipPartial = true, true
+			continue
+		}
+		if isMatchAll(rule) {
+			m.all = true
 			continue
 		}
 		pure, hasAddr, ipOnly, hasKey := true, false, true, false
@@ -422,6 +457,9 @@ func parseCIDROrAddr(s string) (netip.Prefix, error) {
 }
 
 func (m *setMatcher) hasIP(ip netip.Addr) bool {
+	if m.all {
+		return true
+	}
 	ip = ip.Unmap()
 	for _, p := range m.cidrs {
 		if p.Contains(ip) {
@@ -432,6 +470,9 @@ func (m *setMatcher) hasIP(ip netip.Addr) bool {
 }
 
 func (m *setMatcher) has(d string) bool {
+	if m.all {
+		return true
+	}
 	if _, ok := m.exact[d]; ok {
 		return true
 	}

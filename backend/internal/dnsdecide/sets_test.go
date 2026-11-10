@@ -3,6 +3,7 @@ package dnsdecide
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -179,5 +180,76 @@ func TestSetDefsFromConfig(t *testing.T) {
 	}
 	if len(SetDefsFromConfig(map[string]any{})) != 0 {
 		t.Error("没有 route 应该是空")
+	}
+}
+
+// 热切换开关「开」时落盘的规则集只写了 network: [tcp, udp](singbox 的 flipFlagOnSource),它对任何 TCP / UDP 连接都成立;
+// 「关」时写一个永不命中的域名。两种都要能被正确判断,而不是报「判断不了」。
+func TestFileSetsMatchAll(t *testing.T) {
+	dir := t.TempDir()
+	on := write(t, dir, "on.json", `{"version":3,"rules":[{"network":["tcp","udp"]}]}`)
+	off := write(t, dir, "off.json", `{"version":3,"rules":[{"domain":["obflip-off.invalid"]}]}`)
+	f := &FileSets{Defs: map[string]SetDef{
+		"on":  {Type: "local", Format: "source", Path: on},
+		"off": {Type: "local", Format: "source", Path: off},
+	}}
+	ctx := context.Background()
+	b := f.Bind(f.Defs)
+	for _, d := range []string{"example.com", "a.b.test", "xn--abc.test"} {
+		if ok, err := f.Match(ctx, "on", d); err != nil || !ok {
+			t.Errorf("开:%s 应命中: ok=%v err=%v", d, ok, err)
+		}
+		if ok, err := f.Match(ctx, "off", d); err != nil || ok {
+			t.Errorf("关:%s 不该命中也不该报错: ok=%v err=%v", d, ok, err)
+		}
+	}
+	if ok, err := b.MatchIP(ctx, "on", netip.MustParseAddr("203.0.113.9")); err != nil || !ok {
+		t.Errorf("开:IP 应命中: ok=%v err=%v", ok, err)
+	}
+	if ok, err := b.MatchIP(ctx, "on", netip.MustParseAddr("2001:db8::1")); err != nil || !ok {
+		t.Errorf("开:IPv6 应命中: ok=%v err=%v", ok, err)
+	}
+	if ok, err := b.MatchIP(ctx, "off", netip.MustParseAddr("203.0.113.9")); err != nil || ok {
+		t.Errorf("关:IP 不该命中也不该报错: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestIsMatchAllShapes(t *testing.T) {
+	cases := []struct {
+		name string
+		rule map[string]any
+		want bool
+	}{
+		{"tcp+udp", map[string]any{"network": []any{"tcp", "udp"}}, true},
+		{"顺序和大小写不论", map[string]any{"network": []any{"UDP", "Tcp"}}, true},
+		{"带空条件键也算只有 network", map[string]any{"network": []any{"tcp", "udp"}, "domain": []any{}}, true},
+		{"只列 tcp:取决于连接,不算", map[string]any{"network": []any{"tcp"}}, false},
+		{"只列 udp:不算", map[string]any{"network": []any{"udp"}}, false},
+		{"network 是单个字符串:不算", map[string]any{"network": "tcp"}, false},
+		{"还带别的条件:不算", map[string]any{"network": []any{"tcp", "udp"}, "domain": []any{"a.test"}}, false},
+		{"带端口:不算", map[string]any{"network": []any{"tcp", "udp"}, "port": []any{443.0}}, false},
+		{"没有 network:不算", map[string]any{"domain": []any{"a.test"}}, false},
+		{"空规则:不算", map[string]any{}, false},
+	}
+	for _, c := range cases {
+		if got := isMatchAll(c.rule); got != c.want {
+			t.Errorf("%s: got %v want %v", c.name, got, c.want)
+		}
+	}
+
+	// 不算「匹配一切」的 network 规则仍按原来的办法:对域名判断不了
+	m := compile([]any{map[string]any{"network": []any{"udp"}}})
+	if m.all || !m.partial {
+		t.Errorf("只有 udp 应是 partial 而不是 all: %+v", m)
+	}
+	// invert 的优先:反过来写的 network 规则不是「匹配一切」
+	m = compile([]any{map[string]any{"network": []any{"tcp", "udp"}, "invert": true}})
+	if m.all || !m.partial {
+		t.Errorf("invert 不该算 all: %+v", m)
+	}
+	// 与别的规则并存:all 为真,别的规则照常收集
+	m = compile([]any{map[string]any{"domain": []any{"a.test"}}, map[string]any{"network": []any{"tcp", "udp"}}})
+	if !m.all || !m.has("a.test") || !m.has("whatever.test") {
+		t.Errorf("并存: %+v", m)
 	}
 }
