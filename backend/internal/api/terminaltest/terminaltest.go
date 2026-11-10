@@ -6,6 +6,8 @@
 // 取址之后接着在虚拟终端的命名空间里发探测(GET / HEAD / TCP / TLS,见 internal/nsprobe):先用 DHCP 给的 DNS 解析域名
 // (填 dns),再直连目标(填 exit),所以响应有 source / dns / exit;conntrack 取证(entry、dnsEvidence)、内核 DNS 追踪
 // (kernelDns)、旁路由改指(source.override)、exit.kernel / exit.forward、firstLayer 还没做,响应里如实没有这些字段。
+// dnsEvidence(conntrack 里这次 DNS 查询的回复方是不是被问的服务器本人)用终端发 DNS 时的 UDP 源端口精确认出这一次的记录;
+// 连接跟踪表读不到、或没拿到源端口时不带这个字段(不把「读不到」说成「没有」)。
 // dnsForward(dnsmasq 把这次域名查询交给内核 DNS 还是直接问上游)只在有把握时才给:终端问的是本机 LAN 地址上的 dnsmasq、
 // 并且本后端的接管生效(见 internal/dnsforward),其它情况不猜、不带这个字段。
 // 没有注入 Prober 时只做到建终端和取址(响应不带 dns / exit)。没有注入 Terminal(没接线)时回 501,不碰系统。
@@ -21,6 +23,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/conntrack"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsforward"
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
 	"github.com/timeflysoon/Open-Box/backend/internal/nsprobe"
@@ -41,6 +44,11 @@ type Prober interface {
 	Probe(ctx context.Context, namespace string, req nsprobe.Request) (nsprobe.Result, string, error)
 }
 
+// Conntrack 查连接跟踪表(*conntrack.Reader 实现),测试里换假的。读不到返回 error,不能当成「没有记录」。
+type Conntrack interface {
+	Find(ctx context.Context, q conntrack.Query) ([]conntrack.Entry, error)
+}
+
 // Deps 是本分组的依赖。
 type Deps struct {
 	// Capability 返回此刻的前提检查结果(*system.TerminalProbe 的 Capability),测试里换假的。
@@ -49,6 +57,8 @@ type Deps struct {
 	Terminal Terminal
 	// Prober 为空 = 只建终端和取址,不发探测。
 	Prober Prober
+	// Conntrack 为空 = 不做 conntrack 取证(不带 dnsEvidence)。
+	Conntrack Conntrack
 	// DNSForward 返回此刻 dnsmasq 对查询的转发情况(*dnsforward.Service 的 Describe),拿不准返回 nil;为空 = 不填 dnsForward。
 	DNSForward func(ctx context.Context) *dnsforward.Result
 	// IdleAfter 是最后一次测试之后过多久自动拆掉虚拟终端,默认 5 分钟。
@@ -175,7 +185,7 @@ func (h *handlers) run(w http.ResponseWriter, r *http.Request) {
 		"dns": dns, "gateway": lease.Gateway, "lanDevice": v.LANDevice, "reused": v.Reused, "dhcpMs": lease.Ms,
 	}
 	if h.d.Prober != nil {
-		h.probe(r.Context(), out, v.Namespace, in, dns, c.LAN.Address)
+		h.probe(r.Context(), out, probeEnv{ns: v.Namespace, dns: dns, lanAddr: c.LAN.Address, srcIP: lease.IP}, in)
 		if r.Context().Err() != nil {
 			return
 		}
@@ -184,9 +194,17 @@ func (h *handlers) run(w http.ResponseWriter, r *http.Request) {
 }
 
 // probe 在虚拟终端里发探测,把 dns / exit(和探测进程的 stderr)放进 out。
-// lanAddr 是本机 LAN 口的地址:终端问的 DNS 服务器正是它,才说得上「dnsmasq 怎么转发」。
-func (h *handlers) probe(ctx context.Context, out map[string]any, ns string, in routetest.Input, dns []string, lanAddr string) {
-	res, stderr, err := h.d.Prober.Probe(ctx, ns, nsprobe.Request{Target: in.Target, Port: in.Port, Method: in.Method, DNS: dns})
+// probeEnv 是探测要用的环境:命名空间、DHCP 给的 DNS、本机 LAN 口地址(终端问的 DNS 服务器正是它,才说得上
+// 「dnsmasq 怎么转发」)、终端自己的地址(conntrack 取证按它认记录)。
+type probeEnv struct {
+	ns      string
+	dns     []string
+	lanAddr string
+	srcIP   string
+}
+
+func (h *handlers) probe(ctx context.Context, out map[string]any, env probeEnv, in routetest.Input) {
+	res, stderr, err := h.d.Prober.Probe(ctx, env.ns, nsprobe.Request{Target: in.Target, Port: in.Port, Method: in.Method, DNS: env.dns})
 	port := in.Port
 	if port == 0 {
 		port = 443
@@ -215,7 +233,8 @@ func (h *handlers) probe(ctx context.Context, out map[string]any, ns string, in 
 			d["error"] = res.DNS.Error
 		}
 		out["dns"] = d
-		h.fillDNSForward(ctx, out, res.DNS.Server, lanAddr)
+		h.fillDNSForward(ctx, out, res.DNS.Server, env.lanAddr)
+		h.fillDNSEvidence(ctx, out, res.DNS, env.srcIP)
 	}
 	ex := map[string]any{"url": url, "port": port, "method": in.Method, "ok": res.OK}
 	if res.Status != nil {
@@ -243,6 +262,43 @@ func (h *handlers) probe(ctx context.Context, out map[string]any, ns string, in 
 	if stderr != "" {
 		out["probeStderr"] = stderr
 	}
+}
+
+// fillDNSEvidence 查连接跟踪表里终端这次 DNS 查询的记录:用 nsprobe 报的 UDP 源端口精确认出,
+// 回复方是不是被问的服务器(不是就是被改写 / 劫持了)。读不到表、没拿到源端口都不带字段,不猜。
+func (h *handlers) fillDNSEvidence(ctx context.Context, out map[string]any, d *nsprobe.DNSResult, srcIP string) {
+	if h.d.Conntrack == nil || len(d.LocalPorts) == 0 || srcIP == "" {
+		return
+	}
+	host, port := splitDNSServer(d.Server)
+	if host == "" {
+		return
+	}
+	entries, err := h.d.Conntrack.Find(ctx, conntrack.Query{Proto: "udp", Src: srcIP, Dst: host, Dport: port})
+	if err != nil {
+		if ctx.Err() == nil {
+			h.d.Log.Debug("读连接跟踪表失败,不给 dnsEvidence", "err", err)
+		}
+		return
+	}
+	ev := conntrack.AnalyzeDNS(entries, host, port, d.LocalPorts)
+	out["dnsEvidence"] = map[string]any{"flows": ev.Flows, "hijacked": ev.Hijacked, "answeredBy": ev.AnsweredBy, "line": ev.Line}
+}
+
+// splitDNSServer 把 DHCP 给的服务器("ip" 或 "ip:端口")拆成地址和端口(默认 53);认不出地址返回空串。
+func splitDNSServer(s string) (string, int) {
+	host, p, err := net.SplitHostPort(s)
+	if err != nil {
+		host, p = s, "53"
+	}
+	if net.ParseIP(host) == nil {
+		return "", 0
+	}
+	n, err := strconv.Atoi(p)
+	if err != nil || n < 1 || n > 65535 {
+		return "", 0
+	}
+	return host, n
 }
 
 // fillDNSForward 在终端问的是本机 LAN 地址时(DHCP 把路由器自己发给了终端),按 Deps.DNSForward 补 dnsForward。

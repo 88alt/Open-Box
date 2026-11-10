@@ -56,6 +56,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/backup"
 	"github.com/timeflysoon/Open-Box/backend/internal/bandwidth"
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
+	"github.com/timeflysoon/Open-Box/backend/internal/conntrack"
 	"github.com/timeflysoon/Open-Box/backend/internal/contentfilter"
 	"github.com/timeflysoon/Open-Box/backend/internal/controllerproxy"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
@@ -597,7 +598,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Applied:    func(ctx context.Context) bool { return takeover.Status(ctx).Applied },
 		KernelAddr: takeover.KernelAddress(),
 	}
-	terminaltestapi.Register(srv.Mux(), terminaltestapi.Deps{Capability: terminalProbe.Capability, Terminal: vterm, Prober: &nsprobe.Exec{}, DNSForward: dnsFwd.Describe, Log: log})
+	terminaltestapi.Register(srv.Mux(), terminaltestapi.Deps{Capability: terminalProbe.Capability, Terminal: vterm, Prober: &nsprobe.Exec{}, Conntrack: &conntrack.Reader{}, DNSForward: dnsFwd.Describe, Log: log})
 
 	// 域名穿透:按已部署配置里的路由规则推算一个域名 / IP 会命中哪条规则、走哪条线路(DNS 判定和真实路由测试共用一个预测器)
 	penetrationSets := &dnsdecide.FileSets{SingBox: cfg.SingBox, TmpDir: probeDir}

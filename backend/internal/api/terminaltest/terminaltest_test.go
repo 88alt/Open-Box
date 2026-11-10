@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/conntrack"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsforward"
 	"github.com/timeflysoon/Open-Box/backend/internal/nsprobe"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
@@ -630,5 +631,140 @@ func TestRunDNSForwardComparesAddressesNotStrings(t *testing.T) {
 	d.DNSForward = fwdKernelAll
 	if _, has := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com"}`))["dnsForward"]; has {
 		t.Error("解析不出来的地址不能算命中")
+	}
+}
+
+// ---- dnsEvidence:按终端这次 DNS 查询的 UDP 源端口认 conntrack 记录 ----
+
+type fakeCT struct {
+	mu      sync.Mutex
+	entries []conntrack.Entry
+	err     error
+	queries []conntrack.Query
+}
+
+func (f *fakeCT) Find(_ context.Context, q conntrack.Query) ([]conntrack.Entry, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.queries = append(f.queries, q)
+	return f.entries, f.err
+}
+
+func ctEntry(t *testing.T, line string) conntrack.Entry {
+	t.Helper()
+	e, ok := conntrack.Parse(line)
+	if !ok {
+		t.Fatalf("解析不了:%s", line)
+	}
+	return e
+}
+
+func evProber(server string, ports ...int) *fakeProber {
+	return &fakeProber{res: nsprobe.Result{OK: true, DNS: &nsprobe.DNSResult{Server: server, OK: true, Answers: []string{"93.184.216.34"}, MS: 3, LocalPorts: ports}}}
+}
+
+const ctNormal = "ipv4 2 udp 17 25 src=192.168.5.77 dst=192.168.5.1 sport=39000 dport=53 src=192.168.5.1 dst=192.168.5.77 sport=53 dport=39000 mark=0 use=2"
+const ctRedirected = "ipv4 2 udp 17 25 src=192.168.5.77 dst=8.8.8.8 sport=39002 dport=53 src=192.168.5.1 dst=192.168.5.77 sport=7853 dport=39002 mark=0 use=1"
+
+func TestRunFillsDNSEvidence(t *testing.T) {
+	ct := &fakeCT{entries: []conntrack.Entry{ctEntry(t, ctNormal)}}
+	d := capableDeps(newFakeTerm()) // 终端地址 192.168.5.77
+	d.Prober = evProber("192.168.5.1", 39000)
+	d.Conntrack = ct
+	got := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com"}`))
+	ev, _ := got["dnsEvidence"].(map[string]any)
+	if ev["flows"] != float64(1) || ev["hijacked"] != false || ev["answeredBy"] != "192.168.5.1" || ev["line"] != ctNormal || len(ev) != 4 {
+		t.Fatalf("dnsEvidence:%v", got["dnsEvidence"])
+	}
+	if len(ct.queries) != 1 || ct.queries[0] != (conntrack.Query{Proto: "udp", Src: "192.168.5.77", Dst: "192.168.5.1", Dport: 53}) {
+		t.Fatalf("查询条件:%+v", ct.queries)
+	}
+}
+
+func TestRunDNSEvidenceHijackedAndCustomPort(t *testing.T) {
+	ct := &fakeCT{entries: []conntrack.Entry{ctEntry(t, ctRedirected)}}
+	d := capableDeps(newFakeTerm())
+	d.Prober = evProber("8.8.8.8", 39002)
+	d.Conntrack = ct
+	ev, _ := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com"}`))["dnsEvidence"].(map[string]any)
+	if ev["hijacked"] != true || ev["answeredBy"] != "192.168.5.1:7853" || ev["flows"] != float64(1) {
+		t.Fatalf("回复方被改写要判劫持:%v", ev)
+	}
+	// DHCP 给的服务器带端口
+	ct = &fakeCT{}
+	d = capableDeps(newFakeTerm())
+	d.Prober = evProber("192.168.5.1:5353", 4000)
+	d.Conntrack = ct
+	decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com"}`))
+	if len(ct.queries) != 1 || ct.queries[0].Dst != "192.168.5.1" || ct.queries[0].Dport != 5353 {
+		t.Fatalf("端口要跟着服务器写法走:%+v", ct.queries)
+	}
+}
+
+func TestRunDNSEvidenceNoMatchingFlowIsZeroNotMissing(t *testing.T) {
+	d := capableDeps(newFakeTerm())
+	d.Prober = evProber("192.168.5.1", 39000)
+	d.Conntrack = &fakeCT{entries: []conntrack.Entry{ctEntry(t, ctRedirected)}} // 表里有别的记录,没有这次的
+	ev, ok := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com"}`))["dnsEvidence"].(map[string]any)
+	if !ok || ev["flows"] != float64(0) || ev["hijacked"] != false || ev["line"] != "" {
+		t.Fatalf("读得到表、表里没有这次的记录:flows 应是 0:%v", ev)
+	}
+}
+
+func TestRunDNSEvidenceOmittedWhenCannotTell(t *testing.T) {
+	post := func(d Deps, target string) map[string]any {
+		return decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"`+target+`"}`))
+	}
+	// 读不到表:不能说成「没有记录」
+	d := capableDeps(newFakeTerm())
+	d.Prober = evProber("192.168.5.1", 39000)
+	d.Conntrack = &fakeCT{err: errors.New("permission denied")}
+	if _, has := post(d, "example.com")["dnsEvidence"]; has {
+		t.Error("读不到连接跟踪表不该带 dnsEvidence")
+	}
+	// 没拿到源端口(旧的探测进程 / 没发出查询)
+	d = capableDeps(newFakeTerm())
+	d.Prober = evProber("192.168.5.1")
+	ct := &fakeCT{}
+	d.Conntrack = ct
+	if _, has := post(d, "example.com")["dnsEvidence"]; has || len(ct.queries) != 0 {
+		t.Error("没有源端口就认不出这次的记录,不该带、也不用去查")
+	}
+	// 没接线
+	d = capableDeps(newFakeTerm())
+	d.Prober = evProber("192.168.5.1", 39000)
+	if _, has := post(d, "example.com")["dnsEvidence"]; has {
+		t.Error("没接线不该带 dnsEvidence")
+	}
+	// 目标是 IP:没有 DNS 查询
+	d = capableDeps(newFakeTerm())
+	d.Prober = &fakeProber{res: nsprobe.Result{OK: true}}
+	d.Conntrack = &fakeCT{}
+	if _, has := post(d, "1.1.1.1")["dnsEvidence"]; has {
+		t.Error("目标是 IP 不该带 dnsEvidence")
+	}
+	// DNS 服务器写法认不出
+	d = capableDeps(newFakeTerm())
+	d.Prober = evProber("not-an-ip", 39000)
+	ct = &fakeCT{}
+	d.Conntrack = ct
+	if _, has := post(d, "example.com")["dnsEvidence"]; has || len(ct.queries) != 0 {
+		t.Error("认不出服务器地址不该查、不该带")
+	}
+}
+
+func TestSplitDNSServer(t *testing.T) {
+	cases := []struct {
+		in   string
+		host string
+		port int
+	}{
+		{"192.168.5.1", "192.168.5.1", 53}, {"192.168.5.1:5353", "192.168.5.1", 5353}, {"fd00::1", "fd00::1", 53},
+		{"[fd00::1]:53", "fd00::1", 53}, {"", "", 0}, {"dns.example", "", 0}, {"1.1.1.1:0", "", 0}, {"1.1.1.1:70000", "", 0},
+	}
+	for _, c := range cases {
+		if h, p := splitDNSServer(c.in); h != c.host || p != c.port {
+			t.Errorf("%q → %q %d,要 %q %d", c.in, h, p, c.host, c.port)
+		}
 	}
 }

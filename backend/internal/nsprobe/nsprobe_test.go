@@ -363,3 +363,63 @@ func TestRealNetns(t *testing.T) {
 		t.Fatalf("命名空间的 127.0.0.1 不是本机的:%+v %v", res, err)
 	}
 }
+
+// 每次问 DNS 用过的 UDP 源端口要报出来(给 conntrack 取证认「这一次」的查询用),且与服务器看到的来源端口一致。
+func TestResolveReportsLocalPorts(t *testing.T) {
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip(err)
+	}
+	defer pc.Close()
+	seen := make(chan int, 8)
+	go func() {
+		buf := make([]byte, 512)
+		for {
+			n, from, err := pc.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			seen <- from.(*net.UDPAddr).Port
+			if n < 12 {
+				continue
+			}
+			q := append([]byte(nil), buf[:n]...)
+			resp := append([]byte(nil), q...)
+			binary.BigEndian.PutUint16(resp[2:], 0x8180)
+			i := 12
+			for i < len(q) && q[i] != 0 {
+				i += int(q[i]) + 1
+			}
+			resp = resp[:i+1+4]
+			binary.BigEndian.PutUint16(resp[6:], 1)
+			resp = append(resp, 0xc0, 0x0c, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 10, 0, 0, 1)
+			_, _ = pc.WriteTo(resp, from)
+		}
+	}()
+	d, ip := resolve(context.Background(), "example.com", []string{pc.LocalAddr().String()})
+	if ip != "10.0.0.1" || d == nil || !d.OK {
+		t.Fatalf("解析:%+v ip=%s", d, ip)
+	}
+	if len(d.LocalPorts) == 0 {
+		t.Fatalf("没有报本地端口:%+v", d)
+	}
+	got := <-seen
+	found := false
+	for _, p := range d.LocalPorts {
+		if p == got {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("报的端口 %v 里没有服务器看到的 %d", d.LocalPorts, got)
+	}
+}
+
+// 失败的那次也要带上用过的端口(超时 / 被拒,conntrack 里照样有记录)。
+func TestResolveFailureStillReportsLocalPorts(t *testing.T) {
+	dns, _ := fakeDNS(t, "", 0, true) // 只收不回
+	d, ip := resolve(context.Background(), "example.com", []string{dns})
+	if ip != "" || d == nil || d.OK || len(d.LocalPorts) == 0 {
+		t.Fatalf("%+v ip=%q", d, ip)
+	}
+}

@@ -21,6 +21,7 @@ import (
 	"net/netip"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/routetest"
@@ -52,6 +53,9 @@ type DNSResult struct {
 	Answers []string `json:"answers"`
 	MS      int      `json:"ms"`
 	Error   string   `json:"error,omitempty"`
+	// LocalPorts 是问 Server 这一次用过的 UDP 源端口(一次解析可能换端口重试,所以是列表),
+	// 给 conntrack 取证精确认出这次的查询;不进前端的 dns 字段。
+	LocalPorts []int `json:"localPorts,omitempty"`
 }
 
 // Result 是子命令的输出。DNS 为空表示目标是 IP,没有解析这一步。
@@ -244,14 +248,27 @@ func resolve(ctx context.Context, name string, servers []string) (*DNSResult, st
 		if _, _, err := net.SplitHostPort(s); err != nil {
 			addr = net.JoinHostPort(s, "53")
 		}
+		var pmu sync.Mutex
+		var ports []int
 		r := &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, "udp", addr)
+			c, err := (&net.Dialer{}).DialContext(ctx, "udp", addr)
+			if err == nil {
+				if ua, ok := c.LocalAddr().(*net.UDPAddr); ok {
+					pmu.Lock()
+					ports = append(ports, ua.Port)
+					pmu.Unlock()
+				}
+			}
+			return c, err
 		}}
 		qctx, cancel := context.WithTimeout(ctx, dnsTimeout)
 		start := time.Now()
 		ips, err := r.LookupIP(qctx, "ip4", name)
 		cancel()
-		d := &DNSResult{Server: s, Answers: []string{}, MS: int(time.Since(start).Milliseconds())}
+		pmu.Lock()
+		got := append([]int(nil), ports...)
+		pmu.Unlock()
+		d := &DNSResult{Server: s, Answers: []string{}, MS: int(time.Since(start).Milliseconds()), LocalPorts: got}
 		last = d
 		if err != nil {
 			d.Error = describeDNS(err)
