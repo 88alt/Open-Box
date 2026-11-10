@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/dnsforward"
 	"github.com/timeflysoon/Open-Box/backend/internal/nsprobe"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
 )
@@ -569,5 +570,65 @@ func TestRunSetupFailureNeverProbes(t *testing.T) {
 	}
 	if _, has := got["exit"]; has {
 		t.Error("不该有 exit")
+	}
+}
+
+// ---- dnsForward:只在终端问的是本机 LAN 地址、且接管把握十足时才给 ----
+
+func fwdKernelAll(context.Context) *dnsforward.Result {
+	return &dnsforward.Result{Forward: "kernel", Plan: "all", To: "127.0.0.1:7853"}
+}
+
+func fwdProber(server string) *fakeProber {
+	return &fakeProber{res: nsprobe.Result{OK: true, DNS: &nsprobe.DNSResult{Server: server, OK: true, Answers: []string{"93.184.216.34"}, MS: 3}}}
+}
+
+func TestRunFillsDNSForwardWhenAskedLocalDnsmasq(t *testing.T) {
+	d := capableDeps(newFakeTerm()) // LAN 地址 192.168.5.1
+	d.Prober = fwdProber("192.168.5.1")
+	d.DNSForward = fwdKernelAll
+	got := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com"}`))
+	f, _ := got["dnsForward"].(map[string]any)
+	if f["forward"] != "kernel" || f["plan"] != "all" || f["to"] != "127.0.0.1:7853" || f["suffix"] != nil || len(f) != 3 {
+		t.Fatalf("dnsForward:%v", got["dnsForward"])
+	}
+}
+
+func TestRunDNSForwardOmittedWhenNotSure(t *testing.T) {
+	// 终端问的是别的 DNS(旁路由 / 公共 DNS):dnsmasq 没参与
+	d := capableDeps(newFakeTerm())
+	d.Prober = fwdProber("223.5.5.5")
+	d.DNSForward = fwdKernelAll
+	if _, has := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com"}`))["dnsForward"]; has {
+		t.Error("问的不是本机 LAN 地址,不该带 dnsForward")
+	}
+	// 拿不准(DNSForward 返回 nil)
+	d = capableDeps(newFakeTerm())
+	d.Prober = fwdProber("192.168.5.1")
+	d.DNSForward = func(context.Context) *dnsforward.Result { return nil }
+	if _, has := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com"}`))["dnsForward"]; has {
+		t.Error("拿不准不该带 dnsForward")
+	}
+	// 没接线
+	d = capableDeps(newFakeTerm())
+	d.Prober = fwdProber("192.168.5.1")
+	if _, has := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com"}`))["dnsForward"]; has {
+		t.Error("没接线不该带 dnsForward")
+	}
+	// 目标是 IP:没有 DNS 查询,也就没有转发可说
+	d = capableDeps(newFakeTerm())
+	d.Prober = &fakeProber{res: nsprobe.Result{OK: true}}
+	d.DNSForward = fwdKernelAll
+	if _, has := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"1.1.1.1"}`))["dnsForward"]; has {
+		t.Error("目标是 IP 不该带 dnsForward")
+	}
+}
+
+func TestRunDNSForwardComparesAddressesNotStrings(t *testing.T) {
+	d := capableDeps(newFakeTerm())
+	d.Prober = fwdProber("192.168.005.001") // 写法不同的同一个地址不会被当成同一个(ParseIP 不认前导零),不带字段
+	d.DNSForward = fwdKernelAll
+	if _, has := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com"}`))["dnsForward"]; has {
+		t.Error("解析不出来的地址不能算命中")
 	}
 }

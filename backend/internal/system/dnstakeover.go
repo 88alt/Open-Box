@@ -142,6 +142,10 @@ const (
 
 func (t *DNSTakeover) kernelAddr() string  { return orDefault(t.KernelAddr, DefaultKernelDNSAddr) }
 func (t *DNSTakeover) dnsmasqAddr() string { return orDefault(t.DnsmasqAddr, DefaultDnsmasqAddr) }
+
+// KernelAddress 是接管文件里转发到的内核 DNS 入站地址(只读,给 terminal-test 的 dnsForward 用)。
+func (t *DNSTakeover) KernelAddress() string { return t.kernelAddr() }
+
 func (t *DNSTakeover) mainConfigs() []string {
 	if len(t.MainConfigs) > 0 {
 		return t.MainConfigs

@@ -5,7 +5,9 @@
 // 和缺的项;具备前提就建命名空间 + veth、DHCP 取址,把结果放进 source 返回;建不起来回 setupError(原因原文)。
 // 取址之后接着在虚拟终端的命名空间里发探测(GET / HEAD / TCP / TLS,见 internal/nsprobe):先用 DHCP 给的 DNS 解析域名
 // (填 dns),再直连目标(填 exit),所以响应有 source / dns / exit;conntrack 取证(entry、dnsEvidence)、内核 DNS 追踪
-// (kernelDns)、旁路由改指(source.override)、exit.kernel / exit.forward 还没做,响应里如实没有这些字段。
+// (kernelDns)、旁路由改指(source.override)、exit.kernel / exit.forward、firstLayer 还没做,响应里如实没有这些字段。
+// dnsForward(dnsmasq 把这次域名查询交给内核 DNS 还是直接问上游)只在有把握时才给:终端问的是本机 LAN 地址上的 dnsmasq、
+// 并且本后端的接管生效(见 internal/dnsforward),其它情况不猜、不带这个字段。
 // 没有注入 Prober 时只做到建终端和取址(响应不带 dns / exit)。没有注入 Terminal(没接线)时回 501,不碰系统。
 // 建好的虚拟终端空闲一段时间(IdleAfter)后自动拆掉,下一次测试再建。
 package terminaltest
@@ -19,6 +21,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/dnsforward"
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
 	"github.com/timeflysoon/Open-Box/backend/internal/nsprobe"
 	"github.com/timeflysoon/Open-Box/backend/internal/routetest"
@@ -46,6 +49,8 @@ type Deps struct {
 	Terminal Terminal
 	// Prober 为空 = 只建终端和取址,不发探测。
 	Prober Prober
+	// DNSForward 返回此刻 dnsmasq 对查询的转发情况(*dnsforward.Service 的 Describe),拿不准返回 nil;为空 = 不填 dnsForward。
+	DNSForward func(ctx context.Context) *dnsforward.Result
 	// IdleAfter 是最后一次测试之后过多久自动拆掉虚拟终端,默认 5 分钟。
 	IdleAfter time.Duration
 	// Log 可为空。
@@ -170,7 +175,7 @@ func (h *handlers) run(w http.ResponseWriter, r *http.Request) {
 		"dns": dns, "gateway": lease.Gateway, "lanDevice": v.LANDevice, "reused": v.Reused, "dhcpMs": lease.Ms,
 	}
 	if h.d.Prober != nil {
-		h.probe(r.Context(), out, v.Namespace, in, dns)
+		h.probe(r.Context(), out, v.Namespace, in, dns, c.LAN.Address)
 		if r.Context().Err() != nil {
 			return
 		}
@@ -179,7 +184,8 @@ func (h *handlers) run(w http.ResponseWriter, r *http.Request) {
 }
 
 // probe 在虚拟终端里发探测,把 dns / exit(和探测进程的 stderr)放进 out。
-func (h *handlers) probe(ctx context.Context, out map[string]any, ns string, in routetest.Input, dns []string) {
+// lanAddr 是本机 LAN 口的地址:终端问的 DNS 服务器正是它,才说得上「dnsmasq 怎么转发」。
+func (h *handlers) probe(ctx context.Context, out map[string]any, ns string, in routetest.Input, dns []string, lanAddr string) {
 	res, stderr, err := h.d.Prober.Probe(ctx, ns, nsprobe.Request{Target: in.Target, Port: in.Port, Method: in.Method, DNS: dns})
 	port := in.Port
 	if port == 0 {
@@ -209,6 +215,7 @@ func (h *handlers) probe(ctx context.Context, out map[string]any, ns string, in 
 			d["error"] = res.DNS.Error
 		}
 		out["dns"] = d
+		h.fillDNSForward(ctx, out, res.DNS.Server, lanAddr)
 	}
 	ex := map[string]any{"url": url, "port": port, "method": in.Method, "ok": res.OK}
 	if res.Status != nil {
@@ -236,6 +243,27 @@ func (h *handlers) probe(ctx context.Context, out map[string]any, ns string, in 
 	if stderr != "" {
 		out["probeStderr"] = stderr
 	}
+}
+
+// fillDNSForward 在终端问的是本机 LAN 地址时(DHCP 把路由器自己发给了终端),按 Deps.DNSForward 补 dnsForward。
+// DHCP 给的是别的 DNS(旁路由、公共 DNS)时 dnsmasq 根本没参与,不说。
+func (h *handlers) fillDNSForward(ctx context.Context, out map[string]any, server, lanAddr string) {
+	if h.d.DNSForward == nil {
+		return
+	}
+	a, b := net.ParseIP(server), net.ParseIP(lanAddr)
+	if a == nil || b == nil || !a.Equal(b) {
+		return
+	}
+	f := h.d.DNSForward(ctx)
+	if f == nil {
+		return
+	}
+	m := map[string]any{"forward": f.Forward, "plan": f.Plan}
+	if f.To != "" {
+		m["to"] = f.To
+	}
+	out["dnsForward"] = m
 }
 
 func orEmpty(s []string) []string {

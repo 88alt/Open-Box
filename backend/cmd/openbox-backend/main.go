@@ -64,6 +64,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsdecide"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsfilter"
+	"github.com/timeflysoon/Open-Box/backend/internal/dnsforward"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsqlog"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsrewrite"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnssync"
@@ -591,7 +592,12 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 记账文件 terminal-net.json 是撤销用的,恢复出厂设置不删(见 factoryWipes)
 	terminalProbe := system.RealTerminalProbe()
 	vterm := &system.VTermNet{Run: system.ExecRunner, StateFile: filepath.Join(cfg.StateDir(), "terminal-net.json")}
-	terminaltestapi.Register(srv.Mux(), terminaltestapi.Deps{Capability: terminalProbe.Capability, Terminal: vterm, Prober: &nsprobe.Exec{}, Log: log})
+	dnsFwd := &dnsforward.Service{
+		Mode:       dnssync.ModeFromProfile(profileSvc.Get),
+		Applied:    func(ctx context.Context) bool { return takeover.Status(ctx).Applied },
+		KernelAddr: takeover.KernelAddress(),
+	}
+	terminaltestapi.Register(srv.Mux(), terminaltestapi.Deps{Capability: terminalProbe.Capability, Terminal: vterm, Prober: &nsprobe.Exec{}, DNSForward: dnsFwd.Describe, Log: log})
 
 	// 域名穿透:按已部署配置里的路由规则推算一个域名 / IP 会命中哪条规则、走哪条线路(DNS 判定和真实路由测试共用一个预测器)
 	penetrationSets := &dnsdecide.FileSets{SingBox: cfg.SingBox, TmpDir: probeDir}
