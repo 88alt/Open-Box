@@ -23,8 +23,8 @@ import (
 //	flip-dynamic obflip-byp-* / obflip-need-*:热切换的动态集(二进制 .srs,初始是占位,之后由热切换功能改写)
 //	ruleset      其余(geoip-* / geosite-* / 用户规则集链接编成的 .srs):内容来自规则库或用户的名单
 //
-// 本文件负责内容完全确定的部分:node-direct、flip-dynamic 的占位,以及从随包规则库拷贝的 geoip-* / geosite-*。
-// 其余的(热切换开关、用户规则集链接编成的 .srs)在 Missing 里如实报告。
+// 本文件负责内容完全确定的部分:node-direct、flip-dynamic 的占位,从随包规则库拷贝的 geoip-* / geosite-*,
+// 以及 flip-flag(开关状态由 core 随配置给出,见 Built.FlipFlags)。用户规则集链接编成的 .srs 在 Missing 里如实报告。
 const (
 	KindNodeDirect  Kind = "node-direct"
 	KindFlipFlag    Kind = "flip-flag"
@@ -122,14 +122,28 @@ type Files struct {
 	GeoDir  string // 随包规则库目录(只读,<分类名>.srs);空 = 没有规则库,geoip-* / geosite-* 如实报缺
 }
 
-// WriteLocalSets 处理 cfg 引用的本地规则集:
+// 热切换开关文件的内容(source 格式)。和 core 的 FlipFlagOn / FlipFlagOff 逐字节一致:
+// 开 = 此刻不是直连(走代理或拒绝),network 对 tcp / udp 都命中,等于「匹配一切」;关 = 一条永远不会命中的域名。
+const (
+	flipFlagOnSource  = `{"version":3,"rules":[{"network":["tcp","udp"]}]}`
+	flipFlagOffSource = `{"version":3,"rules":[{"domain":["obflip-off.invalid"]}]}`
+)
+
+// WriteLocalSets 不带开关状态:flip-flag 一律报缺。部署用 WriteLocalSetsFlip。
+func (f Files) WriteLocalSets(ctx context.Context, cfg map[string]any, direct any) (*FilesReport, error) {
+	return f.WriteLocalSetsFlip(ctx, cfg, direct, nil)
+}
+
+// WriteLocalSetsFlip 处理 cfg 引用的本地规则集:
 //   - node-direct:每次按 direct(Built.DirectHosts)改写,没有地址时写占位;
 //   - flip-dynamic:不存在才写占位(用 sing-box 编译),已存在的不动,免得覆盖热切换写进去的内容;
 //   - ruleset 里的 geoip-* / geosite-*:从规则库目录拷到配置指定的路径(内容相同则不动),规则库里没有就报缺;
-//   - flip-flag、其余 ruleset(用户规则集链接):这里生成不了,报在 Missing 里(原因写明白)。
+//   - flip-flag:按 flips(Built.FlipFlags)写开 / 关两种内容之一,每次部署都按最新状态改写(内容相同则不动);
+//     flips 为 nil(core 没给)或没有这个 tag 就报缺;
+//   - 其余 ruleset(用户规则集链接):这里生成不了,报在 Missing 里(原因写明白)。
 //
 // 单个文件失败不会中断其它文件,都记在 Missing 里;只有 ctx 取消这类整体性错误才返回 error。
-func (f Files) WriteLocalSets(ctx context.Context, cfg map[string]any, direct any) (*FilesReport, error) {
+func (f Files) WriteLocalSetsFlip(ctx context.Context, cfg map[string]any, direct any, flips map[string]bool) (*FilesReport, error) {
 	rep := &FilesReport{Written: []string{}, Kept: []string{}, Missing: []Missing{}}
 	domains, cidrs := directHostLists(direct)
 	for _, s := range LocalSets(cfg) {
@@ -171,7 +185,28 @@ func (f Files) WriteLocalSets(ctx context.Context, cfg map[string]any, direct an
 			}
 			rep.Written = append(rep.Written, s.Path)
 		case KindFlipFlag:
-			miss("热切换开关的内容取决于每个站点集此刻走直连还是走代理,需要 core 提供开关状态(见 STATUS.md「需要 core 配合」)")
+			if s.Format != "source" {
+				miss("格式应为 source,配置里是 " + s.Format)
+				continue
+			}
+			on, known := flips[s.Tag]
+			if !known {
+				miss("core 没有给出这个开关此刻的状态(flipFlags 里没有它)")
+				continue
+			}
+			data := []byte(flipFlagOffSource)
+			if on {
+				data = []byte(flipFlagOnSource)
+			}
+			if old, err := os.ReadFile(s.Path); err == nil && string(old) == string(data) {
+				rep.Kept = append(rep.Kept, s.Path)
+				continue
+			}
+			if err := writeFile(s.Path, data); err != nil {
+				miss(err.Error())
+				continue
+			}
+			rep.Written = append(rep.Written, s.Path)
 		default:
 			if !geodata.ValidTag(s.Tag) {
 				// 用户规则集链接编成的 list-*:由 ListFiles.Sync 在生成配置前落盘,这里只确认文件在

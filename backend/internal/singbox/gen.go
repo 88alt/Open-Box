@@ -120,8 +120,10 @@ type Built struct {
 	DNSRuleOwners any            `json:"dnsRuleOwners"`
 	DirectHosts   any            `json:"directHosts"`
 	Failover      any            `json:"failover"`
-	NodeCount     int            `json:"-"`
-	ProfileSecret string         `json:"-"`
+	// FlipFlags 是 core 随配置给出的热切换开关状态(开关 tag → 此刻是否不是直连);core 没给(旧版本)时为 nil。
+	FlipFlags     map[string]bool `json:"flipFlags"`
+	NodeCount     int             `json:"-"`
+	ProfileSecret string          `json:"-"`
 	// ListIssues:规则集链接没处理好的(tag → 原因),只有 ListedBuilder 会填;部署据此把原因写给用户。
 	ListIssues     map[string]string `json:"-"`
 	rawConfigBytes []byte
@@ -365,11 +367,12 @@ func (g *Generator) BuildWith(ctx context.Context, o *Override) (*Built, error) 
 		DNSRuleOwners any             `json:"dnsRuleOwners"`
 		DirectHosts   any             `json:"directHosts"`
 		Failover      any             `json:"failover"`
+		FlipFlags     map[string]bool `json:"flipFlags"`
 	}
 	if err := g.core.CallInto(ctx, "configDetailed", []any{args}, &res); err != nil {
 		return nil, err
 	}
-	b := &Built{DNSRuleOwners: res.DNSRuleOwners, DirectHosts: res.DirectHosts, Failover: res.Failover,
+	b := &Built{DNSRuleOwners: res.DNSRuleOwners, DirectHosts: res.DirectHosts, Failover: res.Failover, FlipFlags: res.FlipFlags,
 		NodeCount: len(nodes), ProfileSecret: secret, rawConfigBytes: []byte(res.Config)}
 	if err := json.Unmarshal(res.Config, &b.Config); err != nil {
 		return nil, fmt.Errorf("核心返回的配置不是 JSON 对象: %w", err)

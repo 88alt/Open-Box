@@ -172,7 +172,7 @@ func (d *Deployer) Deploy(ctx context.Context) DeployResult {
 	if err != nil {
 		return fail(StageValidate, "生成配置失败:"+err.Error(), nil)
 	}
-	rep, err := d.Files.WriteLocalSets(ctx, built.Config, built.DirectHosts)
+	rep, err := d.Files.WriteLocalSetsFlip(ctx, built.Config, built.DirectHosts, built.FlipFlags)
 	if err != nil {
 		return fail(StageError, "准备规则集文件被中断:"+err.Error(), nil)
 	}
