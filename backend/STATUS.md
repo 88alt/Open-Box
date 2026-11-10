@@ -68,6 +68,7 @@
 ## 需要 core 配合(由 core 那边按 core/HANDOFF.md 另做;做完后回来勾掉)
 - [ ] 热切换开关状态:core 目前有 `FlipFlagMap` / `FlipFlagStates`(`core/internal/routing/flip.go`)但没有对外的方法,后端拿不到「开关 tag → 开 / 关」。
   **2026-11-04 维护者授权,已定**:让 core 在 `configDetailed` 的返回里多带 `flipFlags`(`{tag: bool}`),不新增方法(开关状态和配置同一次计算,不会两次调用不一致,也少起一个子进程)。core 的金标准**只能手写期望值或用自己写的测试向量**,不能用官方二进制或压缩 bundle 重新生成(core/HANDOFF 第六节);core 现有金标准保留只读,逐步换成自己写的测试向量(core/HANDOFF 第四节 2)。后端不改 core;core 做完后,后端在 `WriteLocalSets` 里补 `obflip-*` 的初始状态,运行中怎么热切换留到真机阶段。
+  **2026-11-10 core 这一半已做**:`configDetailed` 返回多带 `flipFlags`(`{obflip-<id> | obflip-fallback: bool}`,ON = 此刻不是直连),自写测试向量见 `core/internal/config/build_flip_vectors_test.go`;金标准文件没动,比对前去掉这个键。**后端这一半还没做**:`singbox.Built` 加 `FlipFlags`、`Files` 在写 `flip-flag` 类规则集时按它写 `FlipFlagOn` / `FlipFlagOff` 的内容(现在落在 `Missing`)。
   建议让 `configDetailed` 的返回多带一个 `flipFlags`({tag: bool}),或新增一个只算这个的方法;后端拿到后在 `WriteLocalSets` 里补 `flip-flag` 一类即可。注意:改返回值会影响 core 的金标准,需要同步处理。
 
 ## M2 DNS 与过滤
@@ -160,6 +161,7 @@
 - [ ] 清理旧文件 `scripts/native-arm64/`(联调通过之后)
 
 ## 日志(新的在最上面)
+- 2026-11-10 core: `configDetailed` 返回多带 `flipFlags`(2026-11-04 维护者授权的方案):键是开关 tag,值是此刻该开还是关,和配置同一次算出,用已有的 `routing.FlipFlagStates`(classes 取自同一次装配里算的 `PolicyClasses`)。没有站点集时只有兜底一个开关,返回 `{}` 不是 null。金标准文件保持只读:`TestBuildDetailedGolden` 比对前把 `flipFlags` 去掉(500 条仍零不一致),`TestBuildHeadShape` 的键数改成 5。自写向量两个:`TestBuildFlipFlags`(站点集默认走节点组 / 直连 / 拒绝 + 兜底三种取值,tag 由 Python 对 id 独立算出)、`TestBuildFlipFlagsMatchRuleSets`(`flipFlags` 的键正好是配置 `route.rule_set` 里本地 source 开关的 tag)。`gofmt`、`go vet ./...`、`go test ./...` 全绿(沙箱 Go 1.27.3,go.mod 仍是 1.25.12)。后端对返回值用普通 `json.Unmarshal`、不拒绝未知键,所以现有后端不受影响;后端写开关文件是下一个补丁
 - 2026-11-09 scripts: `scripts/dev-panel.sh` 改成适配 main:原脚本跑的 `panel/server/index.mjs` 在 main 上已不存在(面板改由 backend/ 提供),所以在任何系统上健康检查都必然失败,不是 Windows 特有。现在的流程:构建前端 → 停旧进程 → `go build` 后端 → 用 `-listen 127.0.0.1:3036`(`PORT` 可改)、`.dev-data/` 作数据与配置目录、`-dns-query-log off` 启动 → 轮询 `/api/health`;后端提前退出会直接打日志末尾。缺 node / go / curl 时给明确提示;`SKIP_PANEL_BUILD=1` 跳过前端构建;Windows(Git Bash)用 `.exe`、`cygpath -m` 转路径、kill 不掉时退到 `taskkill`。沙箱没有 Go,用假 go / 假后端验证了语法、缺 go 提示、启动与重启(旧进程被停)、后端立即退出三条路径;真实 `go build` 与 Windows 下的实跑待维护者确认
 - 2026-11-07 backend: `/api/openbox/system/resources`(自己的设计,形状取自前端 `SystemResources` 与 `HardwareLoadCard` / `SystemResourcesCard` / 概览「活跃终端」的用法,没有参照上游)。起因:维护者要求 main 的概览页对齐上游 v0.1.413(硬件负载卡、网络状态卡、侧边栏硬件负载),这些卡片读这个接口;前端部分在上一个提交里,没有这个接口时卡片只显示「—」。对账:`git fetch` 后 origin/main 在 72ce65ba(维护者的上游同步),`git log -- backend` 最新是 644ac175(penetration 前置自定义分流归属),和日志对得上。需要真机核对读数(见上面的 [~] 条目);`gofmt`、`go vet ./...`、`go test ./...` 全绿
 - 2026-11-07 backend: penetration 前置自定义分流归属(owner.kind=custom 与 matched.ownerName;自己的设计,依据前端 `OpenboxPenetrationMatched.ownerName` / `owner` 的类型注释与 `RouteComparison.vue` 的用法、自研 `core/internal/routing/route.go` 的规则顺序(只读),没有参照上游;对账:`git fetch` 后 origin/main 在 1eda2b1e,`git log -- backend` 最新 a2b58862(带宽第五刀)在日志里有对应条目,「先做」小节全部已打勾且都找得到提交,没有「做了没打勾」或「打了勾找不到提交」的;其余未打勾条目要么需 core / 真机 / 维护者确认(M6.md 未确认,不动 `update*` 第二部分和打包),要么 DESIGN 已定不做,所以取了 128 里唯一能独立做的 ownerName)。不需要真机。`gofmt`、`go vet ./...`、`go test ./...` 全绿(沙箱 Go 1.25.14)。已知与本补丁无关:`internal/clientapp/clientapp.go` 现状 gofmt 有差异,未动

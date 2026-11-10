@@ -67,7 +67,7 @@ func localEntry(tag, format, path string) map[string]any {
 	return map[string]any{"type": "local", "tag": tag, "format": format, "path": path}
 }
 
-// BuildDetailed 返回 {config, dnsRuleOwners, directHosts, failover}。
+// BuildDetailed 返回 {config, dnsRuleOwners, directHosts, failover, flipFlags}(flipFlags 是自研多带的,基线没有)。
 func BuildDetailed(args any) (map[string]any, error) {
 	get := func(k string) any { return jsx.Get(args, k) }
 	nodes := asList(get("nodes"))
@@ -546,7 +546,14 @@ func BuildDetailed(args any) (map[string]any, error) {
 	if failover == nil {
 		failover = []any{}
 	}
-	return map[string]any{"config": config, "dnsRuleOwners": owners, "directHosts": directHostsOut, "failover": failover}, nil
+	// flipFlags:此刻每个热切换开关(obflip-<id> / obflip-fallback)该是开还是关(ON = 不是直连)。和配置同一次算出,
+	// 后端据此写开关文件的初始内容,不用再起一次子进程、也不会和配置算出两种结果。基线没有这个键(开关状态由 Node 端算),
+	// 所以金标准比对时要先去掉它;没有站点集时是空对象、不是 null。
+	flipFlags := map[string]any{}
+	for tag, on := range routing.FlipFlagStates(normRouting, classes) {
+		flipFlags[tag] = on
+	}
+	return map[string]any{"config": config, "dnsRuleOwners": owners, "directHosts": directHostsOut, "failover": failover, "flipFlags": flipFlags}, nil
 }
 
 func isObjectLike(v any) bool {

@@ -11,7 +11,7 @@ import (
 // 自写测试向量:build.go 的 BuildDetailed 第一段(从入参缺省到节点出站 / endpoint、出站重名检查,即源文件顺序里
 // 「订阅和节点站点直连」「链式代理并表」「节点组」「站点集 selector」「节点出站 / endpoint」「重名检查」六块)。
 // 输入自己拟,期望值按下面的规则人工推算,JSON 逐字节比(map 的键序是字母序):
-//   - 结果恒为 {config, dnsRuleOwners, directHosts, failover};没有规则归属时 dnsRuleOwners 是 [] 不是 null,没有故障转移组时 failover 是 [];
+//   - 结果恒为 {config, dnsRuleOwners, directHosts, failover, flipFlags}(flipFlags 是自研多带的);没有规则归属时 dnsRuleOwners 是 [] 不是 null,没有故障转移组时 failover 是 [];
 //   - profile 里没有 dns 对象时报 JS 同款的 "Cannot read properties of undefined (reading 'split')";
 //   - 出站顺序:用户组出站(直连、各组、拒绝)→ 生效的站点集 selector(按站点集顺序)→ 兜底 selector → 节点(含并进来的链式节点)
 //     → dnsmasq 模式才有的 dnsmasq 回送出站;wireguard 不在 outbounds 里而在 endpoints 里;
@@ -110,10 +110,10 @@ func bhOuts(items ...string) string { return "[" + strings.Join(items, ",") + "]
 
 func TestBuildHeadShape(t *testing.T) {
 	res := bhMust(t, bhArgs(""))
-	if len(res) != 4 {
+	if len(res) != 5 {
 		t.Errorf("结果键数 %d: %v", len(res), res)
 	}
-	for _, k := range []string{"config", "dnsRuleOwners", "directHosts", "failover"} {
+	for _, k := range []string{"config", "dnsRuleOwners", "directHosts", "failover", "flipFlags"} {
 		if _, ok := res[k]; !ok {
 			t.Errorf("缺 %s", k)
 		}
@@ -123,6 +123,10 @@ func TestBuildHeadShape(t *testing.T) {
 	}
 	if got := bhJSON(t, res["failover"]); got != `[]` {
 		t.Errorf("failover=%s", got)
+	}
+	// 没有站点集:只有兜底的开关,兜底默认直连 → 关
+	if got := bhJSON(t, res["flipFlags"]); got != `{"obflip-fallback":false}` {
+		t.Errorf("flipFlags=%s", got)
 	}
 	if got := bhOutbounds(t, res); got != bhOuts(bhDirect, bhBlock, bhFallbackSel) {
 		t.Errorf("没有节点时的出站: %s", got)
