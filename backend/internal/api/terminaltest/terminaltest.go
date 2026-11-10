@@ -5,7 +5,9 @@
 // 和缺的项;具备前提就建命名空间 + veth、DHCP 取址,把结果放进 source 返回;建不起来回 setupError(原因原文)。
 // 取址之后接着在虚拟终端的命名空间里发探测(GET / HEAD / TCP / TLS,见 internal/nsprobe):先用 DHCP 给的 DNS 解析域名
 // (填 dns),再直连目标(填 exit),所以响应有 source / dns / exit;conntrack 取证(entry、dnsEvidence)、内核 DNS 追踪
-// (kernelDns)、旁路由改指(source.override)、exit.kernel / exit.forward、firstLayer 还没做,响应里如实没有这些字段。
+// (kernelDns)、旁路由改指(source.override)、firstLayer 还没做,响应里如实没有这些字段。
+// kernel / entry 要在终端那条连接还开着的时候去读内核连接表:Prober 是 HoldProber(出结果后先留着连接)且接了 Deps.Kernel 才做,
+// 判法见 entry.go。
 // dnsEvidence(conntrack 里这次 DNS 查询的回复方是不是被问的服务器本人)用终端发 DNS 时的 UDP 源端口精确认出这一次的记录;
 // 连接跟踪表读不到、或没拿到源端口时不带这个字段(不把「读不到」说成「没有」)。
 // dnsForward(dnsmasq 把这次域名查询交给内核 DNS 还是直接问上游)只在有把握时才给:终端问的是本机 LAN 地址上的 dnsmasq、
@@ -28,6 +30,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
 	"github.com/timeflysoon/Open-Box/backend/internal/nsprobe"
 	"github.com/timeflysoon/Open-Box/backend/internal/routetest"
+	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
 )
 
@@ -57,8 +60,12 @@ type Deps struct {
 	Terminal Terminal
 	// Prober 为空 = 只建终端和取址,不发探测。
 	Prober Prober
-	// Conntrack 为空 = 不做 conntrack 取证(不带 dnsEvidence)。
+	// Conntrack 为空 = 不做 conntrack 取证(不带 dnsEvidence,entry 里也没有 conntrack 证据)。
 	Conntrack Conntrack
+	// Kernel 取内核当前的连接快照(singbox.KernelConnections)。为空、或 Prober 不是 HoldProber,就不做 kernel / entry。
+	Kernel func(ctx context.Context) (singbox.KernelSnapshot, error)
+	// Route 问系统路由(*routeget.Getter),判旁路用;为空时不判旁路(entry 里 no-route)。
+	Route RouteGetter
 	// DNSForward 返回此刻 dnsmasq 对查询的转发情况(*dnsforward.Service 的 Describe),拿不准返回 nil;为空 = 不填 dnsForward。
 	DNSForward func(ctx context.Context) *dnsforward.Result
 	// IdleAfter 是最后一次测试之后过多久自动拆掉虚拟终端,默认 5 分钟。
@@ -185,7 +192,7 @@ func (h *handlers) run(w http.ResponseWriter, r *http.Request) {
 		"dns": dns, "gateway": lease.Gateway, "lanDevice": v.LANDevice, "reused": v.Reused, "dhcpMs": lease.Ms,
 	}
 	if h.d.Prober != nil {
-		h.probe(r.Context(), out, probeEnv{ns: v.Namespace, dns: dns, lanAddr: c.LAN.Address, srcIP: lease.IP}, in)
+		h.probe(r.Context(), out, probeEnv{ns: v.Namespace, dns: dns, lanAddr: c.LAN.Address, lanDevice: c.LAN.Device, srcIP: lease.IP}, in)
 		if r.Context().Err() != nil {
 			return
 		}
@@ -193,18 +200,30 @@ func (h *handlers) run(w http.ResponseWriter, r *http.Request) {
 	done()
 }
 
-// probe 在虚拟终端里发探测,把 dns / exit(和探测进程的 stderr)放进 out。
 // probeEnv 是探测要用的环境:命名空间、DHCP 给的 DNS、本机 LAN 口地址(终端问的 DNS 服务器正是它,才说得上
-// 「dnsmasq 怎么转发」)、终端自己的地址(conntrack 取证按它认记录)。
+// 「dnsmasq 怎么转发」;连接被改写成它,才算重定向进了内核)和设备(路由查询的入口接口)、终端自己的地址(取证按它认记录)。
 type probeEnv struct {
-	ns      string
-	dns     []string
-	lanAddr string
-	srcIP   string
+	ns        string
+	dns       []string
+	lanAddr   string
+	lanDevice string
+	srcIP     string
 }
 
+// probe 在虚拟终端里发探测,把 dns / exit / kernel / entry(和探测进程的 stderr)放进 out。
 func (h *handlers) probe(ctx context.Context, out map[string]any, env probeEnv, in routetest.Input) {
-	res, stderr, err := h.d.Prober.Probe(ctx, env.ns, nsprobe.Request{Target: in.Target, Port: in.Port, Method: in.Method, DNS: env.dns})
+	req := nsprobe.Request{Target: in.Target, Port: in.Port, Method: in.Method, DNS: env.dns}
+	var k *kernelLook
+	var res nsprobe.Result
+	var stderr string
+	var err error
+	hp, canHold := h.d.Prober.(HoldProber)
+	hold := canHold && h.d.Kernel != nil
+	if hold {
+		res, stderr, err = hp.ProbeHold(ctx, env.ns, req, func(r nsprobe.Result) { k = h.lookupKernel(ctx, env.srcIP, r) })
+	} else {
+		res, stderr, err = h.d.Prober.Probe(ctx, env.ns, req)
+	}
 	port := in.Port
 	if port == 0 {
 		port = 443
@@ -257,6 +276,9 @@ func (h *handlers) probe(ctx context.Context, out map[string]any, env probeEnv, 
 	}
 	if res.Error != "" {
 		ex["error"] = res.Error
+	}
+	if hold {
+		h.fillKernelAndEntry(ctx, out, ex, env, in, res, k)
 	}
 	out["exit"] = ex
 	if stderr != "" {

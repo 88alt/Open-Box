@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -422,4 +423,271 @@ func TestResolveFailureStillReportsLocalPorts(t *testing.T) {
 	if ip != "" || d == nil || d.OK || len(d.LocalPorts) == 0 {
 		t.Fatalf("%+v ip=%q", d, ip)
 	}
+}
+
+// ---- hold:出结果后连接先留着,release / stdin 关闭后才关 ----
+
+// closeWatcher 是个只会按行回一个 204 的 HTTP / TCP 服务,并报告每条连接什么时候被对端关掉。
+func closeWatcher(t *testing.T, httpReply bool) (port int, closed chan struct{}) {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip(err)
+	}
+	t.Cleanup(func() { _ = l.Close() })
+	closed = make(chan struct{}, 4)
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				if httpReply {
+					buf := make([]byte, 4096)
+					_, _ = c.Read(buf)
+					_, _ = c.Write([]byte("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n"))
+				}
+				_, _ = io.Copy(io.Discard, c) // 读到 EOF = 对端关了
+				closed <- struct{}{}
+			}()
+		}
+	}()
+	return l.Addr().(*net.TCPAddr).Port, closed
+}
+
+func expectOpenThenClosed(t *testing.T, closed chan struct{}, release func()) {
+	t.Helper()
+	select {
+	case <-closed:
+		t.Fatal("连接不该在 release 之前被关掉")
+	case <-time.After(300 * time.Millisecond):
+	}
+	release()
+	select {
+	case <-closed:
+	case <-time.After(3 * time.Second):
+		t.Fatal("release 之后连接该关掉")
+	}
+}
+
+func TestRunHoldKeepsConnectionUntilRelease(t *testing.T) {
+	t.Run("TCP", func(t *testing.T) {
+		port, closed := closeWatcher(t, false)
+		res, release, err := RunHold(context.Background(), Request{Target: "127.0.0.1", Port: port, Method: "TCP"})
+		if err != nil || !res.OK || res.LocalPort == 0 {
+			t.Fatalf("%+v %v", res, err)
+		}
+		expectOpenThenClosed(t, closed, release)
+		release() // 可重复调用
+	})
+	for _, m := range []string{"GET", "HEAD"} {
+		t.Run(m, func(t *testing.T) {
+			closed := make(chan struct{}, 4)
+			srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) }))
+			srv.Config.ConnState = func(_ net.Conn, st http.ConnState) {
+				if st == http.StateClosed {
+					closed <- struct{}{}
+				}
+			}
+			srv.StartTLS()
+			t.Cleanup(srv.Close)
+			port, cfg := tlsFor(srv)
+			p := &prober{hold: true, tls: cfg}
+			res, err := p.run(context.Background(), Request{Target: "127.0.0.1", Port: port, Method: m})
+			if err != nil || !res.OK || res.LocalPort == 0 {
+				t.Fatalf("%+v %v", res, err)
+			}
+			expectOpenThenClosed(t, closed, p.release)
+		})
+	}
+}
+
+func TestRunStillClosesRightAway(t *testing.T) {
+	port, closed := closeWatcher(t, false)
+	if res, err := Run(context.Background(), Request{Target: "127.0.0.1", Port: port, Method: "TCP"}); err != nil || !res.OK {
+		t.Fatalf("%+v %v", res, err)
+	}
+	select {
+	case <-closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run 不留连接,探测完就该关")
+	}
+	// HTTP 也一样(不留连接)
+	hclosed := make(chan struct{}, 4)
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) }))
+	srv.Config.ConnState = func(_ net.Conn, st http.ConnState) {
+		if st == http.StateClosed {
+			hclosed <- struct{}{}
+		}
+	}
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+	hport, cfg := tlsFor(srv)
+	p := &prober{tls: cfg}
+	if res, err := p.run(context.Background(), Request{Target: "127.0.0.1", Port: hport, Method: "GET"}); err != nil || !res.OK {
+		t.Fatalf("%+v %v", res, err)
+	}
+	select {
+	case <-hclosed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("HTTP 探测完该关掉连接")
+	}
+}
+
+func TestMainHoldWaitsForStdinClose(t *testing.T) {
+	port, closed := closeWatcher(t, false)
+	stdinR, stdinW := io.Pipe()
+	var out, errb bytes.Buffer
+	done := make(chan int, 1)
+	go func() {
+		done <- MainIO([]string{`{"target":"127.0.0.1","port":` + strconv.Itoa(port) + `,"method":"TCP","holdMs":8000}`}, stdinR, &out, &errb)
+	}()
+	select {
+	case <-done:
+		t.Fatal("stdin 没关,进程不该退出")
+	case <-closed:
+		t.Fatal("连接不该被关")
+	case <-time.After(300 * time.Millisecond):
+	}
+	_ = stdinW.Close()
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Fatalf("code=%d %s", code, errb.String())
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("stdin 关了进程该退出")
+	}
+	select {
+	case <-closed:
+	case <-time.After(3 * time.Second):
+		t.Fatal("进程退出前该关掉连接")
+	}
+	if !strings.Contains(out.String(), `"localPort"`) {
+		t.Fatalf("结果:%s", out.String())
+	}
+}
+
+func TestMainHoldDoesNotWaitWhenNotConnected(t *testing.T) {
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	port := l.Addr().(*net.TCPAddr).Port
+	_ = l.Close() // 没人听:连不上
+	stdinR, _ := io.Pipe()
+	var out, errb bytes.Buffer
+	done := make(chan int, 1)
+	go func() {
+		done <- MainIO([]string{`{"target":"127.0.0.1","port":` + strconv.Itoa(port) + `,"method":"TCP","holdMs":8000,"timeoutMs":1000}`}, stdinR, &out, &errb)
+	}()
+	select {
+	case code := <-done:
+		if code != 0 || !strings.Contains(out.String(), `"ok":false`) {
+			t.Fatalf("code=%d out=%s", code, out.String())
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("没连上就没有要留的连接,不该等")
+	}
+}
+
+// ---- Exec.ProbeHold:读到结果后调用 during,during 返回才关 stdin ----
+
+type fakeProc struct {
+	stdout      io.Reader
+	stdinOpen   bool
+	stdinClosed chan struct{}
+	stderr      string
+	code        int
+}
+
+type nopWC struct{ closed chan struct{} }
+
+func (n *nopWC) Write(p []byte) (int, error) { return len(p), nil }
+func (n *nopWC) Close() error                { close(n.closed); return nil }
+
+func holdExec(fp *fakeProc, started *[]string) *Exec {
+	return &Exec{Self: "/bin/self", Start: func(_ context.Context, name string, args ...string) (*Proc, error) {
+		*started = append([]string{name}, args...)
+		in := &nopWC{closed: fp.stdinClosed}
+		return &Proc{Stdin: in, Stdout: fp.stdout, Wait: func() (string, int, error) {
+			<-fp.stdinClosed // 进程是 stdin 关了才退出的
+			return fp.stderr, fp.code, nil
+		}}, nil
+	}}
+}
+
+func TestExecProbeHold(t *testing.T) {
+	line := `{"url":"a","port":80,"method":"TCP","ok":true,"localPort":40001,"ms":3}` + "\n"
+	t.Run("结果出来后调 during,during 之前 stdin 没关", func(t *testing.T) {
+		fp := &fakeProc{stdout: strings.NewReader(line), stdinClosed: make(chan struct{})}
+		var started []string
+		var duringSaw Result
+		stdinClosedInDuring := true
+		res, _, err := holdExec(fp, &started).ProbeHold(context.Background(), "obterm", Request{Target: "a.b", Method: "TCP"}, func(r Result) {
+			duringSaw = r
+			select {
+			case <-fp.stdinClosed:
+			default:
+				stdinClosedInDuring = false
+			}
+		})
+		if err != nil || !res.OK || duringSaw.LocalPort != 40001 || stdinClosedInDuring {
+			t.Fatalf("res=%+v err=%v during=%+v stdinClosedInDuring=%v", res, err, duringSaw, stdinClosedInDuring)
+		}
+		if started[0] != "ip" || strings.Join(started[1:5], " ") != "netns exec obterm /bin/self" || !strings.Contains(started[6], `"holdMs":6000`) {
+			t.Fatalf("命令:%q", started)
+		}
+	})
+	t.Run("没连上不调 during", func(t *testing.T) {
+		fp := &fakeProc{stdout: strings.NewReader(`{"url":"a","port":80,"method":"TCP","ok":false,"error":"拒绝"}` + "\n"), stdinClosed: make(chan struct{})}
+		var started []string
+		called := false
+		res, _, err := holdExec(fp, &started).ProbeHold(context.Background(), "n", Request{Target: "a.b"}, func(Result) { called = true })
+		if err != nil || res.OK || called {
+			t.Fatalf("%+v %v called=%v", res, err, called)
+		}
+	})
+	t.Run("进程没输出就退出 / 非零退出 / 输出看不懂", func(t *testing.T) {
+		var started []string
+		fp := &fakeProc{stdout: strings.NewReader(""), stdinClosed: make(chan struct{}), stderr: "请求不对\n", code: 2}
+		if _, se, err := holdExec(fp, &started).ProbeHold(context.Background(), "n", Request{Target: "a.b"}, nil); err == nil || se != "请求不对" {
+			t.Fatalf("%q %v", se, err)
+		}
+		fp = &fakeProc{stdout: strings.NewReader("garbage\n"), stdinClosed: make(chan struct{})}
+		if _, _, err := holdExec(fp, &started).ProbeHold(context.Background(), "n", Request{Target: "a.b"}, nil); err == nil || !strings.Contains(err.Error(), "看不懂") {
+			t.Fatal(err)
+		}
+		fp = &fakeProc{stdout: strings.NewReader(line), stdinClosed: make(chan struct{}), stderr: "boom", code: 1}
+		if _, se, err := holdExec(fp, &started).ProbeHold(context.Background(), "n", Request{Target: "a.b"}, nil); err == nil || se != "boom" {
+			t.Fatalf("%q %v", se, err)
+		}
+	})
+	t.Run("起不来", func(t *testing.T) {
+		e := &Exec{Self: "x", Start: func(context.Context, string, ...string) (*Proc, error) { return nil, errors.New("boom") }}
+		if _, _, err := e.ProbeHold(context.Background(), "n", Request{Target: "a.b"}, nil); err == nil || !strings.Contains(err.Error(), "没能在命名空间里启动") {
+			t.Fatal(err)
+		}
+	})
+	t.Run("等不到结果就按 ctx 超时收场", func(t *testing.T) {
+		pr, pw := io.Pipe()
+		defer pw.Close()
+		fp := &fakeProc{stdout: pr, stdinClosed: make(chan struct{})}
+		var started []string
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		// ctx 先到期:ProbeHold 内部的 total 更长,所以由外层 ctx 触发
+		e := holdExec(fp, &started)
+		if _, _, err := e.ProbeHold(ctx, "n", Request{Target: "a.b"}, nil); err == nil || !strings.Contains(err.Error(), "超时") {
+			t.Fatalf("%v", err)
+		}
+	})
+}
+
+// tlsFor 取一个已启动的 TLS 测试服务器的端口和信任它的 tls.Config。
+func tlsFor(s *httptest.Server) (int, *tls.Config) {
+	pool := x509.NewCertPool()
+	pool.AddCert(s.Certificate())
+	_, p, _ := net.SplitHostPort(s.Listener.Addr().String())
+	port, _ := strconv.Atoi(p)
+	return port, &tls.Config{RootCAs: pool}
 }

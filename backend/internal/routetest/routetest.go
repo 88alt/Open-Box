@@ -384,19 +384,14 @@ func (s *Service) fillRoute(ctx context.Context, ex *Exit, port string) {
 			found = c // 同一端口只会有一条;万一重复取最后一条
 		}
 	}
-	if found == nil || len(found.Chains) == 0 {
+	v, ok := ViewOf(found, snap.DirectTags)
+	if !ok {
 		ex.NotSeen = true
 		return
 	}
-	chains := make([]string, 0, len(found.Chains))
-	for i := len(found.Chains) - 1; i >= 0; i-- { // Clash API 的链出口在前、路由选中的在最后;前端要的是反过来
-		chains = append(chains, found.Chains[i])
-	}
-	ex.Chains, ex.Rule, ex.RulePayload, ex.DestinationIP = chains, found.Rule, found.RulePayload, found.DestIP
-	ex.NoDomain = noDomainRule(found.Rule, found.Host)
-	leaf := chains[len(chains)-1]
-	via := !contains(snap.DirectTags, leaf)
-	ex.ViaProxy = &via
+	ex.Chains, ex.Rule, ex.RulePayload, ex.DestinationIP = v.Chains, v.Rule, v.RulePayload, v.DestinationIP
+	ex.NoDomain = v.NoDomain
+	ex.ViaProxy = &v.ViaProxy
 }
 
 // withConnectTo 把 host:port 里的主机换成 ip(端口不变);ip 为空原样返回。

@@ -86,6 +86,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/profile"
 	"github.com/timeflysoon/Open-Box/backend/internal/regiondetect"
 	"github.com/timeflysoon/Open-Box/backend/internal/routedecide"
+	"github.com/timeflysoon/Open-Box/backend/internal/routeget"
 	"github.com/timeflysoon/Open-Box/backend/internal/routetest"
 	"github.com/timeflysoon/Open-Box/backend/internal/rulelist"
 	"github.com/timeflysoon/Open-Box/backend/internal/server"
@@ -598,7 +599,11 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Applied:    func(ctx context.Context) bool { return takeover.Status(ctx).Applied },
 		KernelAddr: takeover.KernelAddress(),
 	}
-	terminaltestapi.Register(srv.Mux(), terminaltestapi.Deps{Capability: terminalProbe.Capability, Terminal: vterm, Prober: &nsprobe.Exec{}, Conntrack: &conntrack.Reader{}, DNSForward: dnsFwd.Describe, Log: log})
+	terminaltestapi.Register(srv.Mux(), terminaltestapi.Deps{Capability: terminalProbe.Capability, Terminal: vterm, Prober: &nsprobe.Exec{}, Conntrack: &conntrack.Reader{}, DNSForward: dnsFwd.Describe,
+		Kernel: func(ctx context.Context) (singbox.KernelSnapshot, error) {
+			return singbox.KernelConnections(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
+		},
+		Route: &routeget.Getter{}, Log: log})
 
 	// 域名穿透:按已部署配置里的路由规则推算一个域名 / IP 会命中哪条规则、走哪条线路(DNS 判定和真实路由测试共用一个预测器)
 	penetrationSets := &dnsdecide.FileSets{SingBox: cfg.SingBox, TmpDir: probeDir}

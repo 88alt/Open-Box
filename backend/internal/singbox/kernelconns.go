@@ -27,6 +27,8 @@ type KernelConn struct {
 	// 规则类型和它的内容);没有时为空。route-test 靠它告诉用户是哪条规则管的。
 	Rule        string
 	RulePayload string
+	// Inbound 是连接进来的入站(Clash API metadata.type 原文,例如 "redirect/redirect-in"),没有时为空。
+	Inbound string
 }
 
 // KernelSnapshot 是某一刻的连接快照。UploadTotal / DownloadTotal 是内核自启动以来的累计总量
@@ -95,6 +97,7 @@ func parseKernelConnections(r io.Reader) (KernelSnapshot, error) {
 				SourcePort    any    `json:"sourcePort"`
 				Host          string `json:"host"`
 				DestinationIP string `json:"destinationIP"`
+				Type          string `json:"type"`
 			} `json:"metadata"`
 		} `json:"connections"`
 	}
@@ -110,7 +113,7 @@ func parseKernelConnections(r io.Reader) (KernelSnapshot, error) {
 			ID: c.ID, Upload: c.Upload, Download: c.Download, Chains: c.Chains,
 			Source: c.Metadata.SourceIP, Host: c.Metadata.Host, DestIP: c.Metadata.DestinationIP,
 			SourcePort: portString(c.Metadata.SourcePort),
-			Rule:       c.Rule, RulePayload: c.RulePayload,
+			Rule:       c.Rule, RulePayload: c.RulePayload, Inbound: c.Metadata.Type,
 		})
 	}
 	return snap, nil

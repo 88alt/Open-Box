@@ -107,3 +107,12 @@ func TestParseKernelConnectionsRule(t *testing.T) {
 		t.Errorf("没有 rule 时应该为空: %+v", s.Conns[1])
 	}
 }
+
+func TestParseKernelConnectionsKeepsInbound(t *testing.T) {
+	snap, err := parseKernelConnections(strings.NewReader(`{"connections":[
+ {"id":"a","chains":["n"],"metadata":{"sourceIP":"192.168.5.77","sourcePort":"40000","type":"redirect/redirect-in"}},
+ {"id":"b","chains":["n"],"metadata":{"sourceIP":"192.168.5.77","sourcePort":"40001"}}]}`))
+	if err != nil || len(snap.Conns) != 2 || snap.Conns[0].Inbound != "redirect/redirect-in" || snap.Conns[1].Inbound != "" {
+		t.Fatalf("%+v %v", snap, err)
+	}
+}

@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,7 +45,13 @@ type Request struct {
 	Method    string   `json:"method"`
 	DNS       []string `json:"dns"`
 	TimeoutMs int      `json:"timeoutMs,omitempty"`
+	// HoldMs > 0:探测出结果(且连上了)之后先不关连接,等标准输入关闭或这么多毫秒(最长 MaxHoldMs)再退出。
+	// 后端趁这段时间读内核的连接表和 conntrack,认出这条连接;连接已经关了,内核连接表里就没有它了。
+	HoldMs int `json:"holdMs,omitempty"`
 }
+
+// MaxHoldMs 是 HoldMs 的上限,防止探测进程被拖着不退出。
+const MaxHoldMs = 10000
 
 // DNSResult 对应前端 terminal-test 响应的 dns(目标是域名时)。Server 是给出答案(或最后一台试过)的服务器。
 type DNSResult struct {
@@ -76,11 +83,32 @@ type Result struct {
 
 // prober 带着可被测试替换的部分。
 type prober struct {
-	tls *tls.Config
+	tls  *tls.Config
+	hold bool     // 探测成功后连接留着,由 release 一起关
+	held []func() // hold 时要关的东西
+}
+
+func (p *prober) release() {
+	for _, f := range p.held {
+		f()
+	}
+	p.held = nil
 }
 
 // Run 在当前网络命名空间里做一次探测(子命令调用它;测试里直接调)。请求内容有问题返回 error。
-func Run(ctx context.Context, req Request) (Result, error) { return (&prober{}).run(ctx, req) }
+func Run(ctx context.Context, req Request) (Result, error) {
+	res, release, err := RunHold(ctx, req)
+	release()
+	return res, err
+}
+
+// RunHold 与 Run 一样,但探测成功后连接不关,返回的 release 才关(可以重复调用)。
+// 后端要在连接还开着的时候去内核连接表里认它。
+func RunHold(ctx context.Context, req Request) (Result, func(), error) {
+	p := &prober{hold: true}
+	res, err := p.run(ctx, req)
+	return res, p.release, err
+}
 
 func (p *prober) run(ctx context.Context, req Request) (Result, error) {
 	in, err := routetest.Parse(routetest.Input{Target: req.Target, Port: req.Port, Method: req.Method})
@@ -163,7 +191,11 @@ func (p *prober) probeTCP(ctx context.Context, target string, port int, res *Res
 	if err != nil {
 		return err
 	}
-	_ = c.Close()
+	if p.hold {
+		p.held = append(p.held, func() { _ = c.Close() })
+	} else {
+		_ = c.Close()
+	}
 	res.OK, res.MS = true, ms(time.Since(start))
 	return nil
 }
@@ -175,7 +207,12 @@ func (p *prober) probeTLS(ctx context.Context, target string, port int, res *Res
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	keep := false
+	defer func() {
+		if !keep {
+			_ = c.Close()
+		}
+	}()
 	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
 	if p.tls != nil {
 		cfg = p.tls.Clone()
@@ -191,6 +228,10 @@ func (p *prober) probeTLS(ctx context.Context, target string, port int, res *Res
 	if err := tls.Client(c, cfg).HandshakeContext(ctx); err != nil {
 		return err
 	}
+	if p.hold {
+		keep = true
+		p.held = append(p.held, func() { _ = c.Close() })
+	}
 	res.OK, res.MS = true, ms(time.Since(start))
 	return nil
 }
@@ -204,10 +245,15 @@ func (p *prober) probeHTTP(ctx context.Context, in routetest.Input, res *Result)
 		TLSClientConfig:     p.tls,
 		TLSHandshakeTimeout: DefaultTimeout,
 		DisableCompression:  true,
-		DisableKeepAlives:   true,
-		Proxy:               nil, // 终端不走代理设置
+		DisableKeepAlives:   !p.hold, // 要留着连接时不能让它在读完后被关掉
+		Proxy:               nil,     // 终端不走代理设置
 	}
-	defer tr.CloseIdleConnections()
+	kept := false
+	defer func() {
+		if !kept {
+			tr.CloseIdleConnections()
+		}
+	}()
 	client := &http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	method := http.MethodGet
 	if in.Method == routetest.MethodHEAD {
@@ -225,7 +271,13 @@ func (p *prober) probeHTTP(ctx context.Context, in routetest.Input, res *Result)
 	}
 	took := time.Since(start)
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxBodyRead))
-	_ = resp.Body.Close()
+	if p.hold {
+		// 响应体没读完时关 Body 会把连接一起关掉,所以留到 release 再关
+		kept = true
+		p.held = append(p.held, func() { _ = resp.Body.Close(); tr.CloseIdleConnections() })
+	} else {
+		_ = resp.Body.Close()
+	}
 	res.OK, res.MS = true, ms(took)
 	st := resp.StatusCode
 	res.Status = &st
@@ -310,6 +362,12 @@ func describeDNS(err error) string {
 // Main 是隐藏子命令 `ns-probe <请求 JSON>` 的入口:跑一次探测,结果 JSON 打到 stdout。
 // 请求有问题打错误到 stderr、返回 2;探测本身失败不算错(写在结果的 error 里,返回 0)。
 func Main(args []string, stdout, stderr io.Writer) int {
+	return MainIO(args, os.Stdin, stdout, stderr)
+}
+
+// MainIO 同 Main,标准输入可换(测试用)。请求带 HoldMs 且连上了(结果里有 localPort)时,
+// 结果打出去之后连接继续留着,直到 stdin 关闭或 HoldMs 到(最长 MaxHoldMs)才退出。
+func MainIO(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) != 1 {
 		fmt.Fprintln(stderr, "用法:ns-probe <请求 JSON>")
 		return 2
@@ -319,7 +377,20 @@ func Main(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "请求不是合法的 JSON:", err)
 		return 2
 	}
-	res, err := Run(context.Background(), req)
+	hold := req.HoldMs > 0
+	run := Run
+	var release func()
+	if hold {
+		run = func(ctx context.Context, r Request) (Result, error) {
+			res, rel, err := RunHold(ctx, r)
+			release = rel
+			return res, err
+		}
+	}
+	res, err := run(context.Background(), req)
+	if release != nil {
+		defer release()
+	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 2
@@ -327,6 +398,18 @@ func Main(args []string, stdout, stderr io.Writer) int {
 	if err := json.NewEncoder(stdout).Encode(res); err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
+	}
+	if hold && res.LocalPort != 0 {
+		wait := time.Duration(min(req.HoldMs, MaxHoldMs)) * time.Millisecond
+		done := make(chan struct{})
+		go func() {
+			_, _ = io.Copy(io.Discard, stdin)
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(wait):
+		}
 	}
 	return 0
 }
