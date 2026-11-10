@@ -111,7 +111,8 @@ export interface OpenboxDnsRewriteRule {
   addresses?: string[]
   note?: string
 }
-export type OpenboxDnsProtocol = 'udp' | 'tcp' | 'https'
+// tls = DoT:地址收 IP 或域名(默认端口 853),域名时和 DoH 一样需要 bootstrap
+export type OpenboxDnsProtocol = 'udp' | 'tcp' | 'https' | 'tls'
 export interface OpenboxDnsBootstrap { server: string; protocol: 'udp' | 'tcp'; port: number }
 export interface OpenboxDnsExtra { server: string; protocol?: OpenboxDnsProtocol; port?: number; bootstrap?: OpenboxDnsBootstrap | null }
 export interface OpenboxProfileDns {
