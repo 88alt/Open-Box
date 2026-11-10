@@ -190,7 +190,7 @@ func TestShareRegionsErrors(t *testing.T) {
 		{"dns 不是对象", `+{"dns":"wan"}`, "dns must be an object"},
 		{"直连上游填域名", `+{"dns":{"direct":"dns.example.com"}}`, "server must be an IP address or wan"},
 		{"上游带区域", `+{"dns":{"proxy":"fe80::1%eth0"}}`, "server must be an IP address or wan"},
-		{"协议非法", `+{"dns":{"directProtocol":"tls","direct":"1.1.1.1"}}`, "protocol must be udp or tcp"},
+		{"协议非法", `+{"dns":{"directProtocol":"quic","direct":"1.1.1.1"}}`, "protocol must be udp, tcp, https or tls"},
 		{"端口 0", `+{"dns":{"directPort":0,"direct":"1.1.1.1"}}`, "port must be an integer between 1 and 65535"},
 		{"端口越界", `+{"dns":{"proxyPort":70000,"proxy":"1.1.1.1"}}`, "port must be an integer between 1 and 65535"},
 		{"端口是小数", `+{"dns":{"proxyPort":53.5,"proxy":"1.1.1.1"}}`, "port must be an integer between 1 and 65535"},

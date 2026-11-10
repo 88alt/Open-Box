@@ -97,7 +97,7 @@ func TestNormalizeDNSUpstream(t *testing.T) {
 }
 
 func TestDNSProtocolAndPort(t *testing.T) {
-	for _, p := range []string{"udp", "tcp", "tls"} {
+	for _, p := range []string{"udp", "tcp", "tls", "https"} {
 		if !isDNSProtocol(p) {
 			t.Errorf("%q 应是合法协议", p)
 		}
@@ -105,7 +105,7 @@ func TestDNSProtocolAndPort(t *testing.T) {
 			t.Errorf("dnsProtocolOr(%q) = %q", p, got)
 		}
 	}
-	for _, v := range []any{"UDP", "Tcp", "TLS", "https", "", " udp", nil, 1.0, true, []any{"udp"}} {
+	for _, v := range []any{"UDP", "Tcp", "TLS", "HTTPS", "quic", "", " udp", nil, 1.0, true, []any{"udp"}} {
 		if isDNSProtocol(v) {
 			t.Errorf("%#v 不应是合法协议", v)
 		}
@@ -134,7 +134,7 @@ func TestDNSProtocolAndPort(t *testing.T) {
 			t.Errorf("dnsPortOr(%#v,tls) = %d,想要默认 853", v, got)
 		}
 	}
-	if dnsDefaultPort("tls") != 853 || dnsDefaultPort("udp") != 53 || dnsDefaultPort("tcp") != 53 {
+	if dnsDefaultPort("tls") != 853 || dnsDefaultPort("udp") != 53 || dnsDefaultPort("tcp") != 53 || dnsDefaultPort("https") != 443 {
 		t.Fatal("dnsDefaultPort")
 	}
 }
@@ -242,7 +242,7 @@ func TestUpstreamOf(t *testing.T) {
 		{"wan 读不到系统上游按 intl 退回", intlProfile, "wan", nil, nil, "udp", "wan", nil, up("udp", "1.1.1.1", 53, true)},
 		{"普通地址", cnProfile, "8.8.8.8", "tcp", 5353.0, "udp", "wan", sys, up("tcp", "8.8.8.8", 5353, false)},
 		{"地址从 URL 折出来", cnProfile, "https://9.9.9.9/dns-query", nil, nil, "udp", "wan", sys, up("udp", "9.9.9.9", 53, false)},
-		{"协议非法退回 fallback", cnProfile, "8.8.8.8", "https", nil, "tcp", "wan", sys, up("tcp", "8.8.8.8", 53, false)},
+		{"协议非法退回 fallback", cnProfile, "8.8.8.8", "quic", nil, "tcp", "wan", sys, up("tcp", "8.8.8.8", 53, false)},
 		{"tls 合法,默认端口 853", cnProfile, "8.8.8.8", "tls", nil, "tcp", "wan", sys, up("tls", "8.8.8.8", 853, false)},
 		{"端口非法退回 53", cnProfile, "8.8.8.8", "udp", 70000.0, "tcp", "wan", sys, up("udp", "8.8.8.8", 53, false)},
 		{"地址非法且 invalid=wan:退成 wan", cnProfile, "dns.google", "tcp", 5353.0, "udp", "wan", sys, up("udp", "192.168.1.1", 53, true)},
@@ -274,7 +274,7 @@ func TestDirectAndProxyUpstream(t *testing.T) {
 		{"直连地址与协议端口", profile(`{"dns":{"direct":"114.114.114.114","directProtocol":"tcp","directPort":5353}}`), up("tcp", "114.114.114.114", 5353, false), up("tcp", "1.1.1.1", 53, false)},
 		{"代理地址与协议端口", profile(`{"dns":{"proxy":"8.8.8.8","proxyProtocol":"udp","proxyPort":853}}`), up("udp", "192.168.1.1", 53, true), up("udp", "8.8.8.8", 853, false)},
 		{"直连地址非法退成 wan,代理非法退成 1.1.1.1 并保留协议端口", profile(`{"dns":{"direct":"bad.host","directProtocol":"tcp","proxy":"bad.host","proxyProtocol":"udp","proxyPort":5300}}`), up("udp", "192.168.1.1", 53, true), up("udp", "1.1.1.1", 5300, false)},
-		{"直连协议非法退回 udp;代理协议非法退回 tcp", profile(`{"dns":{"direct":"1.2.3.4","directProtocol":"https","proxy":"5.6.7.8","proxyProtocol":"quic"}}`), up("udp", "1.2.3.4", 53, false), up("tcp", "5.6.7.8", 53, false)},
+		{"直连协议非法退回 udp;代理协议非法退回 tcp", profile(`{"dns":{"direct":"1.2.3.4","directProtocol":"quic","proxy":"5.6.7.8","proxyProtocol":"quic"}}`), up("udp", "1.2.3.4", 53, false), up("tcp", "5.6.7.8", 53, false)},
 		{"intl:直连 wan 读不到时退成 1.1.1.1", profile(`{"dns":{"region":"intl"}}`), up("udp", "192.168.1.1", 53, true), up("tcp", "1.1.1.1", 53, false)},
 		{"两侧分别读各自的键", profile(`{"dns":{"direct":"1.1.1.1","proxy":"2.2.2.2","directPort":1001,"proxyPort":2002}}`), up("udp", "1.1.1.1", 1001, false), up("tcp", "2.2.2.2", 2002, false)},
 	}
@@ -407,7 +407,7 @@ func TestExtraUpstreams(t *testing.T) {
 	})
 
 	t.Run("协议端口非法时退回各自默认", func(t *testing.T) {
-		p := build(`{"direct":"1.1.1.1","proxy":"2.2.2.2","directExtras":[{"server":"3.3.3.3","protocol":"https","port":0}],"proxyExtras":[{"server":"4.4.4.4","protocol":"https","port":70000}]}`)
+		p := build(`{"direct":"1.1.1.1","proxy":"2.2.2.2","directExtras":[{"server":"3.3.3.3","protocol":"quic","port":0}],"proxyExtras":[{"server":"4.4.4.4","protocol":"quic","port":70000}]}`)
 		if got := directExtraUpstreams(p, sys); !reflect.DeepEqual(got, []upstream{up("udp", "3.3.3.3", 53, false)}) {
 			t.Errorf("直连:%+v", got)
 		}

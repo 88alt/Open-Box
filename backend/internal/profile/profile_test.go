@@ -102,7 +102,7 @@ func TestCheck(t *testing.T) {
 		{"region 非法", `{"region":"us"}`, "region"},
 		{"上游填域名", `{"dns":{"direct":"dns.example.com"}}`, "IP"},
 		{"上游填 IPv6 合法", `{"dns":{"proxy":"2606:4700:4700::1111"}}`, ""},
-		{"上游协议非法", `{"dns":{"directProtocol":"tls"}}`, "directProtocol"},
+		{"上游协议非法", `{"dns":{"directProtocol":"quic"}}`, "directProtocol"},
 		{"上游端口 0", `{"dns":{"proxyPort":0}}`, "proxyPort"},
 		{"备用上游 4 个", `{"dns":{"directExtras":[{"server":"1.1.1.1"},{"server":"1.0.0.1"},{"server":"8.8.8.8"},{"server":"8.8.4.4"}]}}`, "最多"},
 		{"备用上游缺 server", `{"dns":{"directExtras":[{"port":53}]}}`, "缺少 server"},

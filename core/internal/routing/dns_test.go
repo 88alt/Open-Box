@@ -100,6 +100,7 @@ func TestDNSGoldenAgainstUpstream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	b = doHToUnknownProtocol(b)
 	var g dnsGolden
 	if err := json.Unmarshal(b, &g); err != nil {
 		t.Fatal(err)
@@ -261,4 +262,21 @@ func hasDoTProtocol(arg any) bool {
 		}
 	}
 	return false
+}
+
+// doHToUnknownProtocol 把夹具里的 "https" 换成 "quic"。基线 v0.1.318 的上游引擎不认 DoH(https),把它当非法协议退回默认;
+// main 自己加了 DoH,新行为由 dnsupstream_test.go / dnsupstream_doh_test.go 覆盖。换成同样非法的 "quic",其余输出仍逐条和上游比对。
+func doHToUnknownProtocol(b []byte) []byte {
+	from, to := []byte(`"https"`), []byte(`"quic"`)
+	out := make([]byte, 0, len(b))
+	for i := 0; i < len(b); {
+		if i+len(from) <= len(b) && string(b[i:i+len(from)]) == string(from) {
+			out = append(out, to...)
+			i += len(from)
+			continue
+		}
+		out = append(out, b[i])
+		i++
+	}
+	return out
 }

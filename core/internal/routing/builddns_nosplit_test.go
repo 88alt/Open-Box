@@ -96,7 +96,7 @@ func TestBuildDNSNoSplit(t *testing.T) {
 			[]any{dnsDirect("119.29.29.29")}, nil, "ipv4_only"},
 		{"直连上游:端口不合法按 53", obj{"dns": obj{"mode": "dnsmasq", "direct": "119.29.29.29", "directPort": 70000.0}}, DNSOptions{},
 			[]any{dnsDirect("119.29.29.29")}, nil, "ipv4_only"},
-		{"直连上游:协议不合法按 udp", obj{"dns": obj{"mode": "dnsmasq", "direct": "119.29.29.29", "directProtocol": "https"}}, DNSOptions{},
+		{"直连上游:协议不合法按 udp", obj{"dns": obj{"mode": "dnsmasq", "direct": "119.29.29.29", "directProtocol": "quic"}}, DNSOptions{},
 			[]any{dnsDirect("119.29.29.29")}, nil, "ipv4_only"},
 		{"直连上游:写成链接折成主机", obj{"dns": obj{"mode": "dnsmasq", "direct": "https://8.8.8.8/dns-query"}}, DNSOptions{},
 			[]any{dnsDirect("8.8.8.8")}, nil, "ipv4_only"},

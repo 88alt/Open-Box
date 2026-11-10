@@ -16,7 +16,7 @@ var (
 	portsModes     = []string{"blacklist", "whitelist"}
 	tunStacks      = []string{"mixed", "gvisor", "system"}
 	dnsModes       = []string{"off", "hijack", "dnsmasq"}
-	dnsProtocols   = []string{"udp", "tcp"}
+	dnsProtocols   = []string{"udp", "tcp", "https", "tls"}
 	updateChannels = []string{"auto", "direct", "mirror"}
 
 	statusSegment = regexp.MustCompile(`^[1-5][0-9]{2}(-[1-5][0-9]{2})?$`)
@@ -279,6 +279,9 @@ func checkDNS(p map[string]any) error {
 		if err := checkUpstream(dns, side, "dns."+side); err != nil {
 			return err
 		}
+		if err := checkBootstrap(dns, side+"Bootstrap", "dns."+side+"Bootstrap"); err != nil {
+			return err
+		}
 		if err := checkExtras(dns, side+"Extras", "dns."+side+"Extras"); err != nil {
 			return err
 		}
@@ -297,24 +300,51 @@ func checkPortField(m map[string]any, key, label string) error {
 	return nil
 }
 
-// checkUpstream:上游地址只收 IP 或记号 wan(空串 = 沿用默认)。
+// checkUpstream:上游地址按协议校验(空串 = 沿用默认):udp / tcp 只收 IP 或 wan;tls 收 IP、域名或 wan;https 收 https:// 地址或 wan。
 func checkUpstream(m map[string]any, key, label string) error {
 	s, ok, err := wantString(m, key, label)
 	if err != nil || !ok {
 		return err
 	}
-	return validUpstreamAddr(s, label)
+	proto, _, _ := wantString(m, key+"Protocol", label)
+	return validUpstreamAddr(s, proto, label)
 }
 
-func validUpstreamAddr(s, label string) error {
+func validUpstreamAddr(s, proto, label string) error {
 	s = strings.TrimSpace(s)
 	if s == "" || s == WAN {
 		return nil
 	}
-	if _, err := netip.ParseAddr(s); err != nil {
-		return fmt.Errorf("%s 只能填 IP 地址或 wan(路由器系统的上游 DNS)", label)
+	return validateDNSAddr(s, proto, label)
+}
+
+// checkBootstrap:解析 DoH / 域名 DoT 主机名用的 DNS(null / 缺省 = 用上游 DNS)。
+func checkBootstrap(m map[string]any, key, label string) error {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return nil
 	}
-	return nil
+	item, isObj := v.(map[string]any)
+	if !isObj {
+		return fmt.Errorf("%s 必须是对象或 null", label)
+	}
+	server, present, err := wantString(item, "server", label+".server")
+	if err != nil {
+		return err
+	}
+	server = strings.TrimSpace(server)
+	if !present || server == "" {
+		return fmt.Errorf("%s 缺少 server", label)
+	}
+	if server != WAN {
+		if _, err := netip.ParseAddr(server); err != nil {
+			return fmt.Errorf("%s.server 只能是 IP 或 wan", label)
+		}
+	}
+	if err := wantEnum(item, "protocol", label+".protocol", []string{"udp", "tcp"}); err != nil {
+		return err
+	}
+	return checkPortField(item, "port", label+".port")
 }
 
 func checkExtras(m map[string]any, key, label string) error {
@@ -342,13 +372,17 @@ func checkExtras(m map[string]any, key, label string) error {
 		if !present {
 			return fmt.Errorf("%s缺少 server", l)
 		}
-		if err := validUpstreamAddr(server, l+"的 server"); err != nil {
-			return err
-		}
 		if err := wantEnum(item, "protocol", l+"的 protocol", dnsProtocols); err != nil {
 			return err
 		}
+		proto, _, _ := wantString(item, "protocol", l+"的 protocol")
+		if err := validUpstreamAddr(server, proto, l+"的 server"); err != nil {
+			return err
+		}
 		if err := checkPortField(item, "port", l+"的 port"); err != nil {
+			return err
+		}
+		if err := checkBootstrap(item, "bootstrap", l+"的 bootstrap"); err != nil {
 			return err
 		}
 	}

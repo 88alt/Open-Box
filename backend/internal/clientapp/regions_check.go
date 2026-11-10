@@ -45,7 +45,7 @@ var (
 	ruleURLRe  = regexp.MustCompile(`(?i)^https?://\S+$`)
 	ruleTypes  = []string{"geosite", "geoip", "domain", "domainSuffix", "domainKeyword", "ipcidr", "ruleUrl"}
 	actions    = []string{"direct", "proxy"}
-	dnsProtos  = []string{"udp", "tcp"}
+	dnsProtos  = []string{"udp", "tcp", "https", "tls"}
 	matchModes = []string{"inside", "outside"}
 )
 
@@ -413,7 +413,7 @@ func upstreamOf(m map[string]any, serverKey, protoKey, portKey, defServer, defPr
 		proto = defProto
 	}
 	if !oneOf(proto, dnsProtos) {
-		return "", "", 0, fmt.Errorf("%s: protocol must be udp or tcp", label)
+		return "", "", 0, fmt.Errorf("%s: protocol must be udp, tcp, https or tls", label)
 	}
 	port := defPort
 	if raw, ok := m[portKey]; ok && raw != nil {
@@ -425,6 +425,9 @@ func upstreamOf(m map[string]any, serverKey, protoKey, portKey, defServer, defPr
 	}
 	if server == wanUpstream {
 		return server, "udp", 53, nil
+	}
+	if proto == "https" || proto == "tls" {
+		return checkDNSServerAddr(server, proto, port, m[portKey] != nil, label)
 	}
 	ip, perr := netip.ParseAddr(server)
 	if perr != nil || ip.Zone() != "" {

@@ -23,6 +23,7 @@ import (
 const (
 	DefaultDNSPort        = 53
 	DefaultDoTPort        = 853 // sing-box type:tls 的默认端口
+	DefaultDoHPort        = 443 // sing-box type:https 的默认端口
 	DefaultDirectUpstream = "223.5.5.5"
 	DefaultProxyUpstream  = "1.1.1.1"
 	// MaxDNSExtras:每一侧最多几个备用上游(和主上游一起并发竞速)。
@@ -99,7 +100,7 @@ func normalizeDNSUpstream(value any) string {
 
 func isDNSProtocol(v any) bool {
 	s, ok := v.(string)
-	return ok && (s == "udp" || s == "tcp" || s == "tls")
+	return ok && (s == "udp" || s == "tcp" || s == "tls" || s == "https")
 }
 
 func isValidDNSPort(v any) (int, bool) {
@@ -110,10 +111,13 @@ func isValidDNSPort(v any) (int, bool) {
 	return int(f), true
 }
 
-// dnsDefaultPort:协议默认端口(udp / tcp → 53,tls → 853)。
+// dnsDefaultPort:协议默认端口(udp / tcp → 53,tls → 853,https → 443)。
 func dnsDefaultPort(protocol string) int {
-	if protocol == "tls" {
+	switch protocol {
+	case "tls":
 		return DefaultDoTPort
+	case "https":
+		return DefaultDoHPort
 	}
 	return DefaultDNSPort
 }
@@ -178,11 +182,15 @@ func normalizeDNSDomain(value any) string {
 // upstream 是档案里的一条上游整理后的样子。Server 是 any:「上游 DNS」取的是部署时读到的系统上游,JS 里不做类型检查,
 // 测试里喂过非字符串,保持原样带出去。Domain 为 true 表示 Server 是域名(仅 tls),生成配置要带 domain_resolver + bootstrap。
 type upstream struct {
-	Protocol string
-	Server   any
-	Port     int
-	Wan      bool
-	Domain   bool
+	Protocol   string
+	Server     any
+	Port       int
+	Wan        bool
+	Domain     bool
+	Path       string
+	BootServer any
+	BootProto  string
+	BootPort   int
 }
 
 // serverKey 对应 JS Set 的 SameValueZero:同一台上游去重用。
@@ -210,6 +218,9 @@ func wanServer(profile any, systemDNS []any) any {
 // (代理侧不给它写 detour);地址折不出合法 IP 的(tls 再试域名;手改库)按 invalid 退:直连侧退成上游 DNS,代理侧退成 1.1.1.1。
 func upstreamOf(profile, raw, protocol, port any, fallbackProtocol, invalid string, systemDNS []any) upstream {
 	proto := dnsProtocolOr(protocol, fallbackProtocol)
+	if proto == "https" && !isWanUpstream(raw) {
+		return dohUpstreamOf(profile, raw, port, fallbackProtocol, invalid, systemDNS)
+	}
 	server := ""
 	domain := false
 	if !isWanUpstream(raw) {
@@ -232,13 +243,15 @@ func upstreamOf(profile, raw, protocol, port any, fallbackProtocol, invalid stri
 // directUpstream:直连侧实际用哪台。默认是上游 DNS。
 func directUpstream(profile any, systemDNS []any) upstream {
 	dns := jsx.Get(profile, "dns")
-	return upstreamOf(profile, jsx.Get(dns, "direct"), jsx.Get(dns, "directProtocol"), jsx.Get(dns, "directPort"), "udp", WanUpstream, systemDNS)
+	up := upstreamOf(profile, jsx.Get(dns, "direct"), jsx.Get(dns, "directProtocol"), jsx.Get(dns, "directPort"), "udp", WanUpstream, systemDNS)
+	return attachBootstrap(up, jsx.Get(dns, "directBootstrap"))
 }
 
 // proxyUpstream:代理侧上游,协议默认 tcp(UDP 经代理常被截断 / 丢包),地址不合法退成 1.1.1.1。
 func proxyUpstream(profile any, systemDNS []any) upstream {
 	dns := jsx.Get(profile, "dns")
-	return upstreamOf(profile, jsx.Get(dns, "proxy"), jsx.Get(dns, "proxyProtocol"), jsx.Get(dns, "proxyPort"), "tcp", DefaultProxyUpstream, systemDNS)
+	up := upstreamOf(profile, jsx.Get(dns, "proxy"), jsx.Get(dns, "proxyProtocol"), jsx.Get(dns, "proxyPort"), "tcp", DefaultProxyUpstream, systemDNS)
+	return attachBootstrap(up, jsx.Get(dns, "proxyBootstrap"))
 }
 
 // extraUpstreams:备用上游(档案 dns.directExtras / dns.proxyExtras),和主上游并发竞速。
@@ -259,10 +272,12 @@ func extraUpstreams(profile, list any, primary upstream, fallbackProtocol string
 		}
 		server := jsx.Get(item, "server")
 		itemProto := dnsProtocolOr(jsx.Get(item, "protocol"), fallbackProtocol)
-		if !(isWanUpstream(server) || normalizeDNSUpstream(server) != "" || (itemProto == "tls" && normalizeDNSDomain(server) != "")) {
+		_, _, _, dohOK := parseDoHURL(server)
+		if !(isWanUpstream(server) || normalizeDNSUpstream(server) != "" || (itemProto == "tls" && normalizeDNSDomain(server) != "") || (itemProto == "https" && dohOK)) {
 			continue
 		}
 		up := upstreamOf(profile, server, jsx.Get(item, "protocol"), jsx.Get(item, "port"), fallbackProtocol, WanUpstream, systemDNS)
+		up = attachBootstrap(up, jsx.Get(item, "bootstrap"))
 		k := serverKey(up.Server)
 		if seen[k] {
 			continue
@@ -288,6 +303,9 @@ func dnsServerEntry(up upstream, tag, detour string) map[string]any {
 	if up.Port != dnsDefaultPort(up.Protocol) {
 		m["server_port"] = up.Port
 	}
+	if up.Protocol == "https" && up.Path != "" && up.Path != "/dns-query" {
+		m["path"] = up.Path
+	}
 	if detour != "" {
 		m["detour"] = detour
 	}
@@ -303,8 +321,5 @@ func dnsServerEntries(up upstream, tag, detour string, profile any, systemDNS []
 	}
 	bootTag := tag + "-bootstrap"
 	main["domain_resolver"] = bootTag
-	return []map[string]any{
-		main,
-		{"type": "udp", "tag": bootTag, "server": wanServer(profile, systemDNS)},
-	}
+	return []map[string]any{main, bootstrapEntry(up, bootTag, profile, systemDNS)}
 }
