@@ -69,6 +69,9 @@ type Service struct {
 	Now     func() time.Time
 	Measure Measurer
 
+	// Observe 每完成一次测速调一次(成功或失败),给「节点质量」攒带宽样本用;在内部锁里调,回调里不能再进本服务。nil 不调。
+	Observe func(name string, at time.Time, mbps float64, failed bool)
+
 	mu       sync.Mutex
 	running  bool
 	lastErr  string

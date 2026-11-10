@@ -338,6 +338,14 @@
 
 实现约定(M3,`POST node-info/{x}/exit`):请求体可以没有,`{"refresh":true}` 跳过缓存重查,但 15 秒内刚查过的仍按缓存答;缓存 6 小时(按节点 tag,最多 256 个),响应带 `cached:true` 表示来自缓存。先经这个节点(起临时 sing-box,和节点测速同一套)问 api.ip.sb / ipwho.is / api.ipapi.is,得到出口 IP 和国家(`country`);再由本进程直接(不经节点)并行问 proxycheck.io 的 v3 接口(`network.type` → `ipType`:residential / mobile(Wireless)/ business / hosting;`detections` 里的 TOR / VPN / Proxy / Scraper / Compromised → `proxyType`;`detections.risk` → `risk`;`device_estimate.subnet` → `devices`;`network.asn` / `organisation` → `asn` / `asnOwner`;`location` 的城市、地区、国家 → `location`,用「, 」连接)和 RDAP(rdap.org 跳转到各大洲的 RIR,只认顶层两位 `country` → `registeredCountry`)。`native` = 登记国家和 `country` 一致,任何一边不知道是 null。两路各自成败:没查到的那一路在 `errors`(`proxycheck` / `rdap`)里写原因,对应项为空串或 null,另一路照常给;出口不是公网地址时不问第三方,两路都记「出口不是公网地址,不查归属」。`ipv6` 只在出口本身是 IPv6 时有值(另一个协议族的出口地址不单独查)。节点在当前配置里没有可探测的出站(没启用、是节点组)404;openbox-core 或 sing-box 不可用 503;经节点连不上或三家接口都没答 502;其余 500。同时最多 2 个经节点的探测,同一个节点的并发请求合并成一次。
 
+## `/api/openbox/node-quality`
+
+| 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
+|---|---|---|---|---|
+| GET | `/api/openbox/node-quality` | `fetchNodeQuality` (api/openbox.ts:2046) | OpenboxNodeQuality | (query: { allSubscriptions?: boolean; search?: string; details?: string; nodePageSize?: number; allNodes?: boolean; node?: string }) |
+
+实现约定(M3,概览页「节点质量」卡,依据前端类型和 `zh.ts` 的说明文字,没有参照上游):响应 `{subscriptions: [...]}`,只含已启用的订阅,订阅级和节点级字段都在 `api/openbox.ts` 的 `OpenboxQualitySubscription` / `OpenboxQualityNode`,可空的数值给 `null` 不省略键。`search` 不分大小写匹配订阅名或节点的 tag / 地区 / 协议,订阅名命中时节点不过滤;`details` 是要展开的订阅 id,只有它带 `nodes`(按健康 → 失败 → 过期 → 未测、分高在前排序),先给 `nodePageSize`(默认 10,1 – 500,不合法 400)个,`allNodes=true` 给全部;`node` 是展开列表里要带 `charts`(`latency` / `bandwidth` 的样本 `{at, value, failed?}`,`at` 为毫秒)的节点。`allSubscriptions` 目前不改变结果。统计窗口是最近 24 小时(小时桶):可用率 = 成功 / 检测,延时 = 成功检测的平均耗时,抖动 = 连续两次成功检测耗时之差的平均绝对值;下载取窗口内最近一次成功测速,超过两个统一周期(档案 `bandwidth.intervalHours` 的 2 倍)的不参与;**上传没有测速来源,恒为 `null`**(前端显示「上传未检测」,订阅分因此恒标 `provisional`)。节点状态:没有检测 `unknown`、最近一次早于 6 小时 `stale`、最近一次失败 `down`、其余 `healthy`;单节点分数按 `zh.ts` 的权重(可用率 35 / 延时 20 / 抖动 15 / 下载 20 / 上传 10,缺项按其余权重归一),至少观察 1 小时、20 次检测、10 次成功并有近期下载样本才给,否则 `null`;订阅分 = 已评估节点的平均(失败节点按 0 分计入,过期和未测不计入已评估),`coverage` = 已评估 / 总数,不足 0.8 时 `grade` 是 `pending`,否则 ≥90 `excellent`、≥75 `good`、≥60 `fair`、其余 `attention`。使用时长、业务流量来自后端每 10 秒读一次内核连接(排除来源是回环地址的面板探测),节点和订阅各记一份,订阅的使用时长并发只计一次。**各分项折成 0 – 100 的刻度、等级分档、过期时长是自己定的(说明文字没写),待和上游真实响应对表。**
+
 ## `/api/openbox/nodes`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |

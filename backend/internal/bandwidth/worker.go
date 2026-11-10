@@ -128,4 +128,7 @@ func (s *Service) record(name string, item queueItem, res MeasureResult) {
 	s.updated = ts
 	s.pruneHistoryLocked(context.Background())
 	s.saveHistoryLocked()
+	if s.Observe != nil {
+		s.Observe(name, time.UnixMilli(ts), res.Mbps, res.Failed)
+	}
 }

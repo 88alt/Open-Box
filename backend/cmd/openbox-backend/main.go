@@ -34,6 +34,7 @@ import (
 	latencyapi "github.com/timeflysoon/Open-Box/backend/internal/api/latency"
 	latencyhistoryapi "github.com/timeflysoon/Open-Box/backend/internal/api/latencyhistory"
 	nodeinfoapi "github.com/timeflysoon/Open-Box/backend/internal/api/nodeinfo"
+	nodequalityapi "github.com/timeflysoon/Open-Box/backend/internal/api/nodequality"
 	penetrationapi "github.com/timeflysoon/Open-Box/backend/internal/api/penetration"
 	policiesapi "github.com/timeflysoon/Open-Box/backend/internal/api/policies"
 	profileapi "github.com/timeflysoon/Open-Box/backend/internal/api/profile"
@@ -74,6 +75,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/nodeexit"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodeinfo"
+	"github.com/timeflysoon/Open-Box/backend/internal/nodequality"
 	"github.com/timeflysoon/Open-Box/backend/internal/penetration"
 	"github.com/timeflysoon/Open-Box/backend/internal/policyentries"
 	"github.com/timeflysoon/Open-Box/backend/internal/portcheck"
@@ -331,6 +333,60 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		),
 	}
 	bandwidthapi.Register(srv.Mux(), bandwidthapi.Deps{Service: bandwidthSvc})
+
+	// 节点质量(概览页「节点质量」卡):延迟 / 带宽样本由两个服务的观察钩子送进来,
+	// 使用时长与业务流量由 nqSvc.Run 每 10 秒读一次内核连接攒
+	nqSvc := &nodequality.Service{
+		Store: st,
+		Catalog: func(ctx context.Context) ([]nodequality.Subscription, error) {
+			recs, cat, err := subsSvc.Catalog(ctx)
+			if err != nil {
+				return nil, err
+			}
+			byID := map[string]*nodequality.Subscription{}
+			out := make([]nodequality.Subscription, 0, len(recs))
+			for _, r := range recs {
+				if !r.Enabled {
+					continue
+				}
+				mode := "subscription"
+				switch {
+				case len(r.Account) > 0:
+					mode = "login"
+				case r.URL == "" && len(r.URLs) == 0:
+					mode = "node"
+				}
+				out = append(out, nodequality.Subscription{ID: r.ID, Name: r.Name, Mode: mode})
+			}
+			for i := range out {
+				byID[out[i].ID] = &out[i]
+			}
+			for _, c := range cat {
+				if sb := byID[c.SubscriptionID]; sb != nil {
+					sb.Nodes = append(sb.Nodes, nodequality.NodeInfo{Tag: c.Node.Tag, Region: strings.ToUpper(c.Node.RegionCode), Protocol: c.Node.Type})
+				}
+			}
+			return out, nil
+		},
+		Conns: func(ctx context.Context) (singbox.KernelSnapshot, error) {
+			return singbox.KernelConnections(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
+		},
+		// 带宽样本超过两个统一周期就不参与当前评分
+		BandwidthWindow: func(ctx context.Context) time.Duration {
+			p, err := profileSvc.Get(ctx)
+			if err != nil {
+				return 0
+			}
+			set, err := bandwidth.NormalizeSettings(p["bandwidth"])
+			if err != nil {
+				return 0
+			}
+			return 2 * time.Duration(set.IntervalHours) * time.Hour
+		},
+	}
+	nodeHistory.Observe = nqSvc.ObserveLatency
+	bandwidthSvc.Observe = nqSvc.ObserveBandwidth
+	nodequalityapi.Register(srv.Mux(), nodequalityapi.Deps{Service: nqSvc})
 
 	latencyapi.Register(srv.Mux(), latencyapi.Deps{Gen: gen, Subs: subsSvc, Profiles: profileSvc, Runner: probeRunner, History: nodeHistory})
 	// 节点信息:类型 / 协议层 / 服务器 / 链式上游 / 入口地址解析 / 入口国家 / 出口归属和风控值
@@ -890,7 +946,9 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		done := make(chan struct{})
 		go func() { defer close(done); subs.NewScheduler(subsSvc).Run(ctx) }()
 		go bandwidthSvc.Loop(ctx)
-		return func() { wait(); <-done }
+		nqDone := make(chan struct{})
+		go func() { defer close(nqDone); nqSvc.Run(ctx) }() // 退出前会再写一次盘,要等它
+		return func() { wait(); <-done; <-nqDone }
 	}
 
 	// 再加一项:定时读内核把自动择优组测出的新结果记进延迟历史(只读内核、只在有新结果时写盘)

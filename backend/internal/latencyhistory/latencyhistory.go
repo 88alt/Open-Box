@@ -63,6 +63,9 @@ type Service struct {
 	// Kernel 读内核当前的代理和测速记录;nil 或返回 error 时 Sync 只回现有的历史。
 	Kernel func(ctx context.Context) ([]singbox.KernelProxy, error)
 	Now    func() time.Time
+	// Observe 每合入一条新的节点样本(不含节点组的)调一次,delay<=0 是失败;重复的样本不会再调。
+	// 给「节点质量」攒 24 小时的检测统计用;在 store 的更新锁里调,回调里不能再碰这份历史。nil 不调。
+	Observe func(name string, at time.Time, delay int)
 	// File 是存放历史的文件名(在 store 里);空 = "latency-history"。站点延迟用另一个文件,和节点历史互不混。
 	File string
 }
@@ -129,7 +132,7 @@ func (s *Service) Add(_ context.Context, in []Input) (History, error) {
 	err := s.mutate(func(f *file) bool {
 		changed := false
 		for _, it := range items {
-			changed = merge(f, it.name, it.smp) || changed
+			changed = s.merge(f, it.name, it.smp) || changed
 		}
 		out = f.History
 		return changed
@@ -149,7 +152,7 @@ func (s *Service) Record(_ context.Context, items []Item) (History, error) {
 	err := s.mutate(func(f *file) bool {
 		changed := false
 		for _, it := range items {
-			changed = merge(f, it.Name, it.Sample) || changed
+			changed = s.merge(f, it.Name, it.Sample) || changed
 		}
 		out = f.History
 		return changed
@@ -189,7 +192,7 @@ func (s *Service) Sync(ctx context.Context) (History, error) {
 				if isGroup(p.Type) {
 					smp.Node = p.Now
 				}
-				changed = merge(f, p.Name, smp) || changed
+				changed = s.merge(f, p.Name, smp) || changed
 			}
 		}
 		out = f.History
@@ -225,6 +228,19 @@ func (s *Service) mutate(fn func(f *file) bool) error {
 		return nil
 	}
 	return err
+}
+
+// merge 是 merge 加上 Observe 钩子:真合入了一条节点自己的样本才通知。
+func (s *Service) merge(f *file, name string, smp Sample) bool {
+	if !merge(f, name, smp) {
+		return false
+	}
+	if s.Observe != nil && smp.Node == "" {
+		if t, err := parseTime(smp.Time); err == nil {
+			s.Observe(name, t, smp.Delay)
+		}
+	}
+	return true
 }
 
 // merge 把一条样本并进 name 的列表:同一时刻已有就不动;超出 10 条丢最旧的。返回是否有变化。
