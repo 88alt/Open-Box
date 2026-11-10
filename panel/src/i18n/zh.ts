@@ -1378,11 +1378,12 @@ const zh: LANG_MESSAGE = {
   dnsRegionSwitched: '已切换到「{region}」',
   dnsUpstreamProxy: '代理 DNS',
   dnsUpstreamProxyNote:
-    '走代理的域名向它查询,走哪条线路由目标分流按地址决定,测试也经同一条线路。DoH 使用 HTTPS;TCP 稳妥;UDP 要线路支持 UDP。',
+    '走代理的域名向它查询。线路由目标分流按上游地址决定，测试也走同一条线路。DoT 和 DoH 使用加密连接，UDP 需要线路支持。',
   dnsUpstreamProtocol: '协议',
   dnsUpstreamPort: '端口',
   dnsUpstreamDohUrl: 'DoH 地址',
-  dnsUpstreamDohBootstrap: 'DoH 解析 DNS',
+  dnsUpstreamEncryptedBootstrap: '引导 DNS',
+  dnsUpstreamDotHost: 'DoT 域名或 IP 地址',
   dnsUpstreamTest: '测试',
   dnsUpstreamRestore: '恢复默认',
   dnsUpstreamRestoreConfirm:

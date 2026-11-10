@@ -1450,11 +1450,12 @@ const en = {
   dnsRegionSwitched: 'Switched to “{region}”',
   dnsUpstreamProxy: 'Proxy DNS',
   dnsUpstreamProxyNote:
-    'Proxied domains are resolved through it; Destination routing picks the line from its address, and the test uses the same line. DoH uses HTTPS; TCP is the safe choice; UDP needs a line that carries UDP.',
+    'Proxied domains use this resolver. Destination routing picks the line from its address, and the test uses the same line. DoT and DoH use encrypted connections. UDP needs a line that carries UDP.',
   dnsUpstreamProtocol: 'Protocol',
   dnsUpstreamPort: 'Port',
   dnsUpstreamDohUrl: 'DoH URL',
-  dnsUpstreamDohBootstrap: 'DoH bootstrap DNS',
+  dnsUpstreamEncryptedBootstrap: 'Bootstrap DNS',
+  dnsUpstreamDotHost: 'DoT hostname or IP address',
   dnsUpstreamTest: 'Test',
   dnsUpstreamRestore: 'Restore defaults',
   dnsUpstreamRestoreConfirm:

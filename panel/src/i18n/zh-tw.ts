@@ -1379,11 +1379,12 @@ const zhTW: LANG_MESSAGE = {
   dnsRegionSwitched: '已切換到「{region}」',
   dnsUpstreamProxy: '代理 DNS',
   dnsUpstreamProxyNote:
-    '走代理的網域向它查詢,走哪條線路由目標分流按位址決定,測試也經同一條線路。DoH 使用 HTTPS;TCP 穩妥;UDP 要線路支援 UDP。',
+    '走代理的網域向它查詢。線路由目標分流依上游位址決定，測試也走同一條線路。DoT 和 DoH 使用加密連線，UDP 需要線路支援。',
   dnsUpstreamProtocol: '協定',
   dnsUpstreamPort: '連接埠',
   dnsUpstreamDohUrl: 'DoH 位址',
-  dnsUpstreamDohBootstrap: 'DoH 解析 DNS',
+  dnsUpstreamEncryptedBootstrap: '引導 DNS',
+  dnsUpstreamDotHost: 'DoT 網域或 IP 位址',
   dnsUpstreamTest: '測試',
   dnsUpstreamRestore: '恢復預設',
   dnsUpstreamRestoreConfirm:

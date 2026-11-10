@@ -190,43 +190,48 @@
         v-if="draft"
         class="flex flex-col gap-3 text-sm"
       >
-        <div class="flex flex-col gap-1">
-          <label class="text-xs font-medium">{{ $t('dnsUpstreamSide') }}</label>
-          <div
-            role="tablist"
-            class="tabs-box tabs tabs-xs w-fit"
-          >
-            <a
-              v-for="s in SIDES"
-              :key="s"
-              role="tab"
-              class="tab"
-              :class="draft.side === s && 'tab-active'"
-              @click="draft.side = s"
-            >{{ sideName(s) }}</a>
+        <div class="flex flex-wrap items-end justify-between gap-3">
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-medium">{{ $t('dnsUpstreamSide') }}</label>
+            <div
+              role="tablist"
+              class="tabs-box tabs tabs-xs w-fit"
+            >
+              <a
+                v-for="s in SIDES"
+                :key="s"
+                role="tab"
+                class="tab"
+                :class="draft.side === s && 'tab-active'"
+                @click="draft.side = s"
+              >{{ sideName(s) }}</a>
+            </div>
           </div>
-          <p class="text-base-content/50 text-xs">
-            {{ $t(draft.side === 'direct' ? 'dnsUpstreamDirectNote' : 'dnsUpstreamProxyNote') }}
-          </p>
-        </div>
-        <div class="flex flex-col gap-1">
           <div
             role="tablist"
             class="tabs-box tabs tabs-xs w-fit"
           >
-            <a
-              role="tab"
-              class="tab"
-              :class="!draft.wan && 'tab-active'"
-              @click="draft.wan = false"
-            >{{ $t('dnsUpstreamSourceIp') }}</a>
             <a
               role="tab"
               class="tab"
               :class="[draft.wan && 'tab-active', !wanAllowed(draft.side) && 'tab-disabled']"
               @click="wanAllowed(draft.side) && (draft.wan = true)"
             >{{ $t('dnsUpstreamSourceWan') }}</a>
+            <a
+              role="tab"
+              class="tab"
+              :class="!draft.wan && 'tab-active'"
+              @click="draft.wan = false"
+            >{{ $t('dnsUpstreamSourceIp') }}</a>
           </div>
+        </div>
+        <p class="text-base-content/50 text-xs">
+          {{ $t(draft.side === 'direct' ? 'dnsUpstreamDirectNote' : 'dnsUpstreamProxyNote') }}
+        </p>
+        <div
+          v-if="!wanAllowed(draft.side) || (draft.side === 'proxy' && draft.wan)"
+          class="flex flex-col gap-1"
+        >
           <template v-if="wanAllowed(draft.side)">
             <p
               v-if="draft.side === 'proxy' && draft.wan"
@@ -245,10 +250,11 @@
         <div class="flex items-center gap-2">
           <select
             v-if="!draft.wan"
-            v-model="draft.protocol"
-            @change="onProtocolChange(draft)"
+            :value="draft.protocol"
             class="select select-sm w-20 shrink-0"
             :title="$t('dnsUpstreamProtocol')"
+            :aria-label="$t('dnsUpstreamProtocol')"
+            @change="onProtocolChange(draft, $event)"
           >
             <option value="udp">UDP</option>
             <option value="tcp">TCP</option>
@@ -265,8 +271,8 @@
               type="text"
               class="input input-sm min-w-0 flex-1 font-mono"
               :class="{ 'input-error': draft.server && !isServerValid(draft) }"
-              :placeholder="draft.protocol === 'https' ? 'https://dns.example/dns-query' : draft.protocol === 'tls' ? 'dns.google 或 1.1.1.1' : draft.side === 'direct' ? '223.5.5.5' : '1.1.1.1'"
-              :aria-label="$t(draft.protocol === 'https' ? 'dnsUpstreamDohUrl' : 'dnsUpstreamSourceIp')"
+              :placeholder="draft.protocol === 'https' ? 'https://dns.example/dns-query' : draft.protocol === 'tls' ? 'dns.example.net' : draft.side === 'direct' ? '223.5.5.5' : '1.1.1.1'"
+              :aria-label="$t(draft.protocol === 'https' ? 'dnsUpstreamDohUrl' : draft.protocol === 'tls' ? 'dnsUpstreamDotHost' : 'dnsUpstreamSourceIp')"
               spellcheck="false"
             >
             <input
@@ -298,13 +304,13 @@
             />
           </button>
         </div>
-        <!-- DoH 的地址是域名时,要有一个 DNS 来解析它:默认用路由器的上游 DNS,也可以指定 -->
+        <!-- DoH、域名 DoT(地址还没填也算)要有一个 DNS 来解析它:默认用路由器的上游 DNS,也可以指定 -->
         <div
-          v-if="!draft.wan && (draft.protocol === 'https' || (draft.protocol === 'tls' && draft.server && !isIp(draft.server)))"
+          v-if="!draft.wan && needsBootstrap(draft)"
           class="flex flex-col gap-3"
         >
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <label class="text-xs font-medium">{{ $t('dnsUpstreamDohBootstrap') }}</label>
+            <label class="text-xs font-medium">{{ $t('dnsUpstreamEncryptedBootstrap') }}</label>
             <div
               role="tablist"
               class="tabs-box tabs tabs-xs w-fit"
@@ -345,7 +351,7 @@
               class="input input-sm min-w-0 flex-1 font-mono"
               :class="{ 'input-error': draft.bootstrap.server && !isIp(draft.bootstrap.server) }"
               placeholder="223.5.5.5"
-              :aria-label="$t('dnsUpstreamDohBootstrap')"
+              :aria-label="$t('dnsUpstreamEncryptedBootstrap')"
               spellcheck="false"
             >
             <input
@@ -481,11 +487,15 @@ const isDohUrl = (value: string) => {
   }
 }
 const protocolName = (protocol: Protocol) => (protocol === 'https' ? 'DoH' : protocol === 'tls' ? 'DoT' : protocol.toUpperCase())
-// 切协议时端口跟着换成该协议的默认值(53 / 443 / 853);用户填过的自定义端口不动
+// 切协议时,端口还是原协议的默认值就换成新协议的默认值(53 / 443 / 853);用户改过的端口不动
 const DEFAULT_PORTS: Record<Protocol, number> = { udp: 53, tcp: 53, https: 443, tls: 853 }
-const onProtocolChange = (d: { protocol: Protocol; port: number }) => {
-  if (Object.values(DEFAULT_PORTS).includes(d.port)) d.port = DEFAULT_PORTS[d.protocol]
+const onProtocolChange = (d: Upstream, e: Event) => {
+  const next = (e.target as HTMLSelectElement).value as Protocol
+  if (d.port === DEFAULT_PORTS[d.protocol]) d.port = DEFAULT_PORTS[next]
+  d.protocol = next
 }
+// 要不要解析 DNS(引导 DNS):DoH,和地址不是 IP 的 DoT(地址还没填也算)
+const needsBootstrap = (u: Upstream) => u.protocol === 'https' || (u.protocol === 'tls' && !isIp(u.server))
 const defaultBootstrap = (b?: Partial<Bootstrap> | null): Bootstrap => ({
   server: b?.server ?? WAN,
   protocol: b?.protocol === 'tcp' ? 'tcp' : 'udp',
@@ -506,11 +516,7 @@ const isServerValid = (u: Upstream) => {
 const isUpstreamValid = (u: Upstream) =>
   u.wan ||
   (isServerValid(u) &&
-    (u.protocol === 'udp' ||
-      u.protocol === 'tcp' ||
-      (u.protocol === 'tls' && isIp(u.server)) ||
-      u.bootstrap.server === WAN ||
-      (isIp(u.bootstrap.server) && isPort(u.bootstrap.port))))
+    (!needsBootstrap(u) || u.bootstrap.server === WAN || (isIp(u.bootstrap.server) && isPort(u.bootstrap.port))))
 
 const sideName = (side: Side) => t(side === 'direct' ? 'dnsUpstreamDirect' : 'dnsUpstreamProxy')
 const regionName = (r: Region) => t(r === 'intl' ? 'dnsRegionIntl' : 'dnsRegionCn')
@@ -641,7 +647,7 @@ const toUpstreamOut = (u: Upstream) =>
         server: u.server,
         protocol: u.protocol,
         port: u.protocol === 'https' && isDohUrl(u.server) ? Number(new URL(u.server).port || 443) : u.port,
-        ...(u.protocol === 'https' || (u.protocol === 'tls' && !isIp(u.server)) ? { bootstrap: u.bootstrap } : {}),
+        ...(needsBootstrap(u) ? { bootstrap: u.bootstrap } : {}),
       }
 // 把一整张列表写回档案:每侧第一条是主上游,后面是备用;一侧删光了就退回「上游 DNS」
 const toPatch = (list: Upstream[]) => {
