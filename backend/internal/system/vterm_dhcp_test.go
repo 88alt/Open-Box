@@ -143,24 +143,150 @@ func TestVTermAcquireDHCP(t *testing.T) {
 			t.Fatalf("不该有动作:%v %v", d.dcalls, rec.written)
 		}
 	})
-	t.Run("没有 DHCP 客户端 / 只有别的客户端", func(t *testing.T) {
+	t.Run("没有任何 DHCP 客户端", func(t *testing.T) {
 		n, d, _ := newDHCPNet(t)
 		v, _ := n.Ensure(ctx, "br-lan")
 		n.LookPath = func(string) (string, error) { return "", errors.New("nf") }
 		if _, err := n.AcquireDHCP(ctx, v); err == nil || !strings.Contains(err.Error(), "找不到 DHCP 客户端") {
 			t.Fatalf("err=%v", err)
 		}
+		if len(d.dcalls) != 0 {
+			t.Fatalf("不该有动作:%v", d.dcalls)
+		}
+	})
+	t.Run("客户端挑选顺序:udhcpc 优先,其次 dhcpcd,最后 dhclient", func(t *testing.T) {
+		n, _, _ := newDHCPNet(t)
+		have := map[string]bool{"udhcpc": true, "dhcpcd": true, "dhclient": true}
+		n.LookPath = func(f string) (string, error) {
+			if have[f] {
+				return "/sbin/" + f, nil
+			}
+			return "", errors.New("nf")
+		}
+		for _, want := range []string{"udhcpc", "dhcpcd", "dhclient"} {
+			_, kind, err := n.dhcpClient()
+			if err != nil || kind != want {
+				t.Fatalf("want %s got %s err=%v", want, kind, err)
+			}
+			have[want] = false
+		}
+	})
+	t.Run("dhcpcd:用 -T 测试模式取租约,不写回调脚本,配地址路由由本程序做", func(t *testing.T) {
+		n, d, rec := newDHCPNet(t)
+		n.LookPath = func(f string) (string, error) {
+			if f == "dhcpcd" {
+				return "/sbin/dhcpcd", nil
+			}
+			return "", errors.New("nf")
+		}
+		d.execOut = "reason='TEST'\ninterface='obtv-t'\nnew_ip_address='192.168.1.77'\nnew_subnet_cidr='24'\nnew_subnet_mask='255.255.255.0'\nnew_routers='192.168.1.1'\nnew_domain_name_servers='192.168.1.1 8.8.4.4'\nnew_dhcp_server_identifier='192.168.1.1'\nnew_dhcp_lease_time='7200'\n"
+		v, _ := n.Ensure(ctx, "br-lan")
+		l, err := n.AcquireDHCP(ctx, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if l.IP != "192.168.1.77" || l.Mask != 24 || l.Gateway != "192.168.1.1" || l.Server != "192.168.1.1" || l.LeaseSeconds != 7200 ||
+			len(l.DNS) != 2 || l.DNS[1] != "8.8.4.4" {
+			t.Fatalf("租约不对:%+v", l)
+		}
+		want := []string{
+			"ip -n obterm addr flush dev obtv-t",
+			"ip -n obterm route flush dev obtv-t",
+			"ip netns exec obterm /sbin/dhcpcd -T -4 -t 6 -f /dev/null obtv-t",
+			"ip -n obterm addr add 192.168.1.77/24 dev obtv-t",
+			"ip -n obterm route add default via 192.168.1.1 dev obtv-t",
+		}
+		if strings.Join(d.dcalls, "\n") != strings.Join(want, "\n") {
+			t.Fatalf("命令不对:\n%s", strings.Join(d.dcalls, "\n"))
+		}
+		if len(rec.written) != 0 || len(rec.removed) != 0 {
+			t.Fatalf("dhcpcd 不该写 / 删文件:%v %v", rec.written, rec.removed)
+		}
+	})
+	t.Run("dhcpcd:失败如实报最后一行,不配任何东西", func(t *testing.T) {
+		n, d, _ := newDHCPNet(t)
+		n.LookPath = func(f string) (string, error) {
+			if f == "dhcpcd" {
+				return "/sbin/dhcpcd", nil
+			}
+			return "", errors.New("nf")
+		}
+		d.execOut, d.execCode, d.execStderr = "", 1, "obtv-t: soliciting a DHCP lease\ntimed out\n"
+		v, _ := n.Ensure(ctx, "br-lan")
+		_, err := n.AcquireDHCP(ctx, v)
+		if err == nil || !strings.Contains(err.Error(), "timed out") || !strings.Contains(err.Error(), "退出码 1") {
+			t.Fatalf("err=%v", err)
+		}
+		for _, c := range d.dcalls {
+			if strings.Contains(c, "addr add") || strings.Contains(c, "route add") {
+				t.Fatalf("不该配:%s", c)
+			}
+		}
+	})
+	t.Run("dhclient:写回调脚本(0700),用 -1 -d,拿到租约即使退出码非 0(被脚本结束)也算成功;脚本和 pid / 租约文件都删", func(t *testing.T) {
+		n, d, rec := newDHCPNet(t)
 		n.LookPath = func(f string) (string, error) {
 			if f == "dhclient" {
 				return "/sbin/dhclient", nil
 			}
 			return "", errors.New("nf")
 		}
-		if _, err := n.AcquireDHCP(ctx, v); err == nil || !strings.Contains(err.Error(), "只有 dhclient") || !strings.Contains(err.Error(), "暂时只支持 udhcpc") {
+		d.execOut = "OB ip 10.9.8.7\nOB subnet 255.255.255.0\nOB router 10.9.8.1\nOB dns 10.9.8.1\nOB serverid 10.9.8.1\nOB lease 3600\n"
+		d.execCode = -1
+		v, _ := n.Ensure(ctx, "br-lan")
+		l, err := n.AcquireDHCP(ctx, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if l.IP != "10.9.8.7" || l.Mask != 24 || l.Gateway != "10.9.8.1" || l.LeaseSeconds != 3600 {
+			t.Fatalf("租约不对:%+v", l)
+		}
+		wantRun := "ip netns exec obterm /sbin/dhclient -4 -1 -d -sf /run/obtest/obterm-dhcp.sh -pf /run/obtest/obterm-dhclient.pid -lf /run/obtest/obterm-dhclient.leases obtv-t"
+		found := false
+		for _, c := range d.dcalls {
+			if c == wantRun {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("命令不对:\n%s", strings.Join(d.dcalls, "\n"))
+		}
+		if perm, ok := rec.written["/run/obtest/obterm-dhcp.sh"]; !ok || perm != 0o700 {
+			t.Fatalf("脚本没写或权限不对:%v", rec.written)
+		}
+		if len(rec.removed) != 3 {
+			t.Fatalf("脚本、pid、租约文件都该删:%v", rec.removed)
+		}
+	})
+	t.Run("dhclient:没拿到租约且退出码非 0:如实报错,不配东西,临时文件照删", func(t *testing.T) {
+		n, d, rec := newDHCPNet(t)
+		n.LookPath = func(f string) (string, error) {
+			if f == "dhclient" {
+				return "/sbin/dhclient", nil
+			}
+			return "", errors.New("nf")
+		}
+		d.execOut, d.execCode, d.execStderr = "", 2, "No DHCPOFFERS received.\nNo working leases in persistent database - sleeping.\n"
+		v, _ := n.Ensure(ctx, "br-lan")
+		_, err := n.AcquireDHCP(ctx, v)
+		if err == nil || !strings.Contains(err.Error(), "退出码 2") || !strings.Contains(err.Error(), "sleeping") {
 			t.Fatalf("err=%v", err)
 		}
-		if len(d.dcalls) != 0 {
-			t.Fatalf("不该有动作:%v", d.dcalls)
+		for _, c := range d.dcalls {
+			if strings.Contains(c, "addr add") || strings.Contains(c, "route add") {
+				t.Fatalf("不该配:%s", c)
+			}
+		}
+		if len(rec.removed) != 3 {
+			t.Fatalf("临时文件该删:%v", rec.removed)
+		}
+	})
+	t.Run("dhclient 回调脚本:只在父进程是 dhclient 时才结束它", func(t *testing.T) {
+		if !strings.Contains(vtermDhclientScript, `dhclient*) kill -TERM "$PPID"`) || !strings.Contains(vtermDhclientScript, "/proc/$PPID/comm") {
+			t.Fatal("脚本要先核对父进程名")
+		}
+		if strings.Contains(vtermDhclientScript, "ip addr") || strings.Contains(vtermDhclientScript, "ip route") || strings.Contains(vtermDhclientScript, "resolv") {
+			t.Fatal("脚本不该改任何网络配置")
 		}
 	})
 	t.Run("取不到地址:如实报客户端的最后一行,不配任何东西,脚本也删", func(t *testing.T) {
@@ -250,6 +376,37 @@ func TestVTermAcquireDHCP(t *testing.T) {
 	})
 }
 
+func TestParseDhcpcdLease(t *testing.T) {
+	cases := []struct {
+		name, in string
+		ok       bool
+		check    func(DHCPLease) bool
+	}{
+		{"引号和无引号都认", "new_ip_address=10.1.2.3\nnew_subnet_cidr=24\nnew_routers='10.1.2.1 10.1.2.2'\nnew_domain_name_servers=\"1.1.1.1 9.9.9.9\"\n", true,
+			func(l DHCPLease) bool {
+				return l.IP == "10.1.2.3" && l.Mask == 24 && l.Gateway == "10.1.2.1" && len(l.DNS) == 2
+			}},
+		{"没有 subnet_cidr 回落到 subnet_mask", "new_ip_address=10.1.2.3\nnew_subnet_mask=255.255.0.0\n", true, func(l DHCPLease) bool { return l.Mask == 16 }},
+		{"别的键和日志行忽略", "reason=TEST\nold_ip_address=1.2.3.4\nnew_ip_address=10.1.2.3\nnew_subnet_cidr=8\nfoo\n", true, func(l DHCPLease) bool { return l.IP == "10.1.2.3" }},
+		{"同名时带 new_ 的优先", "ip_address=9.9.9.9\nnew_ip_address=10.1.2.3\nip_address=8.8.8.8\nsubnet_cidr=8\n", true, func(l DHCPLease) bool { return l.IP == "10.1.2.3" }},
+		{"没有 new_ 前缀的旧写法也认", "ip_address=10.1.2.3\nsubnet_cidr=24\n", true, func(l DHCPLease) bool { return l.IP == "10.1.2.3" && l.Mask == 24 }},
+		{"没有地址", "new_subnet_cidr=24\n", false, nil},
+		{"没有掩码", "new_ip_address=10.1.2.3\n", false, nil},
+		{"空输出", "", false, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			l, err := parseDhcpcdLease(c.in)
+			if (err == nil) != c.ok {
+				t.Fatalf("err=%v", err)
+			}
+			if c.ok && !c.check(l) {
+				t.Fatalf("%+v", l)
+			}
+		})
+	}
+}
+
 func TestParseDHCPLease(t *testing.T) {
 	cases := []struct {
 		name, in string
@@ -283,6 +440,12 @@ func TestParseDHCPLease(t *testing.T) {
 
 // 真实 DHCP:沙箱里用 busybox 的 udhcpd 当服务器、udhcpc 当客户端。要 root、netns、busybox(带 udhcpc / udhcpd),缺一样就跳过。
 func TestVTermRealDHCP(t *testing.T) {
+	for _, kind := range []string{"udhcpc", "dhcpcd", "dhclient"} {
+		t.Run(kind, func(t *testing.T) { realDHCPCase(t, kind) })
+	}
+}
+
+func realDHCPCase(t *testing.T, kind string) {
 	realIPReady(t)
 	bb, err := exec.LookPath("busybox")
 	if err != nil {
@@ -293,13 +456,19 @@ func TestVTermRealDHCP(t *testing.T) {
 			t.Skipf("busybox 没有 %s", app)
 		}
 	}
+	var real string
+	if kind != "udhcpc" {
+		if real, err = exec.LookPath(kind); err != nil {
+			t.Skipf("没有 %s", kind)
+		}
+	}
 	dir := t.TempDir()
 	link := filepath.Join(dir, "udhcpc")
 	if err := os.Symlink(bb, link); err != nil {
 		t.Skip(err)
 	}
 
-	br := "obtbr-d"
+	br := "obtbr-" + kind[:2]
 	if out, err := exec.Command("ip", "link", "add", br, "type", "bridge").CombinedOutput(); err != nil {
 		t.Skipf("建网桥失败:%v %s", err, out)
 	}
@@ -323,10 +492,13 @@ func TestVTermRealDHCP(t *testing.T) {
 	state := filepath.Join(dir, "terminal-net.json")
 	n := &VTermNet{Run: ExecRunner, StateFile: state, Namespace: "obtd-ns", HostIf: "obtd-h", PeerIf: "obtd-p",
 		LookPath: func(f string) (string, error) {
-			if f == "udhcpc" {
+			if f != kind {
+				return "", errors.New("nf")
+			}
+			if kind == "udhcpc" {
 				return link, nil
 			}
-			return "", errors.New("nf")
+			return real, nil
 		},
 		ScriptDir: dir, Kill: func(int, syscall.Signal) error { return nil }}
 	t.Cleanup(func() { _, _ = n.Recover(context.Background()) })

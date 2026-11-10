@@ -22,8 +22,10 @@ import (
 // 万一卡住,超时会杀掉它,拆除虚拟终端时也会清命名空间里残留的进程(killNamespaceProcs)。
 // 地址和路由都配在命名空间里,命名空间一删就全没了,不需要另外的记账,也不碰主命名空间的任何网络配置。
 //
-// 现在只支持 udhcpc(OpenWrt 自带的 busybox、Debian 的 udhcpc 包)。能力检测里 dhclient / dhcpcd 也算有 DHCP 客户端,
-// 但只装了它们的设备会在这里如实报「暂不支持」,不假装成功。
+// 支持三种客户端,按这个顺序挑第一个找得到的:udhcpc(OpenWrt 自带的 busybox、Debian 的 udhcpc 包)、
+// dhcpcd(用它的测试模式 -T:只取租约并把变量打到标准输出,不配地址、不留进程)、
+// dhclient(ISC,自带回调脚本把租约打出来,脚本在确认拿到租约后让 dhclient 自己退出)。
+// 三者最后都走同一条路:解析出租约,由本程序去命名空间里配地址和默认路由。
 
 // DHCPLease 是取到的租约(对应前端 source 里的 ip / dns / gateway / dhcpMs)。
 type DHCPLease struct {
@@ -58,6 +60,32 @@ esac
 exit 0
 `
 
+// dhclient 在事件发生时运行这个脚本,租约在 new_* 环境变量里。拿到租约(BOUND / REBOOT)后,
+// 只在父进程确实是 dhclient 时才让它退出(dhclient 拿到租约后会留守续租,我们只要一次性取址);
+// 看不出父进程是谁就不动手,由超时收尾。脚本不改任何网络配置。
+const vtermDhclientScript = `#!/bin/sh
+case "$reason" in
+BOUND|REBOOT)
+  echo "OB ip $new_ip_address"
+  echo "OB subnet $new_subnet_mask"
+  echo "OB router $new_routers"
+  echo "OB dns $new_domain_name_servers"
+  echo "OB serverid $new_dhcp_server_identifier"
+  echo "OB lease $new_dhcp_lease_time"
+  case "$(cat /proc/$PPID/comm 2>/dev/null)" in
+  dhclient*) kill -TERM "$PPID" 2>/dev/null ;;
+  esac
+  ;;
+esac
+exit 0
+`
+
+const (
+	dhcpUdhcpc   = "udhcpc"
+	dhcpDhcpcd   = "dhcpcd"
+	dhcpDhclient = "dhclient"
+)
+
 func (n *VTermNet) lookPath(file string) (string, error) {
 	if n.LookPath != nil {
 		return n.LookPath(file)
@@ -65,21 +93,14 @@ func (n *VTermNet) lookPath(file string) (string, error) {
 	return exec.LookPath(file)
 }
 
-// dhcpClient 选客户端:只认 udhcpc。
-func (n *VTermNet) dhcpClient() (string, error) {
-	if p, err := n.lookPath("udhcpc"); err == nil && p != "" {
-		return p, nil
-	}
-	var other []string
-	for _, c := range []string{"dhclient", "dhcpcd"} {
+// dhcpClient 选客户端,返回程序路径和种类(dhcpUdhcpc / dhcpDhcpcd / dhcpDhclient)。
+func (n *VTermNet) dhcpClient() (string, string, error) {
+	for _, c := range []string{dhcpUdhcpc, dhcpDhcpcd, dhcpDhclient} {
 		if p, err := n.lookPath(c); err == nil && p != "" {
-			other = append(other, c)
+			return p, c, nil
 		}
 	}
-	if len(other) > 0 {
-		return "", fmt.Errorf("这台设备只有 %s,虚拟终端取址暂时只支持 udhcpc", strings.Join(other, "、"))
-	}
-	return "", errors.New("找不到 DHCP 客户端(udhcpc),虚拟终端没法取址")
+	return "", "", errors.New("找不到 DHCP 客户端(udhcpc / dhcpcd / dhclient),虚拟终端没法取址")
 }
 
 // AcquireDHCP 让 v 这个虚拟终端(必须是本进程 Ensure 出来、仍在用的)取一个地址并配好。
@@ -96,7 +117,7 @@ func (n *VTermNet) AcquireDHCP(ctx context.Context, v VirtualTerminal) (DHCPLeas
 	if n.cur == nil || n.cur.Namespace != ns || n.cur.PeerIf != peer || v.Namespace != ns || v.PeerIf != peer {
 		return DHCPLease{}, errors.New("这不是本程序当前在用的虚拟终端,没有取址")
 	}
-	client, err := n.dhcpClient()
+	client, kind, err := n.dhcpClient()
 	if err != nil {
 		return DHCPLease{}, err
 	}
@@ -106,28 +127,10 @@ func (n *VTermNet) AcquireDHCP(ctx context.Context, v VirtualTerminal) (DHCPLeas
 		return DHCPLease{}, err
 	}
 
-	dir := n.ScriptDir
-	if dir == "" {
-		dir = os.TempDir()
-	}
-	script := filepath.Join(dir, vtermScriptName)
-	if err := n.writeFile(script, []byte(vtermDHCPScript), 0o700); err != nil {
-		return DHCPLease{}, fmt.Errorf("写不了取址回调脚本 %s:%w", script, err)
-	}
-	defer func() { _ = n.remove(script) }()
-
 	start := n.now()
-	r, err := n.runFor(ctx, vtermDHCPTimeout, "ip", "netns", "exec", ns, client,
-		"-i", peer, "-n", "-q", "-f", "-t", "3", "-T", "2", "-s", script)
+	lease, err := n.runDHCPClient(ctx, ns, peer, client, kind)
 	if err != nil {
-		return DHCPLease{}, fmt.Errorf("运行 %s 失败:%w", filepath.Base(client), err)
-	}
-	if r.Code != 0 {
-		return DHCPLease{}, fmt.Errorf("没有取到地址(%s 退出码 %d):%s", filepath.Base(client), r.Code, lastLine(r.Stderr))
-	}
-	lease, err := parseDHCPLease(r.Stdout)
-	if err != nil {
-		return DHCPLease{}, fmt.Errorf("取址客户端的输出看不懂,没有配地址:%w", err)
+		return DHCPLease{}, err
 	}
 	lease.Ms = n.now().Sub(start).Milliseconds()
 
@@ -143,6 +146,103 @@ func (n *VTermNet) AcquireDHCP(ctx context.Context, v VirtualTerminal) (DHCPLeas
 		}
 	}
 	return lease, nil
+}
+
+// runDHCPClient 在命名空间里跑一次 kind 种类的客户端并解析出租约;临时文件(回调脚本、dhclient 的
+// pid / 租约文件)用完就删,不论成败。
+func (n *VTermNet) runDHCPClient(ctx context.Context, ns, peer, client, kind string) (DHCPLease, error) {
+	base := filepath.Base(client)
+	dir := n.ScriptDir
+	if dir == "" {
+		dir = os.TempDir()
+	}
+	writeScript := func(body string) (string, error) {
+		script := filepath.Join(dir, vtermScriptName)
+		if err := n.writeFile(script, []byte(body), 0o700); err != nil {
+			return "", fmt.Errorf("写不了取址回调脚本 %s:%w", script, err)
+		}
+		return script, nil
+	}
+	runIn := func(args ...string) (RunResult, error) {
+		r, err := n.runFor(ctx, vtermDHCPTimeout, "ip", append([]string{"netns", "exec", ns, client}, args...)...)
+		if err != nil {
+			return r, fmt.Errorf("运行 %s 失败:%w", base, err)
+		}
+		return r, nil
+	}
+
+	switch kind {
+	case dhcpDhcpcd:
+		// -T 测试模式:收到租约就把变量打到标准输出并退出,不配地址;-f /dev/null 不读本机的 dhcpcd.conf,
+		// 免得别人的配置(静态地址、denyinterfaces 等)干扰这次测试。
+		r, err := runIn("-T", "-4", "-t", "6", "-f", "/dev/null", peer)
+		if err != nil {
+			return DHCPLease{}, err
+		}
+		lease, perr := parseDhcpcdLease(r.Stdout)
+		if perr != nil {
+			if r.Code != 0 {
+				return DHCPLease{}, fmt.Errorf("没有取到地址(%s 退出码 %d):%s", base, r.Code, lastLine(firstNonEmpty(r.Stderr, r.Stdout)))
+			}
+			return DHCPLease{}, fmt.Errorf("取址客户端的输出看不懂,没有配地址:%w", perr)
+		}
+		return lease, nil
+
+	case dhcpDhclient:
+		script, err := writeScript(vtermDhclientScript)
+		if err != nil {
+			return DHCPLease{}, err
+		}
+		pid := filepath.Join(dir, "obterm-dhclient.pid")
+		lf := filepath.Join(dir, "obterm-dhclient.leases")
+		defer func() {
+			_ = n.remove(script)
+			_ = n.remove(pid)
+			_ = n.remove(lf)
+		}()
+		// -1 只试一次(失败退出码 2);-d 前台运行;租约文件和 pid 文件放在临时目录,不碰系统自己的。
+		r, err := runIn("-4", "-1", "-d", "-sf", script, "-pf", pid, "-lf", lf, peer)
+		if err != nil {
+			return DHCPLease{}, err
+		}
+		// 脚本在拿到租约后让 dhclient 退出,退出码因此不可靠:以有没有解析出租约为准。
+		lease, perr := parseDHCPLease(r.Stdout)
+		if perr != nil {
+			if r.Code != 0 {
+				return DHCPLease{}, fmt.Errorf("没有取到地址(%s 退出码 %d):%s", base, r.Code, lastLine(firstNonEmpty(r.Stderr, r.Stdout)))
+			}
+			return DHCPLease{}, fmt.Errorf("取址客户端的输出看不懂,没有配地址:%w", perr)
+		}
+		return lease, nil
+	}
+
+	// udhcpc
+	script, err := writeScript(vtermDHCPScript)
+	if err != nil {
+		return DHCPLease{}, err
+	}
+	defer func() { _ = n.remove(script) }()
+	r, err := runIn("-i", peer, "-n", "-q", "-f", "-t", "3", "-T", "2", "-s", script)
+	if err != nil {
+		return DHCPLease{}, err
+	}
+	if r.Code != 0 {
+		return DHCPLease{}, fmt.Errorf("没有取到地址(%s 退出码 %d):%s", base, r.Code, lastLine(r.Stderr))
+	}
+	lease, err := parseDHCPLease(r.Stdout)
+	if err != nil {
+		return DHCPLease{}, fmt.Errorf("取址客户端的输出看不懂,没有配地址:%w", err)
+	}
+	return lease, nil
+}
+
+func firstNonEmpty(ss ...string) string {
+	for _, s := range ss {
+		if strings.TrimSpace(s) != "" {
+			return s
+		}
+	}
+	return ""
 }
 
 // flushPeer 清掉命名空间里这一头的地址和路由。
@@ -170,6 +270,53 @@ func parseDHCPLease(out string) (DHCPLease, error) {
 		}
 		kv[f[1]] = strings.Join(f[2:], " ")
 	}
+	return leaseFromKV(kv)
+}
+
+// parseDhcpcdLease 解析 dhcpcd -T 打到标准输出的 "键=值" 行(值可带单引号或双引号),
+// 键换成上面统一的名字后走同一套判断。其它行(日志、reason=TEST 等)忽略。
+func parseDhcpcdLease(out string) (DHCPLease, error) {
+	// dhcpcd 10 的 -T 打的键带 new_ 前缀(实测:new_ip_address、new_subnet_cidr……);
+	// 不带前缀的旧写法也认,但同名时以带前缀的为准(不带前缀的可能是别的上下文的值)。
+	names := map[string]string{
+		"ip_address":             "ip",
+		"subnet_cidr":            "mask",
+		"subnet_mask":            "subnet",
+		"routers":                "router",
+		"domain_name_servers":    "dns",
+		"dhcp_server_identifier": "serverid",
+		"dhcp_lease_time":        "lease",
+	}
+	kv := map[string]string{}
+	seenNew := map[string]bool{}
+	for _, line := range strings.Split(out, "\n") {
+		k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if !ok {
+			continue
+		}
+		k = strings.TrimSpace(k)
+		prefixed := strings.HasPrefix(k, "new_")
+		name, known := names[strings.TrimPrefix(k, "new_")]
+		if !known {
+			continue
+		}
+		if _, have := kv[name]; have && !prefixed && seenNew[name] {
+			continue
+		}
+		if prefixed {
+			seenNew[name] = true
+		}
+		v = strings.TrimSpace(v)
+		if len(v) >= 2 && (v[0] == '\'' || v[0] == '"') && v[len(v)-1] == v[0] {
+			v = v[1 : len(v)-1]
+		}
+		kv[name] = v
+	}
+	return leaseFromKV(kv)
+}
+
+// leaseFromKV 把统一命名的键值变成租约:ip / mask(或 subnet)/ router / dns / serverid / lease。
+func leaseFromKV(kv map[string]string) (DHCPLease, error) {
 	var l DHCPLease
 	ip := net.ParseIP(strings.TrimSpace(kv["ip"]))
 	if ip == nil || ip.To4() == nil || ip.To4().Equal(net.IPv4zero) {
