@@ -533,3 +533,49 @@ func realDHCPCase(t *testing.T, kind string) {
 		t.Fatal(err)
 	}
 }
+
+func TestVTermPointGatewayAt(t *testing.T) {
+	ctx := context.Background()
+	t.Run("只改命名空间里这一头的默认路由", func(t *testing.T) {
+		n, d, _ := newDHCPNet(t)
+		v, err := n.Ensure(ctx, "br-lan")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := n.AcquireDHCP(ctx, v); err != nil {
+			t.Fatal(err)
+		}
+		d.dcalls = nil
+		if err := n.PointGatewayAt(ctx, v, "192.168.1.9"); err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Join(d.dcalls, "\n"); got != "ip -n obterm route replace default via 192.168.1.9 dev obtv-t" {
+			t.Fatalf("命令不对:%s", got)
+		}
+	})
+	t.Run("命令失败带原因", func(t *testing.T) {
+		n, d, _ := newDHCPNet(t)
+		v, _ := n.Ensure(ctx, "br-lan")
+		d.failOn = func(line string) bool { return strings.Contains(line, "route replace") }
+		if err := n.PointGatewayAt(ctx, v, "192.168.1.9"); err == nil || !strings.Contains(err.Error(), "boom") {
+			t.Fatalf("%v", err)
+		}
+	})
+	t.Run("不是本进程在用的终端 / 网关不是 IPv4:什么都不做", func(t *testing.T) {
+		n, d, _ := newDHCPNet(t)
+		if err := n.PointGatewayAt(ctx, VirtualTerminal{Namespace: "obterm", PeerIf: "obtv-t"}, "192.168.1.9"); err == nil {
+			t.Fatal("没 Ensure 过应报错")
+		}
+		v, _ := n.Ensure(ctx, "br-lan")
+		for _, gw := range []string{"", "not-ip", "fd00::1", "192.168.1.9; reboot"} {
+			if err := n.PointGatewayAt(ctx, v, gw); err == nil {
+				t.Errorf("%q 不该放行", gw)
+			}
+		}
+		for _, c := range d.dcalls {
+			if strings.Contains(c, "route replace") {
+				t.Fatalf("不该跑命令:%s", c)
+			}
+		}
+	})
+}

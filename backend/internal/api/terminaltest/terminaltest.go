@@ -5,7 +5,8 @@
 // 和缺的项;具备前提就建命名空间 + veth、DHCP 取址,把结果放进 source 返回;建不起来回 setupError(原因原文)。
 // 取址之后接着在虚拟终端的命名空间里发探测(GET / HEAD / TCP / TLS,见 internal/nsprobe):先用 DHCP 给的 DNS 解析域名
 // (填 dns),再直连目标(填 exit),所以响应有 source / dns / exit;conntrack 取证(entry、dnsEvidence)、内核 DNS 追踪
-// (kernelDns)、旁路由改指(source.override)、firstLayer 还没做,响应里如实没有这些字段。
+// (kernelDns)、firstLayer 还没做,响应里如实没有这些字段。
+// source.override:DHCP 给的网关不是本机(旁路由场景)时,虚拟终端的网关和 DNS 改指到本机 LAN 口地址再测(见 run)。
 // kernel / entry 要在终端那条连接还开着的时候去读内核连接表:Prober 是 HoldProber(出结果后先留着连接)且接了 Deps.Kernel 才做,
 // 判法见 entry.go。
 // dnsEvidence(conntrack 里这次 DNS 查询的回复方是不是被问的服务器本人)用终端发 DNS 时的 UDP 源端口精确认出这一次的记录;
@@ -38,6 +39,8 @@ import (
 type Terminal interface {
 	Ensure(ctx context.Context, lanDevice string) (system.VirtualTerminal, error)
 	AcquireDHCP(ctx context.Context, v system.VirtualTerminal) (system.DHCPLease, error)
+	// PointGatewayAt 把虚拟终端的默认网关改指到 gateway(旁路由场景用,见 run)。
+	PointGatewayAt(ctx context.Context, v system.VirtualTerminal, gateway string) error
 	Teardown(ctx context.Context) error
 }
 
@@ -183,14 +186,33 @@ func (h *handlers) run(w http.ResponseWriter, r *http.Request) {
 		done()
 		return
 	}
-	dns := lease.DNS
+	dns, gateway := lease.DNS, lease.Gateway
 	if dns == nil {
 		dns = []string{}
 	}
-	out["source"] = map[string]any{
-		"kind": "virtual", "name": v.Namespace, "ip": lease.IP, "mac": v.MAC, "via": "dhcp",
-		"dns": dns, "gateway": lease.Gateway, "lanDevice": v.LANDevice, "reused": v.Reused, "dhcpMs": lease.Ms,
+	// 旁路由场景:DHCP 给的网关不是本机(主路由在发地址),终端的流量根本不经过本机。这时把虚拟终端的网关和 DNS
+	// 改指到本机 LAN 口的地址,模拟「终端手动指向旁路由」,测的才是经本机的那条路。DHCP 没给网关(没有默认路由)
+	// 不算旁路由、不改;本机 LAN 地址认不出来也不改。
+	override := false
+	if lan := net.ParseIP(c.LAN.Address); lan != nil && lan.To4() != nil && gateway != "" && !sameIP(gateway, c.LAN.Address) {
+		if err := h.d.Terminal.PointGatewayAt(r.Context(), v, c.LAN.Address); err != nil {
+			if r.Context().Err() != nil {
+				return
+			}
+			out["setupError"] = "DHCP 给的网关不是本机,把虚拟终端的网关改指到本机失败:" + err.Error()
+			done()
+			return
+		}
+		override, gateway, dns = true, c.LAN.Address, []string{c.LAN.Address}
 	}
+	src := map[string]any{
+		"kind": "virtual", "name": v.Namespace, "ip": lease.IP, "mac": v.MAC, "via": "dhcp",
+		"dns": dns, "gateway": gateway, "lanDevice": v.LANDevice, "reused": v.Reused, "dhcpMs": lease.Ms,
+	}
+	if override {
+		src["override"] = map[string]any{"gateway": gateway}
+	}
+	out["source"] = src
 	if h.d.Prober != nil {
 		h.probe(r.Context(), out, probeEnv{ns: v.Namespace, dns: dns, lanAddr: c.LAN.Address, lanDevice: c.LAN.Device, srcIP: lease.IP}, in)
 		if r.Context().Err() != nil {

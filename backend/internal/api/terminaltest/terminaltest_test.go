@@ -141,6 +141,8 @@ type fakeTerm struct {
 	reused      bool
 	acquireHold time.Duration // 取址时多等一会儿,模拟耗时
 	teardowns   int
+	pointCalls  []string // PointGatewayAt 的网关参数
+	pointErr    error
 	running     int
 	maxRunning  int
 	torn        chan struct{}
@@ -161,6 +163,13 @@ func (f *fakeTerm) Ensure(_ context.Context, lan string) (system.VirtualTerminal
 		return system.VirtualTerminal{}, f.ensureErr
 	}
 	return system.VirtualTerminal{Namespace: "obterm", HostIf: "obtv-h", PeerIf: "obtv-t", LANDevice: lan, MAC: "02:00:00:aa:bb:cc", Reused: f.reused}, nil
+}
+
+func (f *fakeTerm) PointGatewayAt(_ context.Context, _ system.VirtualTerminal, gw string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.pointCalls = append(f.pointCalls, gw)
+	return f.pointErr
 }
 
 func (f *fakeTerm) AcquireDHCP(_ context.Context, _ system.VirtualTerminal) (system.DHCPLease, error) {
@@ -766,5 +775,60 @@ func TestSplitDNSServer(t *testing.T) {
 		if h, p := splitDNSServer(c.in); h != c.host || p != c.port {
 			t.Errorf("%q → %q %d,要 %q %d", c.in, h, p, c.host, c.port)
 		}
+	}
+}
+
+// ---- source.override:DHCP 给的网关不是本机时,网关和 DNS 改指到本机 ----
+
+func TestRunOverridesGatewayAndDNSWhenDHCPGatewayIsNotThisDevice(t *testing.T) {
+	f := newFakeTerm()
+	f.lease = system.DHCPLease{IP: "192.168.5.77", Mask: 24, Gateway: "192.168.5.2", DNS: []string{"192.168.5.2", "223.5.5.5"}, Ms: 42}
+	d := capableDeps(f) // 本机 LAN 地址 192.168.5.1
+	p := &fakeProber{res: nsprobe.Result{OK: true}}
+	d.Prober = p
+	got := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"1.1.1.1"}`))
+	src := got["source"].(map[string]any)
+	ov, _ := src["override"].(map[string]any)
+	dns, _ := src["dns"].([]any)
+	if ov["gateway"] != "192.168.5.1" || len(ov) != 1 || src["gateway"] != "192.168.5.1" || len(dns) != 1 || dns[0] != "192.168.5.1" {
+		t.Fatalf("source:%v", src)
+	}
+	if len(f.pointCalls) != 1 || f.pointCalls[0] != "192.168.5.1" {
+		t.Fatalf("改网关的调用:%v", f.pointCalls)
+	}
+	if len(p.reqs) != 1 || len(p.reqs[0].DNS) != 1 || p.reqs[0].DNS[0] != "192.168.5.1" {
+		t.Fatalf("探测要用改指后的 DNS:%+v", p.reqs)
+	}
+}
+
+func TestRunNoOverrideWhenGatewayIsThisDeviceOrMissing(t *testing.T) {
+	for name, gw := range map[string]string{"网关就是本机": "192.168.5.1", "DHCP 没给网关": ""} {
+		f := newFakeTerm()
+		f.lease = system.DHCPLease{IP: "192.168.5.77", Mask: 24, Gateway: gw, DNS: []string{"223.5.5.5"}, Ms: 1}
+		d := capableDeps(f)
+		src := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com"}`))["source"].(map[string]any)
+		if _, has := src["override"]; has || len(f.pointCalls) != 0 {
+			t.Errorf("%s:不该改指:%v %v", name, src, f.pointCalls)
+		}
+		if src["gateway"] != gw || src["dns"].([]any)[0] != "223.5.5.5" {
+			t.Errorf("%s:要原样报 DHCP 给的:%v", name, src)
+		}
+	}
+}
+
+func TestRunOverrideFailureIsSetupErrorAndNoProbe(t *testing.T) {
+	f := newFakeTerm()
+	f.lease = system.DHCPLease{IP: "192.168.5.77", Mask: 24, Gateway: "192.168.5.2", DNS: []string{"192.168.5.2"}, Ms: 1}
+	f.pointErr = errors.New("Nexthop has invalid gateway")
+	d := capableDeps(f)
+	p := &fakeProber{res: nsprobe.Result{OK: true}}
+	d.Prober = p
+	got := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"1.1.1.1"}`))
+	se, _ := got["setupError"].(string)
+	if !strings.Contains(se, "Nexthop has invalid gateway") || len(p.reqs) != 0 {
+		t.Fatalf("改不成要如实报,不能照旧去测:%v reqs=%d", got["setupError"], len(p.reqs))
+	}
+	if _, has := got["source"]; has {
+		t.Error("没改成功就不该给 source(它说的是改指后的状态)")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -146,6 +147,27 @@ func (n *VTermNet) AcquireDHCP(ctx context.Context, v VirtualTerminal) (DHCPLeas
 		}
 	}
 	return lease, nil
+}
+
+// PointGatewayAt 把 v 这个虚拟终端的默认网关改指到 gateway(旁路由场景:DHCP 给的网关是主路由,
+// 终端的流量不会经过本机,测试就没有意义,所以改成本机 LAN 口的地址,模拟「终端手动把网关指到旁路由」)。
+// 只动命名空间里这一头的默认路由(`ip -n <ns> route replace default via <gw> dev <peer>`),不碰本机和别的网络;
+// 失败时原来的默认路由保持不变。v 必须是本进程 Ensure 出来、仍在用的,gateway 必须是 IPv4 地址。
+func (n *VTermNet) PointGatewayAt(ctx context.Context, v VirtualTerminal, gateway string) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if err := n.checkNames(); err != nil {
+		return err
+	}
+	ns, _, peer := n.names()
+	if n.cur == nil || n.cur.Namespace != ns || n.cur.PeerIf != peer || v.Namespace != ns || v.PeerIf != peer {
+		return errors.New("这不是本程序当前在用的虚拟终端,没有改网关")
+	}
+	if a, err := netip.ParseAddr(gateway); err != nil || !a.Is4() {
+		return fmt.Errorf("网关 %q 不是 IPv4 地址", gateway)
+	}
+	_, err := n.ip(ctx, "-n", ns, "route", "replace", "default", "via", gateway, "dev", peer)
+	return err
 }
 
 // runDHCPClient 在命名空间里跑一次 kind 种类的客户端并解析出租约;临时文件(回调脚本、dhclient 的
