@@ -11,6 +11,3 @@ panel/.tools/sing-box
 .build-cache/
 panel/server/resources/geodata/
 __pycache__/
-.dev-data/
-.dev-backend
-.dev-backend.exe
