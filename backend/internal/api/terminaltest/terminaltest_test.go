@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/nsprobe"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
 )
 
@@ -432,5 +433,141 @@ func TestNewRunRestartsIdleClock(t *testing.T) {
 	}
 	if !waitTorn(t, f, 2*time.Second) {
 		t.Fatal("最终应当拆除")
+	}
+}
+
+// ---------- 在虚拟终端里发探测 ----------
+
+type fakeProber struct {
+	mu     sync.Mutex
+	ns     []string
+	reqs   []nsprobe.Request
+	res    nsprobe.Result
+	stderr string
+	err    error
+}
+
+func (f *fakeProber) Probe(_ context.Context, ns string, req nsprobe.Request) (nsprobe.Result, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ns = append(f.ns, ns)
+	f.reqs = append(f.reqs, req)
+	return f.res, f.stderr, f.err
+}
+
+func iptr(v int) *int { return &v }
+
+func TestRunProbesInsideTerminalAndFillsDNSAndExit(t *testing.T) {
+	f := newFakeTerm()
+	f.lease.DNS = []string{"192.168.5.1", "223.5.5.5"}
+	pr := &fakeProber{res: nsprobe.Result{
+		OK: true, Status: iptr(204), MS: iptr(88), ConnectMs: iptr(31), LocalPort: 40123, ConnectTo: "93.184.216.34", Challenge: "cloudflare",
+		DNS: &nsprobe.DNSResult{Server: "192.168.5.1", OK: true, Answers: []string{"93.184.216.34"}, MS: 12},
+	}, stderr: "note"}
+	d := capableDeps(f)
+	d.Prober = pr
+	got := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com","port":443,"method":"head"}`))
+	if len(pr.ns) != 1 || pr.ns[0] != "obterm" {
+		t.Fatalf("要在虚拟终端的命名空间里探测:%v", pr.ns)
+	}
+	r := pr.reqs[0]
+	if r.Target != "example.com" || r.Port != 443 || r.Method != "HEAD" || len(r.DNS) != 2 || r.DNS[0] != "192.168.5.1" || r.DNS[1] != "223.5.5.5" {
+		t.Fatalf("请求不对:%+v", r)
+	}
+	dns, _ := got["dns"].(map[string]any)
+	if dns["server"] != "192.168.5.1" || dns["ok"] != true || dns["ms"] != float64(12) || dns["error"] != nil {
+		t.Fatalf("dns:%v", dns)
+	}
+	if a, _ := dns["answers"].([]any); len(a) != 1 || a[0] != "93.184.216.34" {
+		t.Fatalf("answers:%v", dns["answers"])
+	}
+	ex, _ := got["exit"].(map[string]any)
+	want := map[string]any{"url": "https://example.com/", "port": float64(443), "method": "HEAD", "ok": true, "status": float64(204), "ms": float64(88),
+		"connectMs": float64(31), "localPort": float64(40123), "connectTo": "93.184.216.34", "challenge": "cloudflare"}
+	for k, v := range want {
+		if ex[k] != v {
+			t.Errorf("exit.%s = %v,要 %v", k, ex[k], v)
+		}
+	}
+	if ex["error"] != nil {
+		t.Errorf("成功不该有 error:%v", ex["error"])
+	}
+	if got["probeStderr"] != "note" {
+		t.Errorf("probeStderr:%v", got["probeStderr"])
+	}
+	// 还没做的部分不带
+	for _, k := range []string{"entry", "dnsEvidence", "kernelDns", "kernel", "firstLayer", "dnsForward"} {
+		if _, has := got[k]; has {
+			t.Errorf("不该有 %s", k)
+		}
+	}
+	if _, has := ex["forward"]; has {
+		t.Error("不该有 exit.forward")
+	}
+}
+
+func TestRunProbeIPTargetAndTCPShape(t *testing.T) {
+	f := newFakeTerm()
+	pr := &fakeProber{res: nsprobe.Result{OK: true, MS: iptr(5), ConnectMs: iptr(5), LocalPort: 5555}}
+	d := capableDeps(f)
+	d.Prober = pr
+	got := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"1.1.1.1","method":"TCP"}`))
+	if dns, _ := got["dns"].(map[string]any); dns["skipped"] != true || len(dns) != 1 {
+		t.Fatalf("目标是 IP:dns 应是 {skipped:true}:%v", got["dns"])
+	}
+	ex, _ := got["exit"].(map[string]any)
+	if ex["url"] != "1.1.1.1:443" || ex["port"] != float64(443) || ex["method"] != "TCP" || ex["ok"] != true || ex["status"] != nil || ex["connectTo"] != nil {
+		t.Fatalf("exit:%v", ex)
+	}
+	if _, has := got["probeStderr"]; has {
+		t.Error("没有 stderr 就不带 probeStderr")
+	}
+}
+
+func TestRunProbeFailureIsReportedNotHidden(t *testing.T) {
+	f := newFakeTerm()
+	pr := &fakeProber{res: nsprobe.Result{Error: "超时(8 秒内没有响应)", DNS: &nsprobe.DNSResult{Server: "192.168.5.1", OK: true, Answers: nil, MS: 3}}}
+	d := capableDeps(f)
+	d.Prober = pr
+	got := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com"}`))
+	ex, _ := got["exit"].(map[string]any)
+	if ex["ok"] != false || ex["error"] != "超时(8 秒内没有响应)" || ex["url"] != "https://example.com/" || ex["method"] != "GET" {
+		t.Fatalf("exit:%v", ex)
+	}
+	if dns, _ := got["dns"].(map[string]any); dns == nil || dns["answers"] == nil {
+		t.Fatalf("answers 要是数组不是 null:%v", got["dns"])
+	}
+	if got["source"] == nil {
+		t.Error("探测失败也要带 source")
+	}
+}
+
+func TestRunProberErrorBecomesExitError(t *testing.T) {
+	f := newFakeTerm()
+	pr := &fakeProber{err: errors.New("探测进程失败:exec format error"), stderr: "exec format error"}
+	d := capableDeps(f)
+	d.Prober = pr
+	got := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com","port":80}`))
+	ex, _ := got["exit"].(map[string]any)
+	if ex["ok"] != false || !strings.Contains(ex["error"].(string), "探测进程失败") || ex["url"] != "http://example.com/" || ex["port"] != float64(80) {
+		t.Fatalf("exit:%v", ex)
+	}
+	if got["probeStderr"] != "exec format error" || got["setupError"] != nil {
+		t.Fatalf("%v", got)
+	}
+}
+
+func TestRunSetupFailureNeverProbes(t *testing.T) {
+	f := newFakeTerm()
+	f.acquireErr = errors.New("没取到地址")
+	pr := &fakeProber{}
+	d := capableDeps(f)
+	d.Prober = pr
+	got := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com"}`))
+	if got["setupError"] == nil || len(pr.ns) != 0 {
+		t.Fatalf("取不到地址不该探测:%v %v", got, pr.ns)
+	}
+	if _, has := got["exit"]; has {
+		t.Error("不该有 exit")
 	}
 }

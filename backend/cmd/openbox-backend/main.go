@@ -76,6 +76,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodeinfo"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodequality"
+	"github.com/timeflysoon/Open-Box/backend/internal/nsprobe"
 	"github.com/timeflysoon/Open-Box/backend/internal/penetration"
 	"github.com/timeflysoon/Open-Box/backend/internal/policyentries"
 	"github.com/timeflysoon/Open-Box/backend/internal/portcheck"
@@ -107,6 +108,11 @@ var builtAt = ""
 func main() { os.Exit(run(os.Args[1:])) }
 
 func run(args []string) int {
+	// 隐藏子命令:terminal-test 在虚拟终端的命名空间里用 `ip netns exec` 调起本程序跑一次探测(internal/nsprobe)。
+	// 它不读配置、不碰数据目录,只发一次探测、打一份 JSON。
+	if len(args) >= 1 && args[0] == "ns-probe" {
+		return nsprobe.Main(args[1:], os.Stdout, os.Stderr)
+	}
 	if len(args) == 1 && (args[0] == "-version" || args[0] == "--version") {
 		fmt.Println("openbox-backend", version)
 		return 0
@@ -585,7 +591,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 记账文件 terminal-net.json 是撤销用的,恢复出厂设置不删(见 factoryWipes)
 	terminalProbe := system.RealTerminalProbe()
 	vterm := &system.VTermNet{Run: system.ExecRunner, StateFile: filepath.Join(cfg.StateDir(), "terminal-net.json")}
-	terminaltestapi.Register(srv.Mux(), terminaltestapi.Deps{Capability: terminalProbe.Capability, Terminal: vterm, Log: log})
+	terminaltestapi.Register(srv.Mux(), terminaltestapi.Deps{Capability: terminalProbe.Capability, Terminal: vterm, Prober: &nsprobe.Exec{}, Log: log})
 
 	// 域名穿透:按已部署配置里的路由规则推算一个域名 / IP 会命中哪条规则、走哪条线路(DNS 判定和真实路由测试共用一个预测器)
 	penetrationSets := &dnsdecide.FileSets{SingBox: cfg.SingBox, TmpDir: probeDir}
