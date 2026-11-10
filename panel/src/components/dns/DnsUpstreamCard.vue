@@ -258,8 +258,8 @@
           >
             <option value="udp">UDP</option>
             <option value="tcp">TCP</option>
-            <option value="https">DoH</option>
             <option value="tls">DoT</option>
+            <option value="https">DoH</option>
           </select>
           <span
             v-if="draft.wan"
