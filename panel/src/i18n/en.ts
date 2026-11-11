@@ -954,7 +954,7 @@ const en = {
   groupType_urltest: 'Auto by latency (url-test)',
   groupType_selector: 'Manual (select)',
   groupInterval: 'Test interval',
-  groupTolerance: 'Tolerance',
+  groupTolerance: 'Latency tolerance',
   groupUrltestHint:
     'Measures latency periodically and switches to the fastest; only when faster by the tolerance, to avoid flapping.',
   groupMembersLabel: 'Members',
@@ -1005,7 +1005,7 @@ const en = {
   failoverSummary: 'Failover · {lanes} lanes · {count} nodes',
   failoverStaticHint:
     'Pick nodes on the left into the current lane; the first lane is primary, the rest are backups in order. A single-node lane is used directly; a multi-node lane is either Auto (picks by latency) or Manual (you choose on the Proxies page).',
-  failoverTolerance: 'In-lane tolerance',
+  failoverTolerance: 'In-lane latency tolerance',
   failoverToleranceHint:
     'Only used by the internal url-test of multi-node lanes: switch only when a node is faster by this many ms; unrelated to lane priority',
   failoverToleranceUnused:
@@ -1179,7 +1179,7 @@ const en = {
   subscriptionNodeDnsToggle: 'Subscription DNS',
   subscriptionNodeDnsLabel: 'Node domain resolver (optional)',
   subscriptionNodeDnsUrlPlaceholder: 'DoH URL, e.g. https://dns.example.net:2096/path',
-  subscriptionNodeDnsBootstrapPlaceholder: 'DNS for DoH host (IP)',
+  subscriptionNodeDnsBootstrapPlaceholder: 'Bootstrap DNS (IP)',
   subscriptionNodeDnsIpPlaceholder: 'DNS IP, e.g. 223.5.5.5 or 2001:4860:4860::8888',
   subscriptionNodeDnsInvalidIp: 'Enter a valid IPv4 or IPv6 DNS address',
   subscriptionNodeDnsPlainHint: 'Resolves only server names in this subscription. Website and LAN DNS are unchanged; node checks use the same resolver.',
@@ -1187,9 +1187,8 @@ const en = {
   subscriptionNodeDnsHint:
     "Fill this in when the provider requires its own DoH to resolve node domains (like OpenClash's proxy-server-nameserver / nameserver-policy). It only resolves this subscription's node server domains; regular sites and LAN DNS are unaffected, and speed tests use it too. When the DoH URL uses a domain, enter an IP on the right to resolve it.",
   subscriptionNodeDnsInvalidUrl: 'The DoH URL must start with https://',
-  subscriptionNodeDnsInvalidBootstrap: 'The DNS for the DoH host must be an IP address',
-  subscriptionNodeDnsNeedBootstrap:
-    'The DoH URL uses a domain; enter an IP on the right to resolve it',
+  subscriptionNodeDnsInvalidBootstrap: 'Enter a valid IP address for bootstrap DNS',
+  subscriptionNodeDnsNeedBootstrap: 'Enter a bootstrap DNS IP to resolve the upstream hostname',
   subscriptionNodeDnsNeedUrl: 'Enter the DoH URL too',
   subscriptionContentPlaceholder:
     'Paste ss:// / trojan:// / hysteria2:// lines, or a Clash/sing-box config…',

@@ -323,6 +323,7 @@
               <div
                 v-if="draft.type === 'urltest'"
                 class="flex flex-col gap-1"
+                :title="$t('groupUrltestHint')"
               >
                 <label class="text-xs font-medium">{{ $t('groupTolerance') }}</label>
                 <div class="flex items-center gap-1">
