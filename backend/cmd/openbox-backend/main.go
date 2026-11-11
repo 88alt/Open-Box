@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -74,6 +75,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/factoryreset"
 	"github.com/timeflysoon/Open-Box/backend/internal/failover"
 	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
+	"github.com/timeflysoon/Open-Box/backend/internal/kerneldns"
 	"github.com/timeflysoon/Open-Box/backend/internal/latencyhistory"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodeexit"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
@@ -631,7 +633,26 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Kernel: func(ctx context.Context) (singbox.KernelSnapshot, error) {
 			return singbox.KernelConnections(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
 		},
-		Route: &routeget.Getter{}, Log: log})
+		Route: &routeget.Getter{},
+		KernelLog: func(ctx context.Context) (terminaltestapi.LogTap, error) {
+			tap, err := singbox.OpenKernelLogs(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
+			if err != nil {
+				return nil, err
+			}
+			return tap, nil
+		},
+		KernelDNSConfig: func() (*kerneldns.Config, error) {
+			b, err := os.ReadFile(filepath.Join(cfg.ConfigDir, "config.json"))
+			if err != nil {
+				return nil, err
+			}
+			var m map[string]any
+			if err := json.Unmarshal(b, &m); err != nil {
+				return nil, err
+			}
+			return kerneldns.ConfigFrom(m), nil
+		},
+		Log: log})
 
 	// 域名穿透:按已部署配置里的路由规则推算一个域名 / IP 会命中哪条规则、走哪条线路(DNS 判定和真实路由测试共用一个预测器)
 	penetrationSets := &dnsdecide.FileSets{SingBox: cfg.SingBox, TmpDir: probeDir}

@@ -5,7 +5,9 @@
 // 和缺的项;具备前提就建命名空间 + veth、DHCP 取址,把结果放进 source 返回;建不起来回 setupError(原因原文)。
 // 取址之后接着在虚拟终端的命名空间里发探测(GET / HEAD / TCP / TLS,见 internal/nsprobe):先用 DHCP 给的 DNS 解析域名
 // (填 dns),再直连目标(填 exit),所以响应有 source / dns / exit;conntrack 取证(entry、dnsEvidence)、内核 DNS 追踪
-// (kernelDns)、firstLayer 还没做,响应里如实没有这些字段。
+// firstLayer 还没做,响应里如实没有这个字段。
+// kernelDns(内核日志实录:命中哪条 DNS 规则、交给哪个解析器、经哪个节点、上游回了什么)要订阅内核日志流,订阅在发探测之前开;
+// 没接 Deps.KernelLog、或目标是 IP 时不带。
 // source.override:DHCP 给的网关不是本机(旁路由场景)时,虚拟终端的网关和 DNS 改指到本机 LAN 口地址再测(见 run)。
 // kernel / entry 要在终端那条连接还开着的时候去读内核连接表:Prober 是 HoldProber(出结果后先留着连接)且接了 Deps.Kernel 才做,
 // 判法见 entry.go。
@@ -29,6 +31,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/conntrack"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnsforward"
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
+	"github.com/timeflysoon/Open-Box/backend/internal/kerneldns"
 	"github.com/timeflysoon/Open-Box/backend/internal/nsprobe"
 	"github.com/timeflysoon/Open-Box/backend/internal/routetest"
 	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
@@ -69,6 +72,11 @@ type Deps struct {
 	Kernel func(ctx context.Context) (singbox.KernelSnapshot, error)
 	// Route 问系统路由(*routeget.Getter),判旁路用;为空时不判旁路(entry 里 no-route)。
 	Route RouteGetter
+	// KernelLog 订阅内核日志流(singbox.OpenKernelLogs)。为空 = 不做 kernelDns。订阅必须在发探测之前开、探测完关,
+	// 内核的日志流只给订阅期间产生的行。
+	KernelLog func(ctx context.Context) (LogTap, error)
+	// KernelDNSConfig 取判断 kernelDns 要用的配置(DNS 服务器、出站类型);为空或出错时不补服务器信息,日志里能认出的照给。
+	KernelDNSConfig func() (*kerneldns.Config, error)
 	// DNSForward 返回此刻 dnsmasq 对查询的转发情况(*dnsforward.Service 的 Describe),拿不准返回 nil;为空 = 不填 dnsForward。
 	DNSForward func(ctx context.Context) *dnsforward.Result
 	// FirstLayer 返回「进内核之前」那一层的情况(NewFirstLayer 接出来的),拿不准返回 nil;为空 = 不填 firstLayer。
@@ -246,12 +254,34 @@ func (h *handlers) probe(ctx context.Context, out map[string]any, env probeEnv, 
 	var res nsprobe.Result
 	var stderr string
 	var err error
+	// kernelDns:域名目标才有 DNS 查询。订阅在发探测之前开,探测完留一小会儿等日志送到再关
+	var tap LogTap
+	var tapErr error
+	var logs []singbox.LogEntry
+	wantKernelDNS := h.d.KernelLog != nil && net.ParseIP(in.Target) == nil
+	if wantKernelDNS {
+		tap, tapErr = h.d.KernelLog(ctx)
+	}
+	stopTap := func() {
+		if tap != nil {
+			logs = tap.Stop()
+			tap = nil
+		}
+	}
+	defer stopTap()
 	hp, canHold := h.d.Prober.(HoldProber)
 	hold := canHold && h.d.Kernel != nil
 	if hold {
 		res, stderr, err = hp.ProbeHold(ctx, env.ns, req, func(r nsprobe.Result) { k = h.lookupKernel(ctx, env.srcIP, r) })
 	} else {
 		res, stderr, err = h.d.Prober.Probe(ctx, env.ns, req)
+	}
+	if tap != nil {
+		select { // 日志经 WebSocket 送过来有一点延迟
+		case <-time.After(kernelLogSettle):
+		case <-ctx.Done():
+		}
+		stopTap()
 	}
 	port := in.Port
 	if port == 0 {
@@ -283,6 +313,9 @@ func (h *handlers) probe(ctx context.Context, out map[string]any, env probeEnv, 
 		out["dns"] = d
 		h.fillDNSForward(ctx, out, res.DNS.Server, env.lanAddr)
 		h.fillDNSEvidence(ctx, out, res.DNS, env.srcIP)
+		if wantKernelDNS {
+			h.fillKernelDNS(out, logs, tapErr, in.Target)
+		}
 	}
 	ex := map[string]any{"url": url, "port": port, "method": in.Method, "ok": res.OK}
 	if res.Status != nil {
@@ -313,6 +346,30 @@ func (h *handlers) probe(ctx context.Context, out map[string]any, env probeEnv, 
 	if stderr != "" {
 		out["probeStderr"] = stderr
 	}
+}
+
+// kernelLogSettle 是探测结束后再等多久才关日志订阅。内核打日志在先、应答在后,这里只是等日志送到。
+const kernelLogSettle = 200 * time.Millisecond
+
+// LogTap 是一次开着的内核日志订阅(*singbox.LogTap 实现)。
+type LogTap interface {
+	Stop() []singbox.LogEntry
+}
+
+// fillKernelDNS 从订阅期间收到的内核日志里截这次 DNS 查询的过程(kerneldns.Analyze)。订阅没开成:no-log 并给原因;
+// 日志里没有这个域名的查询:not-seen(多半是 dnsmasq 用自己的缓存答了)。
+func (h *handlers) fillKernelDNS(out map[string]any, logs []singbox.LogEntry, tapErr error, domain string) {
+	if tapErr != nil {
+		out["kernelDns"] = map[string]any{"seen": false, "reason": "no-log", "error": tapErr.Error()}
+		return
+	}
+	var cfg *kerneldns.Config
+	if h.d.KernelDNSConfig != nil {
+		if c, err := h.d.KernelDNSConfig(); err == nil {
+			cfg = c
+		}
+	}
+	out["kernelDns"] = kerneldns.Analyze(logs, domain, cfg).Map()
 }
 
 // fillDNSEvidence 查连接跟踪表里终端这次 DNS 查询的记录:用 nsprobe 报的 UDP 源端口精确认出,
