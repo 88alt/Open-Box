@@ -623,6 +623,9 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		KernelAddr: takeover.KernelAddress(),
 	}
 	terminaltestapi.Register(srv.Mux(), terminaltestapi.Deps{Capability: terminalProbe.Capability, Terminal: vterm, Prober: &nsprobe.Exec{}, Conntrack: &conntrack.Reader{}, DNSForward: dnsFwd.Describe,
+		FirstLayer: terminaltestapi.NewFirstLayer(func() (map[string]any, error) {
+			return routetest.ReadConfig(filepath.Join(cfg.ConfigDir, "config.json"))
+		}, dnsFwd.Mode, dnsFwd.Describe),
 		Kernel: func(ctx context.Context) (singbox.KernelSnapshot, error) {
 			return singbox.KernelConnections(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
 		},

@@ -71,6 +71,8 @@ type Deps struct {
 	Route RouteGetter
 	// DNSForward 返回此刻 dnsmasq 对查询的转发情况(*dnsforward.Service 的 Describe),拿不准返回 nil;为空 = 不填 dnsForward。
 	DNSForward func(ctx context.Context) *dnsforward.Result
+	// FirstLayer 返回「进内核之前」那一层的情况(NewFirstLayer 接出来的),拿不准返回 nil;为空 = 不填 firstLayer。
+	FirstLayer func(ctx context.Context) *FirstLayer
 	// IdleAfter 是最后一次测试之后过多久自动拆掉虚拟终端,默认 5 分钟。
 	IdleAfter time.Duration
 	// Log 可为空。
@@ -213,6 +215,11 @@ func (h *handlers) run(w http.ResponseWriter, r *http.Request) {
 		src["override"] = map[string]any{"gateway": gateway}
 	}
 	out["source"] = src
+	if h.d.FirstLayer != nil {
+		if fl := h.d.FirstLayer(r.Context()); fl != nil {
+			out["firstLayer"] = fl
+		}
+	}
 	if h.d.Prober != nil {
 		h.probe(r.Context(), out, probeEnv{ns: v.Namespace, dns: dns, lanAddr: c.LAN.Address, lanDevice: c.LAN.Device, srcIP: lease.IP}, in)
 		if r.Context().Err() != nil {
