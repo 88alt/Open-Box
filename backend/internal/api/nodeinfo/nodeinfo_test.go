@@ -141,8 +141,8 @@ func doExit(x *fakeExit, method, path, body string) *httptest.ResponseRecorder {
 }
 
 func TestExitOKAndRefreshFlag(t *testing.T) {
-	risk := 7
-	x := &fakeExit{res: &nodeexit.Result{OK: true, At: 1, IP: "203.0.113.2", Country: "JP", Risk: &risk, Errors: &nodeexit.Errors{RDAP: "超时"}}}
+	trust := 61.0
+	x := &fakeExit{res: &nodeexit.Result{OK: true, At: 1, IP: "203.0.113.2", Country: "JP", TrustScore: &trust, Source: "ip.net.coffee", Errors: &nodeexit.Errors{NetCoffee: "超时"}}}
 	rec := doExit(x, http.MethodPost, "/api/openbox/node-info/"+url.PathEscape("HK 01/备用")+"/exit", `{"refresh":true}`)
 	if rec.Code != 200 || x.tag != "HK 01/备用" || !x.refresh {
 		t.Fatalf("%d tag=%q refresh=%v %s", rec.Code, x.tag, x.refresh, rec.Body)
@@ -151,8 +151,8 @@ func TestExitOKAndRefreshFlag(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["ok"] != true || got["risk"] != float64(7) || got["devices"] != nil || got["native"] != nil || got["errors"].(map[string]any)["rdap"] != "超时" {
-		t.Errorf("形状(没查到的项是 null,errors 只带出错的一路): %s", rec.Body)
+	if got["ok"] != true || got["trustScore"] != float64(61) || got["source"] != "ip.net.coffee" || got["devices"] != nil || got["native"] != nil || got["errors"].(map[string]any)["netcoffee"] != "超时" {
+		t.Errorf("形状(没查到的项是 null,errors 里写出错的来源): %s", rec.Body)
 	}
 	if _, has := got["cached"]; has {
 		t.Error("不是缓存时不带 cached")
