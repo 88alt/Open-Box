@@ -171,6 +171,7 @@
 import { blockConnectionByIdAPI, disconnectByIdAPI } from '@/api'
 import { useConnections } from '@/composables/connections'
 import {
+  CONNECTION_COLUMN_LABEL_MAP,
   CONNECTION_TAB_TYPE,
   CONNECTIONS_TABLE_ACCESSOR_KEY,
   PROXY_CHAIN_DIRECTION,
@@ -319,7 +320,7 @@ const columns: ColumnDef<Connection>[] = [
     accessorFn: getProcessFromConnection,
   },
   {
-    header: () => t(CONNECTIONS_TABLE_ACCESSOR_KEY.Host),
+    header: () => t(CONNECTION_COLUMN_LABEL_MAP[CONNECTIONS_TABLE_ACCESSOR_KEY.Host]!),
     id: CONNECTIONS_TABLE_ACCESSOR_KEY.Host,
     accessorFn: getHostFromConnection,
   },
@@ -421,7 +422,7 @@ const columns: ColumnDef<Connection>[] = [
     sortingFn: (prev, next) => prev.original.upload - next.original.upload,
   },
   {
-    header: () => t(CONNECTIONS_TABLE_ACCESSOR_KEY.SourceIP),
+    header: () => t(CONNECTION_COLUMN_LABEL_MAP[CONNECTIONS_TABLE_ACCESSOR_KEY.SourceIP]!),
     id: CONNECTIONS_TABLE_ACCESSOR_KEY.SourceIP,
     accessorFn: (original) => {
       return getIPLabelFromMap(original.metadata.sourceIP)
@@ -471,7 +472,7 @@ const tanstackTable = useVueTable({
   columnResizeDirection: 'ltr',
   state: {
     get columnOrder() {
-      return connectionTableColumns.value
+      return [CONNECTIONS_TABLE_ACCESSOR_KEY.Close, ...connectionTableColumns.value]
     },
     get columnVisibility() {
       return {
@@ -479,13 +480,13 @@ const tanstackTable = useVueTable({
           Object.values(CONNECTIONS_TABLE_ACCESSOR_KEY).map((key) => [key, false]),
         ),
         ...Object.fromEntries(
-          connectionTableColumns.value
-            .filter(
-              (key) =>
-                key !== CONNECTIONS_TABLE_ACCESSOR_KEY.Close ||
-                connectionTabShow.value !== CONNECTION_TAB_TYPE.CLOSED,
-            )
-            .map((key) => [key, true]),
+          [
+            // 「关闭」列固定在最左,已关闭连接页不显示
+            ...(connectionTabShow.value === CONNECTION_TAB_TYPE.CLOSED
+              ? []
+              : [CONNECTIONS_TABLE_ACCESSOR_KEY.Close]),
+            ...connectionTableColumns.value,
+          ].map((key) => [key, true]),
         ),
       }
     },

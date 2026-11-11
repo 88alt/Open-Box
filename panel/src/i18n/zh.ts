@@ -320,8 +320,6 @@ const zh: LANG_MESSAGE = {
   connectionStyleMobile: '移动端样式',
   card: '卡片',
   table: '表格',
-  customTableColumns: '自定义表格列',
-  customCardLines: '自定义卡片行',
   close: '关闭',
   theme: '主题',
   themeMode_system: '跟随系统',
@@ -603,8 +601,6 @@ const zh: LANG_MESSAGE = {
   label: '标签',
   swipeInTabs: '滑动切换页面二级标签',
   swipeInPages: '滑动切换页面',
-  simpleCardPreset: '简洁预设',
-  detailedCardPreset: '详细预设',
   refresh: '刷新',
   reset: '重置',
   delete: '删除',
@@ -2251,6 +2247,12 @@ const zh: LANG_MESSAGE = {
 
   // ===== 对齐上游 catch-up v0.1.412 缺失键 =====
 
+  // ===== 对齐上游 v0.1.423 连接页(卡片 / 表格自定义)=====
+  connectionCardCustomize: '卡片自定义',
+  connectionTableCustomize: '表格自定义',
+  connectionCardAddRow: '添加一行',
+  connectionDevice: '终端',
+  connectionTarget: '目标',
 }
 
 export default zh

@@ -338,8 +338,6 @@ const en = {
   connectionStyleMobile: 'Mobile style',
   card: 'Card',
   table: 'Table',
-  customTableColumns: 'Custom table columns',
-  customCardLines: 'Custom card lines',
   close: 'Close',
   theme: 'Theme',
   themeMode_system: 'Follow system',
@@ -631,8 +629,6 @@ const en = {
   label: 'Label',
   swipeInTabs: 'Swipe to switch between tabs',
   swipeInPages: 'Swipe to switch between pages',
-  simpleCardPreset: 'Simple preset',
-  detailedCardPreset: 'Detailed preset',
   refresh: 'Refresh',
   reset: 'Reset',
   delete: 'Delete',
@@ -2385,6 +2381,12 @@ const en = {
 
   // ===== 对齐上游 catch-up v0.1.412 缺失键 =====
 
+  // ===== 对齐上游 v0.1.423 连接页(卡片 / 表格自定义)=====
+  connectionCardCustomize: 'Customize cards',
+  connectionTableCustomize: 'Customize table',
+  connectionCardAddRow: 'Add a row',
+  connectionDevice: 'Device',
+  connectionTarget: 'Target',
 }
 
 export type LANG_MESSAGE = typeof en

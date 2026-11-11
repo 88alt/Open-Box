@@ -1,6 +1,8 @@
 import {
   CONNECTIONS_TABLE_ACCESSOR_KEY,
-  DETAILED_CARD_STYLE,
+  DEFAULT_CONNECTION_CARD_MOBILE,
+  DEFAULT_CONNECTION_CARD_PC,
+  DEFAULT_CONNECTION_TABLE_COLUMNS,
   EMOJIS,
   FONTS,
   GLOBAL,
@@ -14,12 +16,14 @@ import {
   PROXY_SORT_TYPE,
   SETTINGS_MENU_KEY,
   TABLE_SIZE,
+  TARGET_ROUTING_COLUMN,
   TABLE_WIDTH_MODE,
   DIRECT_TEST_URL, TEST_URL,
 } from '@/constant'
+import type { ConnectionCardColumn, ConnectionCardRow } from '@/constant'
 import { detectDefaultLanguage, getMinCardWidth, isMiddleScreen, isPreferredDark } from '@/helper/utils'
 import type { SourceIPLabel } from '@/types'
-import { useStorage } from '@vueuse/core'
+import { StorageSerializers, useStorage } from '@vueuse/core'
 import { computed, watch } from 'vue'
 
 // global
@@ -316,26 +320,88 @@ export const proxyChainDirection = useStorage(
 )
 export const tableSize = useStorage<TABLE_SIZE>('config/connecticon-table-size', TABLE_SIZE.SMALL)
 export const tableWidthMode = useStorage('config/table-width-mode', TABLE_WIDTH_MODE.AUTO)
-// 默认表头照正式路由器上用顺手的那套:关闭、源 IP、代理链、主机、进站 / 出站速率、进站 / 出站、连接时间
-// (server/defaults/storage-defaults.json 里全新安装的初始值要和这里一致)
-export const connectionTableColumns = useStorage<CONNECTIONS_TABLE_ACCESSOR_KEY[]>(
-  'config/connection-table-columns',
-  [
-    CONNECTIONS_TABLE_ACCESSOR_KEY.Close,
-    CONNECTIONS_TABLE_ACCESSOR_KEY.SourceIP,
-    CONNECTIONS_TABLE_ACCESSOR_KEY.Chains,
-    CONNECTIONS_TABLE_ACCESSOR_KEY.Host,
-    CONNECTIONS_TABLE_ACCESSOR_KEY.DlSpeed,
-    CONNECTIONS_TABLE_ACCESSOR_KEY.UlSpeed,
-    CONNECTIONS_TABLE_ACCESSOR_KEY.Download,
-    CONNECTIONS_TABLE_ACCESSOR_KEY.Upload,
-    CONNECTIONS_TABLE_ACCESSOR_KEY.ConnectTime,
-  ],
-)
-export const connectionCardLines = useStorage<CONNECTIONS_TABLE_ACCESSOR_KEY[][]>(
-  'config/connection-card-layout',
-  DETAILED_CARD_STYLE,
-)
+// 表格列与卡片布局的存储对齐上游 v0.1.423:
+// - 表格列:旧键 config/connection-table-columns(含「关闭」列)迁到 -v2,「关闭」列固定在最左、不进列设置
+// - 卡片布局:旧键 config/connection-card-layout(-v2) 是「每行一个列表」,新键 -v3 / -mobile 是「每行三列」,
+//   电脑端与手机端各存各的;读不到新键时从旧键换算
+const OLD_DEFAULT_TABLE_COLUMNS =
+  '["close","sourceIP","chains","host","dlSpeed","ulSpeed","dl","ul","connectTime"]'
+const OLD_DEFAULT_CARD_LAYOUTS = [
+  '[["sourceIP","outbound","host"],["connectTime","dlSpeed","ulSpeed"]]',
+  '[["sourceIP","host","connectTime"],["chains","dlSpeed","ulSpeed"],["type","dl","ul"]]',
+]
+const objectStorage = { serializer: StorageSerializers.object }
+const tableColumnsV1 = useStorage<unknown>('config/connection-table-columns', null, undefined, objectStorage)
+const tableColumnsV2 = useStorage<unknown>('config/connection-table-columns-v2', null, undefined, objectStorage)
+const cardLayoutV1 = useStorage<unknown>('config/connection-card-layout', null, undefined, objectStorage)
+const cardLayoutV2 = useStorage<unknown>('config/connection-card-layout-v2', null, undefined, objectStorage)
+const cardLayoutPC = useStorage<unknown>('config/connection-card-layout-v3', null, undefined, objectStorage)
+const cardLayoutMobile = useStorage<unknown>('config/connection-card-layout-mobile', null, undefined, objectStorage)
+
+const VALID_COLUMNS = new Set<string>(Object.values(CONNECTIONS_TABLE_ACCESSOR_KEY))
+const normalizeTableColumns = (value: unknown) =>
+  Array.isArray(value)
+    ? (value.filter(
+        (key) => key !== CONNECTIONS_TABLE_ACCESSOR_KEY.Close && VALID_COLUMNS.has(key),
+      ) as CONNECTIONS_TABLE_ACCESSOR_KEY[])
+    : []
+const normalizeCardColumn = (value: unknown) =>
+  Array.isArray(value)
+    ? (value.filter(
+        (key) =>
+          key === TARGET_ROUTING_COLUMN ||
+          (key !== CONNECTIONS_TABLE_ACCESSOR_KEY.Close && VALID_COLUMNS.has(key)),
+      ) as ConnectionCardColumn[])
+    : []
+
+export const connectionTableColumns = computed<CONNECTIONS_TABLE_ACCESSOR_KEY[]>({
+  get() {
+    const old = tableColumnsV1.value
+    const source =
+      tableColumnsV2.value ?? (JSON.stringify(old) === OLD_DEFAULT_TABLE_COLUMNS ? null : old)
+    const columns = normalizeTableColumns(source ?? DEFAULT_CONNECTION_TABLE_COLUMNS)
+    return columns.length ? columns : DEFAULT_CONNECTION_TABLE_COLUMNS
+  },
+  set(value) {
+    tableColumnsV2.value = value
+  },
+})
+
+export const connectionCardLines = computed<ConnectionCardRow[]>({
+  get() {
+    const stored = isMiddleScreen.value ? cardLayoutMobile.value : cardLayoutPC.value
+    if (Array.isArray(stored) && stored.length) {
+      return stored.map((row) => [
+        normalizeCardColumn(row?.[0]),
+        normalizeCardColumn(row?.[1]),
+        normalizeCardColumn(row?.[2]),
+      ])
+    }
+    if (isMiddleScreen.value) return DEFAULT_CONNECTION_CARD_MOBILE
+    const old = cardLayoutV2.value ?? cardLayoutV1.value
+    if (
+      !Array.isArray(old) ||
+      !old.length ||
+      OLD_DEFAULT_CARD_LAYOUTS.includes(JSON.stringify(old))
+    ) {
+      return DEFAULT_CONNECTION_CARD_PC
+    }
+    const rows = old.flatMap((line) => {
+      const keys = normalizeCardColumn(line)
+      const chunks: ConnectionCardRow[] = []
+      for (let i = 0; i < keys.length; i += 3) {
+        const [first, second, third] = keys.slice(i, i + 3)
+        chunks.push([[first], third ? [second] : [], third ? [third] : second ? [second] : []])
+      }
+      return chunks
+    })
+    return rows.length ? rows : [[[], [], []]]
+  },
+  set(value) {
+    if (isMiddleScreen.value) cardLayoutMobile.value = value
+    else cardLayoutPC.value = value
+  },
+})
 
 export const sourceIPLabelList = useStorage<SourceIPLabel[]>('config/source-ip-label-list', [])
 

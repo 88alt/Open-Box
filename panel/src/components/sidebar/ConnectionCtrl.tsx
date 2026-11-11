@@ -56,6 +56,7 @@ export default defineComponent({
   setup() {
     const { t } = useI18n()
     const settingsModel = ref(false)
+    const settingsTab = ref<'card' | 'table'>('card')
     const { showTip, updateTip } = useTooltip()
     const { isLargeCtrlsBar } = useCtrlsBar(useConnectionCard.value ? 860 : 720)
 
@@ -124,7 +125,10 @@ export default defineComponent({
         <>
           <button
             class="btn btn-circle btn-sm"
-            onClick={() => (settingsModel.value = true)}
+            onClick={() => {
+              settingsTab.value = useConnectionCard.value ? 'card' : 'table'
+              settingsModel.value = true
+            }}
           >
             <WrenchScrewdriverIcon class="h-4 w-4" />
           </button>
@@ -176,10 +180,32 @@ export default defineComponent({
                   <span class="text-base-content/60 text-xs">{t('hideDnsConnectionsHint')}</span>
                 </span>
               </label>
-              {(useConnectionCardPC.value || useConnectionCardMobile.value) && (
-                <ConnectionCardSettings />
-              )}
-              {(!useConnectionCardPC.value || !useConnectionCardMobile.value) && <TableSettings />}
+              <div class="flex flex-col gap-3">
+                <div
+                  class="tabs tabs-box tabs-xs self-start"
+                  role="tablist"
+                >
+                  {(['card', 'table'] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      role="tab"
+                      class={['tab', settingsTab.value === tab && 'tab-active']}
+                      aria-selected={settingsTab.value === tab}
+                      onClick={() => (settingsTab.value = tab)}
+                    >
+                      {t(tab === 'card' ? 'connectionCardCustomize' : 'connectionTableCustomize')}
+                    </button>
+                  ))}
+                </div>
+                <div role="tabpanel">
+                  {settingsTab.value === 'card' ? (
+                    <ConnectionCardSettings key={isMiddleScreen.value ? 'mobile' : 'pc'} />
+                  ) : (
+                    <TableSettings />
+                  )}
+                </div>
+              </div>
               <div class="flex flex-col gap-2">
                 <SourceIPLabels />
               </div>
