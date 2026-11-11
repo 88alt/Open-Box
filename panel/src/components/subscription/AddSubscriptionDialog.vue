@@ -365,9 +365,10 @@
                   v-model="nodeDnsPlainCurrent.server"
                   type="text"
                   class="input input-sm min-w-0 flex-1 font-mono text-xs"
-                  :placeholder="$t('subscriptionNodeDnsIpPlaceholder')"
-                  :aria-label="$t('subscriptionNodeDnsIpPlaceholder')"
+                  :placeholder="nodeDnsProtocol === 'tls' ? 'dns.example.net' : $t('subscriptionNodeDnsIpPlaceholder')"
+                  :aria-label="$t(nodeDnsProtocol === 'tls' ? 'dnsUpstreamDotHost' : 'subscriptionNodeDnsIpPlaceholder')"
                   autocomplete="off"
+                  spellcheck="false"
                 />
                 <input
                   v-model.number="nodeDnsPlainCurrent.port"
@@ -378,12 +379,22 @@
                   :placeholder="$t('port')"
                   :aria-label="$t('port')"
                 />
+                <input
+                  v-if="nodeDnsDotNeedsBootstrap"
+                  v-model="nodeDnsBootstrap"
+                  type="text"
+                  class="input input-sm w-full font-mono text-xs sm:w-48"
+                  :placeholder="$t('subscriptionNodeDnsBootstrapPlaceholder')"
+                  :aria-label="$t('subscriptionNodeDnsBootstrapPlaceholder')"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
               </div>
               <p
                 v-if="nodeDnsError"
                 class="text-error text-xs"
               >{{ $t(nodeDnsError) }}</p>
-              <p class="text-base-content/50 text-xs">{{ $t(nodeDnsProtocol === 'https' ? 'subscriptionNodeDnsHint' : 'subscriptionNodeDnsPlainHint') }}</p>
+              <p class="text-base-content/50 text-xs">{{ $t(nodeDnsProtocol === 'https' ? 'subscriptionNodeDnsHint' : nodeDnsProtocol === 'tls' ? 'subscriptionNodeDnsDotHint' : 'subscriptionNodeDnsPlainHint') }}</p>
             </div>
           </ExpandTransition>
         </div>
@@ -649,51 +660,89 @@ const autoUpdateInterval = computed({
 const bandwidthCheck = ref(props.subscription?.bandwidthCheck === true)
 const bandwidthHelpOpen = ref(false)
 const bandwidthSettings = ref({ intervalHours: 12, maxDownloadMB: 64 })
-// 订阅 DNS 解析有三种写法:DoH(https 地址 + 可选的引导 DNS)、UDP、TCP(明文 DNS,只填 IP 和端口)。
-// 保存时 UDP/TCP 拼成 udp://ip[:port] / tcp://ip[:port] 放进 nodeDns.url
+// 订阅 DNS 解析有四种写法:DoH(https 地址 + 可选的引导 DNS)、UDP、TCP(明文 DNS,只填 IP 和端口)、
+// DoT(IP 或域名 + 端口,默认 853;填域名时要给引导 DNS)。
+// 保存时 UDP/TCP/DoT 拼成 udp://host[:port] / tcp://host[:port] / tls://host[:port] 放进 nodeDns.url
 const NODE_DNS_PROTOCOLS = [
   { key: 'https', label: 'DoH' },
   { key: 'udp', label: 'UDP' },
   { key: 'tcp', label: 'TCP' },
+  { key: 'tls', label: 'DoT' },
 ] as const
 type NodeDnsProtocol = (typeof NODE_DNS_PROTOCOLS)[number]['key']
+type NodeDnsPlainProtocol = Exclude<NodeDnsProtocol, 'https'>
+const NODE_DNS_DEFAULT_PORTS: Record<NodeDnsPlainProtocol, number> = { udp: 53, tcp: 53, tls: 853 }
 const parseNodeDns = (url: string): { protocol: NodeDnsProtocol; server: string; port: number } => {
   try {
     const parsed = new URL(url)
-    if (parsed.protocol === 'udp:' || parsed.protocol === 'tcp:') {
+    if (parsed.protocol === 'udp:' || parsed.protocol === 'tcp:' || parsed.protocol === 'tls:') {
+      const protocol = parsed.protocol.slice(0, -1) as NodeDnsPlainProtocol
       return {
-        protocol: parsed.protocol.slice(0, -1) as NodeDnsProtocol,
+        protocol,
         server: parsed.hostname.replace(/^\[|\]$/g, ''),
-        port: Number(parsed.port) || 53,
+        port: Number(parsed.port) || NODE_DNS_DEFAULT_PORTS[protocol],
       }
     }
   } catch {
-    // 不是 udp/tcp 地址就按 DoH 处理
+    // 不是 udp/tcp/tls 地址就按 DoH 处理
   }
   return { protocol: 'https', server: '', port: 53 }
 }
 const initialNodeDns = parseNodeDns(props.subscription?.nodeDns?.url || '')
 const nodeDnsProtocol = ref<NodeDnsProtocol>(initialNodeDns.protocol)
 const nodeDnsPlain = reactive({
-  udp: { server: '', port: 53 },
-  tcp: { server: '', port: 53 },
+  udp: { server: '', port: NODE_DNS_DEFAULT_PORTS.udp },
+  tcp: { server: '', port: NODE_DNS_DEFAULT_PORTS.tcp },
+  tls: { server: '', port: NODE_DNS_DEFAULT_PORTS.tls },
 })
 if (nodeDnsProtocol.value !== 'https') {
   Object.assign(nodeDnsPlain[nodeDnsProtocol.value], { server: initialNodeDns.server, port: initialNodeDns.port })
 }
-const nodeDnsPlainCurrent = computed(() => nodeDnsPlain[nodeDnsProtocol.value === 'tcp' ? 'tcp' : 'udp'])
+const nodeDnsPlainCurrent = computed(() => nodeDnsPlain[nodeDnsProtocol.value === 'https' ? 'udp' : nodeDnsProtocol.value])
 const nodeDnsUrl = ref(nodeDnsProtocol.value === 'https' ? (props.subscription?.nodeDns?.url ?? '') : '')
-const nodeDnsBootstrap = ref(props.subscription?.nodeDns?.bootstrap ?? '')
+// 引导 DNS:DoH 和域名 DoT 各记各的,切协议不串
+const nodeDnsBootstraps = reactive({ https: '', tls: '' })
+nodeDnsBootstraps[initialNodeDns.protocol === 'tls' ? 'tls' : 'https'] = props.subscription?.nodeDns?.bootstrap ?? ''
+const nodeDnsBootstrap = computed({
+  get: () => nodeDnsBootstraps[nodeDnsProtocol.value === 'tls' ? 'tls' : 'https'],
+  set: (value: string) => {
+    nodeDnsBootstraps[nodeDnsProtocol.value === 'tls' ? 'tls' : 'https'] = value
+  },
+})
 const nodeDnsOpen = ref(Boolean(props.subscription?.nodeDns?.url))
 
 // 填写校验:DoH 地址必须是 https://(不带账号密码和 #);主机名是域名时,必须同时给出解析它用的 DNS(IP)。
 // UDP/TCP 只能填有效的 IPv4/IPv6 地址,端口 1-65535。有错就不能保存,并自动展开输入框把提示显示出来。
 const isIpAddress = (value: string) => ipaddr.IPv4.isValidFourPartDecimal(value) || ipaddr.IPv6.isValid(value)
+// DoT 的地址:IP,或者带点的有效域名(每段 ≤63、总长 ≤253、只含字母数字和连字符)
+const isDotHost = (value: string) => {
+  const host = value.trim()
+  if (!host || host.length > 253) return false
+  if (isIpAddress(host)) return true
+  if (!host.includes('.')) return false
+  return host.split('.').every((label) => label.length <= 63 && /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label))
+}
+// DoT 填的是域名(不是 IP)时,要有引导 DNS(IP)来解析它
+const nodeDnsDotNeedsBootstrap = computed(
+  () =>
+    nodeDnsProtocol.value === 'tls' &&
+    isDotHost(nodeDnsPlainCurrent.value.server) &&
+    !isIpAddress(nodeDnsPlainCurrent.value.server.trim()),
+)
 const nodeDnsError = computed(() => {
   if (nodeDnsProtocol.value !== 'https') {
     const { server, port } = nodeDnsPlainCurrent.value
-    if (!server.trim()) return ''
-    if (!isIpAddress(server.trim())) return 'subscriptionNodeDnsInvalidIp'
+    const host = server.trim()
+    if (!host) return ''
+    if (nodeDnsProtocol.value === 'tls') {
+      if (!isDotHost(host)) return 'dnsUpstreamInvalidDotHost'
+      const bootstrap = nodeDnsBootstrap.value.trim()
+      if (nodeDnsDotNeedsBootstrap.value && !isIpAddress(bootstrap)) {
+        return bootstrap ? 'subscriptionNodeDnsInvalidBootstrap' : 'subscriptionNodeDnsNeedBootstrap'
+      }
+    } else if (!isIpAddress(host)) {
+      return 'subscriptionNodeDnsInvalidIp'
+    }
     return Number.isInteger(port) && port >= 1 && port <= 65535 ? '' : 'dnsUpstreamInvalidPort'
   }
   const url = nodeDnsUrl.value.trim()
@@ -722,7 +771,11 @@ const effectiveNodeDns = computed<{ url: string; bootstrap?: string } | null>(()
     const { server, port } = nodeDnsPlainCurrent.value
     const host = server.trim()
     if (!host || nodeDnsError.value) return null
-    return { url: `${nodeDnsProtocol.value}://${host.includes(':') ? `[${host}]` : host}${port === 53 ? '' : `:${port}`}` }
+    const protocol = nodeDnsProtocol.value
+    return {
+      url: `${protocol}://${host.includes(':') ? `[${host}]` : host}${port === NODE_DNS_DEFAULT_PORTS[protocol] ? '' : `:${port}`}`,
+      ...(nodeDnsDotNeedsBootstrap.value ? { bootstrap: nodeDnsBootstrap.value.trim() } : {}),
+    }
   }
   const url = nodeDnsUrl.value.trim()
   if (!url || nodeDnsError.value) return null
@@ -892,11 +945,13 @@ const resetForm = () => {
   bandwidthHelpOpen.value = false
   const dns = parseNodeDns(props.subscription?.nodeDns?.url || '')
   nodeDnsProtocol.value = dns.protocol
-  nodeDnsPlain.udp = { server: '', port: 53 }
-  nodeDnsPlain.tcp = { server: '', port: 53 }
+  nodeDnsPlain.udp = { server: '', port: NODE_DNS_DEFAULT_PORTS.udp }
+  nodeDnsPlain.tcp = { server: '', port: NODE_DNS_DEFAULT_PORTS.tcp }
+  nodeDnsPlain.tls = { server: '', port: NODE_DNS_DEFAULT_PORTS.tls }
   if (dns.protocol !== 'https') Object.assign(nodeDnsPlain[dns.protocol], { server: dns.server, port: dns.port })
   nodeDnsUrl.value = dns.protocol === 'https' ? (props.subscription?.nodeDns?.url ?? '') : ''
-  nodeDnsBootstrap.value = props.subscription?.nodeDns?.bootstrap ?? ''
+  nodeDnsBootstraps.https = dns.protocol === 'https' ? (props.subscription?.nodeDns?.bootstrap ?? '') : ''
+  nodeDnsBootstraps.tls = dns.protocol === 'tls' ? (props.subscription?.nodeDns?.bootstrap ?? '') : ''
   content.value = props.subscription?.content ?? ''
   overrides.value = { ...(props.subscription?.renameOptions?.overrides || {}) }
   disabledTags.value = [...(props.subscription?.renameOptions?.disabled || [])]

@@ -284,6 +284,7 @@ const columns: ColumnDef<Connection>[] = [
           'button',
           {
             class: 'btn btn-xs btn-circle',
+            'aria-label': t('smartBlockConnection'),
             onClick: (e) => {
               const connection = row.original
 

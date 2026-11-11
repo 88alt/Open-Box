@@ -14,6 +14,7 @@ import {
   getNetworkTypeFromConnection,
   getProcessFromConnection,
 } from '@/helper'
+import { i18n } from '@/i18n'
 import { getIPLabelFromMap } from '@/helper/sourceip'
 import { fromNow, isMiddleScreen, prettyBytesHelper } from '@/helper/utils'
 import { connectionTabShow } from '@/store/connections'
@@ -157,6 +158,7 @@ export default defineComponent<{
             const degradeButton = (
               <button
                 class="btn btn-circle btn-xs"
+                aria-label={i18n.global.t('smartBlockConnection')}
                 onClick={(e) => {
                   e.stopPropagation()
                   blockConnectionByIdAPI(conn.id)

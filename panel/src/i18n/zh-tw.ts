@@ -533,8 +533,7 @@ const zhTW: LANG_MESSAGE = {
   nodeInfoEntryIpv6: '入口 IPv6',
   nodeInfoIpv4Unverified: '未檢測到 IPv4 出口',
   nodeInfoUpstream: '鏈式上游',
-  nodeInfoSupported: '支援',
-  nodeInfoUnsupported: '不支援',
+  nodeInfoRelay: '中轉',
   nodeInfoHasIpv6: '有 IPv6 位址',
   nodeInfoNoIpv6: '沒有 IPv6 位址',
   nodeInfoExitIp: '出口 IPv4',
@@ -1137,6 +1136,7 @@ const zhTW: LANG_MESSAGE = {
   subscriptionNodeDnsIpPlaceholder: 'DNS IP,如 223.5.5.5 或 2001:4860:4860::8888',
   subscriptionNodeDnsInvalidIp: 'DNS 位址只能填有效的 IPv4 或 IPv6 位址',
   subscriptionNodeDnsPlainHint: '僅解析這份訂閱的節點伺服器網域,一般網站和區域網路 DNS 不受影響;節點檢測使用相同解析器。',
+  subscriptionNodeDnsDotHint: 'DoT 預設使用 853 連接埠。填寫網域時需要引導 DNS（IP）。此設定用於解析這份訂閱的節點伺服器網域，節點檢測也使用相同解析器。',
   subscriptionNodeDnsHint:
     '機場要求節點網域用它自己的 DoH 解析時填(相當於 OpenClash 的 proxy-server-nameserver / nameserver-policy)。只用來解析這份訂閱的節點伺服器網域,一般網站和區域網路的 DNS 不受影響;測速也按它解析。DoH 位址是網域時,右邊要填解析它用的 DNS(IP)。',
   subscriptionNodeDnsInvalidUrl: 'DoH 位址要以 https:// 開頭',
@@ -1420,6 +1420,8 @@ const zhTW: LANG_MESSAGE = {
   dnsUpstreamSaveBlocked: '{side}沒有通過測試,沒有儲存:{message}',
   dnsUpstreamInvalid: '位址只填 IPv4 / IPv6。',
   dnsUpstreamInvalidPort: '連接埠填 1~65535。',
+  dnsUpstreamInvalidDotHost: '請填寫有效的 DoT 網域或 IP 位址',
+  smartBlockConnection: '攔截連線',
   dnsUpstreamSaved: '{side}已儲存（{detail}）。',
   dnsRewriteTitle: 'DNS 重寫',
   dnsRewriteDescription:

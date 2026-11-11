@@ -532,8 +532,7 @@ const zh: LANG_MESSAGE = {
   nodeInfoEntryIpv6: '入口 IPv6',
   nodeInfoIpv4Unverified: '未检测到 IPv4 出口',
   nodeInfoUpstream: '链式上游',
-  nodeInfoSupported: '支持',
-  nodeInfoUnsupported: '不支持',
+  nodeInfoRelay: '中转',
   nodeInfoHasIpv6: '有 IPv6 地址',
   nodeInfoNoIpv6: '没有 IPv6 地址',
   nodeInfoExitIp: '出口 IPv4',
@@ -1136,6 +1135,7 @@ const zh: LANG_MESSAGE = {
   subscriptionNodeDnsIpPlaceholder: 'DNS IP,如 223.5.5.5 或 2001:4860:4860::8888',
   subscriptionNodeDnsInvalidIp: 'DNS 地址只能填有效的 IPv4 或 IPv6 地址',
   subscriptionNodeDnsPlainHint: '仅解析这份订阅的节点服务器域名,普通网站和局域网 DNS 不受影响;节点检测使用相同解析器。',
+  subscriptionNodeDnsDotHint: 'DoT 默认使用 853 端口。填域名时需要引导 DNS（IP）。此设置用于解析这份订阅的节点服务器域名，节点检测也使用同一解析器。',
   subscriptionNodeDnsHint:
     '机场要求节点域名用它自己的 DoH 解析时填(相当于 OpenClash 的 proxy-server-nameserver / nameserver-policy)。只用来解析这份订阅的节点服务器域名,普通网站和局域网的 DNS 不受影响;测速也按它解析。DoH 地址是域名时,右边要填解析它用的 DNS(IP)。',
   subscriptionNodeDnsInvalidUrl: 'DoH 地址要以 https:// 开头',
@@ -1419,6 +1419,8 @@ const zh: LANG_MESSAGE = {
   dnsUpstreamSaveBlocked: '{side}没有通过测试,没有保存:{message}',
   dnsUpstreamInvalid: '地址只填 IPv4 / IPv6。',
   dnsUpstreamInvalidPort: '端口填 1~65535。',
+  dnsUpstreamInvalidDotHost: '请填写有效的 DoT 域名或 IP 地址',
+  smartBlockConnection: '拦截连接',
   dnsUpstreamSaved: '{side}已保存（{detail}）。',
   dnsRewriteTitle: 'DNS 重写',
   dnsRewriteDescription:

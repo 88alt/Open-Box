@@ -67,6 +67,11 @@
     </template>
     <template v-else>
       <template v-if="!riskOnly">
+        <NodeInfoText
+          row
+          :text="connectTypeText"
+          :label="$t('type')"
+        />
         <div
           v-if="infoError"
           class="col-span-2 break-all opacity-80"
@@ -78,7 +83,14 @@
             row
             :text="info.protocol.join(' · ')"
             :label="$t('nodeInfoProtocol')"
-          />
+          >
+            <template
+              v-if="udp"
+              #suffix
+            >
+              <span class="badge badge-xs badge-soft badge-info h-4 shrink-0">UDP</span>
+            </template>
+          </NodeInfoText>
           <NodeInfoText
             row
             :text="serverText"
@@ -108,11 +120,6 @@
             row
             :text="info.addresses.v6.join(' · ') || $t('nodeInfoNoIpv6')"
             :label="$t('nodeInfoEntryIpv6')"
-          />
-          <NodeInfoText
-            row
-            :text="udp === undefined ? $t('nodeInfoUnknown') : udp ? $t('nodeInfoSupported') : $t('nodeInfoUnsupported')"
-            label="UDP"
           />
         </template>
         <span
@@ -365,6 +372,12 @@ const entryV4Text = computed(() => {
 })
 
 const exitV4 = computed(() => (exit.value?.ip && !exit.value.ip.includes(':') ? exit.value.ip : ''))
+// 类型:出口 IPv4 就是入口 IPv4 → 直连,否则是中转;两边有一边还没查到就显示未知
+const connectTypeText = computed(() => {
+  const v4 = info.value?.addresses.v4
+  if (!v4?.length || !exitV4.value) return t('nodeInfoUnknown')
+  return t(v4.includes(exitV4.value) ? 'direct' : 'nodeInfoRelay')
+})
 const exitV6 = computed(() => exit.value?.ipv6 || (exit.value?.ip.includes(':') ? exit.value.ip : ''))
 
 // 标签列宽度:中文短、英文长,两种语言下值都对得齐

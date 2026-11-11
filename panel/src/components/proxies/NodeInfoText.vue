@@ -71,6 +71,7 @@
           />
         </span>
       </div>
+      <slot name="suffix" />
     </div>
   </div>
 </template>

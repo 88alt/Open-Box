@@ -559,8 +559,7 @@ const en = {
   nodeInfoEntryIpv6: 'Entry IPv6',
   nodeInfoIpv4Unverified: 'IPv4 exit not detected',
   nodeInfoUpstream: 'Upstream',
-  nodeInfoSupported: 'Yes',
-  nodeInfoUnsupported: 'No',
+  nodeInfoRelay: 'Relay',
   nodeInfoHasIpv6: 'Has IPv6 address',
   nodeInfoNoIpv6: 'No IPv6 address',
   nodeInfoExitIp: 'Exit IPv4',
@@ -1184,6 +1183,7 @@ const en = {
   subscriptionNodeDnsIpPlaceholder: 'DNS IP, e.g. 223.5.5.5 or 2001:4860:4860::8888',
   subscriptionNodeDnsInvalidIp: 'Enter a valid IPv4 or IPv6 DNS address',
   subscriptionNodeDnsPlainHint: 'Resolves only server names in this subscription. Website and LAN DNS are unchanged; node checks use the same resolver.',
+  subscriptionNodeDnsDotHint: 'DoT defaults to port 853. Enter a bootstrap DNS IP when using a hostname. The resolver is used for this subscription’s node hostnames and node checks.',
   subscriptionNodeDnsHint:
     "Fill this in when the provider requires its own DoH to resolve node domains (like OpenClash's proxy-server-nameserver / nameserver-policy). It only resolves this subscription's node server domains; regular sites and LAN DNS are unaffected, and speed tests use it too. When the DoH URL uses a domain, enter an IP on the right to resolve it.",
   subscriptionNodeDnsInvalidUrl: 'The DoH URL must start with https://',
@@ -1496,6 +1496,8 @@ const en = {
   dnsUpstreamSaveBlocked: '{side} did not pass the test, nothing saved: {message}',
   dnsUpstreamInvalid: 'IPv4 / IPv6 addresses only.',
   dnsUpstreamInvalidPort: 'Port must be 1–65535.',
+  dnsUpstreamInvalidDotHost: 'Enter a valid DoT hostname or IP address',
+  smartBlockConnection: 'Block connection',
   dnsUpstreamSaved: '{side} saved ({detail}).',
   dnsRewriteTitle: 'DNS rewrites',
   dnsRewriteDescription:
