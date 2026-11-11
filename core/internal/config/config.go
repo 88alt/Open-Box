@@ -15,7 +15,7 @@ func Register(r *protocol.Registry) {
 	r.Register("configDetailed", hConfigDetailed)
 }
 
-// configDetailed({nodes, profile, userGroups, ...}) → {config, dnsRuleOwners, directHosts, failover, flipFlags}
+// configDetailed({nodes, profile, userGroups, ...}) → {config, dnsRuleOwners, directHosts, failover, flipFlags, nativeBypass}
 func hConfigDetailed(_ *protocol.Context, args []json.RawMessage) (any, error) {
 	var in any
 	if ok, err := protocol.Arg(args, 0, &in); err != nil {

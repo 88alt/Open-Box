@@ -16,7 +16,7 @@
 | routing | normalizePolicy normalizeRouting routingFingerprint migrateStoredRouting classes forwardPlan bypassPlan | 已实现(对照基线的金标准测试) |
 | routing | entryPlan | 已实现(含 whitelist,按基线 entryModePlan 对齐) |
 | groups | normalizeGroups builtinTags emitGroups | 已实现(对照基线的金标准测试,含逐字节键序);组类型 urltest / selector / failover / loadbalance,负载均衡的行为见 HANDOFF 第五节授权记录和 loadbalance_test.go |
-| config | configDetailed | 已实现(对照基线 engine/config.mjs 的 buildConfigDetailed 的金标准测试 + 官方 sing-box check,见下) |
+| config | configDetailed | 已实现(返回 config / dnsRuleOwners / directHosts / failover,另多带 flipFlags、nativeBypass;对照基线 engine/config.mjs 的 buildConfigDetailed 的金标准测试 + 官方 sing-box check,见下) |
 | authz | checkActivationCode activationState authorizationState | 已实现(一律解锁) |
 
 ## 目录
@@ -63,7 +63,7 @@ tun 入站(排除表挖洞、MAC 过滤、dns_mode)、入口原生旁路与热�
 - 金标准 `testdata/config_golden.json`(500 条,`gen-config-golden.mjs` 生成):语料随机造节点(8 种协议含 wireguard)、节点组(含故障转移、内置直连拒绝)、站点集、前置自定义分流(含 ipCidr 送节点的挖洞)、终端分流(ip / mac / bypass / admit)、共享网络、订阅(含节点 DNS)、域名过滤、链式代理(含成环)、热切换、FakeIP,并覆盖 hijack / dnsmasq / off 三种 DNS 模式,有 / 无 auto_redirect。
   480 条正常输出逐条相同,20 条报错(出站重名 / 域名过滤名单没准备好)报错文案逐字相同。
 - 变异测试 40 个抓到 38 个:漏网的是空变异(预期)和「自定义规则与排除段有无交集」的判断(等价变异:落在排除表之外的洞不影响挖洞结果)。
-- **阶段 D**:`testdata/tools/sbcheck.py` 用官方 sing-box 1.13.14 对金标准里的配置跑 `sing-box check`,300 条全过。检查前要剥掉官方版不认的字段(1.14 才有的 `dns_mode` / `dns_address` / `*_mac_address` / `source_mac_address`,以及上游补丁字段 `expected_status`),并把语料里的假 uuid / 密钥 / 证书换成合法值 —— 这是语料和版本差异,不是装配错误。
+- **阶段 D**:`testdata/tools/sbcheck.py` 用官方 sing-box 对金标准里的配置跑 `sing-box check`(1.13.14 下 465 条全过;1.14.4 下 397 条过,见 HANDOFF 第四节 3)。官方版低于 1.14 时检查前要剥掉它不认的字段(1.14 才有的 `dns_mode` / `dns_address` / `*_mac_address` / `source_mac_address`,以及上游补丁字段 `expected_status`),并把语料里的假 uuid / 密钥 / 证书换成合法值 —— 这是语料和版本差异,不是装配错误。
 - **已知缺口**(基线里没有、只能从 Node 消费处推断,没有明文可对照):
   1. `clientBindings`:新版 Node 调 `normalizeClientRoutes(..., {ipv6Bindings})`(IPv6 开着且模式不是 bypass 时带上);核心已按绑定表把 IPv4 来源扩展出对应 IPv6 /128（见 `clientroutes.ExpandSourcesWithBindings`）。绑定形状 `{ "192.168.1.10": ["fd00::10"] }` 或值单字符串。
   2. `platform`:只有 `container` 有行为(2026-10 已对官方 v0.1.353 的 openbox-core 差分核对):`dns-in` 后面多一个监听 `0.0.0.0:53` 的 `dns-in-lan` 入站,`route.rules[0]` 是 `{"action":"hijack-dns","inbound":["dns-in-lan"]}`(在 guardTerminalRules 之后插入);`openwrt` / `systemd` 和不传一样。

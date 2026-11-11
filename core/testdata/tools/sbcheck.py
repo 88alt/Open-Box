@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 # 阶段 D 的辅助工具:拿官方 sing-box 对 testdata/config_golden.json 里的配置逐条跑 `sing-box check`。
 # 用法: python3 sbcheck.py <sing-box 可执行文件> [config_golden.json] [最多条数]
+#   官方 1.14.4: https://github.com/SagerNet/sing-box/releases/download/v1.14.4/sing-box-1.14.4-linux-amd64.tar.gz
 #   官方 1.13.14: https://github.com/SagerNet/sing-box/releases/download/v1.13.14/sing-box-1.13.14-linux-amd64.tar.gz
 # 检查前做的处理(都不是装配错误):
-#   1) 剥掉官方版不认的字段:sing-box 1.14 才有的 tun dns_mode / dns_address / include_mac_address / exclude_mac_address、
-#      规则里的 source_mac_address,以及上游补丁字段 expected_status;
+#   1) 剥掉官方版不认的字段:上游补丁字段 expected_status 一律剥;sing-box 1.14 才有的 tun dns_mode / dns_address /
+#      include_mac_address / exclude_mac_address、规则里的 source_mac_address 只在官方版本低于 1.14 时才剥
+#      (1.14 及以上官方认,原样交给 check,这些字段也就被官方校验到了);
 #   2) 语料里的假 uuid / 密钥 / 证书路径换成合法值(证书用 openssl 现生成),规则集文件用占位内容现编译。
 # 第二个参数是目录时,逐个读里面的 *.json(每个文件就是一份 config):用于检查自写测试向量的产出,
 #   生成:OPENBOX_DUMP_DIR=<目录> go test ./internal/config/ -count=1(见 config/build_head_vectors_test.go 的 dumpConfig)。
 # 只用于验证,不进发布。
 import json,subprocess,os,re,collections,shutil,sys,tempfile
 SB=sys.argv[1]
+_v=subprocess.run([SB,'version'],capture_output=True,text=True).stdout
+_m=re.search(r'version (\d+)\.(\d+)',_v)
+KNOWS_114=bool(_m) and (int(_m.group(1)),int(_m.group(2)))>=(1,14)
 GOLD=sys.argv[2] if len(sys.argv)>2 else os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','config_golden.json')
 LIMIT=int(sys.argv[3]) if len(sys.argv)>3 else 100000
 work=tempfile.mkdtemp(prefix='sbcheck-')
@@ -32,10 +37,11 @@ def mk(tag,fmt):
 errs=collections.Counter(); n=0; passed=0; examples={}
 for i,c in enumerate(ok[:LIMIT]):
     cfg=c['want']['config']
-    for k in ('dns_mode','dns_address','include_mac_address','exclude_mac_address'): cfg['inbounds'][0].pop(k,None)
+    if not KNOWS_114:
+        for k in ('dns_mode','dns_address','include_mac_address','exclude_mac_address'): cfg['inbounds'][0].pop(k,None)
     def strip(o):
         if isinstance(o,dict):
-            o.pop('source_mac_address',None)
+            if not KNOWS_114: o.pop('source_mac_address',None)
             for v in o.values(): strip(v)
         elif isinstance(o,list):
             for v in o: strip(v)

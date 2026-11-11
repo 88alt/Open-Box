@@ -67,7 +67,7 @@ func localEntry(tag, format, path string) map[string]any {
 	return map[string]any{"type": "local", "tag": tag, "format": format, "path": path}
 }
 
-// BuildDetailed 返回 {config, dnsRuleOwners, directHosts, failover, flipFlags}(flipFlags 是自研多带的,基线没有)。
+// BuildDetailed 返回 {config, dnsRuleOwners, directHosts, failover, flipFlags, nativeBypass}(后两个是自研多带的,基线没有)。
 func BuildDetailed(args any) (map[string]any, error) {
 	get := func(k string) any { return jsx.Get(args, k) }
 	nodes := asList(get("nodes"))
@@ -412,6 +412,7 @@ func BuildDetailed(args any) (map[string]any, error) {
 	// ---- 入口原生旁路 ----
 	var bypassEnabled bool
 	var bypassSets []string
+	var bypassReason string
 	var trimmed map[string]bool
 	if nb := get("nativeBypass"); jsx.Truthy(nb) && isObjectLike(nb) {
 		bypassEnabled = jsx.Truthy(jsx.Get(nb, "enabled"))
@@ -432,7 +433,17 @@ func BuildDetailed(args any) (map[string]any, error) {
 			"builtin":    map[string]any{"direct": b.Direct(), "block": b.Block(), "directEnabled": emitRes.Builtin.DirectEnabled, "blockEnabled": emitRes.Builtin.BlockEnabled},
 			"selections": selections, "clientRoutes": toAny(clientRoutes), "fakeIp": fakeIP, "dnsMode": dnsMode, "enabled": directBypass,
 		})
-		bypassEnabled, bypassSets = plan.Enabled, plan.Sets
+		bypassEnabled, bypassSets, bypassReason = plan.Enabled, plan.Sets, plan.Reason
+	}
+	// nativeBypass:这份配置实际用上的入口原生旁路(自研多带的键,基线没有),给后端的 terminal-test firstLayer 用。
+	// auto_redirect 开着时旁路走热切换集合,名单是每个 geoip- 候选;没开时是计划(或入参 nativeBypass)给出的集合,
+	// 开关与名单都有才算生效,与下面写进 tun 入站的条件一致。reason 只有计划给了才有,入参覆盖时为空串。
+	nativeBypass := map[string]any{"enabled": false, "sets": []any{}, "reason": bypassReason}
+	if autoRedirect {
+		cands := routing.FlipBypassCandidates(normRouting)
+		nativeBypass["enabled"], nativeBypass["sets"] = len(cands) > 0, strsToAny(cands)
+	} else if bypassEnabled && len(bypassSets) > 0 {
+		nativeBypass["enabled"], nativeBypass["sets"] = true, strsToAny(bypassSets)
 	}
 	if autoRedirect {
 		candidates := routing.FlipBypassCandidates(normRouting)
@@ -553,7 +564,7 @@ func BuildDetailed(args any) (map[string]any, error) {
 	for tag, on := range routing.FlipFlagStates(normRouting, classes) {
 		flipFlags[tag] = on
 	}
-	return map[string]any{"config": config, "dnsRuleOwners": owners, "directHosts": directHostsOut, "failover": failover, "flipFlags": flipFlags}, nil
+	return map[string]any{"config": config, "dnsRuleOwners": owners, "directHosts": directHostsOut, "failover": failover, "flipFlags": flipFlags, "nativeBypass": nativeBypass}, nil
 }
 
 func isObjectLike(v any) bool {

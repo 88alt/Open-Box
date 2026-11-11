@@ -49,8 +49,9 @@ func TestBuildDetailedGolden(t *testing.T) {
 			} else {
 				var want any
 				_ = json.Unmarshal(c.Want, &want)
-				// flipFlags 是自研多带的键,基线没有;金标准文件保持只读,所以比对前去掉(它的内容由 build_flip_vectors_test.go 自写向量覆盖)。
+				// flipFlags、nativeBypass 是自研多带的键,基线没有;金标准文件保持只读,所以比对前去掉(内容分别由 build_flip_vectors_test.go、build_nativebypass_vectors_test.go 自写向量覆盖)。
 				delete(got, "flipFlags")
+				delete(got, "nativeBypass")
 				if !reflect.DeepEqual(toAny(got), want) {
 					bad++
 					if bad <= 3 {
