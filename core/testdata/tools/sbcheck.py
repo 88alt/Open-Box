@@ -34,7 +34,7 @@ def mk(tag,fmt):
         subprocess.run([SB,'rule-set','compile','--output',p,src],capture_output=True)
     else: shutil.copy(src,p)
     cache[p]=1; return p
-errs=collections.Counter(); n=0; passed=0; examples={}
+errs=collections.Counter(); n=0; passed=0; examples={}; fails=[]
 for i,c in enumerate(ok[:LIMIT]):
     cfg=c['want']['config']
     if not KNOWS_114:
@@ -73,6 +73,21 @@ for i,c in enumerate(ok[:LIMIT]):
     else:
         msg=(r.stdout+r.stderr).strip().splitlines()[-1][:160]
         key=re.sub(r'\d+','N',re.sub(r'[\u4e00-\u9fff\w.-]+(?=[」\]])','X',msg))
-        errs[key]+=1; examples.setdefault(key,(c.get('file',i),msg))
+        errs[key]+=1; examples.setdefault(key,(c.get('file',i),msg)); fails.append(msg)
 print('checked',n,'passed',passed)
 for k,v in errs.most_common(30): print(v,examples[k][0],examples[k][1])
+# 金标准语料(config_golden.json)已知的三类「官方 1.14 比 1.13 严」的失败,见 HANDOFF 第四节 3。归并后只剩「未归类」才是新问题。
+# 只对金标准语料有意义;检查自写向量产出(第二个参数是目录)时,有失败就是真问题,不归类。
+if not os.path.isdir(GOLD) and fails:
+    known=collections.OrderedDict([
+        ('1 过滤名单未进 route.rule_set(语料输入的 allow / blocks 引用了 sets 里没有的名单)',lambda m:'rule-set not found: dns-filter-' in m),
+        ('2 订阅 id 重复导致节点 DoH 服务器 tag 撞了(语料里 sub-a / b / c 重复)',lambda m:'duplicate DNS server tag: dns-sub-' in m),
+        ('3 前置自定义分流 geosite 行的出口不是已知出口(DNS 侧仍写、route 侧整行跳过)',lambda m:'rule-set not found: geosite-' in m),
+    ])
+    left=list(fails)
+    print('已知语料问题归并:')
+    for name,f in known.items():
+        hit=[m for m in left if f(m)]; left=[m for m in left if not f(m)]
+        print(' ',len(hit),name)
+    print('  未归类',len(left),'(不为 0 就是新问题,先查)')
+    for m in left[:5]: print('   ',m)
