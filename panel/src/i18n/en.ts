@@ -538,17 +538,18 @@ const en = {
   qualityTraffic: 'Traffic (sampled)',
   qualityTime: '{hours} h {minutes} min',
   qualityNotMeasured: 'Not tested',
-  qualityDetailScope: 'Delay, variation and bandwidth are medians of current valid samples.',
+  qualityDetailScope:
+    'Latency is the median of up to ten successful probes. Timing variation and download bandwidth use the average of up to ten valid values.',
   qualityHealthHelp:
     'Availability comes first. Confirmed failed nodes count as zero in subscription quality. Unmeasured or outdated nodes lower coverage. Below 80% coverage, the main label shows “More data needed”.',
   qualityModelHelp:
-    'Node score: availability 35%, latency 20%, HTTP timing variation 15%, download 20%, upload 10%. A provisional score requires at least 20 checks over one hour, ten successful checks and a current download sample. Missing uploads are excluded and the remaining weights are normalized.',
+    'Healthy nodes use the same score as bandwidth-aware routing. Latency counts for 40%, download bandwidth for 30% and HTTP timing variation for 30%. Missing metrics are omitted and the remaining weights are normalized. Missing data or fewer than ten samples in a metric marks the score provisional.',
   qualityExampleHelp:
     'Example: one 95-point node and nine failed nodes score about 10 overall. One 95-point node and nine unmeasured nodes require more data instead of an excellent rating.',
   qualityMeasurementHelp:
     'Metrics use the current connection identity, network and global probe target. The last 24 hourly buckets are retained. HTTP timing variation is the mean difference between consecutive successful probe durations, not UDP jitter or IP packet loss. Active time and traffic are sampled, exclude panel probes, and never add points. Concurrent activity is counted once.',
   qualityBandwidthHelp:
-    'Bandwidth is the median of valid measured nodes, not their sum. Samples older than two shared periods do not enter scoring. Upload bandwidth remains unmeasured until an upload test exists; application upload traffic is not upload bandwidth.',
+    'A subscription shows the median of measured node averages. A node’s average expires when its newest bandwidth sample reaches two shared periods. Upload bandwidth is unmeasured and application upload traffic is reported separately.',
   qualityFailedHelp:
     'A historical download result does not prove current availability. A failed node contributes zero to the subscription assessment.',
   qualityMode_login: 'Login',
@@ -958,7 +959,7 @@ const en = {
   groupInterval: 'Test interval',
   groupTolerance: 'Latency tolerance',
   groupUrltestHint:
-    'Measures latency periodically and switches to the fastest; only when faster by the tolerance, to avoid flapping.',
+    'Latency selection switches only when the new node is faster by the tolerance. Bandwidth preference uses the combined score when a healthy candidate has valid bandwidth data.',
   groupMembersLabel: 'Members',
   groupFilterAllSubscriptions: 'All subscriptions',
   groupSubscriptionMissing: 'Deleted subscription',
@@ -1002,14 +1003,15 @@ const en = {
   groupType_loadbalance: 'Load balance',
   loadBalanceHint:
     'Distribute new connections across available nodes, preferring fewer active connections and rotating ties. Parallel connections can combine throughput; established connections keep their outbound.',
-  loadBalanceNodesOnly: 'Select up to 64 real proxy nodes. Remove groups or missing members.',
+  loadBalanceNodesOnly:
+    'Select real proxy nodes. Remove groups or missing members.',
   groupUnitSecond: 's',
   failoverSummary: 'Failover · {lanes} lanes · {count} nodes',
   failoverStaticHint:
     'Pick nodes on the left into the current lane; the first lane is primary, the rest are backups in order. A single-node lane is used directly; a multi-node lane is either Auto (picks by latency) or Manual (you choose on the Proxies page).',
   failoverTolerance: 'In-lane latency tolerance',
   failoverToleranceHint:
-    'Only used by the internal url-test of multi-node lanes: switch only when a node is faster by this many ms; unrelated to lane priority',
+    'Applies to latency selection inside automatic lanes. Skip it when bandwidth preference is enabled and a healthy candidate in the lane has valid bandwidth data. Lane priority is preserved.',
   failoverToleranceUnused:
     'Every lane has a single valid node, so there is nothing to pick between inside a lane; not used for now',
   failoverAdvanced: 'Advanced',
@@ -2325,23 +2327,23 @@ const en = {
   bandwidthOff_urltest:
     'Keep one node selected by latency, with the existing latency tolerance to avoid unnecessary switches.',
   bandwidthOn_urltest:
-    'Keep one stable selection using measured bandwidth with a bounded latency adjustment. At initial selection or required recovery, similarly scored nodes may be separated by other traffic using them. This group’s own load does not push its node out. Normal changes need at least a 25% score advantage and a 60-second minimum hold; failures follow the existing health confirmation rules.',
+    'If at least one healthy candidate has fresh download data, rank by latency 40%, download bandwidth 30% and timing variation 30%. Latency tolerance is skipped in this mode. Keep the current node on ties and hold a healthy selection for 60 seconds. If no healthy candidate has valid bandwidth data, use latency and tolerance.',
   bandwidthExample_urltest:
-    'A: 200 Mbps at 300 ms. B: 50 Mbps at 50 ms. With a 100 ms tolerance, latency selection favors B. With bandwidth preference, A has the higher combined score. Starting a large download through A does not itself switch this group to B.',
+    'A is selected at 150 ms and 10 Mbps. B offers 100 ms and 300 Mbps with the same timing variation. A 100 ms tolerance can keep A in latency mode. With bandwidth preference and fresh samples, B wins after the hold.',
   bandwidthOff_failover:
     'Keep primary/backup tab priority, failure confirmation and failback settings. Automatic tabs choose internally by latency; manual tabs keep the user’s selection.',
   bandwidthOn_failover:
-    'Only automatic selection inside each tab uses bandwidth and bounded latency. Tab priority, failure confirmation, failback switch and recovery hold do not change. A faster backup cannot override a healthy primary; manual tabs are never overridden.',
+    'Automatic tabs use the same 40/30/30 score and skip latency tolerance when a healthy candidate in that tab has valid bandwidth data. Otherwise they use latency tolerance. Tab priority, recovery confirmation, failback and manual selections are preserved.',
   bandwidthExample_failover:
     'A healthy primary offers 50 Mbps and a backup offers 500 Mbps: keep the primary. Inside an automatic primary tab, two healthy nodes have the same latency and offer 200 Mbps and 50 Mbps: prefer the 200 Mbps node within that tab.',
   bandwidthOff_loadbalance:
     'Each new connection goes to a healthy node with fewer active connections/pending dials. Among equally loaded nodes, prefer the low-latency range and rotate ties.',
   bandwidthOn_loadbalance:
-    'For each new connection, minimize (active connections + pending dials + 1) ÷ (bandwidth × bounded latency adjustment). Reservations are shared across groups. Faster nodes can carry more connections; occupied nodes yield to others. Existing connections keep their outbound.',
+    'Use the same 40/30/30 score to weight new connections. Prefer idle nodes first. Among equally busy nodes, favor higher quality. Groups share active connections and pending dials. When all healthy candidates lack bandwidth data, use the original distribution rule.',
   bandwidthExample_loadbalance:
-    'At equal latency A offers 200 Mbps and B offers 50 Mbps. Both idle: favor A. With three connections on A and none on B, next-connection costs are equal: 4/200 = 1/50; rotation may select B. If A is unavailable, only B is considered regardless of A’s past bandwidth.',
+    'A scores 93 and B scores 64. Both idle, the first connection goes to A and the next goes to B if A is still busy. If A fails, B receives new connections regardless of past bandwidth.',
   bandwidthSharedHelp:
-    'One shared test per effective node every {hours} hours, capped at {maxMB} MB per task. Reading scores does not download again. A failed test retains the last valid result. Missing/expired data falls back to neutral data or the original algorithm. Download-test failure is not health failure.',
+    'One shared test per effective node every {hours} hours, with up to {maxMB} MB per task. Average up to ten successful samples. If the newest is two intervals old, the average expires. An unmeasured candidate temporarily uses the median of the other measured candidates. Reading scores adds no probes.',
   bandwidthClientDisabled:
     'Android, iOS, Windows, macOS and Linux clients do not enable bandwidth preference or download testing. In node mode the router can still apply its own policy. Measurements estimate current conditions; combined throughput is not guaranteed.',
   nodeInfoExpandText: 'Expand {field}',
