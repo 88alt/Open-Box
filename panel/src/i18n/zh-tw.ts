@@ -158,6 +158,8 @@ const zhTW: LANG_MESSAGE = {
   sidebarDisplay: '左側欄顯示',
   sidebarDisplayOff: '關閉',
   connectionSort: '排序',
+  connectionSortAscending: '遞增',
+  connectionSortDescending: '遞減',
   proxies: '代理',
   rules: '規則',
   connections: '連接',

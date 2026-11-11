@@ -62,6 +62,12 @@ export default defineComponent({
     return () => {
       // 窄屏用「排序」,宽屏用「排序方式」;窄屏的紧凑样式与上游 v0.1.413 一致
       const sortLabel = t(isMiddleScreen.value ? 'connectionSort' : 'sortBy')
+      // 按钮点一下会切到的方向:当前升序 → 提示「降序」,反之亦然(与上游一致)
+      const sortDirectionLabel = t(
+        connectionSortDirection.value === SORT_DIRECTION.ASC
+          ? 'connectionSortDescending'
+          : 'connectionSortAscending',
+      )
       const sortForCards = (
         <div
           class={[
@@ -95,6 +101,8 @@ export default defineComponent({
             </select>
             <button
               class={['btn join-item btn-sm shrink-0', isMiddleScreen.value && 'btn-square']}
+              aria-label={sortDirectionLabel}
+              title={sortDirectionLabel}
               onClick={() => {
                 connectionSortDirection.value =
                   connectionSortDirection.value === SORT_DIRECTION.ASC

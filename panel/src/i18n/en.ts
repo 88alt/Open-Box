@@ -161,6 +161,8 @@ const en = {
   sidebarDisplay: 'Sidebar display',
   sidebarDisplayOff: 'Off',
   connectionSort: 'Sort',
+  connectionSortAscending: 'Ascending',
+  connectionSortDescending: 'Descending',
   proxies: 'Proxies',
   rules: 'Rules',
   connections: 'Connections',

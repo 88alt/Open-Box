@@ -158,6 +158,8 @@ const zh: LANG_MESSAGE = {
   sidebarDisplay: '左侧栏显示',
   sidebarDisplayOff: '关闭',
   connectionSort: '排序',
+  connectionSortAscending: '升序',
+  connectionSortDescending: '降序',
   proxies: '代理',
   rules: '规则',
   connections: '连接',
