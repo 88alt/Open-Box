@@ -365,6 +365,8 @@
 实现约定(M3,延迟历史):已保存节点的测速(请求体带 `jobs`,含 `progress` 的 NDJSON)测完后按每个 job 的 `record`(不传按默认记,`false` 只测不记)写进延迟历史,响应(NDJSON 是最后一行)带回**整份** `history`;全都不记时不带 `history`。通了记耗时(至少 1),超时 / 被拒 / 失败记 0,`invalid` / `not-found`(根本没测)不记;预览(带 `url` / `urls` / `content` / `loginId`)和链式代理测速不记。记历史失败不影响测速本身。节点组经临时实例测出的样本不带 `node`。
 
 
+另有 `GET /api/openbox/nodes/latency/queue`(前端没有调用,对齐上游 v0.1.423;上游界面在手动测速前用它提示「已排队」):回 `{ busy, running, waiting }`。向内核控制接口的 `GET /openbox/probes`(3 秒时限,带 secret)取 `running` / `interactive` / `background` / `limit`,`waiting` = `interactive` + `background`,`busy` = `waiting > 0` 或(`limit > 0` 且 `running >= limit`)。内核没在跑 / 读不到控制接口 / 超时 / 非 2xx / 回的不是 JSON 对象(老内核没有这个接口)一律回 `{ busy:false, running:0, waiting:0 }`,状态码仍是 200;只有 GET(HEAD 兼容),其它方法 405。
+
 > 实现约定(M1):请求体有 `url` / `urls` / `content` / `loginId` 之一 = 预览(拉取、解析、改名后按 `tags` 测,不落盘,测速地址取档案 `testUrl`;`loginId` 返回 501),否则按 `jobs` 测已保存节点(`url` 缺省取档案 `testUrl`)。`results` 与 `tags` / `jobs` 一一对应。`reason`:`not-found`(是组或已不在订阅里)、`invalid`(地址不合法或 sing-box 起不来,`error` 带原因)、`timeout`、`failed`。`timeoutMs` 默认 5000,上限 30000;一次最多 500 个,同时测 16 个。`progress:true`(仅 jobs)回 NDJSON:每测完一个 `{"done":[下标]}`,最后 `{"results":[...]}`,出错 `{"error":"..."}`。找不到 sing-box 返回 503。**未做**:延迟历史(`record` 忽略,响应没有 `history`)。
 
 ## `/api/openbox/penetration`

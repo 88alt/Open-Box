@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/controllerproxy"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
 	"github.com/timeflysoon/Open-Box/backend/internal/latencyhistory"
@@ -47,6 +48,11 @@ type Deps struct {
 	Profiles Profiles
 	Runner   *probe.Runner
 	History  HistoryRecorder
+
+	// Kernel 取内核控制接口(Clash API)的地址与 secret,给 nodes/latency/queue 问测速排队用;为 nil 时队列恒回不忙。
+	Kernel controllerproxy.Resolver
+	// KernelClient 问内核用的 HTTP 客户端;为 nil 用 http.DefaultClient(测试里换成假的)。
+	KernelClient *http.Client
 }
 
 type handlers struct{ Deps }
@@ -55,6 +61,7 @@ type handlers struct{ Deps }
 func Register(mux *http.ServeMux, d Deps) {
 	h := &handlers{d}
 	mux.HandleFunc("/api/openbox/nodes/latency", httpx.Methods(map[string]http.HandlerFunc{http.MethodPost: h.nodes}))
+	mux.HandleFunc("/api/openbox/nodes/latency/queue", httpx.Methods(map[string]http.HandlerFunc{http.MethodGet: h.queue}))
 	mux.HandleFunc("/api/openbox/chain-proxies/latency", httpx.Methods(map[string]http.HandlerFunc{http.MethodPost: h.chain}))
 }
 

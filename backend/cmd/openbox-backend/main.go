@@ -420,7 +420,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	nodeHistory.Observe = nqSvc.ObserveLatency
 	nodequalityapi.Register(srv.Mux(), nodequalityapi.Deps{Service: nqSvc})
 
-	latencyapi.Register(srv.Mux(), latencyapi.Deps{Gen: gen, Subs: subsSvc, Profiles: profileSvc, Runner: probeRunner, History: nodeHistory})
+	latencyapi.Register(srv.Mux(), latencyapi.Deps{Gen: gen, Subs: subsSvc, Profiles: profileSvc, Runner: probeRunner, History: nodeHistory,
+		Kernel: controllerproxy.FileResolver(filepath.Join(cfg.ConfigDir, "config.json"))})
 	// 节点信息:类型 / 协议层 / 服务器 / 链式上游 / 入口地址解析 / 入口国家 / 出口归属和风控值
 	entryDetector := &regiondetect.Detector{} // 只用它的按 IP 查国家,不占用其它两处的「判断中」状态
 	nodeinfoapi.Register(srv.Mux(), nodeinfoapi.Deps{Service: &nodeinfo.Service{
