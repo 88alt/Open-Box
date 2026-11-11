@@ -6,7 +6,33 @@
   >
     <div class="flex flex-col md:flex-row">
       <div class="md:w-128">
+        <div
+          class="tabs-box tabs tabs-xs mb-2 w-fit"
+          role="tablist"
+        >
+          <button
+            type="button"
+            role="tab"
+            class="tab"
+            :class="{ 'tab-active': !showJSON }"
+            :aria-selected="!showJSON"
+            @click="showJSON = false"
+          >
+            {{ $t('connectionFormatted') }}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            class="tab"
+            :class="{ 'tab-active': showJSON }"
+            :aria-selected="showJSON"
+            @click="showJSON = true"
+          >
+            {{ $t('connectionJSON') }}
+          </button>
+        </div>
         <VueJsonPretty
+          v-if="showJSON"
           :data="infoConn"
           class="overflow-y-auto"
         >
@@ -28,9 +54,41 @@
             </template>
           </template>
         </VueJsonPretty>
+        <dl
+          v-else
+          class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm"
+        >
+          <template
+            v-for="[key, value] in formattedRows"
+            :key="key"
+          >
+            <dt class="text-base-content/65">{{ $t(key) }}</dt>
+            <dd class="break-all">{{ value }}</dd>
+          </template>
+          <template v-if="infoConn">
+            <dt class="text-base-content/65">{{ $t('outbound') }}</dt>
+            <dd class="flex min-w-0 flex-wrap items-center gap-1">
+              <template v-if="routingPolicy">
+                <ProxyName :name="routingPolicy" />
+                <span v-if="nodeChain.length">·</span>
+              </template>
+              <template
+                v-for="(name, index) in nodeChain"
+                :key="index"
+              >
+                <ArrowRightIcon
+                  v-if="index > 0"
+                  class="size-4 shrink-0"
+                />
+                <ProxyName :name="name" />
+              </template>
+              <span v-if="!routingPolicy && !nodeChain.length">—</span>
+            </dd>
+          </template>
+        </dl>
         <div
           class="min-h-12 shrink-0 pt-2 text-sm"
-          v-if="destinationIP && !isPrivateIP"
+          v-if="!showJSON && destinationIP && !isPrivateIP"
         >
           <template v-if="details">
             <div class="flex flex-wrap items-center gap-1">
@@ -79,8 +137,21 @@
 import { getIPInfo, type IPInfo } from '@/api/geoip'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import { useConnections } from '@/composables/connections'
+import {
+  getHostFromConnection,
+  getNetworkTypeFromConnection,
+  getProcessFromConnection,
+} from '@/helper'
+import { getIPLabelFromMap } from '@/helper/sourceip'
+import { prettyBytesHelper } from '@/helper/utils'
 import { proxyMap } from '@/store/proxies'
-import { ArrowRightCircleIcon, MapPinIcon, ServerIcon } from '@heroicons/vue/24/outline'
+import {
+  ArrowRightCircleIcon,
+  ArrowRightIcon,
+  MapPinIcon,
+  ServerIcon,
+} from '@heroicons/vue/24/outline'
+import dayjs from 'dayjs'
 import * as ipaddr from 'ipaddr.js'
 import { last } from 'lodash'
 import { computed, ref, watch } from 'vue'
@@ -88,9 +159,49 @@ import VueJsonPretty from 'vue-json-pretty'
 import 'vue-json-pretty/lib/styles.css'
 import ProxyGroup from '../proxies/ProxyGroup.vue'
 import ProxyIcon from '../proxies/ProxyIcon.vue'
+import ProxyName from '../proxies/ProxyName.vue'
 
 const { infoConn, connectionDetailModalShow } = useConnections()
 const details = ref<IPInfo | null>(null)
+// 默认看格式化视图,每次打开弹窗都回到它;JSON 视图给要看原始字段的人
+const showJSON = ref(false)
+watch(connectionDetailModalShow, (show) => {
+  if (show) showJSON.value = false
+})
+
+const formattedRows = computed<[string, string][]>(() => {
+  const conn = infoConn.value
+  if (!conn) return []
+  const { metadata } = conn
+  const started = dayjs(conn.start)
+  const rows: [string, string][] = [
+    ['host', getHostFromConnection(conn)],
+    ['sourceIP', getIPLabelFromMap(metadata.sourceIP)],
+    ['sourcePort', metadata.sourcePort],
+    ['type', getNetworkTypeFromConnection(conn)],
+    ['rule', [conn.rule, conn.rulePayload].filter(Boolean).join(' · ')],
+    ['process', getProcessFromConnection(conn)],
+    [
+      'connectionStarted',
+      conn.start && started.isValid() ? started.format('YYYY-MM-DD HH:mm:ss') : '',
+    ],
+    ['download', prettyBytesHelper(conn.download)],
+    ['upload', prettyBytesHelper(conn.upload)],
+    ['downloadSpeed', `${prettyBytesHelper(conn.downloadSpeed ?? 0)}/s`],
+    ['uploadSpeed', `${prettyBytesHelper(conn.uploadSpeed ?? 0)}/s`],
+  ]
+  return rows.filter(([, value]) => value)
+})
+
+// 出口:链上最后一个是路由策略组,前面倒过来是实际经过的节点(与连接卡片一致)
+const routingPolicy = computed(() => {
+  const chains = infoConn.value?.chains ?? []
+  return chains.length > 1 ? last(chains) : undefined
+})
+const nodeChain = computed(() => {
+  const chains = infoConn.value?.chains ?? []
+  return [...(routingPolicy.value ? chains.slice(0, -1) : chains)].reverse()
+})
 
 const destinationIP = computed(() => infoConn.value?.metadata.destinationIP)
 const isPrivateIP = computed(() => {
