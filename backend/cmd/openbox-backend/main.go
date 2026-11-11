@@ -347,6 +347,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 使用时长与业务流量由 nqSvc.Run 每 10 秒读一次内核连接攒
 	nqSvc := &nodequality.Service{
 		Store: st,
+		// 所有订阅(含停用的,节点只有启用的订阅才有);停用的订阅在响应里 enabled=false、节点 inactive
 		Catalog: func(ctx context.Context) ([]nodequality.Subscription, error) {
 			recs, cat, err := subsSvc.Catalog(ctx)
 			if err != nil {
@@ -355,9 +356,6 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			byID := map[string]*nodequality.Subscription{}
 			out := make([]nodequality.Subscription, 0, len(recs))
 			for _, r := range recs {
-				if !r.Enabled {
-					continue
-				}
 				mode := "subscription"
 				switch {
 				case len(r.Account) > 0:
@@ -365,7 +363,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 				case r.URL == "" && len(r.URLs) == 0:
 					mode = "node"
 				}
-				out = append(out, nodequality.Subscription{ID: r.ID, Name: r.Name, Mode: mode})
+				out = append(out, nodequality.Subscription{ID: r.ID, Name: r.Name, Mode: mode, Enabled: r.Enabled, BandwidthCheck: r.BandwidthCheck})
 			}
 			for i := range out {
 				byID[out[i].ID] = &out[i]
@@ -380,8 +378,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Conns: func(ctx context.Context) (singbox.KernelSnapshot, error) {
 			return singbox.KernelConnections(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
 		},
-		// 带宽样本超过两个统一周期就不参与当前评分
-		BandwidthWindow: func(ctx context.Context) time.Duration {
+		// 测速周期:下载样本超过两个周期就不参与当前评分
+		Period: func(ctx context.Context) time.Duration {
 			p, err := profileSvc.Get(ctx)
 			if err != nil {
 				return 0
@@ -390,11 +388,36 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			if err != nil {
 				return 0
 			}
-			return 2 * time.Duration(set.IntervalHours) * time.Hour
+			return time.Duration(set.IntervalHours) * time.Hour
+		},
+		// 下载测速历史查询时直接从带宽服务读,不另存
+		Bandwidth: func(tag string) []nodequality.BWSample {
+			list := bandwidthSvc.Samples(tag)
+			out := make([]nodequality.BWSample, 0, len(list))
+			for _, x := range list {
+				out = append(out, nodequality.BWSample{At: x.At, Mbps: x.Mbps, Failed: x.Failed, LowerBound: x.LowerBound})
+			}
+			return out
+		},
+		// 节点图表里并入延迟历史(只要节点自己的样本,不含节点组选中某个节点的记录)
+		History: func(ctx context.Context, tag string) []nodequality.HistSample {
+			h, _, err := nodeHistory.Get(ctx)
+			if err != nil {
+				return nil
+			}
+			var out []nodequality.HistSample
+			for _, x := range h[tag] {
+				if x.Node != "" {
+					continue
+				}
+				if t, err := time.Parse(time.RFC3339Nano, x.Time); err == nil {
+					out = append(out, nodequality.HistSample{At: t.UnixMilli(), Delay: x.Delay})
+				}
+			}
+			return out
 		},
 	}
 	nodeHistory.Observe = nqSvc.ObserveLatency
-	bandwidthSvc.Observe = nqSvc.ObserveBandwidth
 	nodequalityapi.Register(srv.Mux(), nodequalityapi.Deps{Service: nqSvc})
 
 	latencyapi.Register(srv.Mux(), latencyapi.Deps{Gen: gen, Subs: subsSvc, Profiles: profileSvc, Runner: probeRunner, History: nodeHistory})

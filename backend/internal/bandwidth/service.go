@@ -69,9 +69,6 @@ type Service struct {
 	Now     func() time.Time
 	Measure Measurer
 
-	// Observe 每完成一次测速调一次(成功或失败),给「节点质量」攒带宽样本用;在内部锁里调,回调里不能再进本服务。nil 不调。
-	Observe func(name string, at time.Time, mbps float64, failed bool)
-
 	mu       sync.Mutex
 	running  bool
 	lastErr  string
@@ -241,4 +238,15 @@ func (s *Service) pendingByLocked() map[string]int {
 		out[q.SubID]++
 	}
 	return out
+}
+
+// Samples 返回一个节点的测速历史(从旧到新,含失败的),给「节点质量」按需读;没测过回 nil。
+func (s *Service) Samples(name string) []Sample {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, ok := s.measures[name]
+	if !ok || len(m.History) == 0 {
+		return nil
+	}
+	return append([]Sample(nil), m.History...)
 }

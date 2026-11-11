@@ -1,5 +1,5 @@
 // Package nodequality 是 GET /api/openbox/node-quality(概览页「节点质量」卡)。
-// 参数和响应形状取自前端 api/openbox.ts 的 fetchNodeQuality / OpenboxNodeQuality,没有参照上游。
+// 参数和响应形状对齐上游 v0.1.423 的服务端(见 internal/nodequality)。
 package nodequality
 
 import (
@@ -27,25 +27,31 @@ func Register(mux *http.ServeMux, d Deps) {
 
 type handlers struct{ s Service }
 
+// boolParam 与上游一致:true / 1 为真,其余(包括没传)为假。
 func boolParam(v string) bool { return v == "1" || v == "true" }
+
+// intParam 取整数参数:没传或不是整数当 0,交给服务按默认值和范围夹取(上游同样不报错)。
+func intParam(v string) int {
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0
+	}
+	return n
+}
 
 func (h *handlers) get(w http.ResponseWriter, r *http.Request) {
 	httpx.NoStore(w)
 	p := r.URL.Query()
 	q := nq.Query{
+		Page:             intParam(p.Get("page")),
+		PageSize:         intParam(p.Get("pageSize")),
 		AllSubscriptions: boolParam(p.Get("allSubscriptions")),
 		Search:           p.Get("search"),
 		Details:          p.Get("details"),
+		NodePage:         intParam(p.Get("nodePage")),
+		NodePageSize:     intParam(p.Get("nodePageSize")),
 		AllNodes:         boolParam(p.Get("allNodes")),
 		Node:             p.Get("node"),
-	}
-	if v := p.Get("nodePageSize"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 || n > 500 {
-			httpx.Error(w, http.StatusBadRequest, "nodePageSize 要是 1 到 500 的整数")
-			return
-		}
-		q.NodePageSize = n
 	}
 	res, err := h.s.Query(r.Context(), q)
 	if err != nil {

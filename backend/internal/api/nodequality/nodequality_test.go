@@ -28,11 +28,11 @@ func serve(t *testing.T, f *fake, method, url string) *httptest.ResponseRecorder
 
 func TestParams(t *testing.T) {
 	f := &fake{}
-	rec := serve(t, f, http.MethodGet, "/api/openbox/node-quality?allSubscriptions=true&search=hk&details=s1&nodePageSize=10&allNodes=true&node=a%20b")
+	rec := serve(t, f, http.MethodGet, "/api/openbox/node-quality?allSubscriptions=true&search=hk&details=s1&nodePageSize=10&allNodes=true&node=a%20b&page=2&pageSize=5&nodePage=3")
 	if rec.Code != 200 {
 		t.Fatalf("code=%d %s", rec.Code, rec.Body)
 	}
-	want := nq.Query{AllSubscriptions: true, Search: "hk", Details: "s1", NodePageSize: 10, AllNodes: true, Node: "a b"}
+	want := nq.Query{Page: 2, PageSize: 5, AllSubscriptions: true, Search: "hk", Details: "s1", NodePage: 3, NodePageSize: 10, AllNodes: true, Node: "a b"}
 	if f.got != want {
 		t.Fatalf("got %+v", f.got)
 	}
@@ -47,11 +47,14 @@ func TestParams(t *testing.T) {
 	}
 }
 
-func TestBadPageSizeAndMethod(t *testing.T) {
-	for _, u := range []string{"?nodePageSize=0", "?nodePageSize=x", "?nodePageSize=501"} {
-		if rec := serve(t, &fake{}, http.MethodGet, "/api/openbox/node-quality"+u); rec.Code != 400 {
-			t.Fatalf("%s → %d", u, rec.Code)
-		}
+// 上游对不认得的数字参数不报错,当没传,由服务按默认值和范围夹取。
+func TestBadNumbersAreIgnoredAndMethod(t *testing.T) {
+	f := &fake{}
+	if rec := serve(t, f, http.MethodGet, "/api/openbox/node-quality?nodePageSize=x&pageSize=&page=-3&allNodes=yes"); rec.Code != 200 {
+		t.Fatalf("code=%d", rec.Code)
+	}
+	if want := (nq.Query{Page: -3}); f.got != want {
+		t.Fatalf("got %+v", f.got)
 	}
 	if rec := serve(t, &fake{}, http.MethodPost, "/api/openbox/node-quality"); rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("POST → %d", rec.Code)
