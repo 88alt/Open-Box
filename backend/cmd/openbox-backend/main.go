@@ -38,6 +38,7 @@ import (
 	penetrationapi "github.com/timeflysoon/Open-Box/backend/internal/api/penetration"
 	policiesapi "github.com/timeflysoon/Open-Box/backend/internal/api/policies"
 	profileapi "github.com/timeflysoon/Open-Box/backend/internal/api/profile"
+	rollbackapi "github.com/timeflysoon/Open-Box/backend/internal/api/rollback"
 	routetestapi "github.com/timeflysoon/Open-Box/backend/internal/api/routetest"
 	rulesetsapi "github.com/timeflysoon/Open-Box/backend/internal/api/rulesets"
 	serversapi "github.com/timeflysoon/Open-Box/backend/internal/api/servers"
@@ -778,6 +779,18 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Final: factoryreset.Step{Name: "访问密码和登录会话", Run: func(context.Context) error { return authMgr.Reset() }},
 		Log:   log,
 	}})
+
+	// 紧急回滚到直连:撤销 DNS 接管 → 停内核 → 关开机自启,和部署互斥(前端没有调用,命令行 / 外部脚本用)
+	rollbackapi.Register(srv.Mux(), rollbackapi.Deps{
+		Services: svcCtl, DNS: dnsSync, Kind: initKind, CoreService: cfg.CoreService,
+		Exclusive: func(fn func() error) error {
+			err := deployer.Exclusive(fn)
+			if errors.Is(err, singbox.ErrDeployBusy) {
+				return rollbackapi.ErrBusy
+			}
+			return err
+		},
+	})
 
 	// 激活和教程视频:没有对应概念,只回固定内容(DESIGN D9 和第 8 节),不保存任何东西
 	activationapi.Register(srv.Mux(), activationapi.Deps{

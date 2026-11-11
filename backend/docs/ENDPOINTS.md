@@ -402,6 +402,16 @@
 >
 > 实现约定(M1):`region` 取 `cn` / `intl`(缺省 `cn`,其它 400)。响应同时带 `defaults` 和 `dnsRewriteDefaults`(两个前端函数共用同一路径)。
 
+## `/api/openbox/rollback`
+
+前端没有调用,对齐上游 v0.1.423 的路由(命令行 / 外部脚本用)。
+
+| 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
+|---|---|---|---|---|
+| POST | `/api/openbox/rollback` | —(前端不调用) | `{ ok, actions: string[], failures: { step, message }[] }` | — |
+
+实现约定(M5):紧急回滚到直连。和部署互斥,部署在进行时回 `409 { ok:false, message }`(上游是排队等锁,这里不等)。顺序:`restore-dns`(撤销 DNS 接管;没有 DNS 接管的平台没有这一步)→ `stop-core` → `disable-autostart`(关内核开机自启)。`restore-dns` 失败就不停内核、也不关自启(沿用「撤销不成功就不动内核」,`dnsmasq` 不能指着停了的内核),`ok:false`。`stop-core` 失败仍会做 `disable-autostart`。命令本身失败(退出码非 0 / 服务操作出错)记进 `failures`,状态码仍是 200;`failures[].message` 取 stderr(空则 `code <退出码>`)。没有服务管理器回 `503 { ok:false, message }`。与上游的差别:没有 `remove-firewall` 步骤(后端不管理代理相关防火墙规则);撤销 DNS 在停内核之前(上游先停内核)。
+
 ## `/api/openbox/route-test`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
