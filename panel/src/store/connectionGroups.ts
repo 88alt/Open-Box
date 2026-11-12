@@ -6,18 +6,17 @@ import type { Connection } from '@/types'
 import { last } from 'lodash'
 import { computed, reactive, shallowRef, watch } from 'vue'
 import {
+  activeSortDesc,
+  activeSortType,
   connectionFilter,
   connectionGroupMode,
-  connectionSortType,
   hideDnsConnections,
-  isDesc,
   quickFilterEnabled,
   quickFilterRegex,
   renderConnections,
   sortFunctionMap,
   sourceIPFilter,
 } from './connections'
-import { useConnectionCard } from './settings'
 
 export interface ConnectionGroup {
   key: string
@@ -116,9 +115,9 @@ const buildGroups = (conns: Connection[], mode: CONNECTION_SUBGROUP_MODE): Conne
   }
 
   // 排序沿用连接页当前的排序项:流量 / 速度按组内合计,按目标 / 按来源 IP 排时按组名,其它按组里第一条连接
-  const sortType = useConnectionCard.value ? connectionSortType.value : SORT_TYPE.HOST
+  const sortType = activeSortType.value
   const metric = metricKeys[sortType]
-  const direction = useConnectionCard.value && isDesc.value ? -1 : 1
+  const direction = activeSortDesc.value ? -1 : 1
   const byLabel =
     (sortType === SORT_TYPE.HOST && mode === CONNECTION_GROUP_MODE.TARGET) ||
     (sortType === SORT_TYPE.SOURCE_IP && isDevice)

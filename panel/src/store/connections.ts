@@ -1,5 +1,5 @@
 import { disconnectByIdAPI, fetchConnectionsAPI } from '@/api'
-import { CONNECTION_GROUP_MODE, SORT_DIRECTION, SORT_TYPE } from '@/constant'
+import { CONNECTION_GROUP_MODE, SORT_DIRECTION, SORT_TYPE, SORT_TYPE_COLUMN } from '@/constant'
 import { getChainsStringFromConnection, getInboundUserFromConnection } from '@/helper'
 import { showNotification } from '@/helper/notification'
 import type { Connection, ConnectionRawMessage } from '@/types'
@@ -7,7 +7,12 @@ import { useStorage, watchOnce } from '@vueuse/core'
 import dayjs from 'dayjs'
 import { computed, ref, watch } from 'vue'
 import { initAggregatedDataMap, saveConnectionHistory } from './connHistory'
-import { autoDisconnectIdleUDP, autoDisconnectIdleUDPTime, useConnectionCard } from './settings'
+import {
+  autoDisconnectIdleUDP,
+  autoDisconnectIdleUDPTime,
+  connectionTableColumns,
+  useConnectionCard,
+} from './settings'
 
 // 分组方式只在本次打开页面期间有效(换方式会收起已展开的组)
 export const connectionGroupMode = ref<CONNECTION_GROUP_MODE>(CONNECTION_GROUP_MODE.DEVICE)
@@ -132,6 +137,18 @@ export const isDesc = computed(() => {
   return connectionSortDirection.value === SORT_DIRECTION.DESC
 })
 
+// 实际生效的排序项:卡片视图用排序菜单选的;表格视图用表头点的,但那一列被隐藏了就退回按目标升序
+// (不然列表在按一个看不见的列排,表头上也没有箭头可以点回来)
+export const activeSortType = computed(() =>
+  useConnectionCard.value ||
+  connectionTableColumns.value.includes(SORT_TYPE_COLUMN[connectionSortType.value])
+    ? connectionSortType.value
+    : SORT_TYPE.HOST,
+)
+export const activeSortDesc = computed(
+  () => activeSortType.value === connectionSortType.value && isDesc.value,
+)
+
 export const sortFunctionMap: Record<SORT_TYPE, (a: Connection, b: Connection) => number> = {
   [SORT_TYPE.HOST]: (a: Connection, b: Connection) => {
     return (a.metadata.host || a.metadata.destinationIP).localeCompare(
@@ -242,12 +259,10 @@ export const renderConnections = computed(() => {
       return true
     })
     .sort((a, b) => {
-      if (useConnectionCard.value && isDesc.value) {
+      if (activeSortDesc.value) {
         ;[a, b] = [b, a]
       }
-      const sortResult = useConnectionCard.value
-        ? sortFunctionMap[connectionSortType.value](a, b)
-        : sortFunctionMap[SORT_TYPE.HOST](a, b)
+      const sortResult = sortFunctionMap[activeSortType.value](a, b)
 
       if (sortResult === 0) {
         return a.id.localeCompare(b.id)
