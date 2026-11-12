@@ -56,6 +56,10 @@ const props = withDefaults(
     data: any[]
     size?: number
     overscan?: number
+    // 条目有增删 / 重排时,用稳定的键让已经量好的行高跟着条目走(默认用下标)
+    getItemKey?: (index: number) => string | number
+    // 第 index 条和下一条之间的间距(CSS 长度),默认用卡片间距
+    itemSpacing?: (index: number) => string
   }>(),
   {
     data: () => [],
@@ -69,6 +73,7 @@ const virutalOptions = computed(() => {
     getScrollElement: () => parentRef.value,
     estimateSize: () => props.size,
     overscan: props.overscan,
+    ...(props.getItemKey ? { getItemKey: props.getItemKey } : {}),
   }
 })
 
@@ -77,7 +82,9 @@ const virtualRows = computed(() => rowVirtualizer.value.getVirtualItems())
 const totalSize = computed(() => rowVirtualizer.value.getTotalSize())
 
 const marginBottom = (index: number) => {
-  return index === props.data.length - 1 ? `${paddingBottom.value}px` : 'var(--app-card-space, 12px)'
+  if (index === props.data.length - 1) return `${paddingBottom.value}px`
+
+  return props.itemSpacing ? props.itemSpacing(index) : 'var(--app-card-space, 12px)'
 }
 const measureElement = (el: Element | null) => {
   if (!el) {

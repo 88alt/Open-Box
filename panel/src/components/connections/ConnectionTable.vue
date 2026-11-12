@@ -172,7 +172,6 @@ import { blockConnectionByIdAPI, disconnectByIdAPI } from '@/api'
 import { useConnections } from '@/composables/connections'
 import {
   CONNECTION_COLUMN_LABEL_MAP,
-  CONNECTION_TAB_TYPE,
   CONNECTIONS_TABLE_ACCESSOR_KEY,
   PROXY_CHAIN_DIRECTION,
   TABLE_SIZE,
@@ -190,7 +189,7 @@ import { copyText } from '@/helper/clipboard'
 import { showNotification } from '@/helper/notification'
 import { getIPLabelFromMap } from '@/helper/sourceip'
 import { fromNow, prettyBytesHelper } from '@/helper/utils'
-import { connectionTabShow, renderConnections } from '@/store/connections'
+import { renderConnections } from '@/store/connections'
 import {
   connectionTableColumns,
   proxyChainDirection,
@@ -481,10 +480,8 @@ const tanstackTable = useVueTable({
         ),
         ...Object.fromEntries(
           [
-            // 「关闭」列固定在最左,已关闭连接页不显示
-            ...(connectionTabShow.value === CONNECTION_TAB_TYPE.CLOSED
-              ? []
-              : [CONNECTIONS_TABLE_ACCESSOR_KEY.Close]),
+            // 「关闭」列固定在最左
+            CONNECTIONS_TABLE_ACCESSOR_KEY.Close,
             ...connectionTableColumns.value,
           ].map((key) => [key, true]),
         ),
@@ -661,7 +658,11 @@ const handlePinColumn = (column: Column<Connection, unknown>) => {
 // 复制功能:统一走 helper/clipboard(http 下 navigator.clipboard 不可用时走兜底)
 const copyToClipboard = async (text: string) => {
   const ok = await copyText(text)
-  showNotification(ok ? { content: 'copySuccess', type: 'alert-success', timeout: 2000 } : { content: 'copyFailed', type: 'alert-error' })
+  showNotification(
+    ok
+      ? { content: 'copySuccess', type: 'alert-success', timeout: 2000 }
+      : { content: 'copyFailed', type: 'alert-error' },
+  )
 }
 
 const handleCellRightClick = (

@@ -1,18 +1,16 @@
 import { disconnectByIdAPI, fetchConnectionsAPI } from '@/api'
-import { CONNECTION_TAB_TYPE, SORT_DIRECTION, SORT_TYPE } from '@/constant'
+import { CONNECTION_GROUP_MODE, SORT_DIRECTION, SORT_TYPE } from '@/constant'
 import { getChainsStringFromConnection, getInboundUserFromConnection } from '@/helper'
+import { showNotification } from '@/helper/notification'
 import type { Connection, ConnectionRawMessage } from '@/types'
 import { useStorage, watchOnce } from '@vueuse/core'
 import dayjs from 'dayjs'
-import { showNotification } from '@/helper/notification'
 import { computed, ref, watch } from 'vue'
 import { initAggregatedDataMap, saveConnectionHistory } from './connHistory'
 import { autoDisconnectIdleUDP, autoDisconnectIdleUDPTime, useConnectionCard } from './settings'
 
-export const connectionTabShow = useStorage<CONNECTION_TAB_TYPE>(
-  'cache/connection-tab-show',
-  CONNECTION_TAB_TYPE.ACTIVE,
-)
+// 分组方式只在本次打开页面期间有效(换方式会收起已展开的组)
+export const connectionGroupMode = ref<CONNECTION_GROUP_MODE>(CONNECTION_GROUP_MODE.DEVICE)
 export const connectionSortType = useStorage<SORT_TYPE>(
   'config/connection-sort-type',
   SORT_TYPE.HOST,
@@ -26,9 +24,15 @@ export const quickFilterRegex = useStorage<string>('config/quick-filter-regex', 
 export const quickFilterEnabled = useStorage<boolean>('config/quick-filter-enabled', false)
 // 终端的 DNS 查询被劫持进内核后交给 dnsmasq / dns-out 的那些 127.0.0.1:53 行,默认不显示
 export const hideDnsConnections = useStorage<boolean>('config/hide-dns-connections', true)
-const isDnsHijackConnection = (conn: { metadata: { destinationPort: string }; chains: string[]; rule: string }) =>
+const isDnsHijackConnection = (conn: {
+  metadata: { destinationPort: string }
+  chains: string[]
+  rule: string
+}) =>
   conn.metadata.destinationPort === '53' &&
-  (conn.chains.includes('dnsmasq') || conn.chains.includes('dns-out') || (conn.rule || '').includes('route(dnsmasq'))
+  (conn.chains.includes('dnsmasq') ||
+    conn.chains.includes('dns-out') ||
+    (conn.rule || '').includes('route(dnsmasq'))
 export const connectionFilter = ref('')
 export const sourceIPFilter = ref<string[] | null>(null)
 
@@ -124,11 +128,11 @@ export const initConnections = () => {
   }
 }
 
-const isDesc = computed(() => {
+export const isDesc = computed(() => {
   return connectionSortDirection.value === SORT_DIRECTION.DESC
 })
 
-const sortFunctionMap: Record<SORT_TYPE, (a: Connection, b: Connection) => number> = {
+export const sortFunctionMap: Record<SORT_TYPE, (a: Connection, b: Connection) => number> = {
   [SORT_TYPE.HOST]: (a: Connection, b: Connection) => {
     return (a.metadata.host || a.metadata.destinationIP).localeCompare(
       b.metadata.host || b.metadata.destinationIP,
@@ -168,11 +172,8 @@ const sortFunctionMap: Record<SORT_TYPE, (a: Connection, b: Connection) => numbe
   },
 }
 
-export const connections = computed(() => {
-  return connectionTabShow.value === CONNECTION_TAB_TYPE.ACTIVE
-    ? activeConnections.value
-    : closedConnections.value
-})
+// 上游 v0.1.423 起连接页只看活跃连接(已关闭的列表不再单独展示,closedConnections 仍留着给负载均衡用量统计)
+export const connections = computed(() => activeConnections.value)
 
 let lastQuickFilterError = ''
 

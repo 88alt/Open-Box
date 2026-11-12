@@ -105,10 +105,14 @@ export enum SORT_DIRECTION {
   DESC = 'desc',
 }
 
-export enum CONNECTION_TAB_TYPE {
-  ACTIVE = 'activeConnections',
-  CLOSED = 'closedConnections',
+// 连接页的分组方式:值同时是页签文案的 i18n 键(和上游 v0.1.423 一致)
+export enum CONNECTION_GROUP_MODE {
+  DEVICE = 'connectionsByDevice',
+  TARGET = 'connectionsByTarget',
 }
+
+// 展开一个分组之后,组内还能再分:不分 / 按分流 / 按另一个维度(终端分组里是目标,目标分组里是终端)
+export type CONNECTION_SUBGROUP_MODE = 'none' | 'routing' | CONNECTION_GROUP_MODE
 
 export enum LOG_LEVEL {
   Trace = 'trace',

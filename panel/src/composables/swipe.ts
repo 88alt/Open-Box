@@ -1,6 +1,6 @@
-import { CONNECTION_TAB_TYPE, PROXY_TAB_TYPE, ROUTE_NAME } from '@/constant'
+import { CONNECTION_GROUP_MODE, PROXY_TAB_TYPE, ROUTE_NAME } from '@/constant'
 import { renderRoutes } from '@/helper'
-import { connectionTabShow } from '@/store/connections'
+import { connectionGroupMode } from '@/store/connections'
 import { proxiesTabShow, proxyProviederList } from '@/store/proxies'
 import { swipeInPages, swipeInTabs } from '@/store/settings'
 import { useSwipe } from '@vueuse/core'
@@ -31,12 +31,12 @@ export const useSwipeRouter = () => {
               ]
             })
           } else if (r === ROUTE_NAME.connections) {
-            return Object.values(CONNECTION_TAB_TYPE).map((tab) => {
+            return Object.values(CONNECTION_GROUP_MODE).map((tab) => {
               return [
-                () => route.name === ROUTE_NAME.connections && connectionTabShow.value === tab,
+                () => route.name === ROUTE_NAME.connections && connectionGroupMode.value === tab,
                 () => {
                   router.push({ name: ROUTE_NAME.connections })
-                  connectionTabShow.value = tab
+                  connectionGroupMode.value = tab
                 },
               ]
             })
