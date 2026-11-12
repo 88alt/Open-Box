@@ -273,7 +273,9 @@
                   :hour="selectedHour"
                   :kind="KIND_OF[tab]"
                   :dims="DRILL_DIMS[tab]"
+                  :renamable="tab === 'clients' && !e.row.self"
                   @toggle="toggleRow(e.row.key)"
+                  @rename="renameTarget = { ip: $event.key, hostname: $event.name }"
                 />
                 <tr
                   v-else
@@ -366,6 +368,7 @@
         {{ $t('trafficPickDay') }}
       </p>
     </div>
+    <ConnectionDeviceRenameDialog v-model="renameTarget" />
   </div>
 </template>
 
@@ -380,6 +383,8 @@ import {
 } from '@/api/openbox'
 import TextInput from '@/components/common/TextInput.vue'
 import TrafficDetailRow from '@/components/overview/TrafficDetailRow.vue'
+import ConnectionDeviceRenameDialog from '@/components/connections/ConnectionDeviceRenameDialog.vue'
+import type { DeviceRenameTarget } from '@/helper/sourceip'
 import HourlyTrafficChart from '@/components/overview/HourlyTrafficChart.vue'
 import { prettyBytesHelper } from '@/helper/utils'
 import {
@@ -437,6 +442,7 @@ const hourLabel = (h: number) => `${pad2(h)}:00–${pad2(h)}:59`
 // 今天的曲线只画到这个小时(明细一刷新就跟着刷新,不用另起定时器)
 const currentHour = computed(() => (detail.value ? new Date().getHours() : 23))
 const tab = ref<Tab>('clients')
+const renameTarget = ref<DeviceRenameTarget | null>(null)
 const filter = ref('')
 // 当前点开看构成的那一行(同一时间只开一行)
 const expandedKey = ref<string | null>(null)

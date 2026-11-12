@@ -18,6 +18,11 @@
           v-if="note"
           class="text-base-content/60 shrink-0"
         >{{ note }}</span>
+        <ConnectionDeviceRenameButton
+          v-if="renamable"
+          class="ml-1"
+          @rename="$emit('rename', row)"
+        />
       </span>
     </td>
     <td class="text-right tabular-nums">{{ fmt(row.down) }}</td>
@@ -58,6 +63,8 @@ import { ChevronDownIcon } from '@heroicons/vue/24/outline'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { trafficKeyLabel, trafficRowNote } from '@/helper/trafficName'
+import ConnectionDeviceRenameButton from '@/components/connections/ConnectionDeviceRenameButton.vue'
+import { getDeviceName } from '@/helper/sourceip'
 import TrafficDrillPanel from './TrafficDrillPanel.vue'
 
 const props = defineProps<{
@@ -69,10 +76,16 @@ const props = defineProps<{
   hour?: number | null
   kind: OpenboxTrafficDim
   dims: OpenboxTrafficDim[]
+  // 终端设备页签:行尾出现「重命名」,名字按 MAC > IP 标签 > 主机名显示
+  renamable?: boolean
 }>()
-defineEmits<{ toggle: [] }>()
+defineEmits<{ toggle: []; rename: [row: OpenboxTrafficRow] }>()
 
 const { t } = useI18n()
-const note = computed(() => trafficRowNote(props.row, t))
+const note = computed(() =>
+  props.renamable && !props.row.self
+    ? getDeviceName(props.row.key, props.row.name || '')
+    : trafficRowNote(props.row, t),
+)
 const fmt = (n?: number) => prettyBytesHelper(Math.max(0, Math.round(n || 0)), { maximumFractionDigits: 1 })
 </script>
