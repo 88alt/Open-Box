@@ -45,6 +45,7 @@
                   v-if="item.group.deviceIP"
                   @rename="emit('renameDevice', item.group)"
                 />
+                <ConnectionTargetRoutingButton :target="item.group.target" />
               </div>
               <span class="text-base-content/65 block max-w-full truncate text-xs">
                 <template v-if="item.group.sourceIP">{{ item.group.sourceIP }} · </template>
@@ -120,6 +121,7 @@ import VirtualScroller from '../common/VirtualScroller.vue'
 import ProxyName from '../proxies/ProxyName.vue'
 import ConnectionCard from './ConnectionCard'
 import ConnectionDeviceRenameButton from './ConnectionDeviceRenameButton.vue'
+import ConnectionTargetRoutingButton from './ConnectionTargetRoutingButton.vue'
 import ConnectionSubgroupTabs from './ConnectionSubgroupTabs.vue'
 
 const emit = defineEmits<{ renameDevice: [group: ConnectionGroup] }>()

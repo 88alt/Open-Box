@@ -173,6 +173,7 @@
                               v-if="item.group.deviceIP"
                               @rename="emit('renameDevice', item.group)"
                             />
+                            <ConnectionTargetRoutingButton :target="item.group.target" />
                           </div>
                           <span class="text-base-content/65 block truncate text-xs">
                             <template v-if="item.group.sourceIP"
@@ -326,6 +327,7 @@ import { computed, h, ref, type VNode } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProxyName from '../proxies/ProxyName.vue'
 import ConnectionDeviceRenameButton from './ConnectionDeviceRenameButton.vue'
+import ConnectionTargetRoutingButton from './ConnectionTargetRoutingButton.vue'
 import ConnectionSubgroupTabs from './ConnectionSubgroupTabs.vue'
 
 // 表格里的行:组头 / 子组头 / 连接(和卡片视图同一份分组数据),外加展开的组下面单独一行的子分组页签

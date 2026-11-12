@@ -11,6 +11,7 @@
     </template>
     <ConnectionDetails />
     <ConnectionDeviceRenameDialog v-model="renameTarget" />
+    <ConnectionTargetRoutingDialog v-model="routingTarget" />
   </div>
 </template>
 
@@ -19,13 +20,19 @@ import ConnectionCardList from '@/components/connections/ConnectionCardList.vue'
 import ConnectionDetails from '@/components/connections/ConnectionDetails.vue'
 import ConnectionDeviceRenameDialog from '@/components/connections/ConnectionDeviceRenameDialog.vue'
 import ConnectionTable from '@/components/connections/ConnectionTable.vue'
+import ConnectionTargetRoutingDialog from '@/components/connections/ConnectionTargetRoutingDialog.vue'
+import { OPEN_TARGET_ROUTING } from '@/components/connections/targetRoutingKey'
 import { usePaddingForViews } from '@/composables/paddingViews'
 import type { DeviceRenameTarget } from '@/helper/sourceip'
 import type { ConnectionGroup } from '@/store/connectionGroups'
 import { useConnectionCard } from '@/store/settings'
-import { ref } from 'vue'
+import { provide, ref } from 'vue'
 
 const renameTarget = ref<DeviceRenameTarget | null>(null)
+const routingTarget = ref('')
+provide(OPEN_TARGET_ROUTING, (target: string) => {
+  routingTarget.value = target
+})
 const renameDevice = (group: ConnectionGroup) => {
   if (group.deviceIP) renameTarget.value = { ip: group.deviceIP }
 }

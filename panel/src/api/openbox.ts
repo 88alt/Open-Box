@@ -517,7 +517,9 @@ const requestJson = async <T>(input: string, init?: RequestInit): Promise<T> => 
   const data = await response.json().catch(() => null)
 
   if (!response.ok) {
-    throw new Error(extractErrorMessage(data) || `request failed: ${response.status}`)
+    throw Object.assign(new Error(extractErrorMessage(data) || `request failed: ${response.status}`), {
+      status: response.status,
+    })
   }
 
   return data as T
@@ -2063,3 +2065,66 @@ export interface SystemResources {
 }
 export const fetchSystemResources = (signal?: AbortSignal) =>
   requestJson<SystemResources>('/api/openbox/system/resources', { signal })
+
+// ---- 连接页「改分流」:按目标(域名 / IP)查命中的目标分流,并在前置的目标分流里增删规则 ----
+// 接口是 /api/openbox/profile/target-routing(上游 v0.1.423 起有):
+// GET ?target=&type=&original= 查命中;GET ?target=&first=1 只取第一个命中;POST 加规则;DELETE 删一条命中的规则。
+export type OpenboxTargetRoutingType = 'domain' | 'domain_suffix' | 'ip' | 'ip_cidr'
+
+export interface OpenboxTargetRoutingPolicy {
+  id: string
+  name: string
+}
+
+export interface OpenboxTargetRoutingMatch {
+  // policy = 目标分流自己写的条目(可删);ruleset = 来自规则集的条目(只读,请去规则集源头管理)
+  source: 'policy' | 'ruleset' | string
+  name: string
+  policyId?: string
+  type: string
+  value: string
+  outbound?: string
+  removable?: boolean
+}
+
+export interface OpenboxTargetRoutingLookup {
+  policies: OpenboxTargetRoutingPolicy[]
+  matches: OpenboxTargetRoutingMatch[]
+  // 按当前输入「添加」时会写进去的那一条(域名 / 后缀 / IP 段规整后的样子)
+  addition?: { type: string; value: string }
+  // 有规则集暂时核对不了,命中列表可能不全
+  incomplete?: boolean
+  // 只在 first=1 时:这个目标命中的第一个分流组
+  first?: OpenboxTargetRoutingMatch | null
+}
+
+// 增删之后的应用结果:没应用上(内核没跑 / 待重启)时界面提示「已保存,内核尚未应用」
+export interface OpenboxTargetRoutingApplied {
+  ok?: boolean
+  skipped?: string
+  pendingRestart?: { pending: boolean; reasons?: string[] }
+}
+
+const TARGET_ROUTING_URL = '/api/openbox/profile/target-routing'
+
+export const fetchTargetRouting = (target: string, type: string, original: string, signal?: AbortSignal) =>
+  requestJson<OpenboxTargetRoutingLookup>(`${TARGET_ROUTING_URL}?${new URLSearchParams({ target, type, original })}`, {
+    signal,
+  })
+
+export const fetchTargetRoutingFirst = (target: string, signal?: AbortSignal) =>
+  requestJson<OpenboxTargetRoutingLookup>(`${TARGET_ROUTING_URL}?${new URLSearchParams({ target, first: '1' })}`, {
+    signal,
+  })
+
+export const addTargetRouting = (target: string, type: string, policyIds: string[]) =>
+  requestJson<{ applied?: OpenboxTargetRoutingApplied }>(TARGET_ROUTING_URL, {
+    method: 'POST',
+    body: JSON.stringify({ target, type, policyIds }),
+  })
+
+export const removeTargetRouting = (match: OpenboxTargetRoutingMatch) =>
+  requestJson<{ applied?: OpenboxTargetRoutingApplied }>(TARGET_ROUTING_URL, {
+    method: 'DELETE',
+    body: JSON.stringify(match),
+  })

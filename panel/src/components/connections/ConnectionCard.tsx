@@ -1,4 +1,5 @@
 import { blockConnectionByIdAPI, disconnectByIdAPI } from '@/api'
+import ConnectionTargetRoutingButton from '@/components/connections/ConnectionTargetRoutingButton.vue'
 import { useBounceOnVisible } from '@/composables/bouncein'
 import { useConnections } from '@/composables/connections'
 import {
@@ -67,7 +68,15 @@ export default defineComponent<{
           <div class="min-w-0 truncate">{routingPolicy && <ProxyName name={routingPolicy} />}</div>
         ),
         [CONNECTIONS_TABLE_ACCESSOR_KEY.Host]: (
-          <span class="text-main w-80 grow truncate">{getHostFromConnection(conn)}</span>
+          <span class="inline-flex w-80 min-w-0 grow items-center gap-1">
+            <span
+              class="text-main truncate"
+              title={getHostFromConnection(conn)}
+            >
+              {getHostFromConnection(conn)}
+            </span>
+            <ConnectionTargetRoutingButton target={metadata.host || metadata.sniffHost || metadata.destinationIP || ''} />
+          </span>
         ),
         [CONNECTIONS_TABLE_ACCESSOR_KEY.Destination]: (
           <span class="w-80 grow truncate break-all">{getDestinationFromConnection(conn)}</span>
