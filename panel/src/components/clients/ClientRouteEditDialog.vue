@@ -93,7 +93,7 @@
                       :class="hasPicked(c) ? 'text-success' : 'invisible'"
                     />
                     <span class="shrink-0 font-mono text-xs">{{ c.ip }}</span>
-                    <span class="text-base-content/60 min-w-0 flex-1 truncate text-xs">{{ c.name }}</span>
+                    <span class="text-base-content/60 min-w-0 flex-1 truncate text-xs">{{ getDeviceName(c.ip, c.name) }}</span>
                     <span
                       v-if="c.mac"
                       class="text-base-content/40 shrink-0 font-mono text-xs"
@@ -179,6 +179,7 @@ import OutboundPicker, { type OutboundPickerOptions } from '@/components/common/
 import TextInput from '@/components/common/TextInput.vue'
 import { useAnchoredDropdown } from '@/composables/anchoredDropdown'
 import { showNotification } from '@/helper/notification'
+import { getDeviceName } from '@/helper/sourceip'
 import { CheckIcon, ChevronDownIcon } from '@heroicons/vue/24/outline'
 import { computed, reactive, ref, watch } from 'vue'
 
@@ -277,7 +278,15 @@ watch(isOpen, (v) => {
 })
 const visibleKnown = computed(() => {
   const kw = knownKeyword.value.trim().toLowerCase()
-  return props.knownClients.filter((c) => !kw || c.ip.includes(kw) || (c.name || '').toLowerCase().includes(kw))
+  return props.knownClients
+    .filter((c) => form.match === 'ip' || !!c.mac)
+    .filter(
+      (c) =>
+        !kw ||
+        c.ip.includes(kw) ||
+        getDeviceName(c.ip, c.name).toLowerCase().includes(kw) ||
+        (c.mac || '').toLowerCase().includes(kw),
+    )
 })
 
 // 和 server/engine/client-routes.mjs 同一套判断:裸 IP 或带前缀的网段

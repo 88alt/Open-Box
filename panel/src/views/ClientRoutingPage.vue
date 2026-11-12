@@ -141,6 +141,7 @@ import EmptyAction from '@/components/common/EmptyAction.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import { usePaddingForViews } from '@/composables/paddingViews'
 import { showNotification } from '@/helper/notification'
+import { getDeviceName, getDeviceNameByMac, refreshKnownClients } from '@/helper/sourceip'
 import { Bars3Icon, DevicePhoneMobileIcon, PencilSquareIcon, PlusIcon, PowerIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { computed, onMounted, ref, watch } from 'vue'
 import Draggable from 'vuedraggable'
@@ -173,16 +174,17 @@ const outboundExists = (name: string) => {
 }
 const labelOf = (src: string) => {
   const ip = src.replace(/\/(32|128)$/, '')
-  const known = knownClients.value.find((c) => c.ip === ip)
-  return known?.name ? `${ip} (${known.name})` : src
+  if (ip.includes('/')) return src
+  const name = getDeviceName(ip)
+  return name ? `${ip} (${name})` : src
 }
 
 // 按什么认终端:ip 或 mac(老档案没有 match 字段,「不进内核」「白名单」带 MAC 的算 mac)
 const matchOf = (r: OpenboxClientRoute) =>
   r.match === 'ip' || r.match === 'mac' ? r.match : (r.bypass || r.admit) && r.macs?.length ? 'mac' : 'ip'
 const labelOfMac = (mac: string) => {
-  const known = knownClients.value.find((c) => (c.mac || '').toLowerCase() === mac.toLowerCase())
-  return known?.name ? `${mac} (${known.name})` : mac
+  const name = getDeviceNameByMac(mac)
+  return name ? `${mac} (${name})` : mac
 }
 // 白名单生效时,局域网里进内核的终端 / 网段个数
 const admitCount = computed(
@@ -215,6 +217,8 @@ const load = async () => {
   } catch {
     knownClients.value = []
   }
+  // 名字按 MAC > IP 标签 > 主机名取,进页面先把邻居表刷新一次
+  await refreshKnownClients(true)
 }
 
 const persist = async (next: OpenboxClientRoute[]) => {

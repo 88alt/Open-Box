@@ -128,6 +128,18 @@ export const refreshKnownClients = (force = false) => {
 
 const clientsByIP = computed(() => new Map(knownClients.value.map((client) => [client.ip, client])))
 
+const clientsByMac = computed(() => {
+  const map = new Map<string, KnownClient>()
+
+  for (const client of knownClients.value) {
+    const mac = normalizeMac(client.mac)
+
+    if (mac) map.set(mac, client)
+  }
+
+  return map
+})
+
 export const getKnownClient = (ip: string) => clientsByIP.value.get(ip)
 
 // 只有用户给这台终端起了名字(MAC 标签或 IP 标签)才返回,没有就空串
@@ -155,3 +167,16 @@ export const getDeviceName = (ip: string, hostname = '') =>
 
 // 显示用的终端名字:没有名字就显示 IP 本身,空 IP 是内部连接
 export const getDeviceLabel = (ip: string) => (ip ? getDeviceName(ip) || ip : getIPLabelFromMap(ip))
+
+// 按 MAC 取终端名字:MAC 标签优先,没有就取邻居表里这个 MAC 对应的终端的名字,都没有就空串
+export const getDeviceNameByMac = (mac: string) => {
+  const byLabel = getLabelByMac(mac)
+
+  if (byLabel) return byLabel
+
+  refreshKnownClients()
+
+  const client = clientsByMac.value.get(normalizeMac(mac))
+
+  return client ? getDeviceName(client.ip, client.name) : ''
+}
