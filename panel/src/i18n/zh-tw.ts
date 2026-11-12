@@ -2263,6 +2263,15 @@ const zhTW: LANG_MESSAGE = {
   connectionTableCustomize: '表格自訂',
   connectionCardAddRow: '新增一行',
   connectionDevice: '終端',
+  connectionDeviceAlias: '面板顯示名稱',
+  connectionDeviceHostname: '主機名稱',
+  connectionDeviceIP: 'IP 位址',
+  connectionDeviceMAC: 'MAC 位址',
+  connectionDeviceRename: '重新命名',
+  connectionDeviceRenameByIP: '名稱依目前的 IP 位址儲存，整個面板統一使用。',
+  connectionDeviceRenameByMAC: '名稱依 MAC 位址儲存，整個面板統一使用。',
+  connectionDeviceRenameSaved: '裝置名稱已儲存',
+  connectionDeviceRenameTitle: '重新命名裝置',
   connectionTarget: '目標',
 }
 

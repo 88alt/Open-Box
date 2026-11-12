@@ -1,7 +1,7 @@
 // 连接页的分组:按终端或按目标把筛选、排序后的连接分成组,同一时刻只展开一个组,
 // 展开的组里还能再分子组(不分 / 按分流 / 按另一个维度)。结构对齐上游 v0.1.423,自己重写。
 import { CONNECTION_GROUP_MODE, SORT_TYPE, type CONNECTION_SUBGROUP_MODE } from '@/constant'
-import { getIPLabelFromMap } from '@/helper/sourceip'
+import { getDeviceLabel } from '@/helper/sourceip'
 import type { Connection } from '@/types'
 import { last } from 'lodash'
 import { computed, reactive, shallowRef, watch } from 'vue'
@@ -70,8 +70,6 @@ const getGroupKey = (conn: Connection, mode: CONNECTION_SUBGROUP_MODE) => {
 
   return normalizeTarget(conn)
 }
-
-const getDeviceLabel = (ip: string) => (ip ? getIPLabelFromMap(ip) || ip : 'Inner')
 
 const metricKeys: Partial<
   Record<SORT_TYPE, 'download' | 'downloadSpeed' | 'upload' | 'uploadSpeed'>

@@ -15,7 +15,7 @@
 </template>
 
 <script setup lang="ts">
-import { getIPLabelFromMap } from '@/helper/sourceip'
+import { getDeviceLabel } from '@/helper/sourceip'
 import { connections, sourceIPFilter } from '@/store/connections'
 import * as ipaddr from 'ipaddr.js'
 import { isEqual, uniq } from 'lodash'
@@ -56,7 +56,7 @@ watch(
     sourceIPOpts.value = []
 
     sourceIPs.value.forEach((ip) => {
-      const label = getIPLabelFromMap(ip)
+      const label = getDeviceLabel(ip)
       const index = sourceIPOpts.value.findIndex((opt) => opt.label === label)
 
       if (index === -1) {
@@ -70,7 +70,7 @@ watch(
     })
 
     if (sourceIPFilter.value !== null) {
-      const currentLabel = getIPLabelFromMap(sourceIPFilter.value[0])
+      const currentLabel = getDeviceLabel(sourceIPFilter.value[0])
       const current = sourceIPOpts.value.find((opt) => opt.label === currentLabel)
 
       if (!current) {

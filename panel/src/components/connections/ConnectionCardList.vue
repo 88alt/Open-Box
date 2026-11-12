@@ -41,6 +41,10 @@
                 >
                   {{ groupLabel(item) }}
                 </button>
+                <ConnectionDeviceRenameButton
+                  v-if="item.group.deviceIP"
+                  @rename="emit('renameDevice', item.group)"
+                />
               </div>
               <span class="text-base-content/65 block max-w-full truncate text-xs">
                 <template v-if="item.group.sourceIP">{{ item.group.sourceIP }} · </template>
@@ -100,6 +104,7 @@ import { isMiddleScreen, prettyBytesHelper } from '@/helper/utils'
 import {
   connectionGroupItems,
   toggleConnectionGroupItem,
+  type ConnectionGroup,
   type ConnectionGroupItem,
 } from '@/store/connectionGroups'
 import { connectionCardLines } from '@/store/settings'
@@ -114,7 +119,10 @@ import { useI18n } from 'vue-i18n'
 import VirtualScroller from '../common/VirtualScroller.vue'
 import ProxyName from '../proxies/ProxyName.vue'
 import ConnectionCard from './ConnectionCard'
+import ConnectionDeviceRenameButton from './ConnectionDeviceRenameButton.vue'
 import ConnectionSubgroupTabs from './ConnectionSubgroupTabs.vue'
+
+const emit = defineEmits<{ renameDevice: [group: ConnectionGroup] }>()
 
 const { t } = useI18n()
 const { paddingTop } = usePaddingForViews({

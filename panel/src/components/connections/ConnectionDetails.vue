@@ -142,7 +142,7 @@ import {
   getNetworkTypeFromConnection,
   getProcessFromConnection,
 } from '@/helper'
-import { getIPLabelFromMap } from '@/helper/sourceip'
+import { getDeviceLabel } from '@/helper/sourceip'
 import { prettyBytesHelper } from '@/helper/utils'
 import { proxyMap } from '@/store/proxies'
 import {
@@ -176,7 +176,7 @@ const formattedRows = computed<[string, string][]>(() => {
   const started = dayjs(conn.start)
   const rows: [string, string][] = [
     ['host', getHostFromConnection(conn)],
-    ['sourceIP', getIPLabelFromMap(metadata.sourceIP)],
+    ['sourceIP', getDeviceLabel(metadata.sourceIP)],
     ['sourcePort', metadata.sourcePort],
     ['type', getNetworkTypeFromConnection(conn)],
     ['rule', [conn.rule, conn.rulePayload].filter(Boolean).join(' · ')],

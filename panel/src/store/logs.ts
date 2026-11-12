@@ -1,11 +1,11 @@
 import { fetchLogsAPI } from '@/api'
 import { LOG_LEVEL } from '@/constant'
+import { getDeviceName } from '@/helper/sourceip'
 import type { Log, LogWithSeq } from '@/types'
 import { useStorage } from '@vueuse/core'
 import dayjs from 'dayjs'
 import { throttle } from 'lodash'
 import { ref, watch } from 'vue'
-import { sourceIPLabelList } from './settings'
 
 export const logs = ref<LogWithSeq[]>([])
 export const logFilter = ref('')
@@ -23,32 +23,14 @@ const sliceLogs = throttle(() => {
   logsTemp = []
 }, 500)
 
-const ipSourceMatchs: [RegExp, string][] = []
-const restructMatchs = () => {
-  ipSourceMatchs.length = 0
-  for (const { key, label } of sourceIPLabelList.value) {
-    if (key.startsWith('/')) continue
+// 日志里的 `IP:端口` 换成 `IP (名字) :端口`,名字走终端命名(MAC / IP 标签、邻居表主机名)
+const ipPortPattern = /(\[[0-9a-fA-F:.]+\]|\b\d{1,3}(?:\.\d{1,3}){3}):(?=\d)/g
+const labelLogIPs = (payload: string) =>
+  payload.replace(ipPortPattern, (matched, ip: string) => {
+    const name = getDeviceName(ip.startsWith('[') ? ip.slice(1, -1) : ip)
 
-    if (key.includes(':')) {
-      const regex = new RegExp(`${key}]:`, 'ig')
-      ipSourceMatchs.push([regex, `${key}] (${label}) :`])
-    } else {
-      const regex = new RegExp(`${key}:`, 'ig')
-      ipSourceMatchs.push([regex, `${key} (${label}) :`])
-    }
-  }
-}
-
-watch(
-  () => sourceIPLabelList.value,
-  () => {
-    restructMatchs()
-  },
-  {
-    immediate: true,
-    deep: true,
-  },
-)
+    return name ? `${ip} (${name}) :` : matched
+  })
 
 export const initLogs = () => {
   cancel?.()
@@ -68,9 +50,7 @@ export const initLogs = () => {
       return
     }
 
-    for (const [regex, label] of ipSourceMatchs) {
-      data.payload = data.payload.replace(regex, label)
-    }
+    data.payload = labelLogIPs(data.payload)
 
     logsTemp.unshift({
       ...data,

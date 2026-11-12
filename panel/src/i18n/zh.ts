@@ -2262,6 +2262,15 @@ const zh: LANG_MESSAGE = {
   connectionTableCustomize: '表格自定义',
   connectionCardAddRow: '添加一行',
   connectionDevice: '终端',
+  connectionDeviceAlias: '面板显示名称',
+  connectionDeviceHostname: '主机名',
+  connectionDeviceIP: 'IP 地址',
+  connectionDeviceMAC: 'MAC 地址',
+  connectionDeviceRename: '重命名',
+  connectionDeviceRenameByIP: '名称按当前 IP 地址保存，整个面板统一使用。',
+  connectionDeviceRenameByMAC: '名称按 MAC 地址保存，整个面板统一使用。',
+  connectionDeviceRenameSaved: '终端名称已保存',
+  connectionDeviceRenameTitle: '重命名终端',
   connectionTarget: '目标',
 }
 

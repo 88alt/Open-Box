@@ -16,7 +16,7 @@ import {
   getNetworkTypeFromConnection,
   getProcessFromConnection,
 } from '@/helper'
-import { getIPLabelFromMap } from '@/helper/sourceip'
+import { getDeviceLabel } from '@/helper/sourceip'
 import { fromNow, isMiddleScreen, prettyBytesHelper } from '@/helper/utils'
 import { i18n } from '@/i18n'
 import { connectionCardLines, proxyChainDirection } from '@/store/settings'
@@ -80,7 +80,7 @@ export default defineComponent<{
             class="w-40 grow truncate break-all"
             title={metadata.sourceIP || undefined}
           >
-            {getIPLabelFromMap(metadata.sourceIP)}
+            {getDeviceLabel(metadata.sourceIP)}
           </span>
         ),
         [CONNECTIONS_TABLE_ACCESSOR_KEY.SourcePort]: (

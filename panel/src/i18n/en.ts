@@ -2396,6 +2396,15 @@ const en = {
   connectionTableCustomize: 'Customize table',
   connectionCardAddRow: 'Add a row',
   connectionDevice: 'Device',
+  connectionDeviceAlias: 'Dashboard display name',
+  connectionDeviceHostname: 'Hostname',
+  connectionDeviceIP: 'IP address',
+  connectionDeviceMAC: 'MAC address',
+  connectionDeviceRename: 'Rename',
+  connectionDeviceRenameByIP: 'This name is saved for the current IP address and is used throughout the dashboard.',
+  connectionDeviceRenameByMAC: 'This name follows the MAC address and is used throughout the dashboard.',
+  connectionDeviceRenameSaved: 'Device name saved',
+  connectionDeviceRenameTitle: 'Rename device',
   connectionTarget: 'Target',
 }
 

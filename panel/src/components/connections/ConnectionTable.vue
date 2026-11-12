@@ -169,6 +169,10 @@
                             >
                               {{ getGroupLabel(item) }}
                             </button>
+                            <ConnectionDeviceRenameButton
+                              v-if="item.group.deviceIP"
+                              @rename="emit('renameDevice', item.group)"
+                            />
                           </div>
                           <span class="text-base-content/65 block truncate text-xs">
                             <template v-if="item.group.sourceIP"
@@ -275,7 +279,7 @@ import {
 } from '@/helper'
 import { copyText } from '@/helper/clipboard'
 import { showNotification } from '@/helper/notification'
-import { getIPLabelFromMap } from '@/helper/sourceip'
+import { getDeviceLabel } from '@/helper/sourceip'
 import { fromNow, prettyBytesHelper } from '@/helper/utils'
 import {
   connectionGroupItems,
@@ -321,6 +325,7 @@ import { useResizeObserver, useStorage } from '@vueuse/core'
 import { computed, h, ref, type VNode } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProxyName from '../proxies/ProxyName.vue'
+import ConnectionDeviceRenameButton from './ConnectionDeviceRenameButton.vue'
 import ConnectionSubgroupTabs from './ConnectionSubgroupTabs.vue'
 
 // 表格里的行:组头 / 子组头 / 连接(和卡片视图同一份分组数据),外加展开的组下面单独一行的子分组页签
@@ -349,6 +354,8 @@ const columnWidthMap = useStorage('config/table-column-width', {
   [CONNECTIONS_TABLE_ACCESSOR_KEY.ConnectTime]: 100,
 } as Record<CONNECTIONS_TABLE_ACCESSOR_KEY, number>)
 const isManualTable = computed(() => tableWidthMode.value === TABLE_WIDTH_MODE.MANUAL)
+const emit = defineEmits<{ renameDevice: [group: ConnectionGroup] }>()
+
 const { t } = useI18n()
 const columns: ColumnDef<Connection>[] = [
   {
@@ -504,7 +511,7 @@ const columns: ColumnDef<Connection>[] = [
     header: () => t(CONNECTION_COLUMN_LABEL_MAP[CONNECTIONS_TABLE_ACCESSOR_KEY.SourceIP]!),
     id: CONNECTIONS_TABLE_ACCESSOR_KEY.SourceIP,
     accessorFn: (original) => {
-      return getIPLabelFromMap(original.metadata.sourceIP)
+      return getDeviceLabel(original.metadata.sourceIP)
     },
   },
   {
