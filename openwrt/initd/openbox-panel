@@ -82,7 +82,13 @@ start_service() {
 	fi
 
 	procd_open_instance openbox-panel
-	procd_set_param command "$node_cmd" "--max-old-space-size=$heap_mb" "$ENTRY"
+	# 在 160 MiB 堆档限制 V8 年轻代的半空间，减少短命请求对象占用的常驻页。
+	# 小内存设备沿用 V8 自适应值（可能已经低于 4 MiB），老生代上限仍按原档位。
+	if [ -n "$mem_kb" ] && [ "$heap_mb" -eq 160 ]; then
+		procd_set_param command "$node_cmd" "--max-old-space-size=$heap_mb" --max-semi-space-size=4 "$ENTRY"
+	else
+		procd_set_param command "$node_cmd" "--max-old-space-size=$heap_mb" "$ENTRY"
+	fi
 	# OPENSSL_CONF=/dev/null:Node 不读系统的 OpenSSL 配置——有的固件那份写法随包 Node 解析不了,面板直接起不来(GitHub #265)。
 	# HOST=:::IPv4 / IPv6 双栈(GitHub #276),系统没开 IPv6 时面板自己退回 0.0.0.0。
 	# LD_LIBRARY_PATH:x64 的 musl Node 动态依赖 libstdc++.so.6(OpenWrt 默认镜像不带,
