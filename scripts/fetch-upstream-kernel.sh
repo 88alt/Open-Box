@@ -107,6 +107,7 @@ fetch_verified "$KERNEL_ASSET" "$KERNEL_SHA" "$TMP/kernel.tar.gz"
 tar -tzf "$TMP/kernel.tar.gz" | while IFS= read -r entry; do
   case "$entry" in
     bin/|bin/sing-box|bin/sing-box.LICENSE|bin/sing-box.BUILD-INFO.json) ;;
+    bin/mihomo|bin/mihomo.LICENSE|bin/mihomo.SOURCE.txt) ;;
     *) die "内核包里有预期之外的文件:$entry" ;;
   esac
 done

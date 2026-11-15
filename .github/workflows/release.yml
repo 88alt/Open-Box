@@ -126,14 +126,7 @@ jobs:
       # 二进制取自 OPENBOX_KERNEL_TAG,源码包取自 OPENBOX_SOURCE_TAG(脚本需读取该变量)
       - name: Fetch kernel from upstream release
         if: env.OPENBOX_KERNEL_SOURCE == 'upstream'
-        run: |
-          set -eu
-          # 上游内核包从 v0.1.433 起多带 bin/mihomo(+ .LICENSE / .SOURCE.txt),脚本的文件白名单不认。
-          # 只改本次运行里的脚本副本(仓库里的文件不动):把这三个文件加进白名单,脚本照旧只取 sing-box,mihomo 不发布。
-          sed -i '/bin\/sing-box.BUILD-INFO.json) ;;$/a bin/mihomo|bin/mihomo.LICENSE|bin/mihomo.SOURCE.txt) ;;' scripts/fetch-upstream-kernel.sh
-          # sed 没匹配上不会报错:确认真的加进去了(上游改了那一行就会在这里停下)
-          grep -q '^bin/mihomo|bin/mihomo.LICENSE' scripts/fetch-upstream-kernel.sh
-          sh scripts/fetch-upstream-kernel.sh ${{ matrix.arch }} kernel-build
+        run: sh scripts/fetch-upstream-kernel.sh ${{ matrix.arch }} kernel-build
 
       # 备选:OPENBOX_KERNEL_SOURCE=build 时从本仓库补丁源码自己编译
       - name: Read kernel tool versions
