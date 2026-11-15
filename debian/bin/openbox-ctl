@@ -11,8 +11,7 @@
 
 UNIT=openbox.service
 OPENBOX_ROOT=/opt/open-box
-BIN="$OPENBOX_ROOT/bin/sing-box"
-CONF="$OPENBOX_ROOT/etc/config.json"
+. "$OPENBOX_ROOT/openwrt/bin/openbox-kernel"
 DATA="$OPENBOX_ROOT/data"
 # sing-box 自己流量的 fwmark(tun 的 auto_redirect_output_mark 默认值),见 OpenWrt 脚本
 SINGBOX_OUTPUT_MARK=0x2024
@@ -37,16 +36,44 @@ openbox_entry_bypass() {
 
 # Open-Box 自己的 nft 表(inet openbox),起内核前按需整张重建;都不需要就不建。
 # Debian 上没有 dnsmasq 分流,表里只有面板生成的进内核前放行链
+# Replace the owned table in one nft transaction. A separate delete opens a
+# window where old DNAT conntracks can send TUN DNS to the default WAN route.
+openbox_replace_nft() {
+	{
+		nft list table $NFT_TABLE >/dev/null 2>&1 && echo "delete table $NFT_TABLE"
+		cat
+	} | nft -f -
+}
+
+# Stop removes interception/marks but retains the inert TUN DNS egress guard:
+# DNAT conntracks can survive both the core and its routes. Uninstall removes it.
+openbox_clear_nft() {
+	command -v nft >/dev/null 2>&1 || return 0
+	_ob_guard="$(nft -s list chain $NFT_TABLE terminal_dns_egress 2>/dev/null; nft -s list chain $NFT_TABLE terminal_dns_forward 2>/dev/null)"
+	printf '%s\n' "$_ob_guard" | openbox_replace_nft >/dev/null 2>&1 || {
+		echo "openbox: failed to clear interception in nft table $NFT_TABLE" >&2
+		return 1
+	}
+}
+
 openbox_apply_nft() {
 	command -v nft >/dev/null 2>&1 || return 0
-	nft delete table $NFT_TABLE >/dev/null 2>&1
 	_ob_entry="$(openbox_entry_bypass)"
-	[ -n "$_ob_entry" ] || return 0
+	[ -n "$_ob_entry" ] || { openbox_clear_nft; return $?; }
+	_ob_guard=""
+	for _ob_chain in terminal_dns_egress terminal_dns_forward; do
+		case "$_ob_entry" in
+			*"chain $_ob_chain"*) ;;
+			*) _ob_guard="$_ob_guard
+$(nft -s list chain $NFT_TABLE "$_ob_chain" 2>/dev/null | sed '1d;$d')" ;;
+		esac
+	done
 	{
 		echo "table $NFT_TABLE {"
 		echo "$_ob_entry"
+		[ -n "$_ob_guard" ] && echo "$_ob_guard"
 		echo "}"
-	} | nft -f - >/dev/null 2>&1 || echo "openbox: failed to install nft table $NFT_TABLE" >&2
+	} | openbox_replace_nft >/dev/null 2>&1 || { echo "openbox: failed to install nft table $NFT_TABLE" >&2; return 1; }
 }
 
 # auto_redirect 在 nft 里用到的表达式各自是一个内核模块(queue / nat / redir / tproxy / socket / fib),
@@ -103,7 +130,8 @@ openbox_enable_forward() {
 		sysctl -q -w net.ipv4.ip_forward=1 >/dev/null 2>&1
 	fi
 	# 配置里 tun 带 IPv6 地址才需要 v6 转发
-	if grep -q '"inet6_address"' "$CONF" 2>/dev/null; then
+	if grep -q '"inet6_address"' "$CONF" 2>/dev/null ||
+		{ [ "$OPENBOX_KERNEL" = mihomo ] && grep -q '"ipv6": *true' "$CONF" 2>/dev/null; }; then
 		_ob_v6="$(cat /proc/sys/net/ipv6/conf/all/forwarding 2>/dev/null)"
 		if [ "$_ob_v6" = "0" ]; then
 			mkdir -p "$DATA"
@@ -123,28 +151,28 @@ openbox_restore_forward() {
 }
 
 pre_start() {
-	if [ ! -x "$BIN" ]; then
-		echo "openbox: sing-box binary not found at $BIN" >&2
-		return 1
-	fi
-	if [ ! -f "$CONF" ]; then
-		echo "openbox: config not found at $CONF" >&2
-		return 1
-	fi
+	openbox_kernel_ready || return 1
 	[ -e /dev/net/tun ] || modprobe tun >/dev/null 2>&1
 	openbox_clean_stale_nft
 	openbox_load_modules
-	openbox_apply_nft
-	openbox_apply_mark_rule
+	if [ "$OPENBOX_KERNEL" = sing-box ]; then
+		openbox_apply_nft
+		openbox_apply_mark_rule
+	else
+		ENTRY_BYPASS="$OPENBOX_ROOT/etc/mihomo-entry-bypass.nft"
+		if [ -s "$ENTRY_BYPASS" ]; then
+			command -v nft >/dev/null 2>&1 && [ -n "$(openbox_entry_bypass)" ] && openbox_apply_nft || return 1
+		fi
+	fi
 	openbox_enable_forward
 	return 0
 }
 
-# 停止后让系统回到"能正常上网"的状态:撤标记路由、删自己的 nft 表、关回转发。内核自己的 inet sing-box 表
+# 停止后撤标记路由和接管,只保留旧 TUN DNS 出站保护,关回转发。内核自己的 inet sing-box 表
 # 由它正常退出时删,被强杀留下的下次 pre-start 清
 post_stop() {
 	openbox_clear_mark_rule
-	command -v nft >/dev/null 2>&1 && nft delete table $NFT_TABLE >/dev/null 2>&1
+	openbox_clear_nft
 	openbox_restore_forward
 	return 0
 }
