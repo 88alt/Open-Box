@@ -6,8 +6,7 @@ START=99
 STOP=10
 
 OPENBOX_ROOT=/opt/open-box
-BIN="$OPENBOX_ROOT/bin/sing-box"
-CONF="$OPENBOX_ROOT/etc/config.json"
+. "$OPENBOX_ROOT/openwrt/bin/openbox-kernel"
 DATA="$OPENBOX_ROOT/data"
 OPENBOX_DNS_UPSTREAM='127.0.0.1#7853'
 # 与 panel/server/system/dns-takeover.mjs 的 dnsTakeoverBackupPath 一致:该文件存在
@@ -65,6 +64,10 @@ openbox_restore_firewall() {
 }
 
 openbox_dnsmasq_mode() {
+	if [ "${OPENBOX_KERNEL:-sing-box}" = mihomo ]; then
+		[ -f "$OPENBOX_ROOT/etc/mihomo-dnsmasq" ]
+		return $?
+	fi
 	if [ -f "$CONF_META" ]; then
 		grep -qE "\"dnsMode\": *\"dnsmasq\"" "$CONF_META" 2>/dev/null
 		return $?
@@ -119,7 +122,7 @@ openbox_watch_start() {
 			_ob_last="$_ob_pid"
 		done
 		if [ -z "$(openbox_instance_pid)" ]; then
-			logger -t openbox "sing-box did not stay up after start; restoring dnsmasq upstream" 2>/dev/null
+			logger -t openbox "router kernel did not stay up after start; restoring dnsmasq upstream" 2>/dev/null
 			openbox_cleanup
 		fi
 	) </dev/null >/dev/null 2>&1 &
@@ -328,13 +331,40 @@ openbox_clear_mark_rule() {
 	return 0
 }
 
+# Replace the owned table in one nft transaction. A separate delete opens a
+# window where old DNAT conntracks can send TUN DNS to the default WAN route.
+openbox_replace_nft() {
+	{
+		nft list table $NFT_TABLE >/dev/null 2>&1 && echo "delete table $NFT_TABLE"
+		cat
+	} | nft -f -
+}
+
+# Stop removes interception/marks but retains the inert TUN DNS egress guard:
+# DNAT conntracks can survive both the core and its routes. Uninstall removes it.
+openbox_clear_nft() {
+	command -v nft >/dev/null 2>&1 || return 0
+	_ob_guard="$(nft -s list chain $NFT_TABLE terminal_dns_egress 2>/dev/null; nft -s list chain $NFT_TABLE terminal_dns_forward 2>/dev/null)"
+	printf '%s\n' "$_ob_guard" | openbox_replace_nft >/dev/null 2>&1 || {
+		echo "openbox: failed to clear interception in nft table $NFT_TABLE" >&2
+		return 1
+	}
+}
+
 openbox_apply_nft() {
 	command -v nft >/dev/null 2>&1 || return 0
-	nft delete table $NFT_TABLE >/dev/null 2>&1
 	_ob_uid=""
 	openbox_dnsmasq_mode && _ob_uid="$(id -u dnsmasq 2>/dev/null)"
 	_ob_entry="$(openbox_entry_bypass)"
-	[ -n "$_ob_uid" ] || [ -n "$_ob_entry" ] || return 0
+	[ -n "$_ob_uid" ] || [ -n "$_ob_entry" ] || { openbox_clear_nft; return $?; }
+	_ob_guard=""
+	for _ob_chain in terminal_dns_egress terminal_dns_forward; do
+		case "$_ob_entry" in
+			*"chain $_ob_chain"*) ;;
+			*) _ob_guard="$_ob_guard
+$(nft -s list chain $NFT_TABLE "$_ob_chain" 2>/dev/null | sed '1d;$d')" ;;
+		esac
+	done
 	{
 		echo "table $NFT_TABLE {"
 		if [ -n "$_ob_uid" ]; then
@@ -344,8 +374,9 @@ openbox_apply_nft() {
 			echo "	}"
 		fi
 		[ -n "$_ob_entry" ] && echo "$_ob_entry"
+		[ -n "$_ob_guard" ] && echo "$_ob_guard"
 		echo "}"
-	} | nft -f - >/dev/null 2>&1 || echo "openbox: failed to install nft table $NFT_TABLE" >&2
+	} | openbox_replace_nft >/dev/null 2>&1 || { echo "openbox: failed to install nft table $NFT_TABLE" >&2; return 1; }
 }
 
 # auto_redirect 在 nft 里用到的表达式各自是一个内核模块(queue / nat / redir / tproxy / socket / fib)。装的时候
@@ -420,14 +451,7 @@ start_service() {
 	# 会吞掉这里的返回码——即使 return 1,上游 rc.common 的 start 在 USE_PROCD=1 下
 	# 仍可能退出 0。下面的检查与 echo 只用于日志排障,不能作为成败判据;精确归因
 	# 交给面板侧 deployConfig 在重启内核前的预检(检查二进制与配置文件是否存在)。
-	if [ ! -x "$BIN" ]; then
-		echo "openbox: sing-box binary not found at $BIN" >&2
-		return 1
-	fi
-	if [ ! -f "$CONF" ]; then
-		echo "openbox: config not found at $CONF" >&2
-		return 1
-	fi
+	openbox_kernel_ready || return 1
 
 	# 别的代理工具在跑:不起内核(上面那条注释:返回码会被吞,不能当成败判据;面板看的是冲突检测和内核状态)
 	openbox_refuse_if_conflict || return 1
@@ -440,14 +464,31 @@ start_service() {
 	openbox_apply_takeover
 	openbox_restore_firewall || { openbox_cleanup; return 1; }
 	openbox_load_modules
-	openbox_apply_nft
-	openbox_apply_mark_rule
+	if [ "$OPENBOX_KERNEL" = sing-box ]; then
+		openbox_apply_nft
+		openbox_apply_mark_rule
+	else
+		ENTRY_BYPASS="$OPENBOX_ROOT/etc/mihomo-entry-bypass.nft"
+		if [ -s "$ENTRY_BYPASS" ]; then
+			if ! command -v nft >/dev/null 2>&1 || [ -z "$(openbox_entry_bypass)" ] || ! openbox_apply_nft; then
+				openbox_cleanup
+				return 1
+			fi
+		fi
+	fi
 
 	procd_open_instance openbox
-	procd_set_param command "$BIN" run -c "$CONF" -D "$DATA"
+	if [ "$OPENBOX_KERNEL" = mihomo ]; then
+		procd_set_param command "$BIN" -d "$KERNEL_HOME" -f "$CONF"
+	else
+		procd_set_param command "$BIN" run -c "$CONF" -D "$DATA"
+	fi
 	# 直连应答放行的开关文件(内核 tcp10 起):面板在入口白名单模式时建它,内核的 DNS 直连侧应答发出前按它决定写不写
 	# 入口放行集合(panel/server/system/direct-answer-bypass.mjs)
 	procd_set_param env OPENBOX_DIRECT_ANSWER_FLAG="$DATA/flip/direct-answer.on"
+	if [ "$OPENBOX_KERNEL" = mihomo ] && [ -s "$ENTRY_BYPASS" ]; then
+		procd_append_param env OPENBOX_MIHOMO_ENTRY_BYPASS=1
+	fi
 	procd_set_param stdout 1
 	procd_set_param stderr 1
 	procd_set_param respawn 3600 5 5
@@ -469,6 +510,10 @@ start_service() {
 # 无脑 commit 既会造成一次无意义的全 LAN 解析瞬断,还会顺带提交用户在别处暂存的改动。
 openbox_cleanup() {
 	openbox_clear_mark_rule
+	if openbox_kernel_paths && [ "$OPENBOX_KERNEL" = mihomo ]; then
+		uci -q show firewall | sed -n 's/^\(firewall\.openbox_srv_[A-Za-z0-9_]*\)=rule$/\1/p' |
+			while IFS= read -r _ob_rule; do uci -q delete "$_ob_rule"; done
+	fi
 	# 按域名转发的转发文件(在 dnsmasq 的 conf-dir 里)先拿掉:它指向的内核马上就没了。有备份的话下面
 	# 的 uci 还原会一起重启 dnsmasq;没有备份(domains 期间 uci 本来就是用户的)就单独重启一次
 	_ob_installed="$(openbox_dnsmasq_confdir)/$DNSMASQ_FORWARD_CONF"
@@ -540,8 +585,8 @@ openbox_cleanup() {
 		/etc/init.d/firewall reload >/dev/null 2>&1
 	fi
 
-	# 内核停了,dnsmasq 已回到自己的上游,打标记的兜底也一起撤
-	command -v nft >/dev/null 2>&1 && nft delete table $NFT_TABLE >/dev/null 2>&1
+	# 内核停了,dnsmasq 已回到自己的上游,撤接管/标记,只保留旧 TUN DNS 不能外发的保护
+	openbox_clear_nft
 	return 0
 }
 

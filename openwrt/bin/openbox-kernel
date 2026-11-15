@@ -1,0 +1,48 @@
+#!/bin/sh
+# Resolve the router's persisted kernel selection for each service start.
+openbox_kernel_paths() {
+	OPENBOX_KERNEL=sing-box
+	if [ -f "$OPENBOX_ROOT/etc/router-kernel" ]; then
+		OPENBOX_KERNEL=$(cat "$OPENBOX_ROOT/etc/router-kernel") || return 1
+	fi
+	case "$OPENBOX_KERNEL" in
+		sing-box)
+			BIN="$OPENBOX_ROOT/bin/sing-box"
+			CONF="$OPENBOX_ROOT/etc/config.json"
+			KERNEL_HOME="$OPENBOX_ROOT/data"
+			;;
+		mihomo)
+			BIN="$OPENBOX_ROOT/bin/mihomo"
+			CONF="$OPENBOX_ROOT/etc/mihomo.yaml"
+			KERNEL_HOME="$OPENBOX_ROOT/data/mihomo"
+			;;
+		*)
+			echo 'openbox: invalid router kernel selection' >&2
+			return 1
+			;;
+	esac
+}
+
+openbox_kernel_ready() {
+	openbox_kernel_paths || return 1
+	[ -x "$BIN" ] || { echo "openbox: kernel binary not found at $BIN" >&2; return 1; }
+	[ -s "$CONF" ] || { echo "openbox: config not found at $CONF" >&2; return 1; }
+}
+
+openbox_kernel_exec() {
+	openbox_kernel_ready || return 1
+	case "$OPENBOX_KERNEL" in
+		mihomo)
+			if [ -s "$OPENBOX_ROOT/etc/mihomo-entry-bypass.nft" ]; then
+				export OPENBOX_MIHOMO_ENTRY_BYPASS=1
+			fi
+			exec "$BIN" -d "$KERNEL_HOME" -f "$CONF"
+			;;
+		sing-box) exec "$BIN" run -c "$CONF" -D "$KERNEL_HOME" ;;
+	esac
+}
+
+if [ "${0##*/}" = openbox-kernel ]; then
+	OPENBOX_ROOT=/opt/open-box
+	openbox_kernel_exec
+fi
