@@ -28,8 +28,7 @@ def build(stage, output):
     # not force a download of an otherwise identical kernel/runtime.
     licenses = stage / 'panel/server/resources/licenses'
     licenses.mkdir(parents=True, exist_ok=True)
-    for source, name in [('bin/sing-box.LICENSE', 'sing-box.LICENSE'), ('bin/mihomo.LICENSE', 'mihomo.LICENSE'),
-                         ('node/LICENSE', 'node.LICENSE')]:
+    for source, name in [('bin/sing-box.LICENSE', 'sing-box.LICENSE'), ('node/LICENSE', 'node.LICENSE')]:
         if (stage / source).is_file():
             (licenses / name).write_bytes((stage / source).read_bytes())
     layouts = {
@@ -55,7 +54,7 @@ def build(stage, output):
         if kind in ('kernel', 'runtime'):
             component['files'] = {p.relative_to(stage).as_posix(): sha(p)
                                   for item in roots for p in sorted((stage / item).rglob('*'))
-                                  if p.is_file() and ((kind == 'kernel' and p.name in ('sing-box', 'mihomo'))
+                                  if p.is_file() and ((kind == 'kernel' and p.name == 'sing-box')
                                                      or (kind == 'runtime' and p.name != 'LICENSE'))}
         elif kind == 'geo':
             component['manifestSha256'] = sha(stage / geo_dir / 'manifest.json')

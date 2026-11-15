@@ -421,34 +421,6 @@ chmod +x "$STAGE/bin/sing-box"
 cp "$KERNEL_BUNDLE/LICENSE" "$STAGE/bin/sing-box.LICENSE"
 cp "$KERNEL_BUNDLE/BUILD-INFO.json" "$STAGE/bin/sing-box.BUILD-INFO.json"
 
-# mihomo:上游内核包从 v0.1.433 起一并带着它(面板可以切到 mihomo 内核运行)。有就原样封装进 bin/,
-# 并在 meta.json 里记 mihomoVersion(面板的组件更新会据此要求 bin/mihomo 存在且可执行,
-# 清单里的 kernel.files 也要有它);没有(旧版本上游 / 自己编译的内核)就和以前一样不带。
-MIHOMO_VERSION=""
-if [ -f "$KERNEL_BUNDLE/mihomo" ]; then
-  for _f in mihomo.LICENSE mihomo.SOURCE.txt; do
-    [ -f "$KERNEL_BUNDLE/$_f" ] || { echo "ERROR: 内核包里有 mihomo 却缺少 $_f" >&2; exit 1; }
-  done
-  # 版本取自 SOURCE.txt 里记录的源码包名(mihomo-<版本>-source.tar.gz)
-  MIHOMO_VERSION=$(sed -n 's/.*mihomo-\(v[0-9A-Za-z._-]*\)-source\.tar\.gz.*/\1/p' "$KERNEL_BUNDLE/mihomo.SOURCE.txt" | head -n 1)
-  [ -n "$MIHOMO_VERSION" ] || { echo "ERROR: 读不到 mihomo 版本(mihomo.SOURCE.txt)" >&2; exit 1; }
-  # 是 ELF、架构和本次打的包一致(不对的话到路由器上才起不来)
-  python3 - "$KERNEL_BUNDLE/mihomo" "$SINGBOX_ARCH" <<'PY' || { echo "ERROR: mihomo 不是 $SINGBOX_ARCH 的 ELF 可执行文件" >&2; exit 1; }
-import sys
-data = open(sys.argv[1], 'rb').read(20)
-machine = {'amd64': 62, 'arm64': 183}[sys.argv[2]]
-assert data[:4] == b'\x7fELF', 'not ELF'
-assert int.from_bytes(data[18:20], 'little') == machine, 'wrong machine'
-PY
-  log "封装 mihomo $MIHOMO_VERSION..."
-  cp "$KERNEL_BUNDLE/mihomo" "$STAGE/bin/mihomo"
-  chmod +x "$STAGE/bin/mihomo"
-  cp "$KERNEL_BUNDLE/mihomo.LICENSE" "$STAGE/bin/mihomo.LICENSE"
-  cp "$KERNEL_BUNDLE/mihomo.SOURCE.txt" "$STAGE/bin/mihomo.SOURCE.txt"
-else
-  log "内核包里没有 mihomo,本次不带(meta.json 也不写 mihomoVersion)"
-fi
-
 # ---- 7. 构建期依赖守卫(P6 复审 Minor):确认 sing-box 二进制真正静态链接。
 # 对封装后的二进制再检查一次,确认拷入的就是完整静态构建。dt-needed.py 解析 ELF 程序头,这里
 # 复用同一份解析逻辑断言:既没有 PT_INTERP(没有指定动态链接器路径),也没有
@@ -498,14 +470,11 @@ chmod +x "$STAGE/update.sh"
 
 # ---- 9. meta.json ----
 BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-MIHOMO_META=""
-[ -z "$MIHOMO_VERSION" ] || MIHOMO_META="  \"mihomoVersion\": \"$MIHOMO_VERSION\",
-"
 cat > "$STAGE/meta.json" <<EOF
 {
   "version": "$VERSION",
   "singboxVersion": "$SINGBOX_VERSION",
-${MIHOMO_META}  "nodeVersion": "$NODE_VERSION",
+  "nodeVersion": "$NODE_VERSION",
   "arch": "$ARCH",
   "builtAt": "$BUILT_AT"
 }
