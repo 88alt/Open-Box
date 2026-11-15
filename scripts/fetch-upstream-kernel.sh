@@ -14,12 +14,15 @@
 #
 # 产出(与自己编译时的目录布局一致,build-release.sh 不用区分来源):
 #   <outdir>/sing-box-<内核版本>-linux-<arch>-musl/{sing-box,LICENSE,BUILD-INFO.json}
+#       上游内核包里带 mihomo 时(v0.1.433 起),同一个目录里还有 {mihomo,mihomo.LICENSE,mihomo.SOURCE.txt}
 #   <outdir>/sing-box-<内核版本>-source.tar.gz(+ .sha256)   对应源码,发布时一并附上
+#   <outdir>/mihomo-<mihomo 版本>-source.tar.gz(+ .sha256)  mihomo 的对应源码(GPL),有 mihomo 时才有
 #   <outdir>/compat/libobmadvise-*.so                          缺 madvise 固件用的兼容库(取不到只警告)
 #   <outdir>/KERNEL-SOURCE.txt                                 来源记录
 #
 # 校验:内核包的 sha256 同时对照 components.json 和 .sha256 文件,再核对 BUILD-INFO.json 里
-# 记录的二进制哈希、架构、版本。任何一项不符都直接失败。
+# 记录的二进制哈希、架构、版本;内核包里每个可执行文件的哈希还要与 components.json 的 kernel.files 对上。
+# 任何一项不符都直接失败。内核包里出现白名单之外的文件同样失败(上游加了新东西要人看过再放行)。
 set -eu
 
 REPO="${OPENBOX_KERNEL_REPO:-liandu2024/Open-Box}"
@@ -84,12 +87,19 @@ def pick(name, required):
     if not re.fullmatch(r'open-box-[0-9A-Za-z._-]+\.tar\.gz', asset): raise SystemExit(f'{name} 资产名异常: {asset}')
     if not re.fullmatch(r'[0-9a-f]{64}', sha): raise SystemExit(f'{name} sha256 异常')
     return [ver, asset, sha]
-print(' '.join(pick('kernel', True) + pick('app', False)))
+kfiles = d['components']['kernel'].get('files', {}) if isinstance(d['components']['kernel'].get('files', {}), dict) else {}
+def filesha(name):
+    v = kfiles.get(name)
+    if v is None: return '-'
+    if not re.fullmatch(r'[0-9a-f]{64}', str(v)): raise SystemExit(f'kernel.files[{name}] sha256 异常')
+    return str(v)
+print(' '.join(pick('kernel', True) + pick('app', False) + [filesha('bin/sing-box'), filesha('bin/mihomo')]))
 PY
 ) || die "解析组件清单失败"
 # shellcheck disable=SC2086
 set -- $FIELDS
 KERNEL_VERSION=$1; KERNEL_ASSET=$2; KERNEL_SHA=$3; APP_ASSET=$5; APP_SHA=$6
+SINGBOX_FILE_SHA=$7; MIHOMO_FILE_SHA=$8
 log "内核版本:$KERNEL_VERSION"
 
 sha_of() { python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$1"; }
@@ -104,17 +114,51 @@ fetch_verified() { # <资产名> <期望sha256> <目标文件>
 
 # ---- 3. 内核包:下载、校验、解包 ----
 fetch_verified "$KERNEL_ASSET" "$KERNEL_SHA" "$TMP/kernel.tar.gz"
-tar -tzf "$TMP/kernel.tar.gz" | while IFS= read -r entry; do
+# 先把清单读进变量再逐项检查:在管道里 die 会让 tar 报一句无关的 "write error"
+KERNEL_LIST=$(tar -tzf "$TMP/kernel.tar.gz") || die "读不了内核包"
+HAS_MIHOMO=0
+set -f # 清单里的名字不能被当成通配符展开
+for entry in $KERNEL_LIST; do
   case "$entry" in
     bin/|bin/sing-box|bin/sing-box.LICENSE|bin/sing-box.BUILD-INFO.json) ;;
+    bin/mihomo|bin/mihomo.LICENSE|bin/mihomo.SOURCE.txt) HAS_MIHOMO=1 ;;
     *) die "内核包里有预期之外的文件:$entry" ;;
   esac
 done
+set +f
 mkdir -p "$TMP/k"
 tar -xzf "$TMP/kernel.tar.gz" -C "$TMP/k"
 for f in sing-box sing-box.LICENSE sing-box.BUILD-INFO.json; do
   [ -f "$TMP/k/bin/$f" ] || die "内核包缺少 bin/$f"
 done
+if [ "$SINGBOX_FILE_SHA" != "-" ]; then
+  [ "$(sha_of "$TMP/k/bin/sing-box")" = "$SINGBOX_FILE_SHA" ] || die "bin/sing-box 的 sha256 与组件清单的 kernel.files 不符"
+fi
+
+# mihomo(上游 v0.1.433 起随内核包一起发):三个文件必须齐全,二进制哈希要和组件清单对上,
+# 版本取自 SOURCE.txt 里记录的源码包名(mihomo-<版本>-source.tar.gz),没有就不放行
+MIHOMO_VERSION=""
+MIHOMO_SRC_SHA=""
+if [ "$HAS_MIHOMO" = 1 ]; then
+  for f in mihomo mihomo.LICENSE mihomo.SOURCE.txt; do
+    [ -f "$TMP/k/bin/$f" ] || die "内核包里有 mihomo 但缺少 bin/$f"
+  done
+  [ "$MIHOMO_FILE_SHA" != "-" ] || die "内核包里有 bin/mihomo,但组件清单的 kernel.files 里没有它的哈希"
+  [ "$(sha_of "$TMP/k/bin/mihomo")" = "$MIHOMO_FILE_SHA" ] || die "bin/mihomo 的 sha256 与组件清单的 kernel.files 不符"
+  MIHOMO_INFO=$(python3 - "$TMP/k/bin/mihomo.SOURCE.txt" <<'PY'
+import re, sys
+t = open(sys.argv[1], encoding='utf-8').read()
+m = re.search(r'(mihomo-(v[0-9A-Za-z._-]+)-source\.tar\.gz)\s+sha256:([0-9a-f]{64})', t)
+if not m: raise SystemExit('mihomo.SOURCE.txt 里没有「源码包名 sha256:哈希」')
+print(m.group(2), m.group(3))
+PY
+  ) || die "解析 mihomo.SOURCE.txt 失败"
+  MIHOMO_VERSION=${MIHOMO_INFO%% *}
+  MIHOMO_SRC_SHA=${MIHOMO_INFO##* }
+  log "mihomo 版本:$MIHOMO_VERSION"
+elif [ "$MIHOMO_FILE_SHA" != "-" ]; then
+  die "组件清单的 kernel.files 里有 bin/mihomo,内核包里却没有"
+fi
 
 python3 - "$TMP/k/bin/sing-box.BUILD-INFO.json" "$TMP/k/bin/sing-box" "$KERNEL_VERSION" "$GOARCH" <<'PY' || die "内核 BUILD-INFO 校验失败"
 import hashlib, json, sys
@@ -132,6 +176,12 @@ cp "$TMP/k/bin/sing-box" "$BUNDLE/sing-box"
 chmod +x "$BUNDLE/sing-box"
 cp "$TMP/k/bin/sing-box.LICENSE" "$BUNDLE/LICENSE"
 cp "$TMP/k/bin/sing-box.BUILD-INFO.json" "$BUNDLE/BUILD-INFO.json"
+if [ -n "$MIHOMO_VERSION" ]; then
+  cp "$TMP/k/bin/mihomo" "$BUNDLE/mihomo"
+  chmod +x "$BUNDLE/mihomo"
+  cp "$TMP/k/bin/mihomo.LICENSE" "$BUNDLE/mihomo.LICENSE"
+  cp "$TMP/k/bin/mihomo.SOURCE.txt" "$BUNDLE/mihomo.SOURCE.txt"
+fi
 log "内核已就绪:$BUNDLE"
 
 # ---- 4. 对应源码(GPL:分发二进制就要能拿到对应源码;发布时附在 Release 里)----
@@ -143,6 +193,19 @@ if fetch "$BASE/download/$SOURCE_TAG/$SRC" "$OUT/$SRC" && fetch "$BASE/download/
 else
   rm -f "$OUT/$SRC" "$OUT/$SRC.sha256"
   die "取不到内核对应源码 $SRC(上游版本 $SOURCE_TAG);没有源码不能分发这个二进制"
+fi
+
+# mihomo 同样是 GPL:对应源码(SOURCE.txt 里记录了文件名和 sha256)一并取回,发布时附在 Release 里
+if [ -n "$MIHOMO_VERSION" ]; then
+  MSRC="mihomo-$MIHOMO_VERSION-source.tar.gz"
+  if fetch "$BASE/download/$SOURCE_TAG/$MSRC" "$OUT/$MSRC"; then
+    [ "$(sha_of "$OUT/$MSRC")" = "$MIHOMO_SRC_SHA" ] || die "$MSRC 的 sha256 与 mihomo.SOURCE.txt 记录的不符"
+    printf '%s  %s\n' "$MIHOMO_SRC_SHA" "$MSRC" > "$OUT/$MSRC.sha256"
+    log "mihomo 对应源码已取回:$MSRC(取自 $SOURCE_TAG)"
+  else
+    rm -f "$OUT/$MSRC"
+    die "取不到 mihomo 对应源码 $MSRC(上游版本 $SOURCE_TAG);没有源码不能分发这个二进制"
+  fi
 fi
 
 # ---- 5. 缺 madvise 的固件用的兼容库(属于上游 app 组件;取不到只警告,不影响其它固件)----
@@ -164,6 +227,7 @@ fi
   echo "tag=$TAG"
   echo "source_tag=$SOURCE_TAG"
   echo "kernel_version=$KERNEL_VERSION"
+  [ -z "$MIHOMO_VERSION" ] || echo "mihomo_version=$MIHOMO_VERSION"
   echo "arch=$GOARCH"
   echo "fetched_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$OUT/KERNEL-SOURCE.txt"

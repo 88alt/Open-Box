@@ -303,6 +303,12 @@ jobs:
           SINGBOX_VERSION=$(python3 -c "import json;print(json.load(open('dist-release/open-box-linux-x64-components.json'))['components']['kernel']['version'])")
           KERNEL_TAG="${{ needs.kernel-tag.outputs.tag }}"
           SOURCE_TAG="${{ needs.kernel-tag.outputs.source_tag }}"
+          # 上游内核包带 mihomo 时(v0.1.433 起),源码包 mihomo-<版本>-source.tar.gz 也在附件里,版本从文件名取
+          MIHOMO_SRC=$(ls dist-release/mihomo-*-source.tar.gz 2>/dev/null | head -n 1 || true)
+          MIHOMO_VERSION=""
+          if [ -n "$MIHOMO_SRC" ]; then
+            MIHOMO_VERSION=$(basename "$MIHOMO_SRC" | sed -E 's/^mihomo-(.*)-source\.tar\.gz$/\1/')
+          fi
           {
             echo "## Open-Box ${{ env.RELEASE_TAG }}"
             echo ""
@@ -310,6 +316,9 @@ jobs:
               echo "- sing-box 内核版本:\`$SINGBOX_VERSION\`(取自 \`$OPENBOX_KERNEL_REPO\` 的 \`$KERNEL_TAG\` Release;对应源码 \`sing-box-$SINGBOX_VERSION-source.tar.gz\` 取自 \`$SOURCE_TAG\`,见本 Release 附件)"
             else
               echo "- sing-box 内核版本:\`$SINGBOX_VERSION\`(从本仓库源码补丁构建，精简功能集，纯 Go 静态链接)"
+            fi
+            if [ -n "$MIHOMO_VERSION" ]; then
+              echo "- mihomo 内核版本:\`$MIHOMO_VERSION\`(随上游内核包一起发布;对应源码 \`mihomo-$MIHOMO_VERSION-source.tar.gz\` 见本 Release 附件)"
             fi
             echo "- Node 运行时版本:\`$NODE_VERSION\`(musl 构建,glibc 版本在 OpenWrt 上无法运行)"
             echo ""
