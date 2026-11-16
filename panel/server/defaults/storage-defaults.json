@@ -15,7 +15,7 @@
   "config/connection-sort-direction": "desc",
   "config/connection-sort-type": "downloadSpeed",
   "config/connection-table-columns-v2": "[\"sourceIP\",\"outbound\",\"host\",\"dlSpeed\",\"ulSpeed\",\"connectTime\"]",
-  "config/corner-radius": "25",
+  "config/corner-radius": "15",
   "config/custom-background-image": "local-image-1788361724032",
   "config/custom-global-node-name": "GLOBAL",
   "config/dark-theme": "dark",
