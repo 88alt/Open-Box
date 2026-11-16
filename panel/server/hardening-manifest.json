@@ -8,15 +8,15 @@
     "goVersion": "1.25.12",
     "os": "linux",
     "arch": "amd64",
-    "sha256": "093e44e51b6858ab823e52cb82288d2db23203ed0c36a7467c455a6e5418dc44",
+    "sha256": "f85d500a9ad1c51b6dea7bd94561835d6a9cd5c66bd4cf37e7ab9a6b1e26927d",
     "size": 3940500,
-    "bindingSha256": "64e4fca8643995d9352f48ee07a354f16c9d9551baad97df56d327d7e9af9c3a"
+    "bindingSha256": "49cf0ea8532c4e852c0677c47636a0d8e1d7bb4d77bb52c90abe97349c8b90cd"
   },
   "files": {
-    "native/openbox-core": "093e44e51b6858ab823e52cb82288d2db23203ed0c36a7467c455a6e5418dc44",
-    "native/core-build.json": "0d44f525b7a7efe7d5ed205949ddb1257052298b78403c08b7f412d0538caa5e",
-    "index.mjs": "8fb4059b574748369df1c472acf075a9ca17a229b451023e7e75c142fced0ae0",
-    "cli/deploy.mjs": "b8952f5d94b41d72c7ef1db2d01b5d740e115e90af1f8f5c9f2e8b8bd63f10b6",
+    "native/openbox-core": "f85d500a9ad1c51b6dea7bd94561835d6a9cd5c66bd4cf37e7ab9a6b1e26927d",
+    "native/core-build.json": "8568b0b227aa22039b4f92326c787d5efb8435b5e62a2c912f82a6b5aed9606a",
+    "index.mjs": "7cf214f47d168be9b15b78976c979a84435532cc0ca9f40d1f0da92d21f6a3e6",
+    "cli/deploy.mjs": "c9067a432810fa342b45616b12c848f241e9ee6f3dc8604e1c511ac6ff6a3e94",
     "system/access-password-cli.mjs": "2f9078ceaf704e590fcc9ba0fa4b1775cbc60183bfc49c8ff94b5cf6fa2a9005",
     "system/component-update.mjs": "18cadaaa428ddb9f61a50ab389a2dcafbe953e6fcdff4188fd98cfefa3b7e898",
     "system/dns-filter-parse.mjs": "33baea7c21b0df7abf778041d50e32fa5a6cbcd8de9b2cc585c3c762abd53336",
