@@ -5,6 +5,7 @@
 #   open-box password     只打印面板密码(LuCI 的 Open-Box 页面也调这一条)。退出码:0 有 / 3 还没设置 / 1 读不了
 #   open-box restart      重启内核和面板:内核和面板里点「重启」一样重新生成配置再启动,面板重启服务
 #   open-box start        生成配置并启动内核(和面板里点「启动」同一条流程;--detach 后台跑、--status 看结果,LuCI 页面用)
+#   open-box kernel-info  读取已选内核和本机两个内核的版本(LuCI 页面用)
 #   open-box check        只检查有没有新版本,不升级。输出三行:current=… latest=… status=latest|update|unknown
 #   open-box update       直接升级(等同于 sh /opt/open-box/update.sh,沿用安装时选的下载通道)
 #   open-box uninstall    卸载(等同于 sh /opt/open-box/uninstall.sh;默认保留 data/,脚本会当场问)
@@ -242,7 +243,29 @@ DEPLOY_LOG=/tmp/openbox-deploy.log
 
 # 跑一次部署;最后一行是 cli/deploy.mjs 打的结果 JSON({"ok":…,"message":…,"warning":…})
 run_deploy() {
-  ( export OPENBOX_ROOT="$ROOT" ZASHBOARD_DB_PATH="$DB"; run_node "$ROOT/panel/server/cli/deploy.mjs" )
+  ( export OPENBOX_ROOT="$ROOT" ZASHBOARD_DB_PATH="$DB"; run_node "$ROOT/panel/server/cli/deploy.mjs" "$@" )
+}
+
+cmd_kernel_info() (
+  OPENBOX_ROOT="$ROOT"
+  . "$ROOT/openwrt/bin/openbox-kernel" || exit 1
+  openbox_kernel_paths || exit 1
+  printf 'kernel=%s\n' "$OPENBOX_KERNEL"
+  if [ -x "$ROOT/bin/sing-box" ]; then
+    _info=$("$ROOT/bin/sing-box" version 2>/dev/null) || _info=''
+    printf '%s\n' "$_info" | sed -n '1s/^sing-box version \([^[:space:]]\{1,\}\).*/sing-box=\1/p'
+  fi
+  if [ -x "$ROOT/bin/mihomo" ]; then
+    _info=$("$ROOT/bin/mihomo" -v 2>/dev/null) || _info=''
+    printf '%s\n' "$_info" | sed -n '1s/^Mihomo \(Meta \)\{0,1\}\(v\{0,1\}[0-9][^[:space:]]*\).*/mihomo=\2/p'
+  fi
+)
+
+valid_deploy_target() {
+  case "${1:-}" in
+    ''|sing-box|mihomo) [ "$#" -le 1 ] ;;
+    *) return 1 ;;
+  esac
 }
 
 # 从结果 JSON 里取一个字符串字段,只给人看(遇到转义的引号截断也无妨)
@@ -251,15 +274,19 @@ json_field() {
 }
 
 cmd_start() {
-  case "${1:-}" in
-    --detach) cmd_start_detach; return ;;
-    --status) cat "$DEPLOY_STATUS" 2>/dev/null || echo none; return 0 ;;
+  _mode=''
+  case "${1:-}" in --detach|--status) _mode="$1"; shift ;; esac
+  valid_deploy_target "$@" || { echo '不支持的路由器内核' >&2; return 2; }
+  # 切换和普通启动各自有状态，避免 LuCI 读到另一种操作的结果。
+  case "$_mode" in
+    --detach) cmd_start_detach "$@"; return ;;
+    --status) cat "$DEPLOY_STATUS${1:+.$1}" 2>/dev/null || echo none; return 0 ;;
   esac
-  _out=$(run_deploy 2>&1)
+  _out=$(run_deploy "$@" 2>&1)
   _rc=$?
   _res=$(printf '%s\n' "$_out" | tail -n 1)
   # 后台跑(--detach)时把结果写进状态文件,LuCI 页面靠它判断这次部署做完没有、成没成
-  [ "${OPENBOX_DEPLOY_WORKER:-0}" = "1" ] && printf '%s\n' "$_res" > "$DEPLOY_STATUS"
+  [ "${OPENBOX_DEPLOY_WORKER:-0}" = "1" ] && printf '%s\n' "$_res" > "$DEPLOY_STATUS${1:+.$1}"
   if [ "$_rc" = 0 ]; then
     printf '  openbox: 已生成配置并启动\n'
     _w=$(json_field "$_res" warning)
@@ -277,17 +304,17 @@ cmd_start() {
 # 输出全重定向了、早跑完了也一样),LuCI 等到超时报「操作失败:XHR request timed out」,内核其实起来了(GitHub #469;
 # 开发路由器 OpenWrt 25.12 上 ubus call file exec 实测:直接 & 等满 60 秒超时,套子壳 0 秒返回)
 cmd_start_detach() {
-  echo running > "$DEPLOY_STATUS"
+  echo running > "$DEPLOY_STATUS${1:+.$1}" || return 1
   if command -v setsid >/dev/null 2>&1; then
-    ( OPENBOX_DEPLOY_WORKER=1 setsid sh "$0" start > "$DEPLOY_LOG" 2>&1 < /dev/null & )
+    ( OPENBOX_DEPLOY_WORKER=1 setsid sh "$0" start "$@" > "$DEPLOY_LOG" 2>&1 < /dev/null & )
   elif command -v busybox >/dev/null 2>&1 && busybox setsid true >/dev/null 2>&1; then
-    ( OPENBOX_DEPLOY_WORKER=1 busybox setsid sh "$0" start > "$DEPLOY_LOG" 2>&1 < /dev/null & )
+    ( OPENBOX_DEPLOY_WORKER=1 busybox setsid sh "$0" start "$@" > "$DEPLOY_LOG" 2>&1 < /dev/null & )
   else
     # 连 nohup 都可能没有(#406 那种固件):有就套上,没有就靠 subshell 里忽略的信号直接起
     _ob_nohup=""
     if command -v nohup >/dev/null 2>&1; then _ob_nohup="nohup"; fi
     # shellcheck disable=SC2086
-    ( trap '' HUP INT TERM; OPENBOX_DEPLOY_WORKER=1 $_ob_nohup sh "$0" start > "$DEPLOY_LOG" 2>&1 < /dev/null & ) > /dev/null 2>&1
+    ( trap '' HUP INT TERM; OPENBOX_DEPLOY_WORKER=1 $_ob_nohup sh "$0" start "$@" > "$DEPLOY_LOG" 2>&1 < /dev/null & ) > /dev/null 2>&1
   fi
   echo "已在后台生成配置并启动内核(open-box start --status 看结果)"
 }
@@ -400,10 +427,11 @@ case "${1:-}" in
   password) cmd_password ;;
   restart) cmd_restart ;;
   start) shift; cmd_start "$@" ;;
+  kernel-info) cmd_kernel_info ;;
   port) shift; cmd_port "$@" ;;
   check) cmd_check ;;
   update) shift; cmd_update "$@" ;;
   uninstall) shift; cmd_uninstall "$@" ;;
-  -h|--help|help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) echo "未知命令:$1(open-box --help 看用法)" >&2; exit 2 ;;
 esac
