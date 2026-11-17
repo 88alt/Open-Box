@@ -1,0 +1,1 @@
+const l=e=>{let t=Promise.resolve(),r=0;return{persist:i=>{e.list.value=i;const a=++r;return t=t.then(async()=>{if(a===r)try{const n=await e.save(e.list.value);if(a!==r)return;e.apply(n),e.onSaved?.()}catch(n){if(a!==r)return;e.onError?.(n);try{const s=await e.reload();a===r&&e.apply(s)}catch{}}}),t}}};export{l as u};

@@ -1,0 +1,1 @@
+const r={domain:"ruleTypeDomain",domain_suffix:"ruleTypeDomainSuffix",domain_keyword:"ruleTypeDomainKeyword",domain_regex:"ruleTypeDomainRegex",ip_cidr:"ruleTypeIpCidr"},i=e=>r[e]||"ruleTypeOther";export{i as r};

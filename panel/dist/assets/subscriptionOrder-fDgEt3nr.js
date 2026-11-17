@@ -1,0 +1,1 @@
+const i=(n,e,c)=>{const s=new Map;e.forEach((r,t)=>{r&&!s.has(r)&&s.set(r,t)});const o=r=>{const t=c(r);return t?s.get(t)??Number.MAX_SAFE_INTEGER:-1};return[...n].sort((r,t)=>o(r)-o(t))};export{i as s};
