@@ -159,22 +159,26 @@ jobs:
       # 内核包里除了 sing-box,还带着 mihomo 二进制。分发二进制就要能拿到对应源码(GPL),
       # 上游把 mihomo 源码包(mihomo-<版本>-source.tar.gz)放在同一个 Release 里。
       # 文件名按 mihomo 二进制自报的版本拼,取自 OPENBOX_SOURCE_TAG,校验 sha256;版本对不上就失败。
+      # (上面第三行的说明已过时)现在不依赖内核包里有 mihomo 二进制,也不拼文件名:
+      # 直接列出上游 Release 的资产,按 mihomo-*-source.tar.gz 匹配(文件名带 -openbox.N 后缀),校验 sha256。
       - name: Attach corresponding mihomo source
         if: matrix.arch == 'amd64' && env.OPENBOX_KERNEL_SOURCE == 'upstream'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          bin=$(find kernel-build -type f -name mihomo -print -quit)
-          if [ -z "$bin" ]; then
-            echo "::warning::内核包里没有 mihomo,本次不附带 mihomo 源码"
+          api="https://api.github.com/repos/$OPENBOX_KERNEL_REPO/releases/tags/$OPENBOX_SOURCE_TAG"
+          curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            -o release.json "$api"
+          name=$(python3 -c 'import json,re;a=[x["name"] for x in json.load(open("release.json"))["assets"]];m=[n for n in a if re.fullmatch(r"mihomo-.+-source\.tar\.gz",n)];print(m[0] if m else "")')
+          if [ -z "$name" ]; then
+            echo "::warning::上游 $OPENBOX_SOURCE_TAG 里没有 mihomo 源码包,本次不附带"
             exit 0
           fi
-          chmod +x "$bin"
-          ver=$("$bin" -v | head -n 1 | grep -o 'v[0-9][0-9A-Za-z._-]*' | head -n 1)
-          case "$ver" in v[0-9]*) ;; *) echo "读不出 mihomo 版本号:「$ver」" >&2; exit 1 ;; esac
-          name="mihomo-$ver-source.tar.gz"
           base="https://github.com/$OPENBOX_KERNEL_REPO/releases/download/$OPENBOX_SOURCE_TAG"
           curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 -o "kernel-source/$name" "$base/$name" \
-            || { echo "上游 $OPENBOX_SOURCE_TAG 里没有 $name(源码版本要与 mihomo 二进制 $ver 对应)" >&2; exit 1; }
+            || { echo "下载 $name 失败" >&2; exit 1; }
           curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 -o "kernel-source/$name.sha256" "$base/$name.sha256" \
             || { echo "上游缺少 $name.sha256" >&2; exit 1; }
           want=$(awk 'NR==1{print $1}' "kernel-source/$name.sha256")
