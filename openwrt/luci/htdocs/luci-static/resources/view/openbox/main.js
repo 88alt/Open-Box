@@ -24,7 +24,13 @@ var I18N = {
 		'No password yet. Open %s in a browser and set one on first visit.': '还没有设置密码。用浏览器打开 %s,首次打开时设置。',
 		'Could not read the password (the panel database is missing, or the Node runtime is unavailable).':
 			'读不到密码(面板数据库不在,或 Node 运行时不可用)。',
-		'sing-box core': 'sing-box 内核',
+		'Core': '内核',
+		'%s core': '%s 内核',
+		'Select core': '选择内核',
+		'Core information unavailable': '无法读取内核信息',
+		'Version unavailable': '无法读取版本',
+		'Switch core': '切换内核',
+		'Switch to %s and start it? Network access may briefly be interrupted.': '切换并启动 %s？网络可能短暂中断。',
 		'Open-Box panel': 'Open-Box 面板',
 		'Open-Box upgrade': 'Open-Box 升级',
 		'Stopping also turns off autostart (so it stays stopped after a reboot) and restores plain internet access: the IPv6 leak block and the Open-Box DNS upstream are removed. The panel stays reachable.':
@@ -146,7 +152,13 @@ var I18N = {
 		'No password yet. Open %s in a browser and set one on first visit.': '還沒有設定密碼。用瀏覽器開啟 %s,首次開啟時設定。',
 		'Could not read the password (the panel database is missing, or the Node runtime is unavailable).':
 			'讀不到密碼(面板資料庫不在,或 Node 執行環境不可用)。',
-		'sing-box core': 'sing-box 核心',
+		'Core': '核心',
+		'%s core': '%s 核心',
+		'Select core': '選擇核心',
+		'Core information unavailable': '無法讀取核心資訊',
+		'Version unavailable': '無法讀取版本',
+		'Switch core': '切換核心',
+		'Switch to %s and start it? Network access may briefly be interrupted.': '切換並啟動 %s？網路可能短暫中斷。',
 		'Open-Box panel': 'Open-Box 面板',
 		'Open-Box upgrade': 'Open-Box 升級',
 		'Stopping also turns off autostart (so it stays stopped after a reboot) and restores plain internet access: the IPv6 leak block and the Open-Box DNS upstream are removed. The panel stays reachable.':
@@ -333,14 +345,26 @@ function isRunning(serviceListResult, name) {
 function serviceState(name) {
 	return Promise.all([ callInitList(name), callServiceList(name) ]).then(function (res) {
 		var initEntry = res[0][name] || {};
-		return { enabled: initEntry.enabled === true, running: isRunning(res[1], name) };
+		var state = { enabled: initEntry.enabled === true, running: isRunning(res[1], name) };
+		if (name === 'openbox' && state.running) {
+			var instances = res[1][name].instances;
+			Object.keys(instances).some(function (key) {
+				var instance = instances[key];
+				var match = instance && instance.running === true && Array.isArray(instance.command) &&
+					/^\/opt\/open-box\/bin\/(sing-box|mihomo)$/.exec(instance.command[0]);
+				if (!match) return false;
+				state.kernel = match[1];
+				return true;
+			});
+		}
+		return state;
 	}).catch(function () {
 		return { enabled: false, running: false };
 	});
 }
 
 // 按顺序执行一串 init 动作,全部成功才提示成功。内核的「停止」需要 stop + disable
-// 两步(见下方 render() 里 sing-box 内核卡片的说明),所以这里接受数组而不是单个动作。
+// 两步,所以这里接受数组而不是单个动作。
 function act(name, actions) {
 	var list = (typeof actions === 'string') ? [ actions ] : actions;
 	var chain = Promise.resolve();
@@ -369,9 +393,16 @@ function act(name, actions) {
 // `open-box start --status`:running = 还在跑,否则是 cli/deploy.mjs 的结果 JSON
 var DEPLOY_POLL_MS = 2000;
 var DEPLOY_WAIT_MS = 180000;
+var coreDeployNotice;
 
-function deployCore() {
-	return fs.exec(CLI_PATH, [ 'start', '--detach' ]).then(function (res) {
+function notifyCoreDeploy(content, type) {
+	if (coreDeployNotice) coreDeployNotice.remove();
+	coreDeployNotice = ui.addNotification(null, E('p', content), type);
+}
+
+function deployCore(target) {
+	var start = target ? fs.exec(CLI_PATH, [ 'start', '--detach', target ]) : fs.exec(CLI_PATH, [ 'start', '--detach' ]);
+	return start.then(function (res) {
 		if (!res || res.code !== 0) {
 			throw new Error((res && (res.stderr || res.stdout)) || ('exit ' + (res && res.code)));
 		}
@@ -379,48 +410,55 @@ function deployCore() {
 		// 这条请求没等到回话(XHR request timed out):老版本命令行派发后台部署的写法会让 rpcd 一直不回(GitHub #469,
 		// 见命令行 cmd_start_detach),命令其实已经派发了。状态还是「在部署」就接着等结果;已经跑完的结果分不清是不是
 		// 这一次的,不断成败——提示稍后再看,刷新页面让状态跟上(以前直接报「操作失败」,内核却已经起来了)
-		return fs.exec(CLI_PATH, [ 'start', '--status' ]).catch(function () { return null; }).then(function (res) {
+		return readDeployStatus(target).then(function (res) {
 			if (String((res && res.stdout) || '').trim() === 'running') return;
 			var uncertain = new Error(err && err.message ? err.message : String(err));
 			uncertain.uncertain = true;
 			throw uncertain;
 		});
 	}).then(function () {
-		ui.addNotification(null, E('p', tr('Generating the config and starting the core…')), 'info');
-		return waitDeploy(Date.now() + DEPLOY_WAIT_MS);
+		notifyCoreDeploy(tr('Generating the config and starting the core…'), 'info');
+		return waitDeploy(Date.now() + DEPLOY_WAIT_MS, target);
 	}).then(function (result) {
 		if (result === null) {
-			ui.addNotification(null, E('p', tr('The core is still starting. Check it in the Open-Box panel (Backend) in a moment.')), 'warning');
+			notifyCoreDeploy(tr('The core is still starting. Check it in the Open-Box panel (Backend) in a moment.'), 'warning');
 		} else if (result.ok) {
-			ui.addNotification(null, E('p', [ tr('Core started.') ].concat(result.warning ? [ ' ', result.warning ] : [])), 'info');
+			notifyCoreDeploy([ tr('Core started.') ].concat(result.warning ? [ ' ', result.warning ] : []), 'info');
 		} else {
-			ui.addNotification(null, E('p', fmt('The core did not start: %s', result.message || '')), 'error');
+			notifyCoreDeploy(fmt('The core did not start: %s', result.message || ''), 'error');
 		}
 		window.setTimeout(function () { location.reload(); }, 1500);
+		return true;
 	}).catch(function (err) {
 		if (err && err.uncertain) {
-			ui.addNotification(null, E('p', tr('The core is still starting. Check it in the Open-Box panel (Backend) in a moment.')), 'warning');
+			notifyCoreDeploy(tr('The core is still starting. Check it in the Open-Box panel (Backend) in a moment.'), 'warning');
 			window.setTimeout(function () { location.reload(); }, 3000);
-			return;
+			return true;
 		}
-		ui.addNotification(null, E('p', fmt('Action failed: %s', err.message || err)), 'error');
+		notifyCoreDeploy(fmt('Action failed: %s', err.message || err), 'error');
+		return false;
 	});
 }
 
 // 等后台部署结束:返回结果对象 {ok,message,warning};到时限还在跑返回 null
-function waitDeploy(deadline) {
+function readDeployStatus(target) {
+	var status = target ? fs.exec(CLI_PATH, [ 'start', '--status', target ]) : fs.exec(CLI_PATH, [ 'start', '--status' ]);
+	return status.catch(function () { return null; });
+}
+
+function waitDeploy(deadline, target) {
 	return new Promise(function (resolve) { window.setTimeout(resolve, DEPLOY_POLL_MS); }).then(function () {
-		return fs.exec(CLI_PATH, [ 'start', '--status' ]).catch(function () { return null; });
+		return readDeployStatus(target);
 	}).then(function (res) {
 		var text = String((res && res.stdout) || '').trim();
-		if (text !== 'running' && text !== '') {
+		if (text !== 'running' && text !== 'none' && text !== '') {
 			try {
 				return JSON.parse(text);
 			} catch (e) {
 				return { ok: false, message: text };
 			}
 		}
-		return Date.now() < deadline ? waitDeploy(deadline) : null;
+		return Date.now() < deadline ? waitDeploy(deadline, target) : null;
 	});
 }
 
@@ -439,18 +477,19 @@ function readInstalledVersion() {
 	});
 }
 
-// sing-box 内核的版本号是随 Open-Box 发行版本一起钦定、写死进 meta.json 的构建期
-// 常量(见 scripts/build-release.sh 的 SINGBOX_VERSION),不是探测运行中的二进制
-// 现查出来的——这里只是读出这个钦定值展示给用户。之所以不提供独立于 Open-Box 发行
-// 版本的内核升级入口:发布时生成的 sing-box 配置是照着这个确切版本量身写的,而
-// sing-box 的配置 schema 在小版本之间会变(例如 1.11 → 1.12 整个重写了 DNS 段)。
-// 独立升级内核会打破"配置版本"与"内核版本"的对应关系,新内核可能直接拒绝启动
-// 旧配置。所以内核版本随 Open-Box 整个发行版本一起走:要升级内核,走 Open-Box
-// 面板区块的"立即更新"(见 render() 里 sing-box 内核卡片的说明文字)。
-function readInstalledSingboxVersion() {
-	return fs.read(META_PATH).then(function (txt) {
-		var meta = JSON.parse(txt);
-		return meta && meta.singboxVersion ? String(meta.singboxVersion) : null;
+var KERNEL_NAMES = { 'sing-box': 'sing-box', 'mihomo': 'Mihomo' };
+
+function readKernelInfo() {
+	return fs.exec(CLI_PATH, [ 'kernel-info' ]).then(function (res) {
+		if (!res || res.code !== 0) return null;
+		var info = { kernel: '', versions: {} };
+		String(res.stdout || '').split(/\r?\n/).forEach(function (line) {
+			var match = /^(kernel|sing-box|mihomo)=([^\s]+)$/.exec(line);
+			if (!match) return;
+			if (match[1] === 'kernel') info.kernel = match[2];
+			else info.versions[match[1]] = match[2];
+		});
+		return Object.prototype.hasOwnProperty.call(KERNEL_NAMES, info.kernel) ? info : null;
 	}).catch(function () {
 		return null;
 	});
@@ -1020,8 +1059,7 @@ var ROW = 'display:flex;flex-wrap:wrap;align-items:center;gap:.5em;margin:.4em 0
 var BTNROW = 'display:flex;flex-wrap:wrap;gap:.5em;margin:.8em 0 .2em 0';
 
 // 注入到渲染树最前面的命名空间样式表:所有类名都以 `ob-` 开头,避免和 LuCI
-// 主题的 CSS 撞车。2×2 网格 + 900px 断点收缩成单列是这里唯一的媒体查询,
-// align-items:start 让矮的卡片保持自身高度、不被网格拉伸成一格空盒子。
+// 主题的 CSS 撞车。服务卡片在同一行时等高，900px 以下改成单列。
 var STYLE_CSS =
 	// 页面标题行:标题在左、卸载按钮在最右。卸载原本是网格里的第四张卡片,但
 	// 那让一个纯破坏性动作占据了和三个日常功能同等的版面权重;现在它退到页面
@@ -1053,11 +1091,11 @@ var STYLE_CSS =
 	// 副标题末尾那条面板地址:靠 margin-left 和前面的文案分开,而不是在 i18n 词条
 	// 里塞一个尾随空格(不可见、编辑时极易丢),中英文冒号后的松紧也能各自合适。
 	'.ob-descr a{margin-left:.4em}' +
-	'.ob-head-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}' +
+	'.ob-head-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:8px;max-width:100%;margin-inline-start:auto}' +
 	'.ob-pw-btn{vertical-align:baseline}' +
 	'.ob-pw-modal code{display:inline-block;margin-left:.4em;padding:2px 8px;border-radius:4px;' +
 	'background:rgba(127,127,127,.15);font-size:1.15em;user-select:all}' +
-	'.ob-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;margin-top:12px}' +
+	'.ob-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px}' +
 	// 卸载卡片撤走后网格只剩三张:两列排布会在右下角留一个空格子。让内容最多的
 	// 「Open-Box 升级」横跨两列把这个洞填掉(渠道列表另有 max-width 兜着,不会
 	// 被拉成横贯全屏的稀疏长条)。
@@ -1081,10 +1119,15 @@ var STYLE_CSS =
 	// 标题行右侧放按钮时(升级卡片的「一键检测可用升级渠道」)必须显式给字号,
 	// 否则它会继承 h3 的 1.05em 变成一颗大按钮,把标题行撑歪。
 	'.ob-card h3 .cbi-button{font-size:.875rem;font-weight:600;line-height:1.4}' +
+	'.ob-kernel-select{position:relative;display:inline-flex;max-width:100%}' +
+	'.ob-kernel-select select{appearance:none;width:auto;max-width:100%;padding-inline-end:2rem}' +
+	'.ob-kernel-select select:enabled{cursor:pointer}' +
+	'.ob-kernel-select::after{content:"";position:absolute;inset-inline-end:.875rem;top:50%;width:.4rem;height:.4rem;' +
+	'border:solid currentColor;border-width:0 1px 1px 0;transform:translateY(-75%) rotate(45deg);opacity:.65;pointer-events:none}' +
 	// margin-left:auto 不是为了单行时靠右(space-between 已经做到了),而是为了
 	// **换行之后**仍然靠右:卡片一窄,标题 + 状态徽标就占满第一行,版本号被挤到
 	// 第二行——那一行只有它一个,没有 auto 就会贴着左边缘,看着像另起了一段。
-	'.ob-ver{margin-left:auto;font-size:.85em;font-weight:600;opacity:.75;white-space:nowrap}' +
+	'.ob-ver{margin-left:auto;font-size:.85em;font-weight:600;opacity:.75;overflow-wrap:anywhere;text-align:end}' +
 	// font-weight/font-size 写死:徽标现在长在 <h3> 里,不写就会继承标题的粗体、
 	// 字号也跟着 h3 放大,一行里两种粗体读起来分不出主次。
 	'.ob-pill{display:inline-flex;align-items:center;gap:.35em;padding:.15em .65em;border-radius:999px;font-size:.8rem;font-weight:400;border:1px solid currentColor;white-space:nowrap}' +
@@ -1092,6 +1135,9 @@ var STYLE_CSS =
 	'.ob-pill-off{color:#d04a4a}' +
 	'.ob-pill-muted{opacity:.7;border-color:rgba(127,127,127,.4)}' +
 	'.ob-btns{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}' +
+	'.ob-service-card{display:flex;flex-direction:column}' +
+	'.ob-service-card>h3{margin-bottom:0}' +
+	'.ob-service-card>.ob-btns{margin-top:auto;padding-top:14px}' +
 	'.ob-meta{display:flex;flex-wrap:wrap;gap:.5em;align-items:baseline;margin:.4em 0;font-size:.95em}' +
 	// 卸载确认里的勾选框和说明文字必须共用一个行高与中线。LuCI 主题通常会给
 	// 原生 input/label 追加各自的 margin、line-height,只靠父级 align-items:center
@@ -1134,13 +1180,13 @@ return view.extend({
 			serviceState('openbox'),
 			serviceState('openbox-panel'),
 			readInstalledVersion(),
-			readInstalledSingboxVersion(),
+			readKernelInfo(),
 			readPanelPort()
 		]);
 	},
 
 	render: function (data) {
-		var core = data[0], panel = data[1], installed = data[2], singboxVersion = data[3];
+		var core = data[0], panel = data[1], installed = data[2], kernelInfo = data[3];
 		var panelPort = data[4] || 2026;
 		var panelUrl = 'http://' + window.location.hostname + ':' + panelPort;
 		var self = this;
@@ -1212,8 +1258,48 @@ return view.extend({
 		// 直接把三者平铺进去的话,徽标会被摊到行正中间,而不是"贴着标题"。
 		function cardTitle(title, st, version) {
 			return E('h3', {}, [
-				E('div', { 'class': 'ob-h3-left' }, [ E('span', {}, title) ].concat(statusPills(st))),
+				E('div', { 'class': 'ob-h3-left' }, [ title ].concat(statusPills(st))),
 				E('span', { 'class': 'ob-ver' }, version)
+			]);
+		}
+
+		var currentKernel = core.kernel || (kernelInfo && kernelInfo.kernel);
+		var coreTitle = currentKernel ? fmt('%s core', KERNEL_NAMES[currentKernel]) : tr('Core');
+		var kernelVersions = kernelInfo ? kernelInfo.versions : {};
+		var kernelVersion = kernelVersions[currentKernel];
+		var coreButtons = serviceButtons('openbox', core, [ 'stop', 'disable' ],
+			tr('Stopping also turns off autostart (so it stays stopped after a reboot) and restores plain internet access: the IPv6 leak block and the Open-Box DNS upstream are removed. The panel stays reachable.'));
+		var kernelSelect = E('select', {
+			'class': 'cbi-input-select', 'aria-label': tr('Select core'), 'change': function () {
+				var target = kernelSelect.value;
+				kernelSelect.value = currentKernel || '';
+				if (target !== currentKernel && kernelVersions[target]) showKernelSwitchDialog(target);
+			}
+		}, (currentKernel ? [] : [ E('option', { 'value': '' }, tr('Core information unavailable')) ]).concat(
+			Object.keys(KERNEL_NAMES).map(function (kernel) {
+				var unavailable = kernel !== currentKernel && !kernelVersions[kernel];
+				var option = E('option', { 'value': kernel }, KERNEL_NAMES[kernel] + (unavailable ? ' (' + tr('Unavailable') + ')' : ''));
+				option.disabled = unavailable;
+				return option;
+			})
+		));
+		kernelSelect.value = currentKernel || '';
+		kernelSelect.disabled = !kernelInfo;
+
+		function showKernelSwitchDialog(target) {
+			ui.showModal(tr('Switch core'), [
+				E('p', {}, fmt('Switch to %s and start it? Network access may briefly be interrupted.', KERNEL_NAMES[target])),
+				E('div', { 'class': 'right', 'style': BTNROW }, [
+					E('button', { 'class': 'cbi-button', 'click': function () { ui.hideModal(); } }, tr('Cancel')),
+					E('button', { 'class': 'cbi-button cbi-button-apply', 'click': ui.createHandlerFn(self, function () {
+						ui.hideModal();
+						var controls = [ kernelSelect ].concat(Array.from(coreButtons.querySelectorAll('button')));
+						controls.forEach(function (control) { control.disabled = true; });
+						return deployCore(target).then(function (reloading) {
+							if (!reloading) controls.forEach(function (control) { control.disabled = false; });
+						});
+					}) }, tr('Switch core'))
+				])
 			]);
 		}
 
@@ -1956,9 +2042,9 @@ return view.extend({
 						// 改成一个按钮,点了才去取、才弹出来——不点的话密码根本不进这个页面。
 					])
 				]),
-				// 右边一组:「查看密码」挨着「卸载」放(用户要求挪到后面)。密码不直接印在页面上:
-				// 谁路过、谁截图都看得见(反馈里的截图基本都带着它),点了才去取、才弹出来
+				// 内核选择器和页面级操作放在标题栏右侧。
 				E('div', { 'class': 'ob-head-actions' }, [
+					E('div', { 'class': 'ob-kernel-select' }, [ kernelSelect ]),
 					E('button', {
 						'class': 'cbi-button cbi-button-neutral ob-pw-btn',
 						'click': ui.createHandlerFn(self, showPasswordDialog)
@@ -1970,7 +2056,7 @@ return view.extend({
 			]),
 
 			// .ob-wrap > .ob-grid 是固定两列、900px 断点收缩成单列的网格(定义见
-			// STYLE_CSS),三张自成一体的功能块:第一行 sing-box 内核 + Open-Box
+			// STYLE_CSS),三张自成一体的功能块:第一行内核 + Open-Box
 			// 面板,第二行 Open-Box 升级横跨两列(.ob-card-wide,否则右下角会空一格)。
 			// DOM 顺序即视觉顺序(CSS 网格按源码顺序逐行填格,不需要额外的
 			// grid-area/order 声明)。卸载不在网格里,它在页面标题行右侧。
@@ -1983,22 +2069,10 @@ return view.extend({
 					// 把网搞断时停了内核、一重启又被拉起来,网再次断掉——那样的「停止」在真正
 					// 需要它的场景里是无效的。面板服务不做这件事:面板是唯一的管理入口,它应该
 					// 在重启后自己回来。
-					//
-					// 「sing-box 内核」这张卡片是一个自成一体的功能块:状态/控制在上,内核
-					// 版本 + 升级说明在下——内核版本号来自 meta.json 的 singboxVersion(构建期
-					// 钦定值,见 readInstalledSingboxVersion() 的注释),并且这里刻意不放一个
-					// 独立的"升级内核"按钮:内核版本与 Open-Box 发行版本是绑定发布的,配置是
-					// 照着这个确切内核版本生成的,独立升级内核有打破这层对应关系、生成的配置被
-					// 新内核拒绝启动的风险。升级入口统一指向下面「Open-Box 升级」卡片里的
-					// 「立即更新」——内核随整个发行版本一起换。
-					E('div', { 'class': 'ob-card' }, [
-						// 版本号右对齐放在标题行里:它本来是卡片底部一行带标签的
-						// 「内核版本: x.y.z」,加一条分隔线和一段说明。标签、分隔线、
-						// 说明都是冗余的——内核卡片里没有升级入口,升级统一在
-						// 「Open-Box 升级」卡片,这层关系不必再用文字重复一遍。
-						cardTitle(tr('sing-box core'), core, singboxVersion || tr('Not installed')),
-						serviceButtons('openbox', core, [ 'stop', 'disable' ],
-							tr('Stopping also turns off autostart (so it stays stopped after a reboot) and restores plain internet access: the IPv6 leak block and the Open-Box DNS upstream are removed. The panel stays reachable.'))
+					E('div', { 'class': 'ob-card ob-service-card' }, [
+						cardTitle(E('span', {}, coreTitle), core,
+							kernelVersion ? [ currentKernel + '-', E('strong', {}, kernelVersion) ] : tr('Version unavailable')),
+						coreButtons
 					]),
 
 					// 「Open-Box 面板」卡片同理是一个自成一体的功能块:标题行是标题 + 状态
@@ -2006,8 +2080,8 @@ return view.extend({
 					// "这张卡片自己的版本信息",单独成一张紧跟在后面的「Open-Box 升级」卡片
 					// (见下方),不再像旧版那样挤进面板卡片里。面板地址也不在这里了——它
 					// 挪到了页面副标题(见上方 .ob-descr)。
-					E('div', { 'class': 'ob-card' }, [
-						cardTitle(tr('Open-Box panel'), panel, installed || tr('Not installed')),
+					E('div', { 'class': 'ob-card ob-service-card' }, [
+						cardTitle(E('span', {}, tr('Open-Box panel')), panel, installed || tr('Not installed')),
 						serviceButtons('openbox-panel', panel, null, null, [
 							E('button', { 'class': 'cbi-button cbi-button-neutral',
 								'click': ui.createHandlerFn(self, showPortDialog) }, tr('Change port'))
