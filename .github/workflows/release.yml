@@ -155,6 +155,33 @@ jobs:
           set -eu
           mkdir -p kernel-source
           mv kernel-build/*-source.tar.gz kernel-build/*-source.tar.gz.sha256 kernel-source/
+
+      # 内核包里除了 sing-box,还带着 mihomo 二进制。分发二进制就要能拿到对应源码(GPL),
+      # 上游把 mihomo 源码包(mihomo-<版本>-source.tar.gz)放在同一个 Release 里。
+      # 文件名按 mihomo 二进制自报的版本拼,取自 OPENBOX_SOURCE_TAG,校验 sha256;版本对不上就失败。
+      - name: Attach corresponding mihomo source
+        if: matrix.arch == 'amd64' && env.OPENBOX_KERNEL_SOURCE == 'upstream'
+        run: |
+          set -eu
+          bin=$(find kernel-build -type f -name mihomo -print -quit)
+          if [ -z "$bin" ]; then
+            echo "::warning::内核包里没有 mihomo,本次不附带 mihomo 源码"
+            exit 0
+          fi
+          chmod +x "$bin"
+          ver=$("$bin" -v | head -n 1 | grep -o 'v[0-9][0-9A-Za-z._-]*' | head -n 1)
+          case "$ver" in v[0-9]*) ;; *) echo "读不出 mihomo 版本号:「$ver」" >&2; exit 1 ;; esac
+          name="mihomo-$ver-source.tar.gz"
+          base="https://github.com/$OPENBOX_KERNEL_REPO/releases/download/$OPENBOX_SOURCE_TAG"
+          curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 -o "kernel-source/$name" "$base/$name" \
+            || { echo "上游 $OPENBOX_SOURCE_TAG 里没有 $name(源码版本要与 mihomo 二进制 $ver 对应)" >&2; exit 1; }
+          curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 -o "kernel-source/$name.sha256" "$base/$name.sha256" \
+            || { echo "上游缺少 $name.sha256" >&2; exit 1; }
+          want=$(awk 'NR==1{print $1}' "kernel-source/$name.sha256")
+          got=$(sha256sum "kernel-source/$name" | awk '{print $1}')
+          [ "$want" = "$got" ] || { echo "$name 的 sha256 不符" >&2; exit 1; }
+          echo "mihomo 源码:$name(取自上游 $OPENBOX_SOURCE_TAG)"
+
       - uses: actions/upload-artifact@v4
         with:
           name: kernel-${{ matrix.arch }}
@@ -291,6 +318,17 @@ jobs:
           name: kernel-source
           path: dist-release
 
+      # 上游每个 Release 都带着 install.sh / update.sh / uninstall.sh(和各自的 .sha256),
+      # 路由器上的更新器会从 Release 下载 update.sh 并校验 sha256;这里取本次提交里的同名脚本,原样附上。
+      - name: Add install / update / uninstall scripts
+        run: |
+          set -eu
+          for s in install update uninstall; do
+            test -s "scripts/$s.sh"
+            cp "scripts/$s.sh" "dist-release/$s.sh"
+            (cd dist-release && sha256sum "$s.sh" > "$s.sh.sha256")
+          done
+
       - name: List release assets
         run: ls -la dist-release
 
@@ -337,6 +375,18 @@ jobs:
           } > release-notes.md
           cat release-notes.md
 
+      # 上面的发布说明只写了 sing-box,这里补一行 mihomo(没有 mihomo 源码包就不写)
+      - name: Add mihomo to release notes
+        run: |
+          set -eu
+          src=$(ls dist-release/mihomo-*-source.tar.gz 2>/dev/null | head -n 1 || true)
+          [ -n "$src" ] || exit 0
+          src=$(basename "$src")
+          ver=${src#mihomo-}
+          ver=${ver%-source.tar.gz}
+          sed -i "/^- Node /i - mihomo 内核版本:\`$ver\`(与 sing-box 同在内核包里;对应源码 \`$src\`,见本 Release 附件)" release-notes.md
+          cat release-notes.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -347,6 +397,7 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             dist-release/*.tar.gz
+            dist-release/*.sh
             dist-release/*.sha256
             dist-release/*components.json
 
