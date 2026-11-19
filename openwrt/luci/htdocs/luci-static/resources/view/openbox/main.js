@@ -1120,7 +1120,7 @@ var STYLE_CSS =
 	// 否则它会继承 h3 的 1.05em 变成一颗大按钮,把标题行撑歪。
 	'.ob-card h3 .cbi-button{font-size:.875rem;font-weight:600;line-height:1.4}' +
 	'.ob-kernel-select{position:relative;display:inline-flex;max-width:100%}' +
-	'.ob-kernel-select select{appearance:none;width:auto;max-width:100%;padding-inline-end:2rem}' +
+	'.ob-kernel-select select{appearance:none;-webkit-appearance:none;background-image:none;width:auto;max-width:100%;padding-inline-end:2rem}' +
 	'.ob-kernel-select select:enabled{cursor:pointer}' +
 	'.ob-kernel-select::after{content:"";position:absolute;inset-inline-end:.875rem;top:50%;width:.4rem;height:.4rem;' +
 	'border:solid currentColor;border-width:0 1px 1px 0;transform:translateY(-75%) rotate(45deg);opacity:.65;pointer-events:none}' +
@@ -1164,10 +1164,12 @@ var STYLE_CSS =
 	'.ob-chan-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border:1px solid rgba(127,127,127,.2);border-radius:8px}' +
 	'.ob-chan-row:hover{background:rgba(127,127,127,.06)}' +
 	'.ob-chan-radio{display:flex;align-items:center;gap:.5em;min-width:0;cursor:pointer}' +
-	// 主题(Argon)给所有 input 统一加了 padding / line-height / 边框 / 外边距,原生单选框
-	// 带着这些会比文字高出一截、圆点被压到文字基线以下(Windows 上尤其明显);这里
-	// 把它们全部还原、给个固定尺寸,让 flex 的 align-items:center 真正对上文字的中线
-	'.ob-chan-row .ob-chan-radio input{flex:none;width:16px;height:16px;margin:0;padding:0;border:0;border-radius:50%;box-shadow:none;line-height:1;position:static;vertical-align:middle;cursor:pointer}' +
+	// 主题(Argon/Carbon 等)会给 input 加 padding/line-height/伪元素。不能用 position:static:
+	// Carbon 等主题使用 `input[type="radio"]:checked::after{position:absolute;inset:4px;border-radius:50%;background:#fff}`,
+	// 若改成 static 会让伪元素脱离单选框、放大成整屏白色椭圆遮住整页(#910)。这里保持 position:relative
+	// 归零偏移，同时恢复原生 radio 并屏蔽主题伪元素，兼容所有 LuCI 主题。
+	'.ob-chan-row .ob-chan-radio input{flex:none;-webkit-appearance:radio;appearance:radio;width:16px;height:16px;margin:0;padding:0;border:0;border-radius:50%;background:transparent;box-shadow:none;line-height:1;position:relative;top:auto;right:auto;bottom:auto;left:auto;transform:none;vertical-align:middle;cursor:pointer}' +
+	'.ob-chan-row .ob-chan-radio input::before,.ob-chan-row .ob-chan-radio input::after{content:none;display:none}' +
 	'.ob-chan-name{line-height:1.3}' +
 	'.ob-chan-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
 	'.ob-chan-stat{margin-left:auto;font-size:.85em;opacity:.85;white-space:nowrap}' +

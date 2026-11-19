@@ -39,10 +39,100 @@ openbox_entry_bypass() {
 # Replace the owned table in one nft transaction. A separate delete opens a
 # window where old DNAT conntracks can send TUN DNS to the default WAN route.
 openbox_replace_nft() {
+	_ob_tmp="/tmp/openbox-nft-$$.tmp"
+	_ob_err="/tmp/openbox-nft-err-$$.tmp"
+	_ob_head="/tmp/openbox-nft-head-$$.tmp"
+	_ob_tail="/tmp/openbox-nft-tail-$$.tmp"
+	_ob_elems="/tmp/openbox-nft-elems-$$.tmp"
+	_ob_batch="/tmp/openbox-nft-batch-$$.tmp"
+	_ob_old_rmem=""
+	_ob_del=""
+	nft list table $NFT_TABLE >/dev/null 2>&1 && _ob_del="delete table $NFT_TABLE"
 	{
-		nft list table $NFT_TABLE >/dev/null 2>&1 && echo "delete table $NFT_TABLE"
+		[ -n "$_ob_del" ] && printf '%s\n' "$_ob_del"
 		cat
-	} | nft -f -
+	} > "$_ob_tmp"
+	if nft -f - < "$_ob_tmp" 2>"$_ob_err"; then
+		rm -f "$_ob_tmp" "$_ob_err"
+		return 0
+	fi
+	if grep -qi 'No buffer space available' "$_ob_err" 2>/dev/null && [ -w /proc/sys/net/core/rmem_default ]; then
+		_ob_cur_rmem="$(cat /proc/sys/net/core/rmem_default 2>/dev/null)"
+		_ob_max_rmem="$(cat /proc/sys/net/core/rmem_max 2>/dev/null)"
+		if [ -n "$_ob_cur_rmem" ] && [ "$_ob_cur_rmem" -lt 16777216 ] 2>/dev/null; then
+			[ -n "$_ob_max_rmem" ] && [ "$_ob_max_rmem" -lt 16777216 ] 2>/dev/null && echo 16777216 > /proc/sys/net/core/rmem_max 2>/dev/null
+			if echo 16777216 > /proc/sys/net/core/rmem_default 2>/dev/null; then
+				_ob_old_rmem="$_ob_cur_rmem"
+			fi
+		fi
+		if [ -n "$_ob_old_rmem" ] && ! grep -q 'elements = {' "$_ob_tmp"; then
+			if nft -f - < "$_ob_tmp" 2>/dev/null; then
+				echo "$_ob_old_rmem" > /proc/sys/net/core/rmem_default 2>/dev/null
+				rm -f "$_ob_tmp" "$_ob_err"
+				return 0
+			fi
+		fi
+	fi
+	cat "$_ob_err" >&2 2>/dev/null
+	rm -f "$_ob_err"
+	if ! grep -q 'elements = {' "$_ob_tmp"; then
+		[ -n "$_ob_old_rmem" ] && echo "$_ob_old_rmem" > /proc/sys/net/core/rmem_default 2>/dev/null
+		rm -f "$_ob_tmp"
+		return 1
+	fi
+	awk -v tbl="$NFT_TABLE" -v headf="$_ob_head" -v tailf="$_ob_tail" -v elemf="$_ob_elems" '
+		BEGIN { in_set = ""; in_tail_chain = 0 }
+		/^delete table / { print > headf; next }
+		/^table / { print > headf; next }
+		/^\tset [A-Za-z0-9_]+ [{]/ {
+			s = $0; sub(/^\tset /, "", s); sub(/ [{].*/, "", s); in_set = s
+			print > headf; next
+		}
+		in_set != "" && /^\t\telements = [{]/ {
+			body = $0; sub(/^\t\telements = [{][ \t]*/, "", body); sub(/[ \t]*[}].*/, "", body)
+			n = split(body, items, /,[ \t]*/)
+			for (i = 1; i <= n; i += 256) {
+				chunk = ""
+				for (j = i; j <= n && j < i + 256; j++) {
+					if (items[j] == "") continue
+					chunk = (chunk == "" ? items[j] : chunk ", " items[j])
+				}
+				if (chunk != "") printf "add element %s %s { %s }\n", tbl, in_set, chunk > elemf
+			}
+			next
+		}
+		in_set != "" && /^\t[}]$/ { in_set = ""; print > headf; next }
+		/^\tchain (entry_bypass_in|entry_bypass_out|tcp_mss_out|terminal_dns) [{]/ {
+			in_tail_chain = 1; print > tailf; next
+		}
+		in_tail_chain {
+			print > tailf
+			if (/^\t[}]$/) in_tail_chain = 0
+			next
+		}
+		{ print > headf }
+		END { close(headf); close(tailf); close(elemf) }
+	' "$_ob_tmp"
+	_ob_rc=0
+	nft -f - < "$_ob_head" || _ob_rc=1
+	if [ "$_ob_rc" -eq 0 ] && [ -s "$_ob_elems" ]; then
+		while IFS= read -r _ob_line; do
+			[ -n "$_ob_line" ] || continue
+			printf '%s\n' "$_ob_line" > "$_ob_batch"
+			nft -f - < "$_ob_batch" || { _ob_rc=1; break; }
+		done < "$_ob_elems"
+	fi
+	if [ "$_ob_rc" -eq 0 ] && [ -s "$_ob_tail" ]; then
+		{
+			printf 'table %s {\n' "$NFT_TABLE"
+			cat "$_ob_tail"
+			printf '}\n'
+		} > "$_ob_batch"
+		nft -f - < "$_ob_batch" || _ob_rc=1
+	fi
+	[ -n "$_ob_old_rmem" ] && echo "$_ob_old_rmem" > /proc/sys/net/core/rmem_default 2>/dev/null
+	rm -f "$_ob_tmp" "$_ob_head" "$_ob_tail" "$_ob_elems" "$_ob_batch"
+	return $_ob_rc
 }
 
 # Stop removes interception/marks but retains the inert TUN DNS egress guard:
@@ -51,6 +141,7 @@ openbox_clear_nft() {
 	command -v nft >/dev/null 2>&1 || return 0
 	_ob_guard="$(nft -s list chain $NFT_TABLE terminal_dns_egress 2>/dev/null; nft -s list chain $NFT_TABLE terminal_dns_forward 2>/dev/null)"
 	printf '%s\n' "$_ob_guard" | openbox_replace_nft >/dev/null 2>&1 || {
+		nft delete table $NFT_TABLE >/dev/null 2>&1 && return 0
 		echo "openbox: failed to clear interception in nft table $NFT_TABLE" >&2
 		return 1
 	}
