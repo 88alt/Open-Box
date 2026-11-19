@@ -36,11 +36,6 @@
           {{ $t('reset') }}
         </button>
       </div>
-      <p
-        v-if="!enabled"
-        class="text-base-content/60 -mt-2 text-xs"
-      >{{ $t('subscriptionRenameDisabledHint') }}</p>
-
       <!-- Template + unknown label + seq padding -->
       <div
         v-if="enabled"

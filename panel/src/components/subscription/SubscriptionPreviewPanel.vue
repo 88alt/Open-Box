@@ -15,7 +15,10 @@
           v-if="loading"
           class="loading loading-spinner loading-xs"
         />
-        <span class="text-sm font-medium">
+        <span
+          v-if="statusText"
+          class="text-sm font-medium"
+        >
           {{ statusText }}
         </span>
         <span
@@ -105,7 +108,6 @@
             type="button"
             class="btn btn-sm"
             :disabled="!overrideCount"
-            v-tip="$t('subscriptionResetNamesHint', { count: overrideCount })"
             @click="emit('resetOverrides')"
           >
             <ArrowUturnLeftIcon class="h-4 w-4" />
@@ -117,7 +119,6 @@
             type="button"
             class="btn btn-sm"
             :disabled="testingAll || !preview.preview.length || !source"
-            v-tip="$t('subscriptionLatencyHint')"
             @click="testAll"
           >
             <span
@@ -211,7 +212,7 @@
                       />
                       <!-- 独立测速:结果就地显示在胶囊里(闪电 = 没测过,点一下测这个节点) -->
                       <LatencyPill
-                        v-tip="latencyTitle(entry.originalTag) || $t('subscriptionLatencyHint')"
+                        v-tip="latencyTitle(entry.originalTag)"
                         class="w-20"
                         :ms="latency[entry.originalTag]?.ok ? latency[entry.originalTag].ms : undefined"
                         :error="latency[entry.originalTag] && !latency[entry.originalTag].ok ? latencyText(entry.originalTag) : undefined"
@@ -314,7 +315,7 @@ const testingAll = ref(false)
 
 const latencyText = (originalTag: string) => {
   const r = latency.value[originalTag]
-  if (!r) return t('subscriptionLatencyUntested')
+  if (!r) return ''
   return r.ok ? `${r.ms}ms` : latencyReasonText(r.reason)
 }
 // 悬停显示失败原因加服务端给的具体错误;成功和没测过都不出提示
@@ -375,7 +376,6 @@ const startEdit = (entry: { originalTag: string; newTag: string }) => {
 
 const statusText = computed(() => {
   if (props.loading && !props.preview) return t('subscriptionPreviewLoading')
-  if (!props.preview) return ''
-  return t('subscriptionPreviewSummary', { count: props.preview.nodes.length })
+  return ''
 })
 </script>

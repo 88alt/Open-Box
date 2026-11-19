@@ -5,7 +5,6 @@
       <div class="flex items-center justify-between gap-2">
         <div class="flex flex-col gap-1">
           <h2 class="text-base font-semibold">{{ $t('dnsModeTitle') }}（{{ $t('dnsModePort', { port: KERNEL_DNS_PORT }) }}）</h2>
-          <p class="text-base-content/60 text-xs">{{ $t('dnsModeDescription') }}</p>
         </div>
         <select
           class="select select-sm w-40 shrink-0"

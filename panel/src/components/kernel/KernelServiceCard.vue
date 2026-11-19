@@ -220,7 +220,6 @@
           type="button"
           class="btn btn-sm"
           :disabled="isStopDisabled"
-          v-tip="$t('kernelActionStopHint')"
           @click="runKernelAction('stop')"
         >
           <span

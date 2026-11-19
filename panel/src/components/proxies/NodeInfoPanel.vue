@@ -426,7 +426,7 @@ const exitRows = computed(() => {
       label: t('nodeInfoNative'),
       value: nativeText.value,
       source: e.registeredCountry ? t('nativeRegistered', { country: countryLabel(e.registeredCountry) }) : t('nodeInfoSourceRegistry'),
-      title: e.source || t('nodeInfoNativeHint'),
+      title: e.source || '',
     },
   ]
 })

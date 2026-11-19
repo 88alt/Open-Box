@@ -593,8 +593,6 @@ const en = {
   nativeRegistered: 'reg. {country}',
   nodeInfoDevices: 'Subnet devices',
   nodeInfoSourceRegistry: 'by registry',
-  nodeInfoNativeHint:
-    'Native/broadcast compares Net.Coffee registered country with geolocation; missing data remains unknown.',
   nodeInfoQuerying: 'Checking through this node…',
   nodeInfoCheckedAt: 'Checked {time}',
   nodeInfoUnknown: 'Unknown',
@@ -1021,7 +1019,6 @@ const en = {
     'Applies to latency selection inside automatic lanes. Skip it when bandwidth preference is enabled and a healthy candidate in the lane has valid bandwidth data. Lane priority is preserved.',
   failoverToleranceUnused:
     'Every lane has a single valid node, so there is nothing to pick between inside a lane; not used for now',
-  failoverAdvanced: 'Advanced',
   failoverTimeout: 'Probe timeout',
   failoverRestore: 'Return to primary once recovered',
   failoverRestoreHint:
@@ -1212,7 +1209,6 @@ const en = {
   subscriptionDefaultName: 'Subscription',
   subscriptionPreviewEmptyHint: 'Enter a link or paste content to see a live preview here.',
   subscriptionPreviewLoading: 'Loading…',
-  subscriptionPreviewSummary: 'Found {count} nodes',
   subscriptionSkippedSummary: '{count} skipped',
   subscriptionSkippedReason: '{name} — unrecognized type ({type})',
   subscriptionSkippedPlugin:
@@ -1224,9 +1220,6 @@ const en = {
   subscriptionDroppedMore: ', and {count} more',
   subscriptionLatencyTestAll: 'Test all',
   subscriptionLatencyTestOne: 'Test',
-  subscriptionLatencyUntested: 'untested',
-  subscriptionLatencyHint:
-    'Fetches the test URL through the node once (test URL and timeout from panel settings) — the same test as the subscription card and the Proxies page. Wrong passwords or closed ports fail as they should.',
   subscriptionPreviewTabKept: 'Kept ({count})',
   subscriptionPreviewTabExcluded: 'Filtered ({count})',
   subscriptionPreviewNotImported: 'not imported',
@@ -1252,7 +1245,6 @@ const en = {
   groupDanglingMembers:
     'Group "{group}" references "{members}", which is neither a node nor a group; it will be ignored in the config',
   subscriptionResetNames: 'Reset names',
-  subscriptionResetNamesHint: 'Revert {count} manually edited name(s) to the rule-generated ones',
   subscriptionRenameCountrySearch: 'Search country/region',
   geoEntriesLink: 'Details',
   geoEntriesSearch: 'Search domains or IPs in this category',
@@ -1278,8 +1270,6 @@ const en = {
   subscriptionRenameCountryNoMatch: 'No matching country/region',
   subscriptionRenamePrefixLabel:
     'Prefix node names with the subscription name (e.g. "Airport {sep} HK-01")',
-  subscriptionRenameDisabledHint:
-    'Off: nodes keep the provider’s original names; regions are still detected by keyword for flags and region-based groups.',
   subscriptionRenameTokensHint: 'Drag to reorder:',
   subscriptionRenameUnknownLabel: 'Label for unrecognized region',
   subscriptionRenameSeqPadHint:
@@ -1412,7 +1402,6 @@ const en = {
   ipv6Title: 'IPv6',
   dnsModeTitle: 'DNS hijack',
   dnsModePort: 'DNS port {port}',
-  dnsModeDescription: 'How LAN DNS queries reach the kernel for split resolution.',
   dnsModeDnsmasq: 'dnsmasq forwarding',
   dnsModeHijack: 'Firewall hijack',
   dnsModeOff: 'Off',
@@ -1630,7 +1619,6 @@ const en = {
   proxiesGoToKernel: 'Go to kernel settings',
   kernelActionStart: 'Start',
   kernelActionStop: 'Stop',
-  kernelActionStopHint: 'Also turns off autostart, so the core stays stopped after a reboot.',
   kernelActionRestart: 'Restart',
   kernelActionEnable: 'Enable autostart',
   kernelActionDisable: 'Disable autostart',
@@ -2356,10 +2344,6 @@ const en = {
   nodeInfoExpandText: 'Expand {field}',
   nodeInfoCollapseText: 'Collapse {field}',
   nodeTrafficEstimate: 'Human / bot (estimate)',
-  nodeTrafficAsnHelp:
-    'Net.Coffee: 28-day ASN aggregate adjusted by this IP’s risk signals; not measured router traffic.',
-  nodeTrafficEstimateHelp:
-    'Net.Coffee network-type and IP risk estimate; not measured router traffic.',
   nodeTrafficRatio: 'Human {human}%, bot {bot}%',
   nodeTrafficHuman: 'Human',
   nodeTrafficBot: 'Bot',
@@ -2373,8 +2357,6 @@ const en = {
   nodeRiskBlacklist: 'HTTP honeypot blacklist',
   nodeRiskRpki: 'RPKI status',
   nodeRiskUnverified: 'Unverified',
-  nodeRiskRpkiReported:
-    'Net.Coffee reports {value}, but does not provide the announced BGP prefix and matching ROA evidence. This is not a verified validity verdict.',
   nodeRiskDeep: 'Risk detection',
   nodeRiskVpn: 'VPN',
   nodeRiskProxy: 'Proxy',

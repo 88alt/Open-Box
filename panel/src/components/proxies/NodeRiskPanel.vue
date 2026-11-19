@@ -46,21 +46,13 @@
           :label="$t(row.label)"
           :text="row.value"
           :text-class="`${row.color} flex-1 text-right`"
-          :title="
-            row.label === 'nodeRiskRpki' && assessment?.rpkiReported
-              ? $t('nodeRiskRpkiReported', { value: assessment.rpkiReported })
-              : undefined
-          "
         />
       </div>
       <div
         class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2"
         data-node-human-traffic
       >
-        <span
-          class="opacity-60"
-          :title="traffic ? $t(traffic.basis === 'asn-28d' ? 'nodeTrafficAsnHelp' : 'nodeTrafficEstimateHelp') : undefined"
-        >
+        <span class="opacity-60">
           {{ $t('nodeTrafficEstimate') }}
         </span>
         <div
