@@ -62,12 +62,12 @@ const zhTW: LANG_MESSAGE = {
   dfUpdating: '正在下載清單…',
   dfApplied: '清單已更新。',
   dfDescription:
-    '預設關閉。啟用後,轉送的 DNS 查詢先經過過濾,通過後仍按原 DNS 策略解析;DNS 重寫優先。支援網域、Hosts 和基礎 Adblock 語法,不支援的項目會顯示略過數量。啟用的名單按下面的自動更新計畫更新,下載失敗沿用上一次有效名單。',
+    '依名單過濾 DNS 查詢，DNS 重寫優先。',
   dfAuto: '自動更新',
   dfAutoEvery: '每',
   dfAutoAt: '在',
   dfAutoDays: '{days} 天',
-  dfAutoHint: '在選定時間更新一次;核心自己載入新清單,不重啟。',
+  dfAutoHint: '更新後的名單自動生效。',
   dfAdd: '新增清單',
   dfUpdate: '更新名單',
   dfUpdateList: '更新此名單',
@@ -94,7 +94,7 @@ const zhTW: LANG_MESSAGE = {
   dfPreviewFilterBlock: '攔截',
   dfAllow: '放行網域',
   dfAllowHint:
-    '每行一個網域。example.com 精確比對,*.example.com 只比對子網域。放行優先於所有過濾清單,之後仍按原 DNS 分流解析。',
+    '每行一個網域，*.example.com 比對子網域。',
   dfSaveAllow: '儲存放行網域',
   dfRecords: '網域解析查詢',
   dfSearch: '搜尋網域…',
@@ -107,7 +107,7 @@ const zhTW: LANG_MESSAGE = {
   dfPolicy: 'DNS 策略',
   dfQuery: '查詢 / 重新整理',
   dfRecordHint:
-    '保留最近 24 小時,最多 20,000 條。記錄經過 Open-Box 的 DNS 查詢;dnsmasq 模式下 dnsmasq 自己答掉的也記,終端從 dnsmasq 的查詢日誌裡認,認不出的標「路由器轉送」。不含終端自己的快取、旁路及不經過 Open-Box 的加密 DNS。',
+    '顯示 Open-Box 最近 24 小時的查詢，最多 20,000 筆。',
   dfCollectDisabled: '過濾未啟用,目前不收集新紀錄。',
   dfDisconnected: '正在等待核心 DNS 事件,統計可能不完整。',
   dfTime: '時間',
@@ -418,7 +418,7 @@ const zhTW: LANG_MESSAGE = {
   siteLatencyVia: '經 {chain}',
   siteLatencyAutoTest: '開啟概覽自動測速',
   siteLatencyAutoTestHint:
-    '開啟概覽頁時自動測一遍這四個站點的延時。和常用設定裡的「自動檢查連線」是同一個開關。',
+    '開啟概覽頁時自動測一遍這四個站點的延時。和前端面板裡的「自動檢查連線」是同一個開關。',
   siteLatencyTestAll: '重測這四個站點',
   testSitesSettings: '測試站點',
   testSitesTip:
@@ -804,7 +804,7 @@ const zhTW: LANG_MESSAGE = {
   geoUpdateEvery: '每',
   geoUpdateDays: '{days} 天',
   geoUpdateHours: '{hours} 小時',
-  zashboardSettings: '常用設定',
+  zashboardSettings: '前端面板',
   backendSettings: '後端設置',
   generalSettings: '常規設置',
   overviewCard: '概覽卡片',
@@ -1150,8 +1150,8 @@ const zhTW: LANG_MESSAGE = {
   subscriptionNodeDnsHint:
     '機場要求節點網域用它自己的 DoH 解析時填(相當於 OpenClash 的 proxy-server-nameserver / nameserver-policy)。只用來解析這份訂閱的節點伺服器網域,一般網站和區域網路的 DNS 不受影響;測速也按它解析。DoH 位址是網域時,右邊要填解析它用的 DNS(IP)。',
   subscriptionNodeDnsInvalidUrl: 'DoH 位址要以 https:// 開頭',
-  subscriptionNodeDnsInvalidBootstrap: '引導 DNS 要填有效的 IP 位址',
-  subscriptionNodeDnsNeedBootstrap: '上游位址是網域，請填寫解析它用的引導 DNS（IP）',
+  subscriptionNodeDnsInvalidBootstrap: 'DoH/DoT 解析 DNS 須填寫有效的 IP 位址',
+  subscriptionNodeDnsNeedBootstrap: '上游位址是網域，請填寫 DoH/DoT 解析 DNS（IP）',
   subscriptionNodeDnsNeedUrl: '填了解析 DoH 的 DNS,還要填 DoH 位址',
   subscriptionContentPlaceholder:
     '貼上 ss:// / trojan:// / hysteria2:// 等連結,或 Clash/sing-box 設定…',
@@ -1350,16 +1350,16 @@ const zhTW: LANG_MESSAGE = {
   dnsModeDnsmasq: 'DNSmasq 轉發',
   dnsModeHijack: '防火牆劫持',
   dnsModeOff: '停用',
-  dnsModeDnsmasqNote: 'dnsmasq 仍是區域網路的 DNS,只把它的上游改成核心;本機主機名照常。推薦。',
-  dnsModeHijackNote: '防火牆把區域網路發往 53 埠的查詢直接改寫給核心,不經過 dnsmasq。',
+  dnsModeDnsmasqNote: 'dnsmasq 將外部 DNS 查詢轉給核心。',
+  dnsModeHijackNote: '防火牆將 53 連接埠的查詢轉給核心。',
   dnsModeOffNote:
-    '核心不改寫任何 DNS。終端要指向 AdGuard Home / Pi-hole,再把它們的上游指向核心 DNS 位址。',
+    '關閉全域接管，可手動指定 DNS。',
   dnsModeUpstreamHint:
-    '核心 DNS 位址 {addr},三種模式都可用;AdGuard Home / Pi-hole 把上游指向它即可。切換模式後清一次 DNS 快取。',
+    'AdGuard Home / Pi-hole 上游可填 {addr}。',
   dnsModeSaved: 'DNS 劫持方式已儲存。',
   dnsUpstreamTitle: 'DNS 上游',
   dnsUpstreamDescription:
-    '核心兩側解析器分別問誰、使用 UDP、TCP 或 DoH。UDP / TCP 填 IP 與連接埠,DoH 填 HTTPS 位址並選擇解析其網域的 DNS,也可選「上游 DNS」(路由器介面上 DHCP 分配或手動指定的 DNS)。改完即儲存:先讓核心按所選協定真的查一次,查不通不儲存。代理 DNS 走哪條線路,由目標分流按它的位址決定;上游 DNS 固定直連。',
+    '直連和代理分別設定，測試通過後儲存。',
   dnsUpstreamDirect: '直連 DNS',
   dnsUpstreamDirectNote: '解析直連網域用。預設是上游 DNS。',
   dnsUpstreamWan: '上游 DNS',
@@ -1368,18 +1368,18 @@ const zhTW: LANG_MESSAGE = {
   dnsUpstreamSourceIp: '指定位址',
   dnsUpstreamSourceWan: '上游 DNS',
   dnsUpstreamWanNotInCn:
-    '路由器在中國大陸時,代理 DNS 不能用上游 DNS:中國大陸的 DNS 對境外網域有污染',
+    '中國大陸的代理側須指定 DNS 位址。',
   dnsUpstreamWanDirectTag: '直連,不經代理',
   dnsUpstreamWanProxyNote: '代理 DNS 選上游 DNS 時直接問它,不經代理',
   dnsRegionLabel: '路由器在',
   dnsRegionCn: '中國大陸',
   dnsRegionIntl: '中國大陸之外',
-  dnsRegionCnNote: '中國大陸的 DNS 對境外網域有污染,走代理的網域要經代理 DNS 查',
+  dnsRegionCnNote: '境外網域建議用代理 DNS 解析。',
   dnsRegionDetecting:
-    '正在按出口公網 IP 判斷路由器在哪,判出來會自動切換;也可以點「恢復預設」立刻判一次',
+    '正在依出口 IP 判斷地區。',
   dnsRegionDetected: '已按出口公網 IP 判斷:路由器在「{region}」',
   dnsRegionIntlNote:
-    '香港、澳門、台灣都屬於中國大陸之外,沒有 DNS 污染:代理 DNS 預設也直接問上游 DNS、不經代理;開著 FakeIP 時,走代理的網域由節點解析',
+    '直連和代理預設使用上游 DNS。',
   dnsRegionDefaultsCn: '直連用上游 DNS,代理用 TCP 1.1.1.1',
   dnsRegionDefaultsIntl: '兩側都用上游 DNS',
   dnsRegionScopeCn: '不含香港、澳門、台灣,它們屬於中國大陸之外',
@@ -1389,11 +1389,11 @@ const zhTW: LANG_MESSAGE = {
   dnsRegionSwitched: '已切換到「{region}」',
   dnsUpstreamProxy: '代理 DNS',
   dnsUpstreamProxyNote:
-    '走代理的網域向它查詢。線路由目標分流依上游位址決定，測試也走同一條線路。DoT 和 DoH 使用加密連線，UDP 需要線路支援。',
+    '代理 DNS 線路由目標分流決定。',
   dnsUpstreamProtocol: '協定',
   dnsUpstreamPort: '連接埠',
   dnsUpstreamDohUrl: 'DoH 位址',
-  dnsUpstreamEncryptedBootstrap: '引導 DNS',
+  dnsUpstreamEncryptedBootstrap: 'DoH/DoT 解析 DNS',
   dnsUpstreamDotHost: 'DoT 網域或 IP 位址',
   dnsUpstreamTest: '測試',
   dnsUpstreamRestore: '恢復預設',
@@ -1421,7 +1421,7 @@ const zhTW: LANG_MESSAGE = {
   dnsUpstreamProxyExtras: '代理 DNS 備用上游',
   dnsUpstreamAddExtra: '新增備用上游',
   dnsUpstreamExtrasNote:
-    '一行一條:哪一側、協定、位址和連接埠。同一側的第一條是主上游,後面的是備用 —— 和主上游並發查詢,誰先返回結果就用誰的,一個上游卡住時不用乾等到逾時。每側最多 4 個,UDP / TCP 填 IP,DoH 填 HTTPS 位址,也可選上游 DNS。儲存前會讓核心按所選協定真的查一次,查不通不儲存。',
+    '同側主備並行查詢，採用首個成功結果。',
   dnsUpstreamExtraDuplicate: '這個位址已經用過了',
   dnsUpstreamTestVia: '經「{policy}」→ {node}',
   dnsUpstreamTestOk: '{side}可用（{detail}）。',
@@ -1435,9 +1435,9 @@ const zhTW: LANG_MESSAGE = {
   dnsUpstreamSaved: '{side}已儲存（{detail}）。',
   dnsRewriteTitle: 'DNS 重寫',
   dnsRewriteDescription:
-    '把某個網域的解析結果改成另一個網域或固定 IP;預設帶兩條 Google 的重寫（解決 Google Play 無法下載 App 問題）。',
+    '將網域解析改為指定網域或 IP。',
   dnsRewriteNote:
-    '目標或位址儲存後伺服端立即更新,已有的解析結果要等 DNS 快取過期。泛網域 *.example.com 只匹配子網域,不含 example.com 本身。',
+    '儲存後立即更新，舊結果隨 DNS 快取過期。',
   dnsRewriteEmpty: '沒有重寫規則。',
   dnsRewriteAdd: '新增',
   dnsRewriteRestore: '恢復預設',
@@ -1445,14 +1445,14 @@ const zhTW: LANG_MESSAGE = {
   dnsRewriteEditTitle: '修改 DNS 重寫',
   dnsRewriteSource: '查詢網域',
   dnsRewriteSourceHint:
-    '精確網域只匹配自身;*.example.com 匹配 a.example.com 和 a.b.example.com,不含 example.com。',
+    '使用 *.example.com 比對任意層級的子網域。',
   dnsRewriteTarget: '改寫為',
   dnsRewriteKindDomain: '另一個網域',
   dnsRewriteKindIp: '固定 IP',
   dnsRewriteDomainHint:
-    '目標按現有分流策略解析。來源和目標都以 *. 開頭時保留完整子網域前綴,如 a.b.googleapis.cn → a.b.googleapis.com;一般目標則統一指向該網域。',
+    '來源和目標都用 * 時，保留完整子網域。',
   dnsRewriteIpHint:
-    '一行一個,IPv4 / IPv6 可以混填;A 查詢只回 IPv4,AAAA 只回 IPv6（IPv6 關著時回空）。',
+    '每個標籤填一個 IPv4 或 IPv6 位址。',
   dnsRewriteSavedRestart: 'DNS 重寫已儲存。',
   dnsRewriteSavedLive: 'DNS 重寫已儲存並生效;已快取的解析結果等過期後更新。',
   dnsRewriteBadSource: '查詢網域不合法:寫精確網域或 *.example.com。',
@@ -1464,9 +1464,9 @@ const zhTW: LANG_MESSAGE = {
   dnsRewriteAlreadyDefault: '兩條預設重寫已經在了。',
   routeDnsRewrite: 'DNS 重寫',
   routeDnsRewriteHit: '重寫:{source} → {target}',
-  dnsFakeIpTitle: '啟用 FakeIP（走代理的網域交給節點解析）',
+  dnsFakeIpTitle: '啟用 FakeIP',
   dnsFakeIpNote:
-    '預設開啟。走代理的網域不在本機解析：核心先回佔位位址（198.19.0.0/16），連線時把網域交給節點。只對能攜帶網域的出站（SOCKS5 / vless / vmess / trojan / hysteria 等）生效；按目標 IP 判的前置規則對這些連線不會命中。',
+    '代理網域交給支援網域轉送的節點解析。',
   bypassPortsTitle: '進核心前放行的連接埠',
   bypassPortsDescription:
     '自建服務(RustDesk、連接埠映射出去的 NAS 服務等)用到的連接埠:目標連接埠或來源連接埠是這些的 TCP / UDP 流量在進核心之前就放行,和沒裝 Open-Box 一樣,連接埠映射和打洞不受影響。和「前置自訂分流」裡的「連接埠 → 直連」不同:那種已經進了核心,由核心替它重新連線,NAT 會被打亂。黑名單、白名單各存一份,只有選中的那份生效。',
@@ -2144,19 +2144,19 @@ const zhTW: LANG_MESSAGE = {
     '這個節點不直接連,而是經下面選的上游去連它。伺服器填網域也可以,網域由上游那頭解析。住宅代理商給的 http:// https:// 或 主機:連接埠:使用者名稱:密碼 都按 HTTP 代理接。',
   chainProxyUpstreamLabel: '上游',
   chainProxyHint:
-    '上游選一個節點或節點組。儲存後它會出現在節點候選裡（來源「鏈式代理」）:把它加進節點組的成員,或在前置自訂分流 / 終端分流裡直接選它當出站;按關鍵字 / 全部節點選成員的動態節點組不會自動收它。儲存後直接生效,不用重啟核心。',
+    '透過選定的節點或節點群組連線。',
   chainProxyTest: '測速',
   chainProxyTestFailed: '不通',
   chainProxyIpUnknown: 'IP 歸屬地沒查到',
   chainProxyLatencyNotInKernel:
-    '這條還沒進核心(停用中,或上游不可用):延遲是經這條鏈單獨發一次請求測的,含一次核心啟動,會偏高',
+    '暫時啟動測試核心，延遲可能偏高。',
   chainProxyTestVia: '經 {via}',
   chainProxyExitIp: '出口 IP',
   chainProxyIpDetail: 'IP 詳情',
   chainProxyIpDetailTip: '在 {site} 查看這個出口 IP(新分頁)',
   chainProxyIpFailed: 'IP 資訊沒取到:{error}',
   chainProxyTestHint:
-    '測的是框裡填的這一份,不用先儲存:經上游此刻選中的節點真的發一次請求(和訂閱預覽裡的節點測速同一個做法,延遲含一次核心啟動,會比列表裡的高一些)。測速位址、逾時和 IP 資訊介面都用面板設定裡的。',
+    '透過上游測速，無需先儲存。',
   chainProxyVia: '經 {upstream}',
   chainProxyUpstreamMissing: '上游「{name}」已不存在',
   chainProxyErrName: '名稱不能為空',
