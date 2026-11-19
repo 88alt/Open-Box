@@ -15,20 +15,14 @@
       :track-controls="false"
       @menu-click="handleTabClick"
     >
-      <!-- 窄屏:页签行右侧放当前页签的小工具(连接页是「活跃 / 已关闭」,日志页是级别和三个按钮),
+      <!-- 窄屏:页签行右侧放当前页签的小工具(连接页是「活跃 / 已关闭」,日志页是分组页签),
            其余的搜索 / 按钮在下面单独一行;宽屏这个插槽被样式隐藏。和上游 v0.1.413 一致 -->
       <template #mobile-actions>
         <div id="connection-workspace-mobile-actions">
           <ConnectionTabs
             v-if="isMiddleScreen && activeTab === CONNECTION_WORKSPACE_TAB.connections"
           />
-          <div
-            v-if="isMiddleScreen && activeTab === CONNECTION_WORKSPACE_TAB.logs"
-            class="workspace-log-header-tools flex min-w-0 flex-1 items-center justify-end gap-2"
-          >
-            <LogLevelSelect />
-            <LogActionButtons />
-          </div>
+          <LogTabs v-if="isMiddleScreen && activeTab === CONNECTION_WORKSPACE_TAB.logs" />
         </div>
       </template>
       <div class="connection-workspace-controls">
@@ -43,12 +37,13 @@
 
 <script setup lang="ts">
 import ConnectionsContent from '@/components/connections/ConnectionsContent.vue'
+import LogTabs from '@/components/logs/LogTabs.vue'
 import LogsContent from '@/components/logs/LogsContent.vue'
 import RulesContent from '@/components/rules/RulesContent.vue'
 import SettingsMenu from '@/components/settings/SettingsMenu.vue'
 import ConnectionCtrl from '@/components/sidebar/ConnectionCtrl.tsx'
 import ConnectionTabs from '@/components/sidebar/ConnectionTabs.vue'
-import LogsCtrl, { LogActionButtons, LogLevelSelect } from '@/components/sidebar/LogsCtrl.tsx'
+import LogsCtrl from '@/components/sidebar/LogsCtrl.tsx'
 import RulesCtrl from '@/components/sidebar/RulesCtrl.tsx'
 import { CONNECTION_WORKSPACE_TAB, ROUTE_NAME } from '@/constant'
 import { isMiddleScreen } from '@/helper/utils'
@@ -177,10 +172,6 @@ const handleTabClick = (key: string) => {
     min-width: 0;
     flex: 1;
     justify-content: flex-end;
-  }
-  .connection-workspace :deep(.workspace-log-header-tools .select) {
-    padding-left: 0.5rem;
-    padding-right: 1.25rem;
   }
   .connection-workspace :deep(#settings-header-actions) {
     flex: 0 0 100%;

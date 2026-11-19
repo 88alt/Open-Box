@@ -1,14 +1,22 @@
 import { isSingBox } from '@/api'
-import { useCtrlsBar } from '@/composables/useCtrlsBar'
 import { LOG_LEVEL } from '@/constant'
 import { logSeverityLabel } from '@/helper/logSeverity'
 import { useTooltip } from '@/helper/tooltip'
 import { isMiddleScreen } from '@/helper/utils'
-import { initLogs, isPaused, logFilter, logLevel, logLevelFilter, logs } from '@/store/logs'
+import {
+  initLogs,
+  isPaused,
+  logFilter,
+  logLevel,
+  logLevelFilter,
+  logSettingsOpen,
+  logs,
+} from '@/store/logs'
 import { normalizeRuleTarget } from '@/store/rules'
 import { logSearchHistory } from '@/store/settings'
 import {
   ArrowDownTrayIcon,
+  Cog6ToothIcon,
   PauseIcon,
   PlayIcon,
   SparklesIcon,
@@ -19,6 +27,7 @@ import { debounce } from 'lodash'
 import { computed, defineComponent, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TextInput from '../common/TextInput.vue'
+import LogTabs from '../logs/LogTabs.vue'
 
 const logLevels = computed(() => {
   if (isSingBox.value) {
@@ -94,6 +103,16 @@ export const LogActionButtons = defineComponent({
       return (
         <div class="flex shrink-0 items-center gap-2">
           <button
+            type="button"
+            class="btn btn-circle btn-sm"
+            aria-label={t('logSettings')}
+            aria-haspopup="dialog"
+            onMouseenter={(e) => showTip(e, t('logSettings'))}
+            onClick={() => (logSettingsOpen.value = true)}
+          >
+            <Cog6ToothIcon class="h-4 w-4" />
+          </button>
+          <button
             class="btn btn-circle btn-sm"
             aria-label={t('logDownload')}
             onMouseenter={(e) => showTip(e, t('logDownload'))}
@@ -126,7 +145,6 @@ export const LogActionButtons = defineComponent({
 export default defineComponent({
   setup() {
     const { t } = useI18n()
-    const { isLargeCtrlsBar } = useCtrlsBar()
     const { showTip } = useTooltip()
     const insertLogSearchHistory = debounce((log: string) => {
       if (!log) {
@@ -161,21 +179,21 @@ export default defineComponent({
     })
 
     return () => {
-      const levelSelect = <LogLevelSelect />
       const searchInput = (
         <div class="flex min-w-0 flex-1 items-center gap-2">
           <TextInput
             v-model={logFilter.value}
             beforeClose={true}
-            class={isLargeCtrlsBar.value ? 'min-w-64 flex-1' : 'min-w-0 flex-1'}
-            placeholder={`${t('search')} | Regex`}
+            class={isMiddleScreen.value ? 'min-w-0 flex-1' : 'min-w-12 flex-1'}
+            placeholder={isMiddleScreen.value ? t('search') : `${t('search')} | Regex`}
             clearable={true}
             menus={logSearchHistory.value}
             menusDeleteable={true}
             onUpdate:menus={(val) => (logSearchHistory.value = val)}
           />
           <button
-            class="btn btn-circle btn-sm shrink-0"
+            class="btn btn-circle btn-sm shrink-0 max-[360px]:hidden"
+            aria-label={t('ruleFormatQuery')}
             // 和连接页一样:整条 URL 整理成主机名(不带端口)再搜
             onClick={() =>
               (logFilter.value = normalizeRuleTarget(logFilter.value).replace(/:\d+$/, ''))
@@ -184,12 +202,16 @@ export default defineComponent({
           >
             <SparklesIcon class="h-4 w-4" />
           </button>
+          <LogActionButtons />
         </div>
       )
 
       const logLevelSelect = (
         <select
-          class={['select select-sm shrink-0', isLargeCtrlsBar.value ? 'w-28' : 'w-20 max-w-28']}
+          class={[
+            'select select-sm w-auto shrink-0',
+            isMiddleScreen.value ? 'max-w-28 ps-2 pe-6 max-[420px]:text-xs!' : 'max-w-36',
+          ]}
           aria-label={t('logLevel')}
           v-model={logLevelFilter.value}
         >
@@ -205,35 +227,14 @@ export default defineComponent({
         </select>
       )
 
-      const buttons = <LogActionButtons />
-
-      // 窄屏:级别下拉和三个按钮已经在页签行右侧(ConnectionsPage 的 mobile-actions 插槽),这里只留类型筛选和搜索
-      const content =
-        isMiddleScreen.value || !isLargeCtrlsBar.value ? (
-          <div class="app-card-padding app-card-gap flex flex-col">
-            {!isMiddleScreen.value && (
-              <div class="flex w-full justify-between gap-2">
-                <div class="join flex-1">{levelSelect}</div>
-                {buttons}
-              </div>
-            )}
-            <div class="flex w-full items-center gap-2">
-              {logLevelSelect}
-              {searchInput}
-            </div>
-          </div>
-        ) : (
-          <div class="app-card-padding flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2">
-              {levelSelect}
-              <div class="flex w-96 items-center gap-2">
-                {logLevelSelect}
-                {searchInput}
-              </div>
-            </div>
-            {buttons}
-          </div>
-        )
+      // 窄屏:分组页签在页签行右侧(ConnectionsPage 的 mobile-actions 插槽),这里只留类型筛选、搜索和按钮
+      const content = (
+        <div class="app-card-padding app-inline-gap flex min-w-0 flex-nowrap items-center">
+          {!isMiddleScreen.value && <LogTabs class="shrink-0" />}
+          {logLevelSelect}
+          {searchInput}
+        </div>
+      )
 
       return <div class="ctrls-bar">{content}</div>
     }

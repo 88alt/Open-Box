@@ -32,6 +32,9 @@ export interface LogRow {
   targetFakeIp?: string
   // 目标是域名时,给「改分流」用的域名
   routingTarget?: string
+  // 按目标分组用的目标(域名 / IP,不带端口);目标是假 IP 时还原出来的域名
+  groupTarget?: string
+  fakeIpDomain?: string
   message: string
 }
 
@@ -149,6 +152,14 @@ export const useLogRows = () => {
           ? target.host
           : undefined
       const message = localize(parsed.message)
+      const groupTarget = log.probe
+        ? targetAddress
+        : (parsed.module === 'dns' ? parsed.target : undefined) ||
+          context?.inboundTarget?.host ||
+          parsed.target ||
+          context?.target?.host
+      const fakeIpDomain =
+        context?.fakeIp && groupTarget === context.fakeIp ? context.fakeIpDomain : undefined
       const chain =
         (log.chains?.length ? log.chains : undefined) ??
         parsed.mihomoChain ??
@@ -173,6 +184,8 @@ export const useLogRows = () => {
           sourceLabel ?? '',
           targetAddress ?? '',
           targetFakeIp ?? '',
+          groupTarget ?? '',
+          fakeIpDomain ?? '',
           ...(log.chains ?? []),
         ]
 
@@ -195,6 +208,8 @@ export const useLogRows = () => {
           targetAddress,
           targetFakeIp,
           routingTarget,
+          groupTarget,
+          fakeIpDomain,
           message,
         },
       ]
