@@ -141,6 +141,10 @@ export type Log = {
   payload: string
   // 节点探测产生的日志,后端会带上这个标记
   probe?: boolean
+  // 这条日志对应连接经过的出站链(内核带上时才有)
+  chains?: string[]
+  // 发起连接的终端 IP(内核带上时才有)
+  sourceIP?: string
 }
 
 // rawPayload 是后端原文(下载日志用),payload 是把 IP 换成终端名称之后的文本

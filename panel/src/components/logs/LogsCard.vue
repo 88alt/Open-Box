@@ -1,42 +1,113 @@
 <template>
-  <div class="card hover:bg-base-200 app-card-inset block break-all text-sm">
-    <div class="app-inline-gap inline-flex items-center">
-      <div :style="{ minWidth: `${(seqWithPadding.length + 1) * 0.62}em` }">
-        {{ seqWithPadding }}.
-      </div>
-      <span class="badge badge-sm text-main min-w-14">
-        {{ log.time }}
-      </span>
+  <div class="card log-list-card app-card-inset flex w-full flex-col gap-1 text-start text-sm">
+    <span class="flex w-full min-w-0 items-center gap-2">
+      <span class="text-base-content/65 shrink-0 tabular-nums">{{ row.log.time }}</span>
       <span
-        class="badge badge-sm min-w-17"
-        :class="textColorMapForType[log.type as keyof typeof textColorMapForType]"
+        class="badge badge-sm shrink-0 whitespace-nowrap"
+        :class="textColorMapForType[row.level as keyof typeof textColorMapForType]"
       >
         {{ severityLabel }}
       </span>
+      <span
+        v-if="row.log.probe"
+        class="badge badge-xs shrink-0"
+      >
+        {{ $t('logNodeProbe') }}
+      </span>
+    </span>
+
+    <div
+      v-if="hasMeta"
+      class="grid w-full grid-cols-2 items-start gap-x-2 gap-y-1 text-xs sm:grid-cols-[minmax(0,1.25fr)_minmax(0,2fr)_minmax(0,1.75fr)] sm:text-sm"
+    >
+      <div class="flex min-w-0 flex-col">
+        <span class="truncate">{{ row.sourceLabel || row.sourceAddress }}</span>
+        <span
+          v-if="row.sourceLabel && row.sourceAddress"
+          class="text-base-content/65 truncate text-xs"
+        >
+          {{ row.sourceAddress }}
+        </span>
+        <ConnectionDeviceRenameButton
+          v-if="row.sourceAddress"
+          @rename="emit('rename', row)"
+        />
+      </div>
+      <div class="min-w-0 text-center max-sm:order-last max-sm:col-span-2">
+        <div
+          v-if="row.outboundChain?.length || row.routingPolicy"
+          class="flex min-w-0 flex-wrap items-center justify-center gap-1"
+        >
+          <span
+            v-if="row.routingPolicy"
+            class="badge badge-ghost badge-sm"
+          >
+            {{ row.routingPolicy }}
+          </span>
+          <template
+            v-for="(name, index) in row.outboundChain"
+            :key="`${name}-${index}`"
+          >
+            <ArrowRightCircleIcon
+              v-if="index > 0 || row.routingPolicy"
+              class="size-4 shrink-0"
+            />
+            <ProxyName :name="name" />
+          </template>
+        </div>
+        <span
+          v-else-if="row.module"
+          class="text-base-content/65 font-mono text-xs [overflow-wrap:anywhere]"
+        >
+          {{ row.module }}
+        </span>
+      </div>
+      <div class="flex min-w-0 flex-col items-end text-end">
+        <span class="max-w-full truncate">{{ row.targetAddress }}</span>
+        <span
+          v-if="row.targetFakeIp"
+          class="text-base-content/65 max-w-full truncate text-xs"
+        >
+          {{ row.targetFakeIp }}
+        </span>
+        <ConnectionTargetRoutingButton :target="row.routingTarget" />
+      </div>
     </div>
 
-    <span class="app-inline-offset-md leading-6 max-md:mt-2 max-md:block">{{ log.payload }}</span>
+    <span class="w-full truncate">{{ row.message }}</span>
   </div>
 </template>
 
 <script setup lang="ts">
+import ConnectionDeviceRenameButton from '@/components/connections/ConnectionDeviceRenameButton.vue'
+import ConnectionTargetRoutingButton from '@/components/connections/ConnectionTargetRoutingButton.vue'
+import ProxyName from '@/components/proxies/ProxyName.vue'
 import { useBounceOnVisible } from '@/composables/bouncein'
+import type { LogRow } from '@/composables/logRows'
 import { LOG_LEVEL } from '@/constant'
 import { logSeverityLabel } from '@/helper/logSeverity'
-import type { LogWithSeq } from '@/types'
+import { ArrowRightCircleIcon } from '@heroicons/vue/24/outline'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
-  log: LogWithSeq
+  row: LogRow
 }>()
+const emit = defineEmits<{ rename: [row: LogRow] }>()
 
 const { t } = useI18n()
-const severityLabel = computed(() => logSeverityLabel(props.log.type, t))
-
-const seqWithPadding = computed(() => {
-  return props.log.seq.toString().padStart(2, '0')
-})
+const severityLabel = computed(() => logSeverityLabel(props.row.level, t))
+const hasMeta = computed(
+  () =>
+    !!(
+      props.row.sourceLabel ||
+      props.row.sourceAddress ||
+      props.row.outboundChain?.length ||
+      props.row.routingPolicy ||
+      props.row.module ||
+      props.row.targetAddress
+    ),
+)
 
 const textColorMapForType = {
   [LOG_LEVEL.Trace]: 'text-success',
