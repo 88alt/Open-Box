@@ -1,9 +1,10 @@
 import { isSingBox } from '@/api'
 import { useCtrlsBar } from '@/composables/useCtrlsBar'
 import { LOG_LEVEL } from '@/constant'
+import { logSeverityLabel } from '@/helper/logSeverity'
 import { useTooltip } from '@/helper/tooltip'
 import { isMiddleScreen } from '@/helper/utils'
-import { initLogs, isPaused, logFilter, logLevel, logTypeFilter, logs } from '@/store/logs'
+import { initLogs, isPaused, logFilter, logLevel, logLevelFilter, logs } from '@/store/logs'
 import { normalizeRuleTarget } from '@/store/rules'
 import { logSearchHistory } from '@/store/settings'
 import {
@@ -31,9 +32,12 @@ const downloadAllLogs = () => {
     [
       logs.value
         .map((log) =>
-          [log.seq.toString().padEnd(5, ' '), log.time, log.type.padEnd(7, ' '), log.payload].join(
-            '\t',
-          ),
+          [
+            log.seq.toString().padEnd(5, ' '),
+            log.time,
+            log.type.padEnd(7, ' '),
+            log.rawPayload,
+          ].join('\t'),
         )
         .join('\n'),
     ],
@@ -60,8 +64,8 @@ export const LogLevelSelect = defineComponent({
           'select select-sm',
           isMiddleScreen.value ? 'max-w-24 min-w-0 flex-1' : 'join-item w-24 shrink-0',
         ]}
-        aria-label={t('logLevel')}
-        title={logLevel.value}
+        aria-label={t('logReceiveLevel')}
+        title={logSeverityLabel(logLevel.value, t)}
         v-model={logLevel.value}
         onChange={initLogs}
       >
@@ -70,7 +74,7 @@ export const LogLevelSelect = defineComponent({
             key={opt}
             value={opt}
           >
-            {opt}
+            {logSeverityLabel(opt, t)}
           </option>
         ))}
       </select>
@@ -81,28 +85,41 @@ export const LogLevelSelect = defineComponent({
 // 下载 / 暂停 / 清空三个按钮,同样两处共用
 export const LogActionButtons = defineComponent({
   setup() {
-    return () => (
-      <div class="flex shrink-0 items-center gap-2">
-        <button
-          class="btn btn-circle btn-sm"
-          onClick={downloadAllLogs}
-        >
-          <ArrowDownTrayIcon class="h-4 w-4" />
-        </button>
-        <button
-          class="btn btn-circle btn-sm"
-          onClick={() => (isPaused.value = !isPaused.value)}
-        >
-          {isPaused.value ? <PlayIcon class="h-4 w-4" /> : <PauseIcon class="h-4 w-4" />}
-        </button>
-        <button
-          class="btn btn-circle btn-sm"
-          onClick={() => (logs.value = [])}
-        >
-          <XMarkIcon class="h-4 w-4" />
-        </button>
-      </div>
-    )
+    const { t } = useI18n()
+    const { showTip } = useTooltip()
+
+    return () => {
+      const pauseLabel = t(isPaused.value ? 'logResume' : 'logPause')
+
+      return (
+        <div class="flex shrink-0 items-center gap-2">
+          <button
+            class="btn btn-circle btn-sm"
+            aria-label={t('logDownload')}
+            onMouseenter={(e) => showTip(e, t('logDownload'))}
+            onClick={downloadAllLogs}
+          >
+            <ArrowDownTrayIcon class="h-4 w-4" />
+          </button>
+          <button
+            class="btn btn-circle btn-sm"
+            aria-label={pauseLabel}
+            onMouseenter={(e) => showTip(e, pauseLabel)}
+            onClick={() => (isPaused.value = !isPaused.value)}
+          >
+            {isPaused.value ? <PlayIcon class="h-4 w-4" /> : <PauseIcon class="h-4 w-4" />}
+          </button>
+          <button
+            class="btn btn-circle btn-sm hover:text-error"
+            aria-label={t('logClear')}
+            onMouseenter={(e) => showTip(e, t('logClear'))}
+            onClick={() => (logs.value = [])}
+          >
+            <XMarkIcon class="h-4 w-4" />
+          </button>
+        </div>
+      )
+    }
   },
 })
 
@@ -130,47 +147,17 @@ export default defineComponent({
 
     watch(logFilter, insertLogSearchHistory)
 
-    const logFilterOptions = computed(() => {
-      const types: string[] = []
-      const levels: string[] = []
+    // 筛选项:内核支持的级别(不含静默) + 已收到日志里出现过的级别
+    const logFilterLevels = computed(() => {
+      const levels = logLevels.value.filter((level) => level !== LOG_LEVEL.Silent) as string[]
 
-      if (isSingBox.value) {
-        for (const log of logs.value) {
-          const startIndex = log.payload.startsWith('[') ? log.payload.indexOf(']') + 2 : 0
-          const endIndex = log.payload.indexOf(':', startIndex)
-          const type = log.payload.slice(startIndex, endIndex + 1)
-
-          if (!types.includes(type)) {
-            types.push(type)
-          }
-
-          if (!levels.includes(log.type)) {
-            levels.push(log.type)
-          }
-        }
-      } else {
-        for (const log of logs.value) {
-          const index = log.payload.indexOf(' ')
-          const type = index === -1 ? log.payload : log.payload.slice(0, index)
-
-          if (!types.includes(type)) {
-            types.push(type)
-          }
-
-          if (!levels.includes(log.type)) {
-            levels.push(log.type)
-          }
+      for (const log of logs.value) {
+        if (!levels.includes(log.type)) {
+          levels.push(log.type)
         }
       }
 
-      return {
-        levels: levels.sort((a, b) => {
-          const aIdx = logLevels.value.indexOf(a as LOG_LEVEL)
-          const bIdx = logLevels.value.indexOf(b as LOG_LEVEL)
-          return aIdx - bIdx
-        }),
-        types: types.sort(),
-      }
+      return levels
     })
 
     return () => {
@@ -200,32 +187,21 @@ export default defineComponent({
         </div>
       )
 
-      const logTypeSelect = (
+      const logLevelSelect = (
         <select
           class={['select select-sm shrink-0', isLargeCtrlsBar.value ? 'w-28' : 'w-20 max-w-28']}
-          v-model={logTypeFilter.value}
+          aria-label={t('logLevel')}
+          v-model={logLevelFilter.value}
         >
-          <option value="">{t('all')}</option>
-          <optgroup label={t('logLevel')}>
-            {logFilterOptions.value.levels.map((opt) => (
-              <option
-                key={opt}
-                value={opt}
-              >
-                {opt}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label={t('logType')}>
-            {logFilterOptions.value.types.map((opt) => (
-              <option
-                key={opt}
-                value={opt}
-              >
-                {opt}
-              </option>
-            ))}
-          </optgroup>
+          <option value="">{t('logAllLevels')}</option>
+          {logFilterLevels.value.map((opt) => (
+            <option
+              key={opt}
+              value={opt}
+            >
+              {logSeverityLabel(opt, t)}
+            </option>
+          ))}
         </select>
       )
 
@@ -242,7 +218,7 @@ export default defineComponent({
               </div>
             )}
             <div class="flex w-full items-center gap-2">
-              {logTypeSelect}
+              {logLevelSelect}
               {searchInput}
             </div>
           </div>
@@ -251,7 +227,7 @@ export default defineComponent({
             <div class="flex items-center gap-2">
               {levelSelect}
               <div class="flex w-96 items-center gap-2">
-                {logTypeSelect}
+                {logLevelSelect}
                 {searchInput}
               </div>
             </div>

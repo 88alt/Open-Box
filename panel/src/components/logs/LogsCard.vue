@@ -11,7 +11,7 @@
         class="badge badge-sm min-w-17"
         :class="textColorMapForType[log.type as keyof typeof textColorMapForType]"
       >
-        {{ log.type }}
+        {{ severityLabel }}
       </span>
     </div>
 
@@ -22,12 +22,17 @@
 <script setup lang="ts">
 import { useBounceOnVisible } from '@/composables/bouncein'
 import { LOG_LEVEL } from '@/constant'
+import { logSeverityLabel } from '@/helper/logSeverity'
 import type { LogWithSeq } from '@/types'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   log: LogWithSeq
 }>()
+
+const { t } = useI18n()
+const severityLabel = computed(() => logSeverityLabel(props.log.type, t))
 
 const seqWithPadding = computed(() => {
   return props.log.seq.toString().padStart(2, '0')

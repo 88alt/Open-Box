@@ -1,5 +1,6 @@
 import { fetchLogsAPI } from '@/api'
 import { LOG_LEVEL } from '@/constant'
+import { normalizeLogLevel } from '@/helper/logSeverity'
 import { getDeviceName } from '@/helper/sourceip'
 import type { Log, LogWithSeq } from '@/types'
 import { useStorage } from '@vueuse/core'
@@ -9,17 +10,24 @@ import { ref, watch } from 'vue'
 
 export const logs = ref<LogWithSeq[]>([])
 export const logFilter = ref('')
-export const logTypeFilter = ref('')
+export const logLevelFilter = ref('')
 export const isPaused = ref(false)
 export const logLevel = useStorage<string>('config/log-level', LOG_LEVEL.Info)
 // 页面里保留多少条日志。原来是个设置项,但没人会去改它,固定成原来的默认值。
 const LOG_RETENTION_LIMIT = 1000
+// 节点探测的日志很频繁,单独限制条数,免得把普通日志挤掉
+const PROBE_LOG_LIMIT = 200
 
 let cancel: () => void
 let logsTemp: LogWithSeq[] = []
 
 const sliceLogs = throttle(() => {
-  logs.value = logsTemp.concat(logs.value).slice(0, LOG_RETENTION_LIMIT)
+  let probeCount = 0
+
+  logs.value = logsTemp
+    .concat(logs.value)
+    .filter((log) => !log.probe || ++probeCount <= PROBE_LOG_LIMIT)
+    .slice(0, LOG_RETENTION_LIMIT)
   logsTemp = []
 }, 500)
 
@@ -50,10 +58,11 @@ export const initLogs = () => {
       return
     }
 
-    data.payload = labelLogIPs(data.payload)
-
     logsTemp.unshift({
       ...data,
+      type: normalizeLogLevel(data.type),
+      rawPayload: data.payload,
+      payload: labelLogIPs(data.payload),
       time: dayjs().format('HH:mm:ss'),
       seq: idx++,
     })
