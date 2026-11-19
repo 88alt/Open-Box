@@ -1,10 +1,17 @@
 <template>
   <div class="relative">
-    <XMarkIcon
+    <button
       v-if="beforeClose && clearable"
-      :class="clearIconClass"
-      @click="clearInput"
-    />
+      type="button"
+      :class="clearButtonClass"
+      :aria-label="$t('clearInput')"
+      @click.stop="clearInput"
+    >
+      <XMarkIcon
+        class="size-4"
+        aria-hidden="true"
+      />
+    </button>
     <input
       v-model="inputValue"
       ref="inputRef"
@@ -24,11 +31,18 @@
     >
       <slot name="suffix" />
     </div>
-    <XMarkIcon
+    <button
       v-if="!beforeClose && clearable"
-      :class="clearIconClass"
-      @click="clearInput"
-    />
+      type="button"
+      :class="clearButtonClass"
+      :aria-label="$t('clearInput')"
+      @click.stop="clearInput"
+    >
+      <XMarkIcon
+        class="size-4"
+        aria-hidden="true"
+      />
+    </button>
   </div>
 </template>
 
@@ -68,10 +82,10 @@ const inputPaddingClass = computed(() => {
 
   return ''
 })
-const clearIconClass = computed(() => {
+const clearButtonClass = computed(() => {
   return [
-    'absolute top-2 z-10 h-4 w-3 cursor-pointer hover:scale-125',
-    hasSuffix.value ? 'right-8' : 'right-2',
+    'hover:bg-base-content/10 focus-visible:outline-base-content absolute top-1/2 z-10 grid size-6 -translate-y-1/2 place-items-center rounded-full focus-visible:outline',
+    hasSuffix.value ? 'right-8' : 'right-1',
   ]
 })
 
