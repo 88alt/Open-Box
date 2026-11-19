@@ -3,7 +3,7 @@
 import type { OpenboxTrafficRow } from '@/api/openbox'
 import { i18n } from '@/i18n'
 import { failoverLaneOfTag, isFailoverInternalTag } from '@/store/openboxFailover'
-import { getNowProxyNodeName, proxyMap } from '@/store/proxies'
+import { getNowProxyNodeName, outboundDisplayName, proxyMap } from '@/store/proxies'
 
 export const trafficRowNote = (row: OpenboxTrafficRow, t: (key: string, params?: Record<string, unknown>) => string): string => {
   if (row.self) {
@@ -30,7 +30,7 @@ const resolveNodeKey = (key: string): string => {
 }
 
 export const trafficKeyLabel = (key: string): string =>
-  key === TRAFFIC_OTHER_KEY ? i18n.global.t('trafficOtherMerged') : resolveNodeKey(key)
+  key === TRAFFIC_OTHER_KEY ? i18n.global.t('trafficOtherMerged') : outboundDisplayName(resolveNodeKey(key))
 
 export const mergeTrafficNodeRows = (rows: OpenboxTrafficRow[]): OpenboxTrafficRow[] => {
   if (!rows.some((row) => isGroupKey(row.key) || isLaneKey(row.key))) return rows

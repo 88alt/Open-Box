@@ -691,7 +691,7 @@ import type { RouteStageState, RouteStageTone } from '@/components/rules/RouteSt
 import { serviceStatus } from '@/composables/kernelService'
 import { vEaseHeight } from '@/directives/easeHeight'
 import { ruleTypeLabelKey } from '@/helper/ruleType'
-import { proxyMap } from '@/store/proxies'
+import { outboundDisplayName, proxyMap } from '@/store/proxies'
 import { ArrowPathIcon, ArrowRightCircleIcon, BoltIcon, MapIcon, NoSymbolIcon } from '@heroicons/vue/24/outline'
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -964,7 +964,7 @@ const assumptionLine = (a: OpenboxRuleAssumption) => {
     }
     return t('routeAssumeIpVersion', { v: String(r.ip_version ?? '') })
   }).join(t('routeNeedJoin'))
-  const outcome = a.action === 'reject' ? t('routeAssumeReject') : a.outbound ? t('routeAssumeOutbound', { outbound: a.outbound }) : a.action || ''
+  const outcome = a.action === 'reject' ? t('routeAssumeReject') : a.outbound ? t('routeAssumeOutbound', { outbound: outboundDisplayName(a.outbound) }) : a.action || ''
   const needs = a.needs.map(needWord).join(t('routeNeedJoin'))
   if (a.sameOutcome) return t('routeRuleAssumedSame', { index: a.index + 1, scope, outcome })
   // 只差目标 IP 的规则:这次没有解析到域名的地址,不用再列「查询没给什么」

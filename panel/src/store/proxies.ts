@@ -17,6 +17,7 @@ import {
   recheckFailoverGroup,
 } from '@/store/openboxFailover'
 import { iconUrlFor } from '@/helper/iconUrl'
+import { i18n } from '@/i18n'
 import { summarizeLatencyReasons } from '@/helper/latencyReason'
 import {
   loadOpenboxNodeGroups,
@@ -26,6 +27,7 @@ import {
   nodeUpstreams,
   siteSetIcons,
   siteSetIconScales,
+  siteSetNames,
 } from '@/store/openboxSiteSets'
 import {
   GLOBAL,
@@ -881,6 +883,37 @@ export const isLoadBalanceNodeInUse = (groupName: string | undefined, node: stri
     return undefined
   }
   return loadBalanceUsage.value.get(groupName)?.nodes.includes(node) ?? false
+}
+
+// 内置的直连 / 拒绝出站:内核里叫 DIRECT / REJECT(或 __openbox_builtin_ 前缀的名字)。
+// 与上游一致:名字和类型对得上才认;同名的节点组 / 订阅节点 / 策略不算
+const builtinOutboundKind = (name: string): 'direct' | 'block' | undefined => {
+  if (/^(?:DIRECT|__openbox_builtin_DIRECT_*)$/.test(name)) return 'direct'
+  if (/^(?:REJECT|__openbox_builtin_REJECT_*)$/.test(name)) return 'block'
+  return undefined
+}
+
+// 出站名在界面里怎么显示:内置直连 / 拒绝换成当前语言的「直连」「拒绝」(用户在节点管理里改过名就用改后的),
+// 故障转移页签的内部 tag 走 failoverDisplayName,其余原样返回
+export const outboundDisplayName = (name: string): string => {
+  const entry = proxyMap.value[name]
+  let kind = builtinOutboundKind(name)
+  if (entry && kind && entry.type?.toLowerCase() !== (kind === 'direct' ? 'direct' : 'reject')) kind = undefined
+  if (
+    !entry &&
+    kind &&
+    (managedOutbounds.value.some((g) => g.name === name) ||
+      nodeProviders.value.has(name) ||
+      nodeUpstreams.value.has(name) ||
+      siteSetNames.value.has(name))
+  ) {
+    kind = undefined
+  }
+  if (!kind) return failoverDisplayName(name)
+  return (
+    managedOutbounds.value.find((g) => g.kind === kind)?.name ??
+    i18n.global.t(kind === 'direct' ? 'direct' : 'failoverReject')
+  )
 }
 
 export const getNowProxyNodeName = (name: string) => {

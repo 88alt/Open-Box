@@ -53,12 +53,11 @@
 </template>
 
 <script setup lang="ts">
-import { failoverDisplayName } from '@/store/openboxFailover'
 import { NOT_CONNECTED, PROXY_PREVIEW_TYPE } from '@/constant'
 import { getColorForLatency } from '@/helper'
 import { useTooltip } from '@/helper/tooltip'
 import { isWindowResizing } from '@/helper/windowResizeState'
-import { getLatencyByName, isLoadBalanceNodeInUse, isManualSelectable } from '@/store/proxies'
+import { getLatencyByName, isLoadBalanceNodeInUse, isManualSelectable, outboundDisplayName } from '@/store/proxies'
 import { lowLatency, mediumLatency, proxyPreviewType } from '@/store/settings'
 import { useElementSize } from '@vueuse/core'
 import { computed, nextTick, ref, watch } from 'vue'
@@ -113,7 +112,7 @@ const makeTippy = (e: Event, node: { name: string; latency: number }) => {
   const tag = document.createElement('div')
   const name = document.createElement('div')
 
-  name.textContent = failoverDisplayName(node.name)
+  name.textContent = outboundDisplayName(node.name)
   tag.append(name)
 
   if (node.latency !== NOT_CONNECTED) {

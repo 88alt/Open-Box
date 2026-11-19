@@ -56,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { failoverDisplayName, isFailoverGroup } from '@/store/openboxFailover'
+import { isFailoverGroup } from '@/store/openboxFailover'
 import { PROXY_CARD_SIZE, PROXY_SORT_TYPE, PROXY_TYPE } from '@/constant'
 import { checkTruncation } from '@/helper/tooltip'
 import { scrollIntoCenter } from '@/helper/utils'
@@ -65,6 +65,7 @@ import {
   getTestUrl,
   isLoadBalanceNodeInUse,
   isManualSelectable,
+  outboundDisplayName,
   proxyGroupLatencyTest,
   proxyLatencyTest,
   proxyMap,
@@ -123,7 +124,7 @@ const onClick = (event: MouseEvent) => {
 }
 const node = computed(() => proxyMap.value[props.name])
 // 故障转移的内部子组显示成页签名 / 角色,不露 __fo: 技术 tag
-const displayName = computed(() => props.label ?? failoverDisplayName(node.value.name))
+const displayName = computed(() => props.label ?? outboundDisplayName(node.value.name))
 const shownIcon = computed(() => (props.icon !== undefined ? props.icon : node.value?.icon))
 const isLatencyTesting = ref(false)
 const typeFormatter = (type: string) => {
