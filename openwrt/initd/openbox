@@ -333,11 +333,81 @@ openbox_clear_mark_rule() {
 
 # Replace the owned table in one nft transaction. A separate delete opens a
 # window where old DNAT conntracks can send TUN DNS to the default WAN route.
+# If a large CIDR set exceeds OpenWrt's Netlink buffer (ENOBUFS), fall back to
+# installing empty sets + egress guards first, batch-loading elements (256/txn),
+# and finally attaching the bypass/NAT chains (#931).
 openbox_replace_nft() {
+	_ob_tmp="/tmp/openbox-nft-$$.tmp"
+	_ob_head="/tmp/openbox-nft-head-$$.tmp"
+	_ob_tail="/tmp/openbox-nft-tail-$$.tmp"
+	_ob_elems="/tmp/openbox-nft-elems-$$.tmp"
+	_ob_batch="/tmp/openbox-nft-batch-$$.tmp"
+	_ob_del=""
+	nft list table $NFT_TABLE >/dev/null 2>&1 && _ob_del="delete table $NFT_TABLE"
 	{
-		nft list table $NFT_TABLE >/dev/null 2>&1 && echo "delete table $NFT_TABLE"
+		[ -n "$_ob_del" ] && printf '%s\n' "$_ob_del"
 		cat
-	} | nft -f -
+	} > "$_ob_tmp"
+	if nft -f - < "$_ob_tmp"; then
+		rm -f "$_ob_tmp"
+		return 0
+	fi
+	if ! grep -q 'elements = {' "$_ob_tmp"; then
+		rm -f "$_ob_tmp"
+		return 1
+	fi
+	awk -v tbl="$NFT_TABLE" -v headf="$_ob_head" -v tailf="$_ob_tail" -v elemf="$_ob_elems" '
+		BEGIN { in_set = ""; in_tail_chain = 0 }
+		/^delete table / { print > headf; next }
+		/^table / { print > headf; next }
+		/^\tset [A-Za-z0-9_]+ [{]/ {
+			s = $0; sub(/^\tset /, "", s); sub(/ [{].*/, "", s); in_set = s
+			print > headf; next
+		}
+		in_set != "" && /^\t\telements = [{]/ {
+			body = $0; sub(/^\t\telements = [{][ \t]*/, "", body); sub(/[ \t]*[}].*/, "", body)
+			n = split(body, items, /,[ \t]*/)
+			for (i = 1; i <= n; i += 256) {
+				chunk = ""
+				for (j = i; j <= n && j < i + 256; j++) {
+					if (items[j] == "") continue
+					chunk = (chunk == "" ? items[j] : chunk ", " items[j])
+				}
+				if (chunk != "") printf "add element %s %s { %s }\n", tbl, in_set, chunk > elemf
+			}
+			next
+		}
+		in_set != "" && /^\t[}]$/ { in_set = ""; print > headf; next }
+		/^\tchain (entry_bypass_in|entry_bypass_out|tcp_mss_out|terminal_dns) [{]/ {
+			in_tail_chain = 1; print > tailf; next
+		}
+		in_tail_chain {
+			print > tailf
+			if (/^\t[}]$/) in_tail_chain = 0
+			next
+		}
+		{ print > headf }
+		END { close(headf); close(tailf); close(elemf) }
+	' "$_ob_tmp"
+	_ob_rc=0
+	nft -f - < "$_ob_head" || _ob_rc=1
+	if [ "$_ob_rc" -eq 0 ] && [ -s "$_ob_elems" ]; then
+		while IFS= read -r _ob_line; do
+			[ -n "$_ob_line" ] || continue
+			printf '%s\n' "$_ob_line" > "$_ob_batch"
+			nft -f - < "$_ob_batch" || { _ob_rc=1; break; }
+		done < "$_ob_elems"
+	fi
+	if [ "$_ob_rc" -eq 0 ] && [ -s "$_ob_tail" ]; then
+		{
+			printf 'table %s {\n' "$NFT_TABLE"
+			cat "$_ob_tail"
+			printf '}\n'
+		} > "$_ob_batch"
+		nft -f - < "$_ob_batch" || _ob_rc=1
+	fi
+	rm -f "$_ob_tmp" "$_ob_head" "$_ob_tail" "$_ob_elems" "$_ob_batch"
+	return $_ob_rc
 }
 
 # Stop removes interception/marks but retains the inert TUN DNS egress guard:
