@@ -22,7 +22,10 @@ func TestAppWiring(t *testing.T) {
 	web := filepath.Join(root, "web")
 	_ = os.MkdirAll(web, 0o755)
 	_ = os.WriteFile(filepath.Join(web, "index.html"), []byte("<html>PANEL</html>"), 0o644)
-	cfg := system.Config{Paths: system.Paths{DataDir: filepath.Join(root, "data"), ConfigDir: filepath.Join(root, "conf"), WebDir: web}}
+	cfg := system.Config{Paths: system.Paths{DataDir: filepath.Join(root, "data"), ConfigDir: filepath.Join(root, "conf"), WebDir: web},
+		// 服务名必须填:机器上有 systemd / procd 时状态接口会真去查它,空名字会被校验拒绝(回 500);
+		// 用不存在的名字,查到的就是「没在运行」,不碰机器上真实的服务
+		CoreService: "openbox-test-no-such-service", PanelService: "openbox-test-no-such-panel"}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	start := func() (*httptest.Server, *http.Client) {

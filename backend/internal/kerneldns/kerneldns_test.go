@@ -48,7 +48,7 @@ func TestAnalyzeExchangedViaUDPServer(t *testing.T) {
 		"info|[2184370699 0ms] inbound/direct[dns-in]: inbound packet connection from 127.0.0.1:45378",
 		"debug|[2184370699 0ms] router: match[0] inbound=dns-in => hijack-dns",
 		"debug|[2184370699 0ms] dns: exchange x.up.test. IN A",
-		"debug|[2184370699 0ms] dns: match[1] domain_suffix=up.test => route(up)",
+		"debug|[2184370699 0ms] dns: match[0] domain_suffix=up.test => route(up)",
 		"info|[2184370699 0ms] outbound/direct[d2]: outbound packet connection to 127.0.0.1:15353",
 		"debug|[2184370699 12ms] dns: exchanged x.up.test NOERROR 60",
 		"info|[2184370699 12ms] dns: exchanged A x.up.test. 60 IN A 198.51.100.5",
@@ -76,7 +76,7 @@ func TestAnalyzeViaProxyNodeFromDialLine(t *testing.T) {
 	cfg := cfgJSON(t, strings.Replace(testCfg, `"detour":"d2"`, `"detour":"代理组"`, 1))
 	r := Analyze(ents(
 		"debug|[9 0ms] dns: exchange x.up.test. IN A",
-		"debug|[9 0ms] dns: match[1] domain_suffix=up.test => route(up)",
+		"debug|[9 0ms] dns: match[0] domain_suffix=up.test => route(up)",
 		"info|[9 3ms] outbound/vless[节点A]: outbound packet connection to 1.1.1.1:53",
 		"debug|[9 80ms] dns: exchanged x.up.test NOERROR 300",
 	), "x.up.test", cfg)
@@ -88,7 +88,7 @@ func TestAnalyzeViaProxyNodeFromDialLine(t *testing.T) {
 		t.Fatalf("chain 先给 detour:%v", c)
 	}
 	// 没有拨号行时按配置:detour 不是直连类型出站就算走代理
-	r = Analyze(ents("debug|[9 0ms] dns: exchange x.up.test. IN A", "debug|[9 0ms] dns: match[1] domain_suffix=up.test => route(up)"), "x.up.test", cfg)
+	r = Analyze(ents("debug|[9 0ms] dns: exchange x.up.test. IN A", "debug|[9 0ms] dns: match[0] domain_suffix=up.test => route(up)"), "x.up.test", cfg)
 	if r.Map()["viaProxy"] != true {
 		t.Fatalf("%v", r.Map())
 	}
@@ -99,7 +99,7 @@ func TestAnalyzeCachedFailedFakeipActionFinal(t *testing.T) {
 	t.Run("缓存命中", func(t *testing.T) {
 		m := Analyze(ents(
 			"debug|[2837742837 0ms] dns: exchange x.up.test. IN A",
-			"debug|[2837742837 0ms] dns: match[1] domain_suffix=up.test => route(up)",
+			"debug|[2837742837 0ms] dns: match[0] domain_suffix=up.test => route(up)",
 			"debug|[2837742837 0ms] dns: cached x.up.test NOERROR 59",
 			"info|[2837742837 0ms] dns: cached A x.up.test. 59 IN A 198.51.100.5",
 		), "X.UP.TEST.", cfg).Map() // 域名大小写、结尾的点不影响
@@ -110,7 +110,7 @@ func TestAnalyzeCachedFailedFakeipActionFinal(t *testing.T) {
 	t.Run("上游失败", func(t *testing.T) {
 		m := Analyze(ents(
 			"debug|[133733194 0ms] dns: exchange x.bad.test. IN A",
-			"debug|[133733194 0ms] dns: match[3] domain_suffix=bad.test => route(bad)",
+			"debug|[133733194 0ms] dns: match[1] domain_suffix=bad.test => route(bad)",
 			"error|[133733194 1ms] dns: exchange failed for x.bad.test. IN A: dial TCP connection: dial tcp 127.0.0.1:9: connect: connection refused",
 			"error|[133733194 1ms] router: process DNS packet: dial TCP connection: dial tcp 127.0.0.1:9: connect: connection refused",
 		), "x.bad.test", cfg).Map()
@@ -121,7 +121,7 @@ func TestAnalyzeCachedFailedFakeipActionFinal(t *testing.T) {
 	t.Run("FakeIP 服务器", func(t *testing.T) {
 		m := Analyze(ents(
 			"debug|[1308172024 0ms] dns: exchange x.fk.test. IN A",
-			"debug|[1308172024 0ms] dns: match[5] domain_suffix=fk.test => route(fk)",
+			"debug|[1308172024 0ms] dns: match[2] domain_suffix=fk.test => route(fk)",
 			"debug|[1308172024 0ms] dns: exchanged x.fk.test NOERROR 600",
 			"info|[1308172024 0ms] dns: exchanged A x.fk.test. 600 IN A 198.18.0.2",
 		), "x.fk.test", cfg).Map()
@@ -131,7 +131,7 @@ func TestAnalyzeCachedFailedFakeipActionFinal(t *testing.T) {
 	})
 	t.Run("上游回的是占位地址(不是本机 FakeIP 发的)", func(t *testing.T) {
 		m := Analyze(ents(
-			"debug|[7 0ms] dns: exchange x.up.test. IN A", "debug|[7 0ms] dns: match[1] domain_suffix=up.test => route(up)",
+			"debug|[7 0ms] dns: exchange x.up.test. IN A", "debug|[7 0ms] dns: match[0] domain_suffix=up.test => route(up)",
 			"debug|[7 9ms] dns: exchanged x.up.test NOERROR 1", "info|[7 9ms] dns: exchanged A x.up.test. 1 IN A 198.18.3.4",
 		), "x.up.test", cfg).Map()
 		if m["fakeIp"] != true || m["fakeIpLocal"] != false {
@@ -141,14 +141,14 @@ func TestAnalyzeCachedFailedFakeipActionFinal(t *testing.T) {
 	t.Run("规则直接应答:reject 和 predefined 没有 exchanged 行", func(t *testing.T) {
 		m := Analyze(ents(
 			"debug|[2157535799 0ms] dns: exchange rej.test. IN A",
-			"debug|[2157535799 0ms] dns: match[7] domain=rej.test => reject",
+			"debug|[2157535799 0ms] dns: match[3] domain=rej.test => reject",
 		), "rej.test", cfg).Map()
 		if m["result"] != "action" || m["action"] != "reject" || m["ruleIndex"] != 3 || m["server"] != nil {
 			t.Fatalf("%v", m)
 		}
 		m = Analyze(ents(
 			"debug|[3932801698 0ms] dns: exchange pre.test. IN A",
-			"debug|[3932801698 0ms] dns: match[5] domain=pre.test => predefined(NXDOMAIN)",
+			"debug|[3932801698 0ms] dns: match[2] domain=pre.test => predefined(NXDOMAIN)",
 		), "pre.test", cfg).Map()
 		if m["result"] != "action" || m["rcode"] != "NXDOMAIN" || m["action"] != "predefined(NXDOMAIN)" {
 			t.Fatalf("%v", m)
@@ -165,13 +165,13 @@ func TestAnalyzeCachedFailedFakeipActionFinal(t *testing.T) {
 		}
 	})
 	t.Run("只收到查询、没等到应答", func(t *testing.T) {
-		m := Analyze(ents("debug|[5 0ms] dns: exchange x.up.test. IN A", "debug|[5 0ms] dns: match[1] domain_suffix=up.test => route(up)"), "x.up.test", cfg).Map()
+		m := Analyze(ents("debug|[5 0ms] dns: exchange x.up.test. IN A", "debug|[5 0ms] dns: match[0] domain_suffix=up.test => route(up)"), "x.up.test", cfg).Map()
 		if m["result"] != "pending" || m["ttl"] != nil || m["ms"] != nil {
 			t.Fatalf("%v", m)
 		}
 	})
 	t.Run("交给 DNS 重写服务", func(t *testing.T) {
-		m := Analyze(ents("debug|[5 0ms] dns: exchange x.up.test. IN A", "debug|[5 0ms] dns: match[1] domain_suffix=up.test => route(dns-rewrite)",
+		m := Analyze(ents("debug|[5 0ms] dns: exchange x.up.test. IN A", "debug|[5 0ms] dns: match[0] domain_suffix=up.test => route(dns-rewrite)",
 			"debug|[5 1ms] dns: exchanged x.up.test NOERROR 5"), "x.up.test", cfg).Map()
 		if m["rewrite"] != true {
 			t.Fatalf("%v", m)
@@ -188,8 +188,8 @@ func TestAnalyzeNotSeenAndUnrecognized(t *testing.T) {
 	if r := Analyze(nil, "x.up.test", cfg); r.Seen || r.Reason != "not-seen" {
 		t.Fatalf("没收到任何日志:%+v", r)
 	}
-	// 规则序号是偶数 / 超出规则条数:认不出,不猜
-	for _, n := range []string{"2", "99"} {
+	// 规则序号超出规则条数(testCfg 有 4 条):认不出,不猜
+	for _, n := range []string{"4", "99"} {
 		r := Analyze(ents("debug|[1 0ms] dns: exchange x.up.test. IN A", "debug|[1 0ms] dns: match["+n+"] domain_suffix=up.test => route(up)"), "x.up.test", cfg)
 		if r.Seen || r.Reason != "no-log" || !strings.Contains(r.Err, "规则序号 "+n) {
 			t.Fatalf("序号 %s:%+v", n, r)
@@ -208,10 +208,10 @@ func TestAnalyzeNotSeenAndUnrecognized(t *testing.T) {
 func TestAnalyzePicksLastQueryAndV6(t *testing.T) {
 	cfg := cfgJSON(t, testCfg)
 	r := Analyze(ents(
-		"debug|[1 0ms] dns: exchange x.up.test. IN A", "debug|[1 0ms] dns: match[1] domain_suffix=up.test => route(up)", "debug|[1 5ms] dns: exchanged x.up.test SERVFAIL 0",
-		"debug|[2 0ms] dns: exchange x.up.test. IN A", "debug|[2 0ms] dns: match[1] domain_suffix=up.test => route(up)", "debug|[2 7ms] dns: exchanged x.up.test NOERROR 60",
+		"debug|[1 0ms] dns: exchange x.up.test. IN A", "debug|[1 0ms] dns: match[0] domain_suffix=up.test => route(up)", "debug|[1 5ms] dns: exchanged x.up.test SERVFAIL 0",
+		"debug|[2 0ms] dns: exchange x.up.test. IN A", "debug|[2 0ms] dns: match[0] domain_suffix=up.test => route(up)", "debug|[2 7ms] dns: exchanged x.up.test NOERROR 60",
 		"info|[2 7ms] dns: exchanged A x.up.test. 60 IN A 198.51.100.5",
-		"debug|[3 0ms] dns: exchange x.up.test. IN AAAA", "debug|[3 0ms] dns: match[1] domain_suffix=up.test => route(up)", "debug|[3 2ms] dns: exchanged x.up.test NOERROR 60",
+		"debug|[3 0ms] dns: exchange x.up.test. IN AAAA", "debug|[3 0ms] dns: match[0] domain_suffix=up.test => route(up)", "debug|[3 2ms] dns: exchanged x.up.test NOERROR 60",
 		"info|[3 2ms] dns: exchanged AAAA x.up.test. 60 IN AAAA 2001:db8::5",
 	), "x.up.test", cfg)
 	m := r.Map()

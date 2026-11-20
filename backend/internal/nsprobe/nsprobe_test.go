@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -42,14 +43,14 @@ func tlsServer(t *testing.T, h http.HandlerFunc) (int, *tls.Config) {
 }
 
 // fakeDNS 起一个 UDP DNS 服务器:A 查询回 ip,rcode 非 0 时回那个错误码,drop 时不理。返回 "127.0.0.1:端口"。
-func fakeDNS(t *testing.T, ip string, rcode int, drop bool) (string, *int) {
+func fakeDNS(t *testing.T, ip string, rcode int, drop bool) (string, *atomic.Int64) {
 	t.Helper()
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		t.Skip(err)
 	}
 	t.Cleanup(func() { _ = pc.Close() })
-	queries := new(int)
+	queries := new(atomic.Int64)
 	go func() {
 		buf := make([]byte, 512)
 		for {
@@ -57,7 +58,7 @@ func fakeDNS(t *testing.T, ip string, rcode int, drop bool) (string, *int) {
 			if err != nil {
 				return
 			}
-			*queries++
+			queries.Add(1)
 			if drop || n < 12 {
 				continue
 			}
@@ -196,8 +197,8 @@ func TestRunFailures(t *testing.T) {
 		dead, q := fakeDNS(t, "", 0, true)
 		start := time.Now()
 		res, _ = Run(ctx, Request{Target: "a.test", Method: "TCP", DNS: []string{dead}})
-		if res.OK || !strings.Contains(res.Error, "没有响应") || *q == 0 || time.Since(start) < 2*time.Second {
-			t.Fatalf("%+v q=%d", res, *q)
+		if res.OK || !strings.Contains(res.Error, "没有响应") || q.Load() == 0 || time.Since(start) < 2*time.Second {
+			t.Fatalf("%+v q=%d", res, q.Load())
 		}
 		l, _ := net.Listen("tcp", "127.0.0.1:0")
 		defer l.Close()

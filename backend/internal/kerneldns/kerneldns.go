@@ -1,7 +1,7 @@
 // Package kerneldns 把内核日志流里一次 DNS 查询的过程整理成 terminal-test 的 kernelDns:命中哪条 DNS 规则、
 // 交给哪个解析器、经哪个节点发出、上游回了什么。是从内核日志里截下来的实录,不是推算。
-// 自己的设计,依据前端 OpenboxTerminalKernelDns 的字段注释,日志的写法取自 sing-box 1.13.14 的源码
-// (dns/router.go、dns/client_log.go)和对真实内核的实测(见测试里的样例行,都是真实内核打出来的);没有参照上游。
+// 自己的设计,依据前端 OpenboxTerminalKernelDns 的字段注释,日志的写法取自 sing-box 的源码
+// (dns/router.go、dns/client_log.go)和对真实内核 1.14.4 的实测(见测试里的样例行,都是真实内核打出来的;规则序号 1.13 与 1.14 写法不同,现按 1.14);没有参照上游。
 //
 // 依赖内核版本:日志里的规则序号、各句话的写法都是 sing-box 自己的。认不出的写法一律返回 seen=false 并说明,不猜;
 // 换内核大版本后要重新对一遍(kerneldns_real_test.go 用真实内核核对,有可执行文件时跑)。
@@ -248,12 +248,13 @@ func summarize(lines []line, cfg *Config) (*Query, string) {
 		}
 	}
 	if matchSeen {
-		// 内核 1.13.14 日志里的规则序号是 2*i+1(i 是 dns.rules 里 0 起的下标),奇数才合法;
-		// 对不上就不猜,说明白,免得把一条规则说成另一条
-		if matchN%2 != 1 || (cfg != nil && cfg.RuleCount > 0 && (matchN-1)/2 >= cfg.RuleCount) {
+		// 内核 1.14 的 DNS 日志里 match[N] 的 N 就是 dns.rules 里 0 起的下标(1.13 是 2*i+1,已不再支持:
+		// 项目固定用 1.14.x,两种写法的奇数序号无法分辨,混着认会把一条规则说成另一条);
+		// 超出规则条数就不猜,说明白,免得把一条规则说成另一条
+		if matchN < 0 || (cfg != nil && cfg.RuleCount > 0 && matchN >= cfg.RuleCount) {
 			return nil, fmt.Sprintf("日志里的规则序号 %d 认不出(内核日志的写法和预期的不一样,可能换了内核版本)", matchN)
 		}
-		q.Matched, q.RuleIdx = true, (matchN-1)/2
+		q.Matched, q.RuleIdx = true, matchN
 	}
 	if q.Result == "" {
 		if strings.HasPrefix(q.Action, "reject") || strings.HasPrefix(q.Action, "predefined") {

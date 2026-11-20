@@ -63,7 +63,7 @@ func logLines(domain string) []singbox.LogEntry {
 	return []singbox.LogEntry{
 		{Level: "info", Payload: "[77 0ms] inbound/direct[dns-in]: inbound packet connection from 127.0.0.1:5353"},
 		{Level: "debug", Payload: "[77 0ms] dns: exchange " + domain + ". IN A"},
-		{Level: "debug", Payload: "[77 0ms] dns: match[3] domain_suffix=example.com => route(up)"},
+		{Level: "debug", Payload: "[77 0ms] dns: match[1] domain_suffix=example.com => route(up)"},
 		{Level: "debug", Payload: "[77 21ms] dns: exchanged " + domain + " NOERROR 300"},
 		{Level: "info", Payload: "[77 21ms] dns: exchanged A " + domain + ". 300 IN A 93.184.216.34"},
 	}

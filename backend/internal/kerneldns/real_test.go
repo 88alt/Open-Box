@@ -38,7 +38,7 @@ func dnsQuery(name string, qtype uint16) []byte {
 	return b
 }
 
-// 用真实的 sing-box 核对:日志的写法、规则序号(2*i+1)、拨号行、控制接口的日志订阅都和这里解析的一致。
+// 用真实的 sing-box 核对:日志的写法、规则序号(1.14 起就是 dns.rules 的 0 起下标)、拨号行、控制接口的日志订阅都和这里解析的一致。
 // 没有 sing-box 可执行文件时跳过。换内核版本后这个测试就是「重新对一遍」的那一步。
 func TestRealSingBoxKernelDNSTrace(t *testing.T) {
 	bin, err := exec.LookPath("sing-box")
@@ -176,7 +176,7 @@ func TestRealSingBoxKernelDNSTrace(t *testing.T) {
 	if m6 := Analyze(entries, "x.up.test", c).Map(); m6["v6"] == nil {
 		t.Fatalf("同一个域名有 AAAA 查询,应有 v6:%v", m6)
 	}
-	// FakeIP / reject / predefined / 兜底:规则序号 2*i+1 的换算要和内核对上
+	// FakeIP / reject / predefined / 兜底:规则序号要和内核对上
 	if m = Analyze(entries, "x.fk.test", c).Map(); m["ruleIndex"] != 1 || m["fakeIpLocal"] != true || m["fakeIp"] != true || m["result"] != "exchanged" {
 		t.Fatalf("x.fk.test:%v", m)
 	}
