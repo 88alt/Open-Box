@@ -543,15 +543,10 @@ const zh: LANG_MESSAGE = {
   qualityNoResults: '没有匹配的订阅',
   qualityExpand: '展开「{name}」节点',
   qualityCollapse: '收起「{name}」节点',
-  qualityNodeDetails: '节点质量详情',
-  qualityNodeDetailsLink: '节点详情',
   qualityShowAllNodes: '显示全部',
   qualityShowFirstNodes: '收起',
   qualityHelp: '节点质量说明',
-  qualityLastCheck: '最近检测',
   qualityNever: '尚未检测',
-  qualityActiveTime: '活跃时长（采样估算）',
-  qualityTraffic: '业务流量（采样估算）',
   qualityTime: '{hours} 小时 {minutes} 分',
   qualityNotMeasured: '未检测',
   qualityDetailScope:
@@ -566,7 +561,6 @@ const zh: LANG_MESSAGE = {
     '按当前有效连接、网络环境和全局测速目标统计，保留最近 24 个小时桶。抖动指连续成功 HTTP 探测耗时之差的均值，不等同于 UDP 抖动或 IP 丢包率。时长与业务流量为采样估算，排除面板探测，不参与加分；并发使用时长只计一次。',
   qualityBandwidthHelp:
     '订阅带宽显示各已测节点带宽均值的中位数。最新带宽样本达到两个统一周期后，该节点的带宽均值不再参与评分。上传带宽暂未检测，业务上传流量单独显示。',
-  qualityFailedHelp: '历史下载结果不代表当前可用；当前检测失败的节点，在订阅评估中按 0 分计入。',
   qualityMode_login: '登录',
   qualityMode_subscription: '订阅',
   qualityMode_node: '节点',
@@ -2321,6 +2315,8 @@ const zh: LANG_MESSAGE = {
   nodeInfoSharingHigh: '高危',
   nodeInfoReportLink: '查询 {provider} 报告',
   nodeInfoIpTypeSource: 'IP 类型来源',
+  qualityPreviousScore: '上次评分',
+  nodeScoreWeightJitter: '抖动',
 }
 
 export default zh

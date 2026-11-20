@@ -2027,6 +2027,9 @@ export type OpenboxQualityNode = OpenboxQualityStats & {
   protocol: string
   state: OpenboxQualityState
   score: number | null
+  // 这次没测出新分数时沿用上一次的分,scoreAt 是那一次的时间
+  scoreStale?: boolean
+  scoreAt?: number | string | null
   charts?: { latency?: OpenboxQualitySample[]; bandwidth?: OpenboxQualitySample[] }
 }
 export type OpenboxQualitySubscription = OpenboxQualityStats & {

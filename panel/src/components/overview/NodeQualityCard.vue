@@ -201,43 +201,29 @@
                         class="min-w-0 truncate"
                         :title="node.tag"
                       >{{ node.tag }}</span>
-                      <div class="text-base-content/60 flex min-w-0 items-center gap-2 text-xs whitespace-nowrap">
+                      <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs whitespace-nowrap">
                         <span
-                          class="truncate"
-                          :title="`${node.protocol} · ${timeAt(node.lastAt)}`"
-                        >{{ node.protocol }} · {{ timeAt(node.lastAt) }}</span>
-                        <button
-                          type="button"
-                          class="hover:text-base-content flex shrink-0 cursor-pointer items-center gap-0.5"
-                          data-quality-node-details
-                          @click.stop="openDetails(node)"
+                          v-tip="node.scoreStale ? `${$t('qualityPreviousScore')} · ${timeAt(node.scoreAt || 0)}` : undefined"
+                          class="shrink-0 font-bold tabular-nums"
+                          :class="node.state === 'down' ? 'text-error' : ''"
                         >
-                          {{ $t('qualityNodeDetailsLink') }}
-                          <ChevronRightIcon class="h-3 w-3" />
-                        </button>
+                          {{ node.score === null ? '—' : `${node.score} ${$t('qualityPoints')}` }}
+                        </span>
+                        <span class="text-base-content/60">{{ timeAt(node.lastAt) }}</span>
+                        <StatusBadge
+                          v-if="node.state === 'healthy' || node.state === 'down'"
+                          :on="node.state === 'healthy'"
+                          :on-text="$t('qualityState_healthy')"
+                          :off-text="$t('qualityState_down')"
+                        />
+                        <span
+                          v-else
+                          class="badge badge-ghost badge-sm"
+                        >{{ $t(`qualityState_${node.state}`) }}</span>
+                        <span class="text-base-content/60">{{ $t('qualityAvailability') }} {{ num(node.availability, 1) }}%</span>
+                        <span class="text-base-content/60">{{ $t('nodeScoreWeightJitter') }} {{ num(node.jitter) }} ms</span>
                       </div>
                     </div>
-                  </div>
-                  <div class="ml-auto flex max-w-full flex-wrap items-center gap-x-3 gap-y-1 text-sm whitespace-nowrap lg:shrink-0 lg:flex-nowrap">
-                    <span :class="node.state === 'down' ? 'text-error' : ''">
-                      {{ node.score === null ? $t(`qualityState_${node.state}`) : `${node.score} ${$t('qualityPoints')}` }}
-                    </span>
-                    <span :class="node.state === 'healthy' && node.latency !== null ? getColorForLatency(node.latency) : 'text-base-content/60'">
-                      {{ node.state === 'healthy' ? num(node.latency) : '—' }} ms
-                    </span>
-                    <span :class="node.state === 'healthy' ? getColorForBandwidth(node.download) : 'text-base-content/60'">
-                      ↓ {{ node.state === 'healthy' ? num(node.download) : '—' }} Mbps
-                    </span>
-                    <StatusBadge
-                      v-if="node.state === 'healthy' || node.state === 'down'"
-                      :on="node.state === 'healthy'"
-                      :on-text="$t('qualityState_healthy')"
-                      :off-text="$t('qualityState_down')"
-                    />
-                    <span
-                      v-else
-                      class="badge badge-ghost badge-sm"
-                    >{{ $t(`qualityState_${node.state}`) }}</span>
                   </div>
                 </div>
 
@@ -269,32 +255,13 @@
                           :kind="item.key"
                           :samples="node.charts?.[item.key] || []"
                         />
-                        <div
+                        <NodeInfoPanel
                           v-else
-                          class="flex h-10 w-full min-w-0 flex-col gap-1"
-                        >
-                          <div class="flex items-center justify-between gap-2 text-xs leading-4">
-                            <h4 class="text-base-content/60">{{ $t(item.label) }}</h4>
-                            <button
-                              type="button"
-                              class="text-base-content/60 hover:text-base-content flex shrink-0 cursor-pointer items-center gap-0.5"
-                              :aria-label="`${$t(item.label)} · ${$t('geoEntriesLink')}`"
-                              @click="openDetails(node)"
-                            >
-                              {{ $t('geoEntriesLink') }}
-                              <ChevronRightIcon class="h-3 w-3" />
-                            </button>
-                          </div>
-                          <div class="flex h-5 min-w-0 items-center">
-                            <NodeInfoPanel
-                              compact
-                              class="w-full"
-                              :name="node.tag"
-                              :risk-only="item.key === 'risk'"
-                              :exit-state="exitState"
-                            />
-                          </div>
-                        </div>
+                          compact
+                          :name="node.tag"
+                          :risk-only="item.key === 'risk'"
+                          :exit-state="exitState"
+                        />
                       </section>
                     </div>
                   </div>
@@ -357,100 +324,27 @@
         </button>
       </template>
     </DialogWrapper>
-
-    <DialogWrapper
-      v-model="detailOpen"
-      :title="detailNode?.tag || $t('qualityNodeDetails')"
-      box-class="w-full max-w-4xl"
-      header-class="pr-10! [&>span:last-of-type]:min-w-0 [&>span:last-of-type]:truncate"
-    >
-      <template #title-left>
-        <CountryFlag
-          v-if="detailNode"
-          :code="detailNode.region"
-          :size="20"
-        />
-      </template>
-      <div
-        v-if="detailNode"
-        class="flex flex-col gap-4 text-sm"
-      >
-        <div
-          class="grid grid-cols-1 gap-4 md:grid-cols-2"
-          data-quality-metrics
-        >
-          <dl
-            v-for="col in [0, 1]"
-            :key="col"
-            class="grid content-start gap-x-2 gap-y-1 text-xs leading-4"
-            :style="{ gridTemplateColumns: dlColumns }"
-          >
-            <template
-              v-for="row in detailRows.filter((_, i) => i % 2 === col)"
-              :key="row.label"
-            >
-              <dt class="opacity-60">{{ $t(row.label) }}</dt>
-              <dd class="min-w-0 wrap-break-word">{{ row.value }}</dd>
-            </template>
-          </dl>
-        </div>
-        <p
-          v-if="detailNode.state === 'down'"
-          class="text-error text-xs"
-        >
-          {{ $t('qualityFailedHelp') }}
-        </p>
-        <div
-          role="separator"
-          class="border-base-content/10 border-t"
-          data-quality-details-separator
-        ></div>
-        <div
-          class="grid grid-cols-1 gap-4 md:grid-cols-2"
-          data-quality-full-details
-        >
-          <section
-            v-for="risk in [false, true]"
-            :key="`${detailNode.tag}-${risk}`"
-            class="flex min-w-0 flex-col gap-2"
-          >
-            <h3 class="text-sm font-semibold">{{ $t(risk ? 'nodeRiskAssessment' : 'nodeInfo') }}</h3>
-            <NodeInfoPanel
-              class="h-auto! overflow-y-visible! pr-0!"
-              :name="detailNode.tag"
-              :udp="proxyMap[detailNode.tag]?.udp"
-              :risk-only="risk"
-              :exit-state="detailExit"
-            />
-          </section>
-        </div>
-      </div>
-    </DialogWrapper>
   </section>
 </template>
 
 <script setup lang="ts">
-import { fetchNodeQuality, type OpenboxNodeQuality, type OpenboxQualityNode, type OpenboxQualitySubscription } from '@/api/openbox'
+import { fetchNodeQuality, type OpenboxNodeQuality, type OpenboxQualitySubscription } from '@/api/openbox'
 import CountryFlag from '@/components/common/CountryFlag.vue'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import ExpandTransition from '@/components/common/ExpandTransition.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import NodeInfoPanel from '@/components/proxies/NodeInfoPanel.vue'
-import { useNodeExit, type NodeExitState } from '@/composables/nodeExit'
+import { useNodeExit } from '@/composables/nodeExit'
 import { getColorForBandwidth, getColorForLatency } from '@/helper'
 import { showNotification } from '@/helper/notification'
 import { prettyBytesHelper } from '@/helper/utils'
-import { proxyMap } from '@/store/proxies'
-import { ChevronDownIcon, ChevronRightIcon, ChevronUpIcon, InformationCircleIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
+import { ChevronDownIcon, ChevronUpIcon, InformationCircleIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
 import dayjs from 'dayjs'
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import QualityHistoryChart from './QualityHistoryChart.vue'
 
-const { t, locale } = useI18n()
-const dlColumns = computed(
-  () => `minmax(${locale.value.startsWith('zh') ? '4.25rem' : '5.25rem'}, max-content) minmax(0, 1fr)`,
-)
+const { t } = useI18n()
 
 const data = ref<OpenboxNodeQuality | null>(null)
 const search = ref('')
@@ -459,9 +353,6 @@ const openNode = ref('')
 const showAll = ref(false)
 const loading = ref(false)
 const helpOpen = ref(false)
-const detailOpen = ref(false)
-const detailNode = ref<OpenboxQualityNode | null>(null)
-const detailExit = shallowRef<NodeExitState>(useNodeExit(''))
 const exitState = computed(() => useNodeExit(openNode.value))
 
 const detailItems = [
@@ -487,19 +378,6 @@ const summary = computed(() => {
     failed: subs.reduce((n, s) => n + s.failed, 0),
     unknown: subs.reduce((n, s) => n + s.unknown, 0),
   }
-})
-
-const detailRows = computed(() => {
-  const n = detailNode.value
-  if (!n) return []
-  return [
-    { label: 'qualityAvailability', value: num(n.availability, 1) + '%' },
-    { label: 'qualityLatencyJitter', value: `${num(n.latency)} / ${num(n.jitter)} ms` },
-    { label: 'qualityBandwidth', value: `${num(n.download)} / ${num(n.upload)} Mbps` },
-    { label: 'qualityActiveTime', value: timeText(n.activeMs) },
-    { label: 'qualityTraffic', value: bytes(n.up + n.down) },
-    { label: 'qualityLastCheck', value: timeAt(n.lastAt) },
-  ]
 })
 
 let controller: AbortController | undefined
@@ -536,11 +414,6 @@ const load = async () => {
   }
 }
 
-const openDetails = (node: OpenboxQualityNode) => {
-  detailNode.value = node
-  detailExit.value = openNode.value === node.tag ? exitState.value : useNodeExit(node.tag)
-  detailOpen.value = true
-}
 const toggleSub = (id: string) => {
   openNode.value = ''
   openSub.value = openSub.value === id ? '' : id

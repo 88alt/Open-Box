@@ -569,15 +569,10 @@ const en = {
   qualityNoResults: 'No matching subscriptions',
   qualityExpand: 'Expand {name} nodes',
   qualityCollapse: 'Collapse {name} nodes',
-  qualityNodeDetails: 'Node quality details',
-  qualityNodeDetailsLink: 'Node details',
   qualityShowAllNodes: 'Show all',
   qualityShowFirstNodes: 'Show first 10',
   qualityHelp: 'Node quality explained',
-  qualityLastCheck: 'Last check',
   qualityNever: 'Not tested',
-  qualityActiveTime: 'Active time (sampled)',
-  qualityTraffic: 'Traffic (sampled)',
   qualityTime: '{hours} h {minutes} min',
   qualityNotMeasured: 'Not tested',
   qualityDetailScope:
@@ -592,8 +587,6 @@ const en = {
     'Metrics use the current connection identity, network and global probe target. The last 24 hourly buckets are retained. HTTP timing variation is the mean difference between consecutive successful probe durations, not UDP jitter or IP packet loss. Active time and traffic are sampled, exclude panel probes, and never add points. Concurrent activity is counted once.',
   qualityBandwidthHelp:
     'A subscription shows the median of measured node averages. A node’s average expires when its newest bandwidth sample reaches two shared periods. Upload bandwidth is unmeasured and application upload traffic is reported separately.',
-  qualityFailedHelp:
-    'A historical download result does not prove current availability. A failed node contributes zero to the subscription assessment.',
   qualityMode_login: 'Login',
   qualityMode_subscription: 'Subscription',
   qualityMode_node: 'Node',
@@ -2452,6 +2445,8 @@ const en = {
   nodeInfoSharingHigh: 'High risk',
   nodeInfoReportLink: 'View {provider} report',
   nodeInfoIpTypeSource: 'IP type source',
+  qualityPreviousScore: 'Previous score',
+  nodeScoreWeightJitter: 'Jitter',
 }
 
 export type LANG_MESSAGE = typeof en

@@ -544,15 +544,10 @@ const zhTW: LANG_MESSAGE = {
   qualityNoResults: '沒有符合的訂閱',
   qualityExpand: '展開「{name}」節點',
   qualityCollapse: '收起「{name}」節點',
-  qualityNodeDetails: '節點品質詳情',
-  qualityNodeDetailsLink: '節點詳情',
   qualityShowAllNodes: '顯示全部',
   qualityShowFirstNodes: '收起',
   qualityHelp: '節點品質說明',
-  qualityLastCheck: '最近檢測',
   qualityNever: '尚未檢測',
-  qualityActiveTime: '活躍時長（取樣估算）',
-  qualityTraffic: '業務流量（取樣估算）',
   qualityTime: '{hours} 小時 {minutes} 分',
   qualityNotMeasured: '未檢測',
   qualityDetailScope:
@@ -567,7 +562,6 @@ const zhTW: LANG_MESSAGE = {
     '按目前有效連線、網路環境及全域測速目標統計，保留最近 24 個小時桶。抖動指連續成功 HTTP 探測耗時之差的平均，不等同於 UDP 抖動或 IP 丟包率。時長與業務流量為取樣估算，排除面板探測，不參與加分；並發使用時長只計一次。',
   qualityBandwidthHelp:
     '訂閱頻寬顯示各已測節點頻寬平均值的中位數。最新頻寬樣本達到兩個統一週期後，該節點的頻寬平均值不再參與評分。上傳頻寬暫未檢測，業務上傳流量另行顯示。',
-  qualityFailedHelp: '歷史下載結果不代表目前可用；目前檢測失敗的節點，在訂閱評估中按 0 分計入。',
   qualityMode_login: '登入',
   qualityMode_subscription: '訂閱',
   qualityMode_node: '節點',
@@ -2322,6 +2316,8 @@ const zhTW: LANG_MESSAGE = {
   nodeInfoSharingHigh: '高危',
   nodeInfoReportLink: '查詢 {provider} 報告',
   nodeInfoIpTypeSource: 'IP 類型來源',
+  qualityPreviousScore: '上次評分',
+  nodeScoreWeightJitter: '抖動',
 }
 
 export default zhTW
