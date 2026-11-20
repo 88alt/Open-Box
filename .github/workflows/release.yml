@@ -301,7 +301,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: [build, kernel-tag]
+    needs: [build, kernel-tag, geodata]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -332,6 +332,26 @@ jobs:
             cp "scripts/$s.sh" "dist-release/$s.sh"
             (cd dist-release && sha256sum "$s.sh" > "$s.sh.sha256")
           done
+
+      # GeoSite / GeoIP 的 JSON 源文件(MetaCubeX meta-rules-dat,GPL-3.0)随 Release 一并发布,
+      # 与上游一致:geodata-<提交>-sources.tar.xz(+ .sha256)。
+      # 内容就是 geodata 任务里 bundle-geodata.py 生成的 sources.tar.gz(LICENSE + geoip/*.json + geosite/*.json),
+      # 这里只改成 xz 压缩并按冻结的提交号命名,保证与完整安装包里的 Geo 数据同一提交。
+      - name: Download frozen Geo snapshot
+        uses: actions/download-artifact@v4
+        with:
+          name: geodata
+          path: geodata
+
+      - name: Add Geo sources tarball
+        run: |
+          set -eu
+          version=$(python3 -c "import json;print(json.load(open('geodata/manifest.json'))['version'])")
+          case "$version" in *[!0-9a-f]*|'') echo "bad geodata version: $version" >&2; exit 1;; esac
+          name="geodata-$version-sources.tar.xz"
+          gzip -dc geodata/sources.tar.gz | xz -9e -T1 > "dist-release/$name"
+          tar -tJf "dist-release/$name" | grep -qx LICENSE
+          (cd dist-release && sha256sum "$name" > "$name.sha256")
 
       - name: List release assets
         run: ls -la dist-release
@@ -401,6 +421,7 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             dist-release/*.tar.gz
+            dist-release/*.tar.xz
             dist-release/*.sh
             dist-release/*.sha256
             dist-release/*components.json
