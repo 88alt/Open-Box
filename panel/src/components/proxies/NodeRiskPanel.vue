@@ -1,9 +1,11 @@
 <template>
-  <!-- 出口 IP 的风险评估:情报(威胁 / 滥用 / 黑名单 / RPKI)、深度检测(VPN / 代理 / Tor / 爬虫)、真人流量占比。
+  <!-- 出口 IP 的风险评估:Net.Coffee 信任评分、Ping0.cc 风控值,情报(威胁 / 滥用 / 黑名单 / RPKI)、深度检测(VPN / 代理 / Tor / 爬虫)、真人流量占比。
        compact 只显示一行摘要:威胁结论 + 滥用等级 -->
   <div
     :class="
-      compact ? 'flex min-w-0 items-center gap-2' : 'col-span-2 flex min-w-0 flex-col gap-2 text-xs leading-4'
+      compact
+        ? 'flex min-w-0 items-center gap-2'
+        : 'col-span-2 grid min-w-0 grid-cols-subgrid gap-x-2 gap-y-1'
     "
     data-node-risk
   >
@@ -11,45 +13,84 @@
       <span
         class="min-w-0 flex-1 truncate text-sm"
         :class="sections[0].rows[0].color"
-        :title="sections[0].rows[0].value"
       >
         {{ sections[0].rows[0].value }}
       </span>
       <span
+        v-tip="$t('nodeRiskAbuse')"
         class="shrink-0"
         :class="sections[0].rows[1].color"
-        :title="$t('nodeRiskAbuse')"
       >
         {{ sections[0].rows[1].value }}
       </span>
     </template>
     <template v-else>
-      <div
+      <NodeInfoText
+        row
+        :label="$t('nodeInfoTrust')"
+        :text="trustScore == null ? '—' : `${trustScore} / 100`"
+        :text-style="trustScore == null ? undefined : { color: trustColor }"
+        source="Net.Coffee"
+        :source-href="netCoffeeHref"
+      >
+        <template #prefix>
+          <progress
+            v-if="trustScore != null"
+            class="progress mt-1 h-1.5 w-12 shrink-0"
+            :style="{ color: trustColor }"
+            :value="trustScore"
+            max="100"
+            :aria-label="$t('nodeInfoTrust')"
+          ></progress>
+        </template>
+      </NodeInfoText>
+      <NodeInfoText
+        row
+        :label="$t('nodeRiskPing0')"
+        :text="ping0Text"
+        :text-class="ping0Tier?.color"
+        :source="ping0Source"
+        :source-href="ping0Href"
+      >
+        <template
+          v-if="ping0Risk"
+          #prefix
+        >
+          <div
+            class="bg-base-content/10 mt-1 h-1.5 w-12 shrink-0 overflow-hidden rounded-full"
+            role="progressbar"
+            :aria-label="$t('nodeRiskPing0')"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            :aria-valuenow="ping0Risk.percent"
+            :title="`${ping0Risk.percent}%`"
+          >
+            <div
+              class="from-success via-warning to-error h-full bg-linear-to-r"
+              :style="{ clipPath: `inset(0 ${100 - ping0Risk.percent}% 0 0 round 9999px)` }"
+            ></div>
+          </div>
+        </template>
+      </NodeInfoText>
+      <template
         v-for="(section, index) in sections"
         :key="section.title"
-        class="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-1"
       >
         <hr
           v-if="index > 0"
           class="border-base-content/15 col-span-2 my-1"
         />
-        <h3
-          v-else
-          class="col-span-2 text-xs font-semibold"
-        >
-          {{ $t(section.title) }}
-        </h3>
         <NodeInfoText
           v-for="row in section.rows"
           :key="row.label"
           row
           :label="$t(row.label)"
           :text="row.value"
-          :text-class="`${row.color} flex-1 text-right`"
+          :text-class="row.color"
         />
-      </div>
+      </template>
       <div
-        class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2"
+        class="col-span-2 grid grid-cols-subgrid items-center gap-x-2"
         data-node-human-traffic
       >
         <span class="opacity-60">
@@ -59,22 +100,26 @@
           v-if="traffic"
           class="flex min-w-0 items-center gap-2 tabular-nums"
         >
-          <span class="text-primary shrink-0 whitespace-nowrap">{{ $t('nodeTrafficHuman') }} {{ human }}%</span>
+          <span class="text-success shrink-0 whitespace-nowrap"
+            >{{ $t('nodeTrafficHuman') }} {{ human }}%</span
+          >
           <div
-            class="bg-error/70 rounded-field h-1.5 min-w-0 flex-1 overflow-hidden"
+            class="bg-error/70 rounded-field h-1.5 w-20 min-w-0 shrink overflow-hidden"
             role="img"
             :aria-label="$t('nodeTrafficRatio', { human, bot: 100 - human })"
           >
             <div
-              class="bg-primary h-full"
+              class="bg-success h-full"
               :style="{ width: traffic.human + '%' }"
             ></div>
           </div>
-          <span class="text-error shrink-0 whitespace-nowrap">{{ $t('nodeTrafficBot') }} {{ 100 - human }}%</span>
+          <span class="text-error shrink-0 whitespace-nowrap"
+            >{{ $t('nodeTrafficBot') }} {{ 100 - human }}%</span
+          >
         </div>
         <span
           v-else
-          class="text-right opacity-60"
+          class="opacity-60"
         >
           {{ $t('nodeRiskUnknown') }}
         </span>
@@ -84,12 +129,23 @@
 </template>
 
 <script setup lang="ts">
-import type { OpenboxNodeHumanTraffic, OpenboxNodeRiskAssessment } from '@/api/openbox'
+import type {
+  OpenboxNodeHumanTraffic,
+  OpenboxNodeRiskAssessment,
+  OpenboxNodeSharing,
+} from '@/api/openbox'
 import NodeInfoText from '@/components/proxies/NodeInfoText.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
+  trustScore?: number | null
+  trustColor?: string
+  netCoffeeHref?: string
+  ping0Risk?: OpenboxNodeSharing['risk']
+  ping0Status?: string
+  ping0Source?: string
+  ping0Href?: string
   assessment?: OpenboxNodeRiskAssessment
   traffic?: OpenboxNodeHumanTraffic
   compact?: boolean
@@ -103,11 +159,30 @@ interface Cell {
 }
 
 const human = computed(() => Math.round(props.traffic?.human ?? 0))
+const PING0_TIERS: Record<string, { label: string; color: string }> = {
+  veryClean: { label: 'nodeRiskVeryClean', color: 'text-success' },
+  clean: { label: 'nodeRiskClean', color: 'text-success' },
+  neutral: { label: 'nodeRiskPing0Neutral', color: 'text-base-content' },
+  slight: { label: 'nodeRiskPing0Slight', color: 'text-warning' },
+  elevated: { label: 'nodeRiskPing0Elevated', color: 'text-orange-500' },
+  extreme: { label: 'nodeRiskExtreme', color: 'text-error' },
+}
+const ping0Tier = computed(() =>
+  props.ping0Risk?.tier ? PING0_TIERS[props.ping0Risk.tier] : undefined,
+)
+const ping0Text = computed(() =>
+  props.ping0Risk
+    ? ping0Tier.value
+      ? t(ping0Tier.value.label)
+      : `${props.ping0Risk.percent}%`
+    : (props.ping0Status ?? t('nodeRiskUnknown')),
+)
 const unknown = (): Cell => ({ value: t('nodeRiskUnknown'), color: 'opacity-60' })
 // 类名要写全,Tailwind 只编它在源码里见过的类
 const tone = (key: string, level: Tone): Cell => ({
   value: t(key),
-  color: level === 'good' ? 'text-primary' : level === 'moderate' ? 'text-orange-500' : 'text-red-500',
+  color:
+    level === 'good' ? 'text-success' : level === 'moderate' ? 'text-orange-500' : 'text-red-500',
 })
 
 const abuse = (): Cell => {
@@ -141,13 +216,26 @@ const blacklist = (): Cell => {
   const n = props.assessment?.httpBlacklist
   if (n == null || n < 0) return unknown()
   if (n === 0) return tone('nodeRiskClean', 'good')
-  const key = n <= 2 ? 'nodeRiskVeryLow' : n <= 25 ? 'nodeRiskLow' : n <= 50 ? 'nodeRiskModerate' : n <= 100 ? 'nodeRiskHigh' : 'nodeRiskVeryHigh'
+  const key =
+    n <= 2
+      ? 'nodeRiskVeryLow'
+      : n <= 25
+        ? 'nodeRiskLow'
+        : n <= 50
+          ? 'nodeRiskModerate'
+          : n <= 100
+            ? 'nodeRiskHigh'
+            : 'nodeRiskVeryHigh'
   const cell = tone(key, n > 50 ? 'bad' : 'moderate')
   return { ...cell, value: `${cell.value} · ${(Math.min(n, 255) / 25.5).toFixed(2)} / 10` }
 }
 
 const detected = (flag?: boolean | null): Cell =>
-  flag == null ? unknown() : flag ? tone('nodeRiskDetected', 'bad') : tone('nodeRiskNotDetected', 'good')
+  flag == null
+    ? unknown()
+    : flag
+      ? tone('nodeRiskDetected', 'bad')
+      : tone('nodeRiskNotDetected', 'good')
 
 const sections = computed(() => {
   const a = props.assessment
@@ -163,7 +251,7 @@ const sections = computed(() => {
   const rpkiValue = a?.rpki || a?.rpkiReported
   const rpki: Cell =
     rpkiValue === 'valid'
-      ? { value: 'Valid', color: 'text-primary' }
+      ? { value: 'Valid', color: 'text-success' }
       : rpkiValue === 'invalid'
         ? { value: 'Invalid', color: 'text-red-500' }
         : rpkiValue === 'notfound'

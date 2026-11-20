@@ -420,7 +420,6 @@
               :name="detailNode.tag"
               :udp="proxyMap[detailNode.tag]?.udp"
               :risk-only="risk"
-              :hide-footer="!risk"
               :exit-state="detailExit"
             />
           </section>

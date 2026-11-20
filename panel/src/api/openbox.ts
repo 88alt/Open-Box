@@ -1988,6 +1988,15 @@ export interface OpenboxNodeExit {
 export const fetchNodeInfo = (tag: string, refresh = false) =>
   requestJson<OpenboxNodeInfo>(`/api/openbox/node-info/${encodeURIComponent(tag)}${refresh ? '?refresh=1' : ''}`)
 export const fetchNodeEntryCountry = (tag: string) => requestJson<{ ip: string; country: string }>(`/api/openbox/node-info/${encodeURIComponent(tag)}/entry-country`)
+// Ping0.cc 对出口 IP 的共享人数区间、风控值和 IP 类型;error 为 'challenge' 表示 Ping0 要求人工验证
+export interface OpenboxNodeSharing {
+  range?: string
+  risk?: { tier: 'neutral' | 'slight' | 'elevated' | 'extreme' | 'clean' | 'veryClean'; percent: number } | null
+  ipTypes?: string[]
+  error?: string
+}
+export const fetchNodeSharing = (ip: string, refresh = false, signal?: AbortSignal) =>
+  requestJson<OpenboxNodeSharing>(`/api/openbox/node-info/sharing/${encodeURIComponent(ip)}${refresh ? '?refresh=1' : ''}`, { signal })
 // refresh = true 跳过 6 小时缓存重新查(服务端 15 秒内的重复刷新仍按缓存答)
 export const fetchNodeExit = (tag: string, refresh = false) =>
   requestJson<OpenboxNodeExit>(`/api/openbox/node-info/${encodeURIComponent(tag)}/exit`, {

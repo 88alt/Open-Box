@@ -9,7 +9,11 @@
     :role="overflowing ? 'button' : undefined"
     :tabindex="overflowing ? 0 : undefined"
     :aria-expanded="overflowing ? expanded : undefined"
-    :aria-label="overflowing ? $t(expanded ? 'nodeInfoCollapseText' : 'nodeInfoExpandText', { field: label }) : undefined"
+    :aria-label="
+      overflowing
+        ? $t(expanded ? 'nodeInfoCollapseText' : 'nodeInfoExpandText', { field: label })
+        : undefined
+    "
     data-node-info-text
     @click="toggle"
     @keydown.enter.prevent="toggle"
@@ -25,7 +29,8 @@
       <slot name="prefix" />
       <div
         ref="host"
-        class="relative min-w-0 flex-1"
+        class="relative min-w-0"
+        :class="{ 'flex-1': !$slots.suffix }"
       >
         <!-- 量宽度用的隐形副本:单行不换行,比容器宽就说明被截断了 -->
         <span
@@ -36,9 +41,13 @@
           {{ text }}
           <span
             v-if="source"
-            class="ml-2 text-[10px]"
+            class="ml-2 inline-flex items-center gap-0.5 text-[10px]"
           >
             {{ source }}
+            <ArrowTopRightOnSquareIcon
+              v-if="sourceHref"
+              class="size-3 shrink-0"
+            />
           </span>
         </span>
         <span
@@ -52,8 +61,23 @@
           >
             {{ text }}
           </span>
+          <a
+            v-if="source && sourceHref"
+            :href="sourceHref"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-base-content/60 hover:text-base-content focus-visible:text-base-content ml-auto inline-flex shrink-0 items-center gap-0.5 text-[10px] underline-offset-2 hover:underline"
+            @click.stop
+            @keydown.stop
+          >
+            {{ source }}
+            <ArrowTopRightOnSquareIcon
+              class="size-3 shrink-0"
+              aria-hidden="true"
+            />
+          </a>
           <span
-            v-if="source"
+            v-else-if="source"
             class="text-base-content/50 text-[10px]"
             :class="expanded ? 'break-all' : 'truncate'"
           >
@@ -77,7 +101,7 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronDownIcon } from '@heroicons/vue/24/outline'
+import { ArrowTopRightOnSquareIcon, ChevronDownIcon } from '@heroicons/vue/24/outline'
 import { useResizeObserver } from '@vueuse/core'
 import { nextTick, onMounted, ref, watch, type StyleValue } from 'vue'
 
@@ -86,6 +110,7 @@ const props = defineProps<{
   label?: string
   row?: boolean
   source?: string
+  sourceHref?: string
   textClass?: string
   textStyle?: StyleValue
 }>()
@@ -107,7 +132,7 @@ const measure = () => {
 
 useResizeObserver(host, measure)
 watch(
-  () => [props.text, props.source],
+  () => [props.text, props.source, props.sourceHref],
   async () => {
     expanded.value = false
     await nextTick()
