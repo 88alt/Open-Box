@@ -70,19 +70,6 @@
       />
     </div>
     <div
-      v-if="swipeInPages && isVisibleSwipeInTabs"
-      class="setting-item md:hidden!"
-    >
-      <div class="setting-item-label">
-        {{ $t('swipeInTabs') }}
-      </div>
-      <input
-        type="checkbox"
-        v-model="swipeInTabs"
-        class="toggle"
-      />
-    </div>
-    <div
       v-if="isVisibleDisablePullToRefresh"
       class="setting-item md:hidden!"
     >
@@ -194,7 +181,6 @@ import {
   scrollAnimationEffect,
   sidebarDisplay,
   swipeInPages,
-  swipeInTabs,
 } from '@/store/settings'
 import { QuestionMarkCircleIcon } from '@heroicons/vue/24/outline'
 import { ref } from 'vue'
@@ -208,7 +194,6 @@ const isVisibleChangePassword = useIsSettingVisible(k.changePassword)
 const isVisibleIPInfoAPI = useIsSettingVisible(k.IPInfoAPI)
 const isVisibleScrollAnimationEffect = useIsSettingVisible(k.scrollAnimationEffect)
 const isVisibleSwipeInPages = useIsSettingVisible(k.swipeInPages)
-const isVisibleSwipeInTabs = useIsSettingVisible(k.swipeInTabs)
 const isVisibleDisablePullToRefresh = useIsSettingVisible(k.disablePullToRefresh)
 const isChangePasswordDialogOpen = ref(false)
 

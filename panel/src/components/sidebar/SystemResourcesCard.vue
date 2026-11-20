@@ -32,10 +32,7 @@
           </div>
         </div>
       </div>
-      <div
-        class="app-card-gap flex flex-col"
-        :title="$t('systemMemoryHint')"
-      >
+      <div class="app-card-gap flex flex-col">
         <div class="app-card-gap grid grid-cols-3">
           <div
             v-for="item in memoryItems"

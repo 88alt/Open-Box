@@ -40,13 +40,11 @@
           :key="p.id"
           class="@container/tile app-card-inset bg-base-100 border-base-300/60 rounded-lg border"
           :class="p.current && 'platform-tile-current'"
-          :title="p.hint"
         >
           <span class="flex flex-col items-start gap-1.5 @min-[14rem]/tile:flex-row @min-[14rem]/tile:gap-2">
             <CountryFlag
               :code="p.icon"
               :size="32"
-              :title="p.hint"
               class="shrink-0 @min-[14rem]/tile:mt-0.5"
               :class="!p.current && 'grayscale'"
             />
@@ -379,7 +377,6 @@ const platformCards = computed(() => [
     title: 'OpenWrt',
     icon: 'brand:openwrt',
     req: t('routerPlatformReqOpenwrt'),
-    hint: t('routerPlatformHintOpenwrt'),
     current: platformKind.value === 'openwrt',
   },
   {
@@ -387,7 +384,6 @@ const platformCards = computed(() => [
     title: 'Linux',
     icon: theme.value === DARK_THEME ? 'brand:linux-color-light' : 'brand:linux-color',
     req: t('routerPlatformReqLinux'),
-    hint: t('routerPlatformHintLinux'),
     current: platformKind.value === 'systemd',
   },
   {
@@ -395,7 +391,6 @@ const platformCards = computed(() => [
     title: 'Docker',
     icon: 'brand:docker',
     req: 'Linux · x64 / arm64',
-    hint: t('dockerAccessHint', { ip: serviceStatus.value?.container?.lanIp || '' }),
     current: platformKind.value === 'container',
   },
 ])

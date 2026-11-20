@@ -231,7 +231,6 @@
                 :placeholder="$t('chainProxyPassLabel')"
               />
             </div>
-            <p class="text-base-content/50 text-xs">{{ $t('chainProxyFieldsHint') }}</p>
           </template>
         </div>
 

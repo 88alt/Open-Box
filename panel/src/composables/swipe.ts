@@ -1,10 +1,6 @@
-import { CONNECTION_GROUP_MODE, PROXY_TAB_TYPE, ROUTE_NAME } from '@/constant'
 import { renderRoutes } from '@/helper'
-import { connectionGroupMode } from '@/store/connections'
-import { proxiesTabShow, proxyProviederList } from '@/store/proxies'
-import { swipeInPages, swipeInTabs } from '@/store/settings'
+import { swipeInPages } from '@/store/settings'
 import { useSwipe } from '@vueuse/core'
-import { flatten } from 'lodash'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -16,37 +12,11 @@ export const useSwipeRouter = () => {
   const router = useRouter()
   const { direction } = useSwipe(swiperRef, { threshold: 90 })
 
-  const swipeList = computed(() => {
-    return flatten(
-      renderRoutes.value.map((r) => {
-        if (swipeInTabs.value) {
-          if (r === ROUTE_NAME.proxies && proxyProviederList.value.length > 0) {
-            return Object.values(PROXY_TAB_TYPE).map((tab) => {
-              return [
-                () => route.name === ROUTE_NAME.proxies && proxiesTabShow.value === tab,
-                () => {
-                  router.push({ name: ROUTE_NAME.proxies })
-                  proxiesTabShow.value = tab
-                },
-              ]
-            })
-          } else if (r === ROUTE_NAME.connections) {
-            return Object.values(CONNECTION_GROUP_MODE).map((tab) => {
-              return [
-                () => route.name === ROUTE_NAME.connections && connectionGroupMode.value === tab,
-                () => {
-                  router.push({ name: ROUTE_NAME.connections })
-                  connectionGroupMode.value = tab
-                },
-              ]
-            })
-          }
-        }
-
-        return [[() => route.name === r, () => router.push({ name: r })]]
-      }),
-    )
-  })
+  const swipeList = computed(() =>
+    renderRoutes.value.map(
+      (r) => [() => route.name === r, () => router.push({ name: r })] as const,
+    ),
+  )
 
   const getNextIndexInSwipeList = () => {
     return swipeList.value.findIndex((s) => s[0]())

@@ -81,7 +81,6 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
         label: 'scrollAnimationEffect',
       },
       { key: `${SETTINGS_MENU_KEY.general}.swipeInPages`, label: 'swipeInPages' },
-      { key: `${SETTINGS_MENU_KEY.general}.swipeInTabs`, label: 'swipeInTabs' },
       {
         key: `${SETTINGS_MENU_KEY.general}.disablePullToRefresh`,
         label: 'disablePullToRefresh',

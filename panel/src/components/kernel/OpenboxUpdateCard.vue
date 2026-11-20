@@ -7,7 +7,6 @@
       <div class="flex flex-wrap items-center gap-2">
         <select
           v-model="channel"
-          v-tip="$t('obUpdateDescription')"
           class="select select-sm w-auto"
           :disabled="updateRunning"
         >
