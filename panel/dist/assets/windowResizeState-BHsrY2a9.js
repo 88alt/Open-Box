@@ -1,1 +1,0 @@
-import{aJ as a}from"./index-D6Sv-1At.js";const t=a(!1);let i=!1,e;const s=()=>{t.value=!0,e&&window.clearTimeout(e),e=window.setTimeout(()=>{t.value=!1,e=void 0},220)},o=()=>i?()=>{}:(i=!0,window.addEventListener("resize",s,{passive:!0}),()=>{window.removeEventListener("resize",s),e&&(window.clearTimeout(e),e=void 0),i=!1,t.value=!1});export{t as a,o as i};

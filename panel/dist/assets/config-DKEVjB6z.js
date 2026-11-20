@@ -1,1 +1,0 @@
-import{kf as o}from"./index-Dmeu6xMw.js";import{aJ as s}from"./index-Drjh5Q9p.js";const a=s({port:0,"socks-port":0,"redir-port":0,"tproxy-port":0,"mixed-port":0,"allow-lan":!1,"bind-address":"",mode:"","mode-list":[],modes:[],"log-level":"",ipv6:!1,tun:{enable:!1}}),r=async()=>{a.value=(await o()).data};export{a as c,r as f};

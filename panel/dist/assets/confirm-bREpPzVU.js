@@ -1,1 +1,0 @@
-import{aH as t}from"./index-Drjh5Q9p.js";const r=t({open:!1,title:"",message:"",danger:!0});let s;const o=e=>e.required===!1?Promise.resolve(!0):(s&&s(!1),r.title=e.title||"",r.message=e.message,r.danger=e.danger!==!1,r.open=!0,new Promise(a=>{s=a})),i=e=>{const a=s;s=void 0,r.open=!1,a?.(e)};export{o as a,r as c,i as r};

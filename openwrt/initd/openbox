@@ -571,6 +571,7 @@ start_service() {
 		fi
 	fi
 
+	openbox_kernel_mem_env
 	procd_open_instance openbox
 	if [ "$OPENBOX_KERNEL" = mihomo ]; then
 		procd_set_param command "$BIN" -d "$KERNEL_HOME" -f "$CONF"
@@ -580,6 +581,12 @@ start_service() {
 	# 直连应答放行的开关文件(内核 tcp10 起):面板在入口白名单模式时建它,内核的 DNS 直连侧应答发出前按它决定写不写
 	# 入口放行集合(panel/server/system/direct-answer-bypass.mjs)
 	procd_set_param env OPENBOX_DIRECT_ANSWER_FLAG="$DATA/flip/direct-answer.on"
+	if [ -n "$OPENBOX_KERNEL_GOMEMLIMIT" ]; then
+		procd_append_param env GOMEMLIMIT="$OPENBOX_KERNEL_GOMEMLIMIT"
+	fi
+	if [ -n "$OPENBOX_KERNEL_GOGC" ]; then
+		procd_append_param env GOGC="$OPENBOX_KERNEL_GOGC"
+	fi
 	if [ "$OPENBOX_KERNEL" = mihomo ] && [ -s "$ENTRY_BYPASS" ]; then
 		procd_append_param env OPENBOX_MIHOMO_ENTRY_BYPASS=1
 	fi

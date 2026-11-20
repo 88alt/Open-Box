@@ -29,8 +29,55 @@ openbox_kernel_ready() {
 	[ -s "$CONF" ] || { echo "openbox: config not found at $CONF" >&2; return 1; }
 }
 
+openbox_kernel_mem_env() {
+	OPENBOX_KERNEL_GOMEMLIMIT="${GOMEMLIMIT:-}"
+	OPENBOX_KERNEL_GOGC="${GOGC:-}"
+	[ -n "$OPENBOX_KERNEL_GOMEMLIMIT" ] && return 0
+
+	_ob_mem_kb=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null)
+	for _ob_cg in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory/memory.limit_in_bytes /sys/fs/cgroup/memory.limit_in_bytes; do
+		[ -r "$_ob_cg" ] || continue
+		_ob_cg_kb=$(awk '$1 ~ /^[0-9]+$/ && $1 > 0 && $1 < 1125899906842624 {printf "%.0f", $1 / 1024}' "$_ob_cg" 2>/dev/null)
+		if [ -n "$_ob_cg_kb" ] && [ "$_ob_cg_kb" -gt 0 ]; then
+			if [ -z "$_ob_mem_kb" ] || [ "$_ob_cg_kb" -lt "$_ob_mem_kb" ]; then
+				_ob_mem_kb="$_ob_cg_kb"
+			fi
+		fi
+	done
+	case "$_ob_mem_kb" in
+		''|*[!0-9]*) return 0 ;;
+	esac
+
+	if [ "$_ob_mem_kb" -lt 393216 ]; then
+		case "$OPENBOX_KERNEL" in
+			mihomo)
+				OPENBOX_KERNEL_GOMEMLIMIT=96MiB
+				[ -n "$OPENBOX_KERNEL_GOGC" ] || OPENBOX_KERNEL_GOGC=30
+				;;
+			*)
+				OPENBOX_KERNEL_GOMEMLIMIT=72MiB
+				[ -n "$OPENBOX_KERNEL_GOGC" ] || OPENBOX_KERNEL_GOGC=35
+				;;
+		esac
+	elif [ "$_ob_mem_kb" -lt 786432 ]; then
+		case "$OPENBOX_KERNEL" in
+			mihomo)
+				OPENBOX_KERNEL_GOMEMLIMIT=144MiB
+				[ -n "$OPENBOX_KERNEL_GOGC" ] || OPENBOX_KERNEL_GOGC=40
+				;;
+			*)
+				OPENBOX_KERNEL_GOMEMLIMIT=112MiB
+				[ -n "$OPENBOX_KERNEL_GOGC" ] || OPENBOX_KERNEL_GOGC=50
+				;;
+		esac
+	fi
+}
+
 openbox_kernel_exec() {
 	openbox_kernel_ready || return 1
+	openbox_kernel_mem_env
+	[ -n "$OPENBOX_KERNEL_GOMEMLIMIT" ] && export GOMEMLIMIT="$OPENBOX_KERNEL_GOMEMLIMIT"
+	[ -n "$OPENBOX_KERNEL_GOGC" ] && export GOGC="$OPENBOX_KERNEL_GOGC"
 	case "$OPENBOX_KERNEL" in
 		mihomo)
 			if [ -s "$OPENBOX_ROOT/etc/mihomo-entry-bypass.nft" ]; then

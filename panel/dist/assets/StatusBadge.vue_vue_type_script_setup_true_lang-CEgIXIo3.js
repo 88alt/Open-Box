@@ -1,1 +1,0 @@
-import{H as e,aB as t,r as s,ak as n,a$ as o}from"./index-C7we6OMP.js";const l=e({__name:"StatusBadge",props:{on:{type:Boolean},onText:{},offText:{}},setup(a){return(c,r)=>(t(),s("span",{class:n(["status-badge badge badge-sm whitespace-nowrap",a.on?"status-on":"status-off"])},o(a.on?a.onText:a.offText),3))}});export{l as _};
