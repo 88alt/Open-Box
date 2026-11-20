@@ -7,10 +7,10 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { version } from './package.json'
 
 const devProxyPort = Number.parseInt(
-  process.env.ZASHBOARD_DEV_PROXY_PORT || process.env.PORT || '2026',
+  process.env.ZASHBOARD_DEV_PROXY_PORT || process.env.PORT || '3036',
   10,
 )
-const resolvedDevProxyPort = Number.isFinite(devProxyPort) ? devProxyPort : 2026
+const resolvedDevProxyPort = Number.isFinite(devProxyPort) ? devProxyPort : 3036
 
 const getGitCommitId = (): string => {
   try {
