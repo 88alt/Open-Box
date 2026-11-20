@@ -230,22 +230,7 @@
           />
           {{ $t('kernelActionStop') }}
         </button>
-        <button
-          type="button"
-          class="btn btn-sm"
-          :disabled="isRestartDisabled"
-          @click="runKernelAction('restart')"
-        >
-          <span
-            v-if="pendingAction === 'restart'"
-            class="loading loading-spinner loading-xs"
-          />
-          <ArrowPathIcon
-            v-else
-            class="h-4 w-4"
-          />
-          {{ $t('kernelActionRestart') }}
-        </button>
+        <KernelRestartButton />
       </div>
 
       <!-- Open-Box 更新:通道 / 检查更新 / 自动更新(档案还在加载时先不显示) -->
@@ -267,9 +252,9 @@ import CountryFlag from '@/components/common/CountryFlag.vue'
 import GithubIcon from '@/components/common/GithubIcon.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import FactoryResetButton from '@/components/kernel/FactoryResetButton.vue'
+import KernelRestartButton from '@/components/kernel/KernelRestartButton.vue'
 import OpenboxUpdateCard from '@/components/kernel/OpenboxUpdateCard.vue'
 import {
-  isRestartDisabled,
   isStartDisabled,
   isStopDisabled,
   pendingAction,
@@ -281,7 +266,6 @@ import { refreshUpdateInfo, updateInfo } from '@/composables/openboxUpdate'
 import { DARK_THEME, theme } from '@/store/settings'
 import logoUrl from '@/assets/logo.png'
 import {
-  ArrowPathIcon,
   ArrowTopRightOnSquareIcon,
   CircleStackIcon,
   CpuChipIcon,

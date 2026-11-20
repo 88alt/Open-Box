@@ -30,11 +30,17 @@
             {{ lastSync ? $t('clientConfigLastSync', { time: lastSync }) : $t('clientConfigNeverSynced') }}
           </span>
         </div>
-        <span
+        <i18n-t
           v-if="issue.pairCode"
           v-tip.contain="$t('pairCodeTip')"
-          class="badge badge-sm badge-ghost font-mono tracking-widest"
-        >{{ issue.pairCode }}</span>
+          keypath="pairCodeDisplay"
+          tag="span"
+          class="badge badge-sm badge-ghost shrink-0 gap-0 whitespace-nowrap"
+        >
+          <template #code>
+            <span class="font-mono tracking-widest">{{ issue.pairCode }}</span>
+          </template>
+        </i18n-t>
         <button
           type="button"
           class="btn btn-ghost btn-square btn-xs"

@@ -40,11 +40,17 @@
             {{ r.server.protocol }} · {{ $t('serverPortLabel') }} {{ r.server.port }}
           </span>
         </div>
-        <span
+        <i18n-t
           v-if="r.pairCode"
           v-tip="$t('pairCodeTip')"
-          class="badge badge-sm badge-ghost font-mono tracking-widest"
-        >{{ r.pairCode }}</span>
+          keypath="pairCodeDisplay"
+          tag="span"
+          class="badge badge-sm badge-ghost shrink-0 gap-0 whitespace-nowrap"
+        >
+          <template #code>
+            <span class="font-mono tracking-widest">{{ r.pairCode }}</span>
+          </template>
+        </i18n-t>
         <button
           type="button"
           class="btn btn-ghost btn-square btn-xs"

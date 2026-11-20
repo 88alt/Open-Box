@@ -39,9 +39,9 @@
             >
               <td
                 class="max-w-[24rem] truncate"
-                :title="e.row.key"
+                :title="trafficKeyTitle(e.row.key, by)"
               >
-                {{ trafficKeyLabel(e.row.key) || '—' }}
+                {{ trafficKeyLabel(e.row.key, by) || '—' }}
                 <span
                   v-if="trafficRowNote(e.row, t)"
                   class="text-base-content/60 ml-1"
@@ -174,7 +174,7 @@ import {
 import { prettyBytesHelper } from '@/helper/utils'
 import { trafficCountDirect } from '@/store/settings'
 import { ChevronDownIcon, ChevronUpIcon, InformationCircleIcon } from '@heroicons/vue/24/outline'
-import { mergeTrafficNodeRows, trafficKeyLabel, trafficRowNote } from '@/helper/trafficName'
+import { mergeTrafficNodeRows, trafficKeyLabel, trafficKeyTitle, trafficRowNote } from '@/helper/trafficName'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 

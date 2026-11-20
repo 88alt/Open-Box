@@ -1,6 +1,6 @@
 // 流量表里"名称"后面那个灰字:DHCP 主机名,或者"本机 · WAN pppoe-wan0"这种路由器自身地址的
 // 标注。主表和下钻表共用,别各写一遍。
-import type { OpenboxTrafficRow } from '@/api/openbox'
+import type { OpenboxTrafficDim, OpenboxTrafficRow } from '@/api/openbox'
 import { i18n } from '@/i18n'
 import { failoverLaneOfTag, isFailoverInternalTag } from '@/store/openboxFailover'
 import { getNowProxyNodeName, outboundDisplayName, proxyMap } from '@/store/proxies'
@@ -29,8 +29,17 @@ const resolveNodeKey = (key: string): string => {
   return (isLaneKey(key) ? failoverLaneOfTag(key)?.lane.members?.[0] : proxyMap.value[key]?.all?.[0]) || key
 }
 
-export const trafficKeyLabel = (key: string): string =>
-  key === TRAFFIC_OTHER_KEY ? i18n.global.t('trafficOtherMerged') : outboundDisplayName(resolveNodeKey(key))
+// 终端设备那一维里,没有源 IP 的流量记录键是空串,显示成「来源未知」;访问目标原样显示;其余按节点名显示
+export const trafficKeyLabel = (key: string, kind?: OpenboxTrafficDim): string => {
+  if (key === TRAFFIC_OTHER_KEY) return i18n.global.t('trafficOtherMerged')
+  if (kind === 'client') return key || i18n.global.t('trafficUnknownClient')
+  if (kind === 'host') return key
+  return outboundDisplayName(resolveNodeKey(key))
+}
+
+// 「来源未知」那一行悬停时说明为什么认不出终端;其余行不设 title
+export const trafficKeyTitle = (key: string, kind?: OpenboxTrafficDim): string | undefined =>
+  kind === 'client' && !key ? i18n.global.t('trafficUnknownClientHint') : undefined
 
 export const mergeTrafficNodeRows = (rows: OpenboxTrafficRow[]): OpenboxTrafficRow[] => {
   if (!rows.some((row) => isGroupKey(row.key) || isLaneKey(row.key))) return rows

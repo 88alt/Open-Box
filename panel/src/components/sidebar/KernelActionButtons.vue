@@ -41,35 +41,20 @@
         class="h-4 w-4"
       />
     </button>
-    <button
-      type="button"
-      class="btn btn-square btn-sm bg-base-100 h-9 w-9 kernel-action-btn"
-      :disabled="isRestartDisabled"
-      v-tip="$t('kernelActionRestart')"
-      @click="runKernelAction('restart')"
-    >
-      <span
-        v-if="pendingAction === 'restart'"
-        class="loading loading-spinner loading-xs"
-      />
-      <ArrowPathIcon
-        v-else
-        class="h-4 w-4"
-      />
-    </button>
+    <KernelRestartButton icon-only />
   </div>
 </template>
 
 <script setup lang="ts">
+import KernelRestartButton from '@/components/kernel/KernelRestartButton.vue'
 import {
-  isRestartDisabled,
   isStartDisabled,
   isStopDisabled,
   pendingAction,
   useKernelActions,
   useServiceStatusPolling,
 } from '@/composables/kernelService'
-import { ArrowPathIcon, PlayIcon, StopIcon } from '@heroicons/vue/24/outline'
+import { PlayIcon, StopIcon } from '@heroicons/vue/24/outline'
 
 defineProps<{
   vertical?: boolean

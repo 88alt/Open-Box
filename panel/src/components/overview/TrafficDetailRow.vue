@@ -12,8 +12,8 @@
         />
         <span
           class="min-w-0 truncate"
-          :title="row.key"
-        >{{ trafficKeyLabel(row.key) || '—' }}</span>
+          :title="trafficKeyTitle(row.key, kind)"
+        >{{ trafficKeyLabel(row.key, kind) || '—' }}</span>
         <span
           v-if="note"
           class="text-base-content/60 shrink-0"
@@ -62,7 +62,7 @@ import { prettyBytesHelper } from '@/helper/utils'
 import { ChevronDownIcon } from '@heroicons/vue/24/outline'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { trafficKeyLabel, trafficRowNote } from '@/helper/trafficName'
+import { trafficKeyLabel, trafficKeyTitle, trafficRowNote } from '@/helper/trafficName'
 import ConnectionDeviceRenameButton from '@/components/connections/ConnectionDeviceRenameButton.vue'
 import { getDeviceName } from '@/helper/sourceip'
 import TrafficDrillPanel from './TrafficDrillPanel.vue'

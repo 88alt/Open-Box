@@ -86,7 +86,7 @@ const RESTART_REASON_KEYS: Record<string, string> = {
   inbounds: 'restartPendingReasonInbounds',
   system: 'restartPendingReasonSystem',
 }
-const restartPendingSignature = computed(() => {
+export const restartPendingSignature = computed(() => {
   const pending = serviceStatus.value?.pendingRestart
   if (!serviceStatus.value?.core.running || !pending?.pending) return ''
   return [...(pending.reasons || [])].sort().join(',') || 'pending'
