@@ -19,6 +19,7 @@
 # POSIX sh(OpenWrt 是 busybox ash,Debian 是 dash),不用 bashism。
 
 ROOT=/opt/open-box
+PANEL_BIN="$ROOT/bin/openbox-panel"
 NODE="$ROOT/node/bin/node"
 DB="$ROOT/data/openbox.sqlite"
 META="$ROOT/meta.json"
@@ -117,6 +118,10 @@ run_node() {
 }
 
 read_password() {
+  if [ -x "$PANEL_BIN" ]; then
+    "$PANEL_BIN" password "$DB"
+    return $?
+  fi
   run_node "$ROOT/panel/server/system/access-password-cli.mjs" "$DB"
 }
 
@@ -176,10 +181,11 @@ cmd_update() {
 # 新端口压根没生效。ps 那条只当没有 pgrep 时的兜底。
 panel_running() {
   if command -v pgrep >/dev/null 2>&1; then
+    pgrep -f "bin/openbox-panel" >/dev/null 2>&1 && return 0
     pgrep -f "panel/server/index.mjs" >/dev/null 2>&1 && return 0
     return 1
   fi
-  ps w 2>/dev/null | grep -q "[p]anel/server/index.mjs"
+  ps w 2>/dev/null | grep -qE "bin/[o]penbox-panel|[p]anel/server/index\.mjs"
 }
 
 # open-box port            打印当前端口
@@ -241,8 +247,12 @@ cmd_port() {
 DEPLOY_STATUS=/tmp/openbox-deploy.status
 DEPLOY_LOG=/tmp/openbox-deploy.log
 
-# 跑一次部署;最后一行是 cli/deploy.mjs 打的结果 JSON({"ok":…,"message":…,"warning":…})
+# 跑一次部署;最后一行是结果 JSON({"ok":…,"message":…,"warning":…})
 run_deploy() {
+  if [ -x "$PANEL_BIN" ]; then
+    ( export OPENBOX_ROOT="$ROOT" ZASHBOARD_DB_PATH="$DB"; "$PANEL_BIN" deploy "$@" )
+    return $?
+  fi
   ( export OPENBOX_ROOT="$ROOT" ZASHBOARD_DB_PATH="$DB"; run_node "$ROOT/panel/server/cli/deploy.mjs" "$@" )
 }
 
@@ -356,7 +366,7 @@ menu_password() {
   case "$_rc" in
     0) printf '\n  面板地址: http://%s:%s\n  当前密码: %s\n' "$(lan_ip)" "$(openbox_current_port)" "$_pw" ;;
     3) printf '\n  还没有设置密码:用浏览器打开 http://%s:%s,首次打开时设置。\n' "$(lan_ip)" "$(openbox_current_port)" ;;
-    *) printf '\n  读不到密码(面板数据库不在,或 Node 运行时不可用)。\n' ;;
+    *) printf '\n  读不到密码(面板数据库不在,或面板程序不可用)。\n' ;;
   esac
 }
 
