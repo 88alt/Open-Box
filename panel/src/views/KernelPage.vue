@@ -25,10 +25,6 @@
         <template v-if="profile">
           <div class="card bg-base-100 border-base-300/60 border">
             <div class="kernel-group">
-              <NodeDirectCard
-                :profile="profile"
-                :patch-profile="patchProfile"
-              />
               <DirectBypassCard
                 :profile="profile"
                 :patch-profile="patchProfile"
@@ -94,7 +90,6 @@ import type { OpenboxKernelVersion, OpenboxProfile, OpenboxServiceStatus } from 
 import { fetchKernelVersion, fetchProfile, saveProfile } from '@/api/openbox'
 import ContainerCard from '@/components/kernel/ContainerCard.vue'
 import KernelServiceCard from '@/components/kernel/KernelServiceCard.vue'
-import NodeDirectCard from '@/components/kernel/NodeDirectCard.vue'
 import DirectBypassCard from '@/components/kernel/DirectBypassCard.vue'
 import BlockQuicCard from '@/components/kernel/BlockQuicCard.vue'
 import BypassPortsCard from '@/components/kernel/BypassPortsCard.vue'

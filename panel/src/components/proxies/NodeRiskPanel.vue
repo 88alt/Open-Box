@@ -160,16 +160,15 @@ const sections = computed(() => {
             color: a.threats.some((v) => v.severity === 'bad') ? 'text-red-500' : 'text-orange-500',
           }
         : tone('nodeRiskNoThreats', 'good')
+  const rpkiValue = a?.rpki || a?.rpkiReported
   const rpki: Cell =
-    a?.rpki === 'valid'
+    rpkiValue === 'valid'
       ? { value: 'Valid', color: 'text-primary' }
-      : a?.rpki === 'invalid'
+      : rpkiValue === 'invalid'
         ? { value: 'Invalid', color: 'text-red-500' }
-        : a?.rpki === 'notfound'
-          ? { value: 'NotFound', color: 'text-orange-500' }
-          : a?.rpkiReported
-            ? { value: t('nodeRiskUnverified'), color: 'opacity-60' }
-            : unknown()
+        : rpkiValue === 'notfound'
+          ? { value: 'NotFound', color: 'opacity-60' }
+          : unknown()
   return [
     {
       title: 'nodeRiskIntelligence',
