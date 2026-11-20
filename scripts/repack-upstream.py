@@ -238,11 +238,16 @@ def build(arch, outdir):
         stable.write_bytes(versioned.read_bytes())
         write_sha(stable)
 
-        # ---- 完整安装包:app + kernel + geo(与上游完整包同结构,不含可选的 mihomo)----
+        # ---- 完整安装包:app + kernel + geo + kernel-mihomo(与上游完整包同结构)----
+        # v0.1.469 起纯 Go 版内置 sing-box / mihomo 双核,包里自带的 component-update verify 会校验 kernel-mihomo,
+        # 完整包里缺它就会报「组件校验失败: kernel-mihomo」。清单里有 kernel-mihomo 就一并放进去。
         full_v = out / f'open-box-{tag}-linux-{arch}.tar.gz'
         seen = set()
         with tarfile.open(full_v, 'w:gz', format=tarfile.PAX_FORMAT, compresslevel=9) as tout:
-            for src in (app_out, paths['kernel'], paths['geo']):
+            parts = [app_out, paths['kernel'], paths['geo']]
+            if 'kernel-mihomo' in paths:
+                parts.append(paths['kernel-mihomo'])
+            for src in parts:
                 add_tar(tout, src, seen)
         full_s = out / f'open-box-linux-{arch}.tar.gz'
         full_s.write_bytes(full_v.read_bytes())
