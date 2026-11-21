@@ -738,6 +738,10 @@ export interface OpenboxUserGroup {
   keywords?: string[]
   // dynamic 用:关键词组合方式,缺省 = or
   keywordMode?: OpenboxKeywordMode
+  // dynamic 用:排除关键词(命中的节点移出组)及其组合方式(or 命中任一 / and 命中全部),缺省 = or;
+  // 先按 keywords 选、再剔除;只在非空时随组保存(对齐上游 v0.1.472)
+  excludeKeywords?: string[]
+  excludeKeywordMode?: OpenboxKeywordMode
   // dynamic 用:只在这些订阅(订阅 id,可多选)的节点里按关键词匹配;空 = 全部订阅
   subscriptionIds?: string[]
   // 旧版单选字段,只读兼容:载入时折进 subscriptionIds,保存时不再写

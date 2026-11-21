@@ -738,11 +738,34 @@
           class="grid min-h-0 flex-1 grid-rows-[minmax(0,max-content)_minmax(4rem,1fr)] gap-2"
         >
           <div class="flex min-h-0 flex-col gap-1 overflow-y-auto overscroll-contain [&>*]:shrink-0">
-            <label class="text-xs font-medium">{{ $t('groupKeywordsLabel') }}</label>
-            <input
-              v-model="keywordsText"
-              type="text"
-              class="input input-sm w-full"
+            <div class="flex min-w-0 flex-wrap items-baseline gap-1 text-xs">
+              <label class="font-medium">{{ $t('groupKeywordsLabel') }}</label>
+              <div class="ms-auto flex min-w-0 flex-wrap items-baseline justify-end gap-1">
+                <span
+                  v-if="excludeSummary"
+                  class="text-base-content/70 min-w-0 break-words"
+                >{{ $t('groupExcludeKeywordsSummary', { keywords: excludeSummary }) }}</span>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs shrink-0 font-normal"
+                  @click="showExclude = true"
+                >
+                  {{ $t(excludeSummary ? 'groupExcludeKeywordsEdit' : 'groupExcludeKeywords') }}
+                  <PencilSquareIcon
+                    class="size-3.5"
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
+            </div>
+            <TagInput
+              v-if="draft"
+              ref="keywordInput"
+              v-model="draft.keywords"
+              v-model:pending="keywordPending"
+              unique
+              clearable
+              :label="$t('groupKeywordsLabel')"
               :placeholder="$t('groupKeywordsPlaceholder')"
             />
             <p class="text-base-content/50 text-xs">
@@ -771,6 +794,57 @@
           </div>
         </div>
       </div>
+    </DialogWrapper>
+
+    <!-- 排除关键词:动态组先按关键词选节点,再把命中排除词的移出去 -->
+    <DialogWrapper
+      v-model="showExclude"
+      :title="$t('groupExcludeKeywords')"
+      box-class="w-full max-w-lg"
+    >
+      <div
+        v-if="draft"
+        class="flex flex-col gap-3 p-2"
+      >
+        <div
+          role="tablist"
+          :aria-label="$t('groupExcludeKeywordsMode')"
+          class="tabs-box tabs tabs-xs w-fit"
+        >
+          <button
+            v-for="m in (['or', 'and'] as const)"
+            :key="m"
+            type="button"
+            role="tab"
+            :aria-selected="(draft.excludeKeywordMode === 'and') === (m === 'and')"
+            :class="['tab', (draft.excludeKeywordMode === 'and') === (m === 'and') && 'tab-active']"
+            @click="draft.excludeKeywordMode = m"
+          >
+            {{ m.toUpperCase() }}
+          </button>
+        </div>
+        <TagInput
+          ref="excludeInput"
+          v-model="draft.excludeKeywords"
+          v-model:pending="excludePending"
+          unique
+          clearable
+          :label="$t('groupExcludeKeywords')"
+          :placeholder="$t('groupKeywordsPlaceholder')"
+        />
+        <p class="text-base-content/50 text-xs">
+          {{ $t(draft.excludeKeywordMode === 'and' ? 'groupExcludeKeywordsAllHint' : 'groupExcludeKeywordsHint') }}
+        </p>
+      </div>
+      <template #footer>
+        <button
+          type="button"
+          class="btn btn-sm"
+          @click="showExclude = false"
+        >
+          {{ $t('close') }}
+        </button>
+      </template>
     </DialogWrapper>
 
     <BandwidthHelpDialog
@@ -1005,6 +1079,7 @@ import type {
 import { fetchDefaultNodeGroups, fetchNodeGroups, saveNodeGroups } from '@/api/openbox'
 import BulkPick from '@/components/subscription/BulkPick.vue'
 import SubscriptionFilter from '@/components/subscription/SubscriptionFilter.vue'
+import TagInput from '@/components/common/TagInput.vue'
 import CountryFlag from '@/components/common/CountryFlag.vue'
 import CountrySelect from '@/components/common/CountrySelect.vue'
 import { kernelTestUrl } from '@/helper/testUrl'
@@ -1041,6 +1116,20 @@ const loading = ref(false)
 // 带宽择优的统一测速参数(档案里的 bandwidth),只读:帮助弹窗和开关旁的周期说明用,改它去「内核」页
 const bandwidthSettings = ref<OpenboxBandwidthSettings>({ intervalHours: 2, maxDownloadMB: 64 })
 const showBandwidthHelp = ref(false)
+
+// 关键词标签输入:还没回车提交的文字放在 pending 里,保存 / 关弹窗时由 commit() 收进标签
+const keywordInput = ref<InstanceType<typeof TagInput> | null>(null)
+const excludeInput = ref<InstanceType<typeof TagInput> | null>(null)
+const keywordPending = ref('')
+const excludePending = ref('')
+const showExclude = ref(false)
+watch(showExclude, (open) => {
+  if (!open) excludeInput.value?.commit()
+})
+// 编辑器标题行里的排除词摘要:OR / AND 连接
+const excludeSummary = computed(() =>
+  (draft.value?.excludeKeywords || []).join(draft.value?.excludeKeywordMode === 'and' ? ' AND ' : ' OR '),
+)
 // 提示一律走右上角那套 toast(zashboard 自带的 showNotification),不在页面里挂
 // 内联文字:内联的会把列表往下顶、切走再回来还在,而且同一屏里两种提示样式看着
 // 像两套东西。
@@ -1119,12 +1208,19 @@ const matchedNodes = (group: OpenboxUserGroup) => {
   const scoped = scopeIds.length
     ? matchableNodes.value.filter((n) => n.subscriptionId && scopeIds.includes(n.subscriptionId))
     : matchableNodes.value
-  if (!keywords.length) return scoped.map((n) => n.name)
+  // 排除词:全是空词时不排除任何节点(与 core 一致);or 命中任一就移出,and 要全部命中才移出
+  const excludes = (group.excludeKeywords || []).filter((kw) => kw.trim())
+  const excluded = (text: string) =>
+    excludes.length > 0 &&
+    (group.excludeKeywordMode === 'and'
+      ? excludes.every((kw) => keywordMatches(text, kw))
+      : excludes.some((kw) => keywordMatches(text, kw)))
+  if (!keywords.length) return scoped.filter((n) => !excluded(n.text)).map((n) => n.name)
   return scoped
     .filter((n) =>
-      group.keywordMode === 'and'
+      (group.keywordMode === 'and'
         ? keywords.every((kw) => keywordMatches(n.text, kw))
-        : keywords.some((kw) => keywordMatches(n.text, kw)),
+        : keywords.some((kw) => keywordMatches(n.text, kw))) && !excluded(n.text),
     )
     .map((n) => n.name)
 }
@@ -1177,6 +1273,11 @@ const openEditor = (group: OpenboxUserGroup | null) => {
   if (draft.value) {
     if (!draft.value.mode) draft.value.mode = 'static'
     if (!draft.value.keywords) draft.value.keywords = []
+    if (!draft.value.excludeKeywords) draft.value.excludeKeywords = []
+    if (draft.value.excludeKeywordMode !== 'and') draft.value.excludeKeywordMode = 'or'
+    keywordPending.value = ''
+    excludePending.value = ''
+    showExclude.value = false
     draft.value.subscriptionIds = scopeIdsOf(draft.value)
     delete draft.value.subscriptionId
     if (draft.value.icon === undefined) draft.value.icon = ''
@@ -1320,7 +1421,7 @@ const recoveryHoldSeconds = computed<number>({
 // 类型切换:普通 ↔ 故障转移之间成员形状不同,两边各留一份草稿便于切回;组成员进不了页签的列出来拦住保存
 const lastType = ref<OpenboxGroupType>('urltest')
 const blockedMembers = ref<string[]>([])
-let normalBackup: { mode: OpenboxUserGroup['mode']; members: string[]; keywords: string[]; interval?: string } | null = null
+let normalBackup: { mode: OpenboxUserGroup['mode']; members: string[]; keywords: string[]; excludeKeywords: string[]; interval?: string } | null = null
 let failoverBackup: { lanes: OpenboxFailoverLane[] } | null = null
 const onTypeChange = () => {
   const d = draft.value
@@ -1330,7 +1431,7 @@ const onTypeChange = () => {
   lastType.value = next
   if (prev === next) return
   if (next === 'failover') {
-    normalBackup = { mode: d.mode, members: [...d.members], keywords: [...(d.keywords || [])], interval: d.interval }
+    normalBackup = { mode: d.mode, members: [...d.members], keywords: [...(d.keywords || [])], excludeKeywords: [...(d.excludeKeywords || [])], interval: d.interval }
     if (failoverBackup) {
       d.lanes = failoverBackup.lanes.map((l) => ({ ...l, members: [...l.members] }))
     } else {
@@ -1350,6 +1451,7 @@ const onTypeChange = () => {
     d.mode = normalBackup?.mode ?? 'static'
     d.members = normalBackup ? [...normalBackup.members] : []
     d.keywords = normalBackup ? [...normalBackup.keywords] : []
+    d.excludeKeywords = normalBackup ? [...normalBackup.excludeKeywords] : []
     d.interval = normalBackup?.interval && /^(\d+)(s|m|h)$/.test(normalBackup.interval) ? normalBackup.interval : '300s'
     if (typeof d.tolerance !== 'number') d.tolerance = 100
   }
@@ -1531,18 +1633,6 @@ const moveLeft = () => {
   members.value = members.value.filter((n) => !drop.has(n))
   checkedSelected.value = []
 }
-
-// 关键词在界面上是一行逗号分隔的文本,存下去是数组
-const keywordsText = computed({
-  get: () => (draft.value?.keywords || []).join(','),
-  set: (v: string) => {
-    if (!draft.value) return
-    draft.value.keywords = v
-      .split(',')
-      .map((k) => k.trim())
-      .filter(Boolean)
-  },
-})
 
 // 按当前节点实时算一遍:关键词写完能立刻看到会选中谁,不用保存了再回来看
 const dynamicMatched = computed(() => (draft.value ? matchedNodes(draft.value) : []))
@@ -1734,6 +1824,9 @@ const normalizeExpectedStatus = (raw: string | undefined): string | null => {
 const showTypeChangeConfirm = ref(false)
 const saveDraft = async (typeChangeConfirmed = false) => {
   if (!draft.value || saving.value) return
+  // 还停在输入框里没回车的关键词先收进标签,免得保存时丢掉
+  keywordInput.value?.commit()
+  excludeInput.value?.commit()
   // 保存时再做一次范围校正,避免输入框尚未触发 blur 时把临时值写进配置。
   if (draft.value.type === 'urltest' || draft.value.type === 'failover' || draft.value.type === 'loadbalance') normalizeIntervalSeconds()
   if (draft.value.type === 'selector') delete draft.value.bandwidth
@@ -1791,6 +1884,15 @@ const saveDraft = async (typeChangeConfirmed = false) => {
   try {
     // 组自己的测速地址保留用户选择的 HTTP / HTTPS 协议
     const base: OpenboxUserGroup = { ...draft.value, name, id: draft.value.id || `g-${Date.now()}`, testUrl: kernelTestUrl(draft.value.testUrl), expectedStatus: expectedStatus ?? '' }
+    // 排除词只对动态组有意义;空数组不写,和服务端 / 上游的序列化一致
+    const excludes = (base.excludeKeywords || []).map((k) => k.trim()).filter(Boolean)
+    if (base.mode === 'dynamic' && !isFailover.value && excludes.length) {
+      base.excludeKeywords = excludes
+      base.excludeKeywordMode = base.excludeKeywordMode === 'and' ? 'and' : 'or'
+    } else {
+      delete base.excludeKeywords
+      delete base.excludeKeywordMode
+    }
     let item: OpenboxUserGroup
     if (isFailover.value) {
       // 页签是唯一的成员来源:members / keywords 清空;页签名去掉首尾空白
