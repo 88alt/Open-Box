@@ -112,43 +112,57 @@ func orStr(s, fallback string) string {
 	return fallback
 }
 
+// keywordsHit:and = 所有(非空)关键词都要命中(官方 v0.1.354);否则任一命中即可。
+// and 模式下关键词全为空时视为命中(与原有行为一致);排除侧另见调用处:没有有效关键词不应排除任何节点。
+func keywordsHit(text string, kws []string, mode string) bool {
+	if mode == "and" {
+		for _, kw := range kws {
+			if jsx.Trim(normalizeForMatch(kw)) == "" {
+				continue
+			}
+			if !keywordMatches(text, kw) {
+				return false
+			}
+		}
+		return true
+	}
+	for _, kw := range kws {
+		if keywordMatches(text, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasKeyword:至少有一个非空关键词;排除侧全是空词时不该排除任何节点。
+func hasKeyword(kws []string) bool {
+	for _, kw := range kws {
+		if jsx.Trim(normalizeForMatch(kw)) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // resolveMembers:动态组按关键词从 dynamicTags 里现挑(不带关键词 = 全部;链式代理的节点不在里面,
 // 住宅线路不该悄悄混进自动择优池);静态组用显式成员,可以是节点、别的组、启用的内置直连 / 拒绝,
 // 剔除重复 / 自引用 / 指向不存在的东西的条目。
 func resolveMembers(g *Group, dynamicTags []string, nodeTagSet, memberNames map[string]bool, matchText map[string]string) []string {
 	if g.Mode == "dynamic" {
-		if len(g.Keywords) == 0 {
-			return append([]string{}, dynamicTags...)
-		}
 		out := []string{}
 		for _, tag := range dynamicTags {
 			text, ok := matchText[tag]
 			if !ok {
 				text = normalizeForMatch(tag)
 			}
-			if g.KeywordMode == "and" {
-				// 官方 v0.1.354:and = 所有(非空)关键词都要命中
-				all := true
-				for _, kw := range g.Keywords {
-					if jsx.Trim(normalizeForMatch(kw)) == "" {
-						continue
-					}
-					if !keywordMatches(text, kw) {
-						all = false
-						break
-					}
-				}
-				if all {
-					out = append(out, tag)
-				}
+			if len(g.Keywords) > 0 && !keywordsHit(text, g.Keywords, g.KeywordMode) {
 				continue
 			}
-			for _, kw := range g.Keywords {
-				if keywordMatches(text, kw) {
-					out = append(out, tag)
-					break
-				}
+			// 排除关键词:or = 命中任一就移出,and = 所有(非空)关键词都命中才移出
+			if hasKeyword(g.ExcludeKeywords) && keywordsHit(text, g.ExcludeKeywords, g.ExcludeKeywordMode) {
+				continue
 			}
+			out = append(out, tag)
 		}
 		return out
 	}

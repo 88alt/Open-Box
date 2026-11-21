@@ -74,8 +74,12 @@ type Group struct {
 	IconScale   int
 	KeywordMode string // or / and(官方 v0.1.354:只有恰好是 "and" 才是 and)
 	Keywords    []string
-	Members     []string
-	Kind        string // direct / block / 空
+	// 排除关键词(对齐上游 v0.1.472):只对动态组生效,命中的节点移出组;
+	// 非空时才序列化 excludeKeywords / excludeKeywordMode
+	ExcludeKeywordMode string // or / and
+	ExcludeKeywords    []string
+	Members            []string
+	Kind               string // direct / block / 空
 
 	// 只有对应类型才有的字段;extras 记录它们来自哪种类型(内置出站会改写 Type,但这些字段原样保留)
 	extras  string // "" / urltest / failover / loadbalance
@@ -134,6 +138,10 @@ func (g *Group) MarshalJSON() ([]byte, error) {
 	put("iconScale", g.IconScale)
 	put("keywordMode", g.KeywordMode)
 	put("keywords", g.Keywords)
+	if len(g.ExcludeKeywords) > 0 {
+		put("excludeKeywords", g.ExcludeKeywords)
+		put("excludeKeywordMode", g.ExcludeKeywordMode)
+	}
 	put("members", g.Members)
 	// 只在开着时才写:关着的组和旧档案的序列化结果保持一致
 	putBandwidth := func() {
@@ -296,6 +304,11 @@ func normalizeGroup(raw any, index int) *Group {
 		g.KeywordMode = "and"
 	}
 	g.Keywords = strList(jsx.Get(raw, "keywords"))
+	g.ExcludeKeywords = strList(jsx.Get(raw, "excludeKeywords"))
+	g.ExcludeKeywordMode = "or"
+	if km, isStr := jsx.Get(raw, "excludeKeywordMode").(string); isStr && km == "and" {
+		g.ExcludeKeywordMode = "and"
+	}
 	g.Members = strList(jsx.Get(raw, "members"))
 
 	switch g.Type {
@@ -336,7 +349,7 @@ func normalizeGroup(raw any, index int) *Group {
 		}
 	case "failover":
 		g.extras = "failover"
-		g.Keywords, g.Members = []string{}, []string{}
+		g.Keywords, g.ExcludeKeywords, g.Members = []string{}, []string{}, []string{}
 		g.Lanes = normalizeLanes(jsx.Get(raw, "lanes"))
 		g.TestURL, _ = jsx.NonEmpty(jsx.Get(raw, "testUrl"))
 		g.ExpectedStatus, _ = NormalizeExpectedStatus(jsx.Get(raw, "expectedStatus"))
@@ -377,7 +390,7 @@ func withKind(g *Group) *Group {
 		g.Icon = builtinDefault(kind).Icon
 	}
 	g.Kind, g.Type, g.Mode = kind, "selector", "static"
-	g.Keywords, g.Members = []string{}, []string{}
+	g.Keywords, g.ExcludeKeywords, g.Members = []string{}, []string{}, []string{}
 	return g
 }
 

@@ -56,6 +56,7 @@ openbox-core 交接笔记(第 6 版,只管 core;后端另见 backend/HANDOFF.md)
 [x] config:configDetailed 装配(站点直连、链式节点核对、节点组 / 站点集、dns / route / tun 入站、入口旁路、共享网络、FakeIP 缓存)
 [x] configDetailed 多带 nativeBypass {enabled, sets, reason}(自研多带,基线没有;后端 terminal-test 的 firstLayer 用):auto_redirect 开着时是站点集里走直连的 geoip- 候选(与 route_exclude_address_set 里的 obflip-byp- 一一对应),没开时是计划或入参 nativeBypass 给出的集合(开关与名单都有才算生效);reason 取旁路计划给的原因,入参覆盖时为空串;自写向量 build_nativebypass_vectors_test.go,变异 8 个全抓住;金标准比对前和 flipFlags 一样先去掉这个键
 [x] 带宽择优(core 层):组的 bandwidth 开关 → urltest / loadbalance 出站和故障转移多节点自动页签的内部 urltest 写 bandwidth:true;选项 disableBandwidth(客户端配置)不写。测速调度、校验、接口在后端,见 backend/STATUS.md
+[x] groups:排除关键词(2026-11-21 维护者授权,对齐上游 v0.1.472 面板的 excludeKeywords / excludeKeywordMode):只对动态组生效,先按 keywords 选(没写 = 全部非链式节点)、再剔除命中排除词的节点;excludeKeywordMode 只有恰好是 "and" 才是 and(and = 所有非空排除词都命中才移出,否则任一命中就移出);排除词全空不排除任何节点;非空才序列化(紧跟 keywords),故障转移与内置出站清空;自写向量 internal/groups/exclude_keywords_test.go,金标准文件没动,变异 2 个全抓住
 [x] 授权三个方法(checkActivationCode、activationState、authorizationState):固定的"未限制"返回
 [x] go.mod 对齐 Go 1.25.12
 [x] idna / urlx UTS46 轻量映射表（内置忽略字符 + 兼容映射 + 简易双向；覆盖 gen-urlx --wide 语料主要条目）
