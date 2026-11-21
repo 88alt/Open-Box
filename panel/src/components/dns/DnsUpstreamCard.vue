@@ -75,7 +75,7 @@
             <span
               v-else
               class="truncate"
-            >{{ row.server }}<span
+            >{{ serverText(row) }}<span
               v-if="row.protocol !== 'https'"
               class="text-base-content/50"
             >:{{ row.port }}</span></span>
@@ -271,12 +271,13 @@
               type="text"
               class="input input-sm min-w-0 flex-1 font-mono"
               :class="{ 'input-error': draft.server && !isServerValid(draft) }"
-              :placeholder="draft.protocol === 'https' ? 'https://dns.example/dns-query' : draft.protocol === 'tls' ? 'dns.example.net' : draft.side === 'direct' ? '223.5.5.5' : '1.1.1.1'"
-              :aria-label="$t(draft.protocol === 'https' ? 'dnsUpstreamDohUrl' : draft.protocol === 'tls' ? 'dnsUpstreamDotHost' : 'dnsUpstreamSourceIp')"
+              :placeholder="draft.protocol === 'https' || draft.protocol === 'tls' ? 'dns.example.net' : draft.side === 'direct' ? '223.5.5.5' : '1.1.1.1'"
+              :aria-label="$t(draft.protocol === 'https' ? 'dnsUpstreamDohHost' : draft.protocol === 'tls' ? 'dnsUpstreamDotHost' : 'dnsUpstreamSourceIp')"
               spellcheck="false"
+              @change="onServerChange"
+              @paste="onServerPaste"
             >
             <input
-              v-if="draft.protocol !== 'https'"
               v-model.number="draft.port"
               type="number"
               min="1"
@@ -412,6 +413,7 @@ import {
   type OpenboxProfile,
 } from '@/api/openbox'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
+import { dohHost, dohUrl, parseDohInput, parseDohUrl, type DohPath } from '@/helper/dohAddress'
 import { showNotification } from '@/helper/notification'
 import { ArrowUturnLeftIcon, BoltIcon, PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -434,6 +436,8 @@ interface Upstream {
   protocol: Protocol
   port: number
   bootstrap: Bootstrap
+  // DoH 的路径(界面不显示,保存时原样拼回地址)
+  dohPath?: DohPath
 }
 interface Row extends Upstream {
   index: number
@@ -466,26 +470,6 @@ const isIp = (value: string) => {
   return IPV6_RE.test(host) && host !== '::' && host.split('::').length <= 2 && host.split(':').length <= 8
 }
 const isPort = (value: unknown) => typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 65535
-// DoH 地址:https://,有主机名,不带账号密码 / 查询 / #,端口缺省 443
-const isDohUrl = (value: string) => {
-  try {
-    const u = new URL(value)
-    const port = Number(u.port || 443)
-    return (
-      u.protocol === 'https:' &&
-      !!u.hostname &&
-      !u.username &&
-      !u.password &&
-      !u.hash &&
-      !u.search &&
-      !['0.0.0.0', '[::]'].includes(u.hostname) &&
-      port >= 1 &&
-      port <= 65535
-    )
-  } catch {
-    return false
-  }
-}
 const protocolName = (protocol: Protocol) => (protocol === 'https' ? 'DoH' : protocol === 'tls' ? 'DoT' : protocol.toUpperCase())
 // 切协议时,端口还是原协议的默认值就换成新协议的默认值(53 / 443 / 853);用户改过的端口不动
 const DEFAULT_PORTS: Record<Protocol, number> = { udp: 53, tcp: 53, https: 443, tls: 853 }
@@ -501,14 +485,14 @@ const defaultBootstrap = (b?: Partial<Bootstrap> | null): Bootstrap => ({
   protocol: b?.protocol === 'tcp' ? 'tcp' : 'udp',
   port: b?.port ?? DEFAULT_PORT,
 })
-// 地址(和端口)填对了:DoH 看地址,DoT 看 IP 或域名加端口,UDP / TCP 看 IP 加端口
+// 地址(和端口)填对了:DoH 看域名或 IP 加端口,DoT 看 IP 或域名加端口,UDP / TCP 看 IP 加端口
 const isDotHost = (s: string) => {
   const h = s.trim()
   if (!h || isIp(h) || h.length > 253 || !h.includes('.')) return false
   return h.split('.').every((l) => l.length <= 63 && /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$/.test(l))
 }
 const isServerValid = (u: Upstream) => {
-  if (u.protocol === 'https') return isDohUrl(u.server)
+  if (u.protocol === 'https') return !!dohHost(u) && isPort(u.port)
   if (u.protocol === 'tls') return (isIp(u.server) || isDotHost(u.server)) && isPort(u.port)
   return isIp(u.server) && isPort(u.port)
 }
@@ -518,6 +502,24 @@ const isUpstreamValid = (u: Upstream) =>
   (isServerValid(u) &&
     (!needsBootstrap(u) || u.bootstrap.server === WAN || (isIp(u.bootstrap.server) && isPort(u.bootstrap.port))))
 
+// 存档 / 列表里用的地址:DoH 是完整的 https:// 地址,其余就是填的主机
+const serverText = (u: Upstream) => (u.protocol === 'https' ? dohUrl(u) || u.server : u.server)
+// DoH 的「域名或 IP」框:敲完或粘贴完整地址时,拆成主机、端口、路径
+const applyDohInput = (text: string) => {
+  const d = draft.value
+  if (!d || d.protocol !== 'https') return false
+  const parsed = parseDohInput(text, d.port)
+  if (!parsed) return false
+  Object.assign(d, parsed)
+  return true
+}
+const onServerChange = () => {
+  const d = draft.value
+  if (d) applyDohInput(d.server)
+}
+const onServerPaste = (e: ClipboardEvent) => {
+  if (applyDohInput(e.clipboardData?.getData('text') ?? '')) e.preventDefault()
+}
 const sideName = (side: Side) => t(side === 'direct' ? 'dnsUpstreamDirect' : 'dnsUpstreamProxy')
 const regionName = (r: Region) => t(r === 'intl' ? 'dnsRegionIntl' : 'dnsRegionCn')
 const regionDefaultsText = (r: Region) => t(r === 'intl' ? 'dnsRegionDefaultsIntl' : 'dnsRegionDefaultsCn')
@@ -608,17 +610,21 @@ const readOne = (side: Side, server: unknown, protocol: unknown, port: unknown, 
   const wan = server === WAN
   const host = typeof server === 'string' && !wan ? server : ''
   if (!wan && !host) return null
+  const kind: Protocol = wan
+    ? 'udp'
+    : protocol === 'udp' || protocol === 'tcp' || protocol === 'https' || protocol === 'tls'
+      ? protocol
+      : FALLBACK_PROTOCOL[side]
+  // DoH:存档里是完整地址,界面上拆成主机、端口、路径;认不出来就原样放进主机框让用户改
+  const doh = kind === 'https' ? parseDohUrl(host) : null
   return {
     side,
     wan,
-    server: wan ? '' : host,
-    protocol: wan
-      ? 'udp'
-      : protocol === 'udp' || protocol === 'tcp' || protocol === 'https' || protocol === 'tls'
-        ? protocol
-        : FALLBACK_PROTOCOL[side],
-    port: wan || !isPort(port) ? DEFAULT_PORT : (port as number),
+    server: wan ? '' : doh ? doh.server : host,
+    protocol: kind,
+    port: wan ? DEFAULT_PORT : doh ? doh.port : !isPort(port) ? (kind === 'https' ? DEFAULT_PORTS.https : DEFAULT_PORT) : (port as number),
     bootstrap: defaultBootstrap(bootstrap as Partial<Bootstrap> | null),
+    ...(doh ? { dohPath: doh.dohPath } : {}),
   }
 }
 const sideRows = (side: Side): Row[] => {
@@ -637,16 +643,16 @@ const sideRows = (side: Side): Row[] => {
 }
 const rows = computed<Row[]>(() => [...sideRows('direct'), ...sideRows('proxy')])
 const countOf = (side: Side) => rows.value.filter((r) => r.side === side).length
-const rowLabel = (r: Upstream) => (r.wan ? t('dnsUpstreamWan') : r.server)
+const rowLabel = (r: Upstream) => (r.wan ? t('dnsUpstreamWan') : serverText(r))
 
-// DoH 的端口取自地址(缺省 443);DoH 和域名 DoT 才带 bootstrap
+// DoH 的地址由主机、端口、路径拼回完整的 https:// 地址;DoH 和域名 DoT 才带 bootstrap
 const toUpstreamOut = (u: Upstream) =>
   u.wan
     ? { server: WAN, protocol: 'udp', port: DEFAULT_PORT }
     : {
-        server: u.server,
+        server: serverText(u),
         protocol: u.protocol,
-        port: u.protocol === 'https' && isDohUrl(u.server) ? Number(new URL(u.server).port || 443) : u.port,
+        port: u.port,
         ...(needsBootstrap(u) ? { bootstrap: u.bootstrap } : {}),
       }
 // 把一整张列表写回档案:每侧第一条是主上游,后面是备用;一侧删光了就退回「上游 DNS」
@@ -848,7 +854,7 @@ const openEditor = (row: Row | null) => {
   editing.value = row
   editorError.value = ''
   draft.value = row
-    ? { side: row.side, wan: row.wan, server: row.server, protocol: row.protocol, port: row.port, bootstrap: { ...row.bootstrap } }
+    ? { side: row.side, wan: row.wan, server: row.server, protocol: row.protocol, port: row.port, bootstrap: { ...row.bootstrap }, dohPath: row.dohPath }
     : { side: 'proxy', wan: false, server: '', protocol: 'tcp', port: DEFAULT_PORT, bootstrap: defaultBootstrap() }
   editorOpen.value = true
 }
@@ -867,7 +873,7 @@ const saveEditor = async () => {
   }
   const duplicate = rows.value
     .filter((r) => r.key !== current?.key)
-    .some((r) => r.side === d.side && (d.wan ? r.wan : !r.wan && r.server === d.server))
+    .some((r) => r.side === d.side && (d.wan ? r.wan : !r.wan && serverText(r) === serverText(d)))
   if (duplicate) {
     editorError.value = t('dnsUpstreamExtraDuplicate')
     return
