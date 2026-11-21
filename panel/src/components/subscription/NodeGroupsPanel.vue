@@ -222,90 +222,24 @@
                 <option value="loadbalance">{{ $t('groupType_loadbalance') }}</option>
               </select>
             </div>
-            <!-- 故障转移:检测间隔按秒填(按设定间隔进行健康检查,不是分钟级的择优测速);容差只给多节点页签里的
-                 内部自动择优用,页签全是单节点时没有用武之地,置灰说明;超时 / 回切直接排在同一行右侧 -->
-            <template v-if="isFailover">
-              <div class="flex flex-col gap-1">
-                <label class="text-xs font-medium">{{ $t('groupInterval') }}</label>
-                <div class="flex items-center gap-1">
-                  <input
-                    v-model.number="intervalSeconds"
-                    type="number"
-                    min="5"
-                    max="86400"
-                    class="input input-sm w-20 max-sm:w-14"
-                    @blur="normalizeIntervalSeconds"
-                  />
-                  <span class="text-base-content/60 text-xs">{{ $t('groupUnitSecond') }}</span>
-                </div>
-              </div>
-              <div class="flex flex-col gap-1">
-                <label
-                  class="text-xs font-medium"
-                  v-tip="allLanesSingle ? $t('failoverToleranceUnused') : $t('failoverToleranceHint')"
-                >{{ $t('failoverTolerance') }}</label>
-                <div class="flex items-center gap-1">
-                  <input
-                    v-model.number="draft.tolerance"
-                    type="number"
-                    min="0"
-                    class="input input-sm w-20 max-sm:w-14"
-                    :disabled="allLanesSingle"
-                  />
-                  <span class="text-base-content/60 text-xs">{{ $t('groupUnitMs') }}</span>
-                </div>
-              </div>
-              <div
-                v-if="failoverSettings"
-                class="group-advanced ml-auto flex min-w-0 flex-nowrap items-end gap-3 max-sm:basis-full max-sm:gap-2"
-              >
-                <div class="flex flex-col gap-1">
-                  <label class="text-xs font-medium">{{ $t('failoverTimeout') }}</label>
-                  <div class="flex items-center gap-1">
-                    <input
-                      v-model.number="timeoutSeconds"
-                      type="number"
-                      min="1"
-                      max="60"
-                      class="input input-sm w-20 max-sm:w-14"
-                    />
-                    <span class="text-base-content/60 text-xs">{{ $t('groupUnitSecond') }}</span>
-                  </div>
-                </div>
-                <label class="flex h-8 cursor-pointer items-center gap-2">
-                  <input
-                    v-model="failoverSettings.restorePrimary"
-                    type="checkbox"
-                    class="toggle toggle-sm"
-                  />
-                  <span
-                    class="text-xs font-medium"
-                    v-tip="$t('failoverRestoreHint')"
-                  >{{ $t('failoverRestore') }}</span>
-                </label>
-                <div
-                  v-if="failoverSettings.restorePrimary"
-                  class="flex flex-col gap-1"
-                >
-                  <label
-                    class="text-xs font-medium"
-                    v-tip="$t('failoverHoldHint')"
-                  >{{ $t('failoverHold') }}</label>
-                  <div class="flex items-center gap-1">
-                    <input
-                      v-model.number="recoveryHoldSeconds"
-                      type="number"
-                      min="0"
-                      max="86400"
-                      class="input input-sm w-20 max-sm:w-14"
-                    />
-                    <span class="text-base-content/60 text-xs">{{ $t('groupUnitSecond') }}</span>
-                  </div>
-                </div>
-              </div>
-            </template>
+            <!-- 故障转移:检测间隔 / 容差 / 超时 / 回切收进「参数设定」弹窗,点确认才写回草稿 -->
+            <button
+              v-if="isFailover"
+              ref="failoverParamsButton"
+              type="button"
+              class="btn btn-ghost btn-xs h-8 shrink-0 font-normal"
+              aria-haspopup="dialog"
+              :aria-expanded="showFailoverParams"
+              @click="openFailoverParams"
+            >
+              {{ $t('failoverParameters') }}
+              <Cog6ToothIcon
+                class="h-4 w-4"
+                aria-hidden="true"
+              />
+            </button>
             <!-- 检测间隔/容差只对 urltest 有意义:selector 是手动选,不会自己去测;负载均衡会测速但没有容差 -->
-            <template v-else-if="draft.type === 'urltest' || isLoadBalance">
+            <template v-if="draft.type === 'urltest' || isLoadBalance">
               <div class="flex flex-col gap-1">
                 <label class="text-xs font-medium">{{ $t('groupInterval') }}</label>
                 <div class="flex items-center gap-1">
@@ -359,10 +293,27 @@
                 <QuestionMarkCircleIcon class="h-4 w-4" />
               </button>
             </div>
+            <button
+              v-if="draft.type !== 'selector'"
+              type="button"
+              class="btn btn-ghost btn-xs ml-auto h-8 shrink-0 font-normal"
+              :aria-controls="customTestUrlId"
+              :aria-expanded="showCustomTestUrl"
+              @click="showCustomTestUrl = !showCustomTestUrl"
+            >
+              {{ $t('groupCustomTestUrl') }}
+              <ChevronDownIcon
+                class="h-4 w-4 transition-transform"
+                :class="{ 'rotate-180': showCustomTestUrl }"
+                aria-hidden="true"
+              />
+            </button>
           </div>
-          <!-- 测速地址 + 可接受状态码:单独排一整行,不挤在规则 / 间隔 / 容差那一行里 -->
+          <!-- 测速地址 + 可接受状态码:默认折叠,点「自定义测速地址」展开;单独排一整行 -->
           <div
             v-if="draft.type !== 'selector'"
+            v-show="showCustomTestUrl"
+            :id="customTestUrlId"
             class="flex min-w-0 gap-3 max-sm:flex-col"
           >
             <div class="flex min-w-0 flex-1 flex-col gap-1">
@@ -599,6 +550,7 @@
                     ghost-class="opacity-40"
                     item-key="id"
                     role="tablist"
+                    :aria-label="$t('failoverLaneOrderHint')"
                     class="tabs-box tabs tabs-xs min-w-0 flex-nowrap overflow-x-auto overflow-y-hidden"
                   >
                     <template #item="{ element: lane, index }">
@@ -850,6 +802,107 @@
       :max-m-b="bandwidthSettings.maxDownloadMB"
     />
 
+    <!-- 故障转移「参数设定」:在副本上改,确认才写回草稿;取消 / 关闭不留痕 -->
+    <DialogWrapper
+      v-model="showFailoverParams"
+      :title="$t('failoverParameters')"
+      box-class="w-full max-w-md"
+    >
+      <template #footer>
+        <button
+          type="button"
+          class="btn btn-sm"
+          @click="showFailoverParams = false"
+        >
+          {{ $t('cancel') }}
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary btn-sm"
+          @click="applyFailoverParams"
+        >
+          {{ $t('confirm') }}
+        </button>
+      </template>
+      <div
+        v-if="paramsDraft"
+        class="flex flex-col gap-3"
+      >
+        <label class="flex flex-col gap-1">
+          <span class="text-xs font-medium">{{ $t('groupInterval') }}</span>
+          <span class="flex items-center gap-1">
+            <input
+              ref="failoverIntervalInput"
+              v-model.number="paramsIntervalSeconds"
+              type="number"
+              min="5"
+              max="86400"
+              class="input input-sm min-w-0 flex-1"
+            />
+            <span class="text-base-content/60 text-xs">{{ $t('groupUnitSecond') }}</span>
+          </span>
+        </label>
+        <label
+          v-tip="allLanesSingle ? $t('failoverToleranceUnused') : $t('failoverToleranceHint')"
+          class="flex flex-col gap-1"
+        >
+          <span class="text-xs font-medium">{{ $t('failoverTolerance') }}</span>
+          <span class="flex items-center gap-1">
+            <input
+              v-model.number="paramsDraft.tolerance"
+              type="number"
+              min="0"
+              max="60000"
+              class="input input-sm min-w-0 flex-1"
+              :disabled="allLanesSingle"
+            />
+            <span class="text-base-content/60 text-xs">{{ $t('groupUnitMs') }}</span>
+          </span>
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-xs font-medium">{{ $t('failoverTimeout') }}</span>
+          <span class="flex items-center gap-1">
+            <input
+              v-model.number="paramsTimeoutSeconds"
+              type="number"
+              min="1"
+              max="60"
+              class="input input-sm min-w-0 flex-1"
+            />
+            <span class="text-base-content/60 text-xs">{{ $t('groupUnitSecond') }}</span>
+          </span>
+        </label>
+        <label
+          v-if="paramsDraft.failover.restorePrimary"
+          v-tip="$t('failoverHoldHint')"
+          class="flex flex-col gap-1"
+        >
+          <span class="text-xs font-medium">{{ $t('failoverHold') }}</span>
+          <span class="flex items-center gap-1">
+            <input
+              v-model.number="paramsHoldSeconds"
+              type="number"
+              min="0"
+              max="86400"
+              class="input input-sm min-w-0 flex-1"
+            />
+            <span class="text-base-content/60 text-xs">{{ $t('groupUnitSecond') }}</span>
+          </span>
+        </label>
+        <label class="flex cursor-pointer items-center gap-2">
+          <input
+            v-model="paramsDraft.failover.restorePrimary"
+            type="checkbox"
+            class="toggle toggle-sm"
+          />
+          <span
+            v-tip="$t('failoverRestoreHint')"
+            class="text-xs font-medium"
+          >{{ $t('failoverRestore') }}</span>
+        </label>
+      </div>
+    </DialogWrapper>
+
     <!-- 删有成员的页签先确认(草稿内的动作,取消整个弹窗也不会落库) -->
     <DialogWrapper
       v-model="showLaneDelete"
@@ -857,7 +910,7 @@
     >
       <div class="flex flex-col gap-4 p-2">
         <p class="text-sm">
-          {{ $t('failoverDeleteLaneConfirm', { lane: pendingLane ? laneLabelOf(pendingLane) : '', count: pendingLane?.members.length ?? 0 }) }}
+          {{ $t('failoverDeleteLaneConfirm', { lane: pendingLane ? laneLabelOf(pendingLane) : '' }) }}
         </p>
         <div class="flex justify-end gap-2">
           <button
@@ -1088,8 +1141,10 @@ import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import BandwidthHelpDialog from '@/components/subscription/BandwidthHelpDialog.vue'
 import {
   Bars3Icon,
+  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  Cog6ToothIcon,
   PencilSquareIcon,
   PlusIcon,
   PowerIcon,
@@ -1315,7 +1370,6 @@ const ensureFailoverFields = (d: OpenboxUserGroup) => {
   if (d.expectedStatus === undefined) d.expectedStatus = ''
   d.failover = { ...FAILOVER_DEFAULTS, ...(d.failover || {}) }
 }
-const failoverSettings = computed(() => (draft.value?.type === 'failover' ? draft.value.failover ?? null : null))
 const activeLaneId = ref('')
 const activeLane = computed(() => draft.value?.lanes?.find((l) => l.id === activeLaneId.value) ?? null)
 const nodeNameSet = computed(() => new Set(availableNodes.value.map((n) => n.name)))
@@ -1386,33 +1440,65 @@ const confirmDeleteLane = () => {
   pendingLane.value = null
   showLaneDelete.value = false
 }
-// 界面上按秒填,存的是 sing-box 认的 "Ns"。输入过程中不套最小值,
-// 否则输入 120 会先经过 1、12,每一步都被钳成 5,失焦时再统一校正。
-const intervalSeconds = computed<number>({
+// 故障转移「参数设定」弹窗:界面按秒填,存的是 sing-box 认的 "Ns"。弹窗里改的是副本,确认才写回草稿。
+// 输入过程中不套最小值,否则输入 120 会先经过 1、12,每一步都被钳成 5;确认时再统一校正。
+type FailoverParamsDraft = { interval: string; tolerance: number; failover: OpenboxFailoverSettings }
+const showFailoverParams = ref(false)
+const paramsDraft = ref<FailoverParamsDraft | null>(null)
+const failoverParamsButton = ref<HTMLButtonElement | null>(null)
+const failoverIntervalInput = ref<HTMLInputElement | null>(null)
+const clampInt = (v: number, min: number, max: number, fallback: number) =>
+  Number.isFinite(v) ? Math.min(max, Math.max(min, Math.floor(v))) : fallback
+const openFailoverParams = () => {
+  const d = draft.value
+  if (d?.type !== 'failover' || !d.failover) return
+  paramsDraft.value = { interval: d.interval ?? '', tolerance: d.tolerance, failover: { ...d.failover } }
+  showFailoverParams.value = true
+}
+const applyFailoverParams = () => {
+  const d = draft.value
+  const p = paramsDraft.value
+  if (d?.type !== 'failover' || !p) return
+  d.interval = p.interval
+  d.tolerance = clampInt(p.tolerance ?? 100, 0, 60000, 100)
+  d.failover = { ...p.failover }
+  normalizeIntervalSeconds()
+  showFailoverParams.value = false
+}
+// 弹窗打开时焦点落在第一个输入框,关闭后回到「参数设定」按钮
+watch(
+  showFailoverParams,
+  (open) => {
+    if (open) failoverIntervalInput.value?.focus()
+    else failoverParamsButton.value?.focus()
+  },
+  { flush: 'post' },
+)
+const paramsIntervalSeconds = computed<number>({
   get: () => {
-    const m = /^(\d+)s$/.exec(draft.value?.interval || '')
+    const m = /^(\d+)s$/.exec(paramsDraft.value?.interval || '')
     return m ? Number(m[1]) : 300
   },
   set: (v: number) => {
-    if (!draft.value) return
-    const n = Number.isFinite(v) ? Math.min(86400, Math.max(0, Math.floor(v))) : 300
-    draft.value.interval = `${n}s`
+    if (!paramsDraft.value) return
+    paramsDraft.value.interval = `${clampInt(v, 0, 86400, 300)}s`
   },
 })
-const timeoutSeconds = computed<number>({
-  get: () => Math.round((failoverSettings.value?.timeoutMs ?? 5000) / 1000),
+const paramsTimeoutSeconds = computed<number>({
+  get: () => Math.round((paramsDraft.value?.failover.timeoutMs ?? 5000) / 1000),
   set: (v: number) => {
-    if (!failoverSettings.value) return
-    failoverSettings.value.timeoutMs = (Number.isFinite(v) ? Math.min(60, Math.max(1, Math.floor(v))) : 5) * 1000
+    if (paramsDraft.value) paramsDraft.value.failover.timeoutMs = clampInt(v, 1, 60, 5) * 1000
   },
 })
-const recoveryHoldSeconds = computed<number>({
-  get: () => Math.round((failoverSettings.value?.recoveryHoldMs ?? 60000) / 1000),
+const paramsHoldSeconds = computed<number>({
+  get: () => Math.round((paramsDraft.value?.failover.recoveryHoldMs ?? 60000) / 1000),
   set: (v: number) => {
-    if (!failoverSettings.value) return
-    failoverSettings.value.recoveryHoldMs = (Number.isFinite(v) ? Math.min(86400, Math.max(0, Math.floor(v))) : 60) * 1000
+    if (paramsDraft.value) paramsDraft.value.failover.recoveryHoldMs = clampInt(v, 0, 86400, 60) * 1000
   },
 })
+// 「自定义测速地址」折叠区:默认收起
+const showCustomTestUrl = ref(false)
+const customTestUrlId = `group-test-url-${Math.random().toString(36).slice(2, 8)}`
 
 // 类型切换:普通 ↔ 故障转移之间成员形状不同,两边各留一份草稿便于切回;组成员进不了页签的列出来拦住保存
 const lastType = ref<OpenboxGroupType>('urltest')

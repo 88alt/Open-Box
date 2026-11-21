@@ -276,6 +276,7 @@ const en = {
   expectedStatusInvalid:
     'Invalid accepted status: codes or ranges joined by "/", e.g. 200-299 or 204',
   groupTestUrl: 'Test URL',
+  groupCustomTestUrl: 'Custom test URL',
   directTestUrlHint:
     'Only for the built-in direct outbound. Supports HTTP / HTTPS; HTTP by default.',
   testUrlHint:
@@ -1080,7 +1081,9 @@ const en = {
   failoverMaxLanes: 'At most {n} lanes',
   failoverDeleteLane: 'Delete lane',
   failoverDeleteLaneConfirm:
-    'Delete "{lane}"? Its {count} nodes are removed from this lane (cancelling the dialog discards everything).',
+    'Delete “{lane}” and its member settings?',
+  failoverLaneOrderHint: 'Drag tabs to set priority. The leftmost tab is primary, followed by backups.',
+  failoverParameters: 'Parameters',
   failoverLaneNamePlaceholder: 'Lane name (optional)',
   failoverLaneIconInherit: 'Inherit group icon',
   failoverModeEmpty: 'no valid node',
@@ -1097,8 +1100,8 @@ const en = {
   failoverDropBlocked: 'Remove them',
   failoverBlockedMembersRequired:
     'Some members still reference groups: remove them or switch the rule back.',
-  failoverLanesRequired: 'A failover group needs at least two lanes with one valid node each.',
-  failoverLanesRequiredOne: 'At least one lane must contain a valid node.',
+  failoverLanesRequired: 'Configure members in at least two failover tabs.',
+  failoverLanesRequiredOne: 'Configure members in at least one failover tab.',
   failoverTypeChangeTitle: 'Change to a normal group',
   failoverTypeChangeConfirm:
     'Saving this failover group as a normal group drops the lane hierarchy; only the members from before the switch are kept. Save anyway?',
