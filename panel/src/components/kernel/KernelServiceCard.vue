@@ -10,7 +10,6 @@
           rel="noopener noreferrer"
           class="hover:bg-base-200 inline-flex cursor-pointer items-center gap-2 rounded-lg py-1"
           aria-label="Open-Box GitHub"
-          v-tip="$t('openboxGithubHint')"
         >
           <img
             :src="logoUrl"
@@ -95,15 +94,14 @@
         <span class="text-base-content/70">{{ $t('kernelVersionLabel') }}:</span>
         <span class="font-medium">{{ kernelText }}</span>
         <a
-          href="https://github.com/SagerNet/sing-box"
+          :href="kernelGithubUrl"
           target="_blank"
           rel="noopener noreferrer"
           class="text-base-content/70 hover:text-primary inline-flex items-center gap-1.5 rounded-md px-1 py-0.5"
-          aria-label="sing-box GitHub"
-          v-tip="$t('singboxGithubHint')"
+          :aria-label="kernelGithubLabel"
         >
           <GithubIcon class="h-4 w-4" />
-          <span>{{ $t('singboxGithubLabel') }}</span>
+          <span>{{ kernelGithubLabel }}</span>
           <ArrowTopRightOnSquareIcon class="h-4 w-4" />
         </a>
       </div>
@@ -136,8 +134,7 @@
           target="_blank"
           rel="noopener noreferrer"
           class="text-base-content/60 hover:text-primary inline-flex items-center gap-1.5 rounded-md px-1 py-0.5"
-          aria-label="Geo 数据 GitHub"
-          v-tip="$t('geoGithubHint')"
+          :aria-label="$t('geoGithubLabel')"
         >
           <GithubIcon class="h-4 w-4" />
           <span>{{ $t('geoGithubLabel') }}</span>
@@ -322,6 +319,12 @@ const kernelText = computed(() => {
   const bare = raw.trim().replace(/^sing-box(?:\s+version)?[\s-]*/i, '')
   return bare ? `sing-box-${bare}` : t('kernelVersionUnknown')
 })
+// 内核项目链接:当前内核是 mihomo 就指向 MetaCubeX/mihomo,否则指向 sing-box;没报内核名按 sing-box
+const kernelName = computed(() => props.kernelVersion?.kernel || 'sing-box')
+const kernelGithubUrl = computed(() =>
+  kernelName.value === 'mihomo' ? 'https://github.com/MetaCubeX/mihomo' : 'https://github.com/SagerNet/sing-box',
+)
+const kernelGithubLabel = computed(() => t('kernelGithubLabel', { kernel: kernelName.value }))
 
 // 冲突的代理工具读共享状态,不用页面传进来的那份快照:
 // 快照只在进页面和点动作后更新,进页面时拿到 null,横幅就一直不出现

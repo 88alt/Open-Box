@@ -1108,6 +1108,8 @@ export interface OpenboxServiceActionResult {
 }
 
 export interface OpenboxKernelVersion {
+  // 当前运行的内核;没报就是 sing-box
+  kernel?: 'sing-box' | 'mihomo'
   version: string
   raw: string
   // false 表示没读到版本(sing-box 缺失或无法执行),此时 version 为空字符串。
