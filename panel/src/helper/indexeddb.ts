@@ -1,5 +1,5 @@
 import { fetchServerApi } from '@/store/auth'
-import { customBackgroundURL } from '@/store/settings'
+import { customBackgroundEnabled, customBackgroundURL } from '@/store/settings'
 import dayjs from 'dayjs'
 import { computed, ref, watch } from 'vue'
 const BACKGROUND_IMAGE_API_URL = '/api/background-image'
@@ -198,7 +198,7 @@ watch(
 )
 
 export const backgroundImage = computed(() => {
-  if (!customBackgroundURL.value) {
+  if (!customBackgroundEnabled.value || !customBackgroundURL.value) {
     return ''
   }
 

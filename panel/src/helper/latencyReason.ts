@@ -11,6 +11,7 @@ const LATENCY_REASON_KEYS: Record<string, string> = {
   unreachable: 'latencyReasonUnreachable',
   invalid: 'latencyReasonInvalid',
   'not-found': 'latencyReasonNotFound',
+  'mihomo-only': 'latencyReasonMihomoOnly',
   unstable: 'latencyReasonUnstable',
   status: 'latencyReasonStatus',
   error: 'latencyReasonError',

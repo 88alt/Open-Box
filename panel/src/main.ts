@@ -31,7 +31,7 @@ const bootstrap = async () => {
   await initializePersistentStorage()
   await import('@/helper/dayjs')
 
-  const [{ createApp }, { default: App }, { loadFonts }, { i18n }, router] = await Promise.all([
+  const [{ createApp }, { default: App }, { loadFonts }, { i18n, initLanguage }, router] = await Promise.all([
     import('vue'),
     import('./App.vue'),
     import('./assets/load-fonts'),
@@ -40,6 +40,7 @@ const bootstrap = async () => {
   ])
 
   loadFonts()
+  await initLanguage()
 
   const app = createApp(App)
 

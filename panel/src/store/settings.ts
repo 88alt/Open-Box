@@ -87,6 +87,7 @@ export const emoji = useStorage<EMOJIS>(
   IS_APPLE_DEVICE ? EMOJIS.TWEMOJI : EMOJIS.NOTO_COLOR_EMOJI,
 )
 export const customBackgroundURL = useStorage('config/custom-background-image', '')
+export const customBackgroundEnabled = useStorage('config/custom-background-enabled', true)
 export const dashboardTransparent = useStorage('config/dashboard-transparent', 90)
 export const globalRadius = useStorage('config/global-radius', 26)
 export const autoUpgrade = useStorage('config/auto-upgrade', false)

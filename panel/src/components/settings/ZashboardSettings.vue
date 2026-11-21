@@ -22,9 +22,16 @@
         v-if="isVisibleCustomBackgroundURL"
         class="setting-item"
       >
-        <div class="setting-item-label">
+        <label class="setting-item-label flex items-center gap-2">
           {{ $t('customBackgroundURL') }}
-        </div>
+          <input
+            v-model="customBackgroundEnabled"
+            type="checkbox"
+            role="switch"
+            class="toggle toggle-sm shrink-0"
+            :aria-label="$t('showPanelBackground')"
+          />
+        </label>
         <div
           class="join"
           :class="isBackgroundDragOver ? 'ring-primary rounded-field ring-1' : ''"
@@ -99,30 +106,22 @@
         v-if="isVisibleGlobalRadius"
         class="setting-item"
       >
-        <div class="setting-item-label">
+        <label
+          for="global-corner-radius"
+          class="setting-item-label"
+        >
           {{ $t('globalRadius') }}
-        </div>
-        <div class="join radius-stepper max-w-64">
-          <button
-            class="btn btn-sm join-item min-w-12 px-0 text-xl"
-            @click="adjustGlobalRadius(-1)"
-            :disabled="globalRadius <= 0"
-          >
-            -
-          </button>
-          <div
-            class="input input-sm join-item pointer-events-none min-w-24 flex-1 justify-center text-center text-base font-medium"
-          >
-            {{ globalRadius }}px
-          </div>
-          <button
-            class="btn btn-sm join-item min-w-12 px-0 text-xl"
-            @click="adjustGlobalRadius(1)"
-            :disabled="globalRadius >= 50"
-          >
-            +
-          </button>
-        </div>
+        </label>
+        <NumberStepper
+          id="global-corner-radius"
+          class="max-w-64"
+          v-model="globalRadius"
+          :label="$t('globalRadius')"
+          unit="px"
+          :min="0"
+          :max="50"
+          integer
+        />
       </div>
       <div
         v-if="isVisibleTheme"
@@ -163,12 +162,14 @@ import {
   themeMode,
   THEME_MODES,
   blurIntensity,
+  customBackgroundEnabled,
   customBackgroundURL,
   dashboardTransparent,
   globalRadius,
 } from '@/store/settings'
 import { AdjustmentsHorizontalIcon, ArrowPathIcon, ArrowUpTrayIcon } from '@heroicons/vue/24/outline'
 import { computed, ref, watch } from 'vue'
+import NumberStepper from '../common/NumberStepper.vue'
 import TextInput from '../common/TextInput.vue'
 
 const k = GENERAL_ITEM_KEYS
@@ -192,11 +193,6 @@ const hasVisibleItems = computed(() => {
     isVisibleTheme.value
   )
 })
-
-const adjustGlobalRadius = (step: number) => {
-  const currentValue = Number(globalRadius.value || 0)
-  globalRadius.value = Math.min(50, Math.max(0, currentValue + step))
-}
 
 watch(customBackgroundURL, (value) => {
   if (value) {

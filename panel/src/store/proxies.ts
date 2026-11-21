@@ -39,7 +39,7 @@ import {
   TEST_URL,
 } from '@/constant'
 import { isProxyGroup } from '@/helper'
-import { showNotification } from '@/helper/notification'
+import { dismissNotification, showNotification } from '@/helper/notification'
 import type { History, Proxy, ProxyProvider } from '@/types'
 import { useStorage } from '@vueuse/core'
 import { last } from 'lodash'
@@ -503,7 +503,25 @@ export const handlerProxySelect = async (proxyGroupName: string, proxyName: stri
     if (proxyGroup.now === proxyName) return
   }
 
-  await selectProxyAPI(proxyGroupName, proxyName)
+  // 切换通常很快,超过 350ms 还没返回才弹「正在切换」,返回后立即关掉
+  const switchingKey = `policy-switching:${proxyGroupName}`
+  let switchingShown = false
+  const switchingTimer = setTimeout(() => {
+    switchingShown = true
+    showNotification({
+      content: 'policyOutboundSwitching',
+      params: { group: proxyGroupName, outbound: proxyName },
+      type: 'alert-info',
+      key: switchingKey,
+      timeout: 0,
+    })
+  }, 350)
+  try {
+    await selectProxyAPI(proxyGroupName, proxyName)
+  } finally {
+    clearTimeout(switchingTimer)
+    if (switchingShown) dismissNotification(switchingKey)
+  }
   proxyMap.value[proxyGroupName].now = proxyName
 
   if (automaticDisconnection.value) {
