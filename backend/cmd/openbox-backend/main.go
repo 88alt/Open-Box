@@ -92,6 +92,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/routeget"
 	"github.com/timeflysoon/Open-Box/backend/internal/routetest"
 	"github.com/timeflysoon/Open-Box/backend/internal/rulelist"
+	"github.com/timeflysoon/Open-Box/backend/internal/scoreweights"
 	"github.com/timeflysoon/Open-Box/backend/internal/server"
 	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
 	"github.com/timeflysoon/Open-Box/backend/internal/sitelatency"
@@ -392,6 +393,15 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 				return 0
 			}
 			return time.Duration(set.IntervalHours) * time.Hour
+		},
+		// 评分权重:取档案 nodeScoreWeights,没设置或不合法就用默认 40 / 30 / 30
+		Weights: func(ctx context.Context) (scoreweights.Weights, bool) {
+			p, err := profileSvc.Get(ctx)
+			if err != nil {
+				return scoreweights.Weights{}, false
+			}
+			w, err := scoreweights.Normalize(p["nodeScoreWeights"])
+			return w, err == nil
 		},
 		// 下载测速历史查询时直接从带宽服务读,不另存
 		Bandwidth: func(tag string) []nodequality.BWSample {

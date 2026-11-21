@@ -2218,12 +2218,8 @@ const zh: LANG_MESSAGE = {
   bandwidthSettingsTitle: '带宽测试',
   bandwidthPeriod: '统一带宽测试周期',
   bandwidthHours: '小时',
-  bandwidthPeriodSummary: '统一带宽测试周期：{hours} 小时',
   bandwidthDownloadCap: '单次下载流量上限',
-  bandwidthDaily:
-    '当前去重后 {count} 个符合条件的节点，每日 {times} 次，按当前上限预计最多消耗 {size}/天。',
-  bandwidthBudgetHint:
-    '只测试启用定期检查的订阅与启用带宽择优的组，同一实际节点跨订阅与分组共用一次测试。此处估算周期性下载正文，不含首次/新增节点测试、协议开销及机场流量倍率。客户端不执行带宽测试。',
+  bandwidthDaily: '去重后有 {count} 个符合条件的节点，单个节点一天最多测试 {times} 次，按当前上限最多消耗 {size}/天。',
   bandwidthHealthFirst:
     '节点健康、可用是第一前提。已确认故障及尚未确认恢复的节点继续排除，历史带宽再高也不参与选择。没有带宽记录不等于节点不可用。',
   bandwidthOff: '关闭时',
@@ -2338,6 +2334,37 @@ const zh: LANG_MESSAGE = {
   nodeInfoIpTypeSource: 'IP 类型来源',
   qualityPreviousScore: '上次评分',
   nodeScoreWeightJitter: '抖动',
+  nodeScoreWeights: '评分权重',
+  nodeScoreWeightLatency: '延时',
+  nodeScoreWeightDownload: '带宽',
+  nodeScoreWeightFirstDivider: '延时与带宽分界',
+  nodeScoreWeightSecondDivider: '带宽与抖动分界',
+  nodeScoreWeightValues: '延时 {latency}%，带宽 {download}%，抖动 {jitter}%',
+  bandwidthDays: '天',
+  bandwidthPeriodUnit: '带宽测试周期单位',
+  bandwidthPeriodInvalid: '请输入至少 1 小时的有效周期。',
+  bandwidthSettingsHelpLabel: '{title}说明',
+  bandwidthHelpCurrent: '当前设置',
+  bandwidthHelpCurrentTest: '带宽测试每 {hours} 小时，每次最多 {maxMB} MB',
+  bandwidthHelpEditLocation: '在「设置 → 后端设置 → {section}」修改',
+  bandwidthHelpLoading: '正在读取…',
+  bandwidthHelpUnavailable: '未能读取已保存的值',
+  bandwidthSettingsHelpExampleHeading: '示例',
+  bandwidthSettingsHelpIntro:
+    '路由器通过节点下载测试数据，估算节点的下载速度。开启定期带宽检查的订阅和开启节点评分的分组会将符合条件的节点纳入测速。同一个实际节点出现在多个订阅或分组里，也共用一次测试。',
+  bandwidthSettingsHelpInterval: '决定每个符合条件的节点隔多久安排一次测速。',
+  bandwidthSettingsHelpCap: '限制一次测速最多下载多少测试数据。测速可能提前结束。',
+  bandwidthSettingsHelpExample:
+    '周期设为 2 小时，单次上限设为 64 MB。若有 99 个去重后的节点，每个节点每天安排 12 次。每次都用满上限时，99 × 12 × 64 MB 约为 76.03 GB/天。首次或新增节点测速、协议开销和机场流量倍率另计。',
+  nodeScoreWeightsHelpIntro:
+    '系统把延时、下载带宽和 HTTP 抖动各自换算成 0–100 分，再按权重算出总分。HTTP 抖动反映多次 HTTP 探测的耗时波动。默认权重依次为 40%、30%、30%。某项设为 0%，这项就不计入总分。',
+  nodeScoreWeightsHelpDrag:
+    '拖动任一分界点，会一起调整相邻的两项权重，合计始终为 100%。也可用方向键调整 1 个百分点，按住 Shift 时可微调 0.1 个百分点。',
+  nodeScoreWeightsHelpExample:
+    '两个节点都健康，且各项测试数据有效。在开启节点评分的自动择优组里，默认权重下 B 得分更高。把延时权重提高到 70% 后，A 得分更高。',
+  nodeScoreWeightMetric: '项目',
+  nodeScoreWeightsDefaultExample: '默认权重得分（40 / 30 / 30）',
+  nodeScoreWeightsAdjustedExample: '调整后得分（70 / 15 / 15）',
 }
 
 export default zh

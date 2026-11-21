@@ -3,10 +3,12 @@ package nodequality
 import (
 	"math"
 	"sort"
+
+	"github.com/timeflysoon/Open-Box/backend/internal/scoreweights"
 )
 
 // 评分模型,口径对齐上游 v0.1.423 的服务端(panel/server/index.mjs 里 node-quality 的评分与汇总):
-//   - 单节点只看三项:延时 40%、下载带宽 30%、HTTP 探测波动 30%;可用率不进分数(只展示),上传没有测速来源恒为 null;
+//   - 单节点只看三项:延时、下载带宽、HTTP 探测波动,权重取档案 nodeScoreWeights(默认 40 / 30 / 30,面板可调);可用率不进分数(只展示),上传没有测速来源恒为 null;
 //   - 每一项按分段线性表折成 0~100 分;没测到的项不计、其余项按权重归一;
 //   - 只有「当前状态是 healthy 且有延时」才给分;分数为 四舍五入(Σ 分项 × 权重 / Σ 权重);
 //   - 暂估(provisional):缺下载、缺波动、延时样本不足 10 个、波动样本不足 10 个、下载样本不足 10 个,任一成立;
@@ -14,10 +16,6 @@ import (
 //     (down 的节点按 0 分计入);覆盖率不足 0.8 是 pending,有 down 是 attention,否则 85 / 75 / 60 分档。
 
 const (
-	wLatency  = 40.0
-	wDownload = 30.0
-	wJitter   = 30.0
-
 	// 探测结果的「新鲜」时限:最近一次检测比现在早这么久(或在将来)就是 stale。
 	// 上游按节点从带宽管理器取这个时限、取不到用 10 分钟;这里没有按节点的来源,统一 10 分钟。
 	defaultFreshMs = int64(10 * 60 * 1000)
@@ -103,7 +101,7 @@ type evaluated struct {
 }
 
 // evaluate 把一个节点 24 小时的统计和下载汇总折成状态与分数。nowMs 是现在,periodMs 是测速周期,freshMs 是新鲜时限。
-func evaluate(sm summary, dl *download, nowMs, periodMs, freshMs int64) evaluated {
+func evaluate(sm summary, dl *download, nowMs, periodMs, freshMs int64, w scoreweights.Weights) evaluated {
 	var ev evaluated
 	ev.Checks = sm.Success + sm.Failure
 	if ev.Checks > 0 {
@@ -144,9 +142,22 @@ func evaluate(sm summary, dl *download, nowMs, periodMs, freshMs int64) evaluate
 				sv += w * interp(*v, k)
 			}
 		}
-		add(ev.Latency, wLatency, latencyKnots)
-		add(ev.Download, wDownload, downloadKnots)
-		add(ev.Jitter, wJitter, jitterKnots)
+		add(ev.Latency, w.Latency, latencyKnots)
+		add(ev.Download, w.Download, downloadKnots)
+		add(ev.Jitter, w.Jitter, jitterKnots)
+		// 权重可以被调成 0:有测到的项权重全是 0 时,按等权重算,避免 0/0。
+		if sw == 0 {
+			sw, sv = 0, 0
+			add2 := func(v *float64, k []knot) {
+				if v != nil {
+					sw++
+					sv += interp(*v, k)
+				}
+			}
+			add2(ev.Latency, latencyKnots)
+			add2(ev.Download, downloadKnots)
+			add2(ev.Jitter, jitterKnots)
+		}
 		sc := int(math.Floor(sv/sw + 0.5))
 		ev.Score = &sc
 		ev.Provisional = ev.Download == nil || ev.Jitter == nil ||

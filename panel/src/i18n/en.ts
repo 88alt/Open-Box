@@ -2348,12 +2348,9 @@ const en = {
   bandwidthSettingsTitle: 'Bandwidth testing',
   bandwidthPeriod: 'Shared bandwidth test interval',
   bandwidthHours: 'hours',
-  bandwidthPeriodSummary: 'Shared bandwidth test interval: {hours} h',
   bandwidthDownloadCap: 'Download limit per test',
   bandwidthDaily:
-    '{count} unique eligible nodes × {times} tests/day: up to {size}/day at the current limit.',
-  bandwidthBudgetHint:
-    'Only enabled subscriptions and groups are tested. Each effective node shares one test across subscriptions and groups. This estimates periodic download payload; initial/new-node tests, protocol overhead and provider multipliers are additional. Clients never run bandwidth tests.',
+    '{count} unique eligible nodes, at most {times} tests per node on any day. Up to {size}/day at the current limit.',
   bandwidthHealthFirst:
     'Availability comes first. Confirmed failed nodes and nodes awaiting recovery confirmation are excluded regardless of past bandwidth. Missing bandwidth data does not mean a node is unavailable.',
   bandwidthOff: 'When disabled',
@@ -2468,6 +2465,38 @@ const en = {
   nodeInfoIpTypeSource: 'IP type source',
   qualityPreviousScore: 'Previous score',
   nodeScoreWeightJitter: 'Jitter',
+  nodeScoreWeights: 'Node scoring weights',
+  nodeScoreWeightLatency: 'Latency',
+  nodeScoreWeightDownload: 'Bandwidth',
+  nodeScoreWeightFirstDivider: 'Divider between latency and bandwidth',
+  nodeScoreWeightSecondDivider: 'Divider between bandwidth and jitter',
+  nodeScoreWeightValues: 'Latency {latency}%, bandwidth {download}%, jitter {jitter}%',
+  bandwidthDays: 'days',
+  bandwidthPeriodUnit: 'Bandwidth test interval unit',
+  bandwidthPeriodInvalid: 'Enter a valid interval of at least one hour.',
+  bandwidthSettingsHelpLabel: '{title} help',
+  bandwidthHelpCurrent: 'Current settings',
+  bandwidthHelpCurrentTest: 'Bandwidth test every {hours} h, up to {maxMB} MB per test',
+  bandwidthHelpEditLocation: 'Edit in Settings → Backend Settings → {section}',
+  bandwidthHelpLoading: 'Loading…',
+  bandwidthHelpUnavailable: 'Could not load saved values',
+  bandwidthSettingsHelpExampleHeading: 'Example',
+  bandwidthSettingsHelpIntro:
+    'The router downloads test data through eligible nodes to estimate download speed. Subscriptions with periodic bandwidth checks and groups with node scoring can add nodes to the test schedule. The same node shares one test across subscriptions and groups.',
+  bandwidthSettingsHelpInterval: 'How often the router schedules a test for each eligible node.',
+  bandwidthSettingsHelpCap:
+    'The maximum amount of data one test may download. A test can end before reaching the limit.',
+  bandwidthSettingsHelpExample:
+    'With a 2-hour interval and a 64 MB limit, 99 unique nodes can run 12 tests each per day. If every test reaches the limit, that is about 76.03 GB/day. Initial tests, tests of newly added nodes, protocol overhead and provider multipliers are additional.',
+  nodeScoreWeightsHelpIntro:
+    'The router converts latency, download bandwidth and HTTP timing variation to scores from 0 to 100, then combines them using these weights. The defaults are 40%, 30% and 30%. A weight of 0% excludes that metric from the score.',
+  nodeScoreWeightsHelpDrag:
+    'Drag either divider to adjust the two neighboring weights. The total stays at 100%. Use the arrow keys to adjust by 1 percentage point, or Shift + arrow keys to adjust by 0.1.',
+  nodeScoreWeightsHelpExample:
+    'Both nodes are healthy and have valid measurements. In an automatic group with node scoring enabled, B ranks higher with the default weights. Raising the latency weight to 70% puts A ahead.',
+  nodeScoreWeightMetric: 'Metric',
+  nodeScoreWeightsDefaultExample: 'Score (40 / 30 / 30)',
+  nodeScoreWeightsAdjustedExample: 'Score (70 / 15 / 15)',
 }
 
 export type LANG_MESSAGE = typeof en

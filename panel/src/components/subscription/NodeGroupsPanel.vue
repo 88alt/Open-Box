@@ -358,7 +358,6 @@
               >
                 <QuestionMarkCircleIcon class="h-4 w-4" />
               </button>
-              <span class="text-base-content/60 text-xs">{{ $t('bandwidthPeriodSummary', { hours: bandwidthSettings.intervalHours }) }}</span>
             </div>
           </div>
           <!-- 测速地址 + 可接受状态码:单独排一整行,不挤在规则 / 间隔 / 容差那一行里 -->

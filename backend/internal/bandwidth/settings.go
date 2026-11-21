@@ -10,19 +10,27 @@ import (
 // Settings 对应档案 bandwidth / OpenboxBandwidthSettings。
 type Settings struct {
 	IntervalHours int `json:"intervalHours"`
-	MaxDownloadMB int `json:"maxDownloadMB"`
+	// IntervalUnit 是面板上周期的显示单位("hours" / "days");IntervalHours 始终是换算后的小时数。
+	IntervalUnit  string `json:"intervalUnit"`
+	MaxDownloadMB int    `json:"maxDownloadMB"`
 }
+
+// 周期显示单位。
+const (
+	UnitHours = "hours"
+	UnitDays  = "days"
+)
 
 const (
 	minIntervalHours = 1
-	maxIntervalHours = 24
+	maxIntervalHours = 720
 	minDownloadMB    = 1
 	maxDownloadMB    = 1024
 )
 
 // DefaultSettings 默认测速参数。
 func DefaultSettings() Settings {
-	return Settings{IntervalHours: 6, MaxDownloadMB: 50}
+	return Settings{IntervalHours: 6, IntervalUnit: UnitHours, MaxDownloadMB: 50}
 }
 
 // NormalizeSettings 规整档案里的 bandwidth;非法返回错误信息(400)。
@@ -42,6 +50,13 @@ func NormalizeSettings(v any) (Settings, error) {
 			return Settings{}, fmt.Errorf("intervalHours must be an integer between %d and %d", minIntervalHours, maxIntervalHours)
 		}
 		out.IntervalHours = n
+	}
+	if x, ok := m["intervalUnit"]; ok {
+		u, isStr := x.(string)
+		if !isStr || (u != UnitHours && u != UnitDays) {
+			return Settings{}, fmt.Errorf("intervalUnit must be %q or %q", UnitHours, UnitDays)
+		}
+		out.IntervalUnit = u
 	}
 	if x, ok := m["maxDownloadMB"]; ok {
 		n, err := asInt(x)

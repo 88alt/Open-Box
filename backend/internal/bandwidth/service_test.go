@@ -16,6 +16,21 @@ func TestNormalizeSettings(t *testing.T) {
 	if _, err := NormalizeSettings(map[string]any{"intervalHours": float64(0)}); err == nil {
 		t.Fatal("expected error")
 	}
+	if s.IntervalUnit != UnitHours {
+		t.Fatalf("单位默认是小时: %+v", s)
+	}
+	// 周期可以超过一天(面板能按「天」输入),上限 30 天
+	if s, err := NormalizeSettings(map[string]any{"intervalHours": float64(72), "intervalUnit": "days"}); err != nil || s.IntervalHours != 72 || s.IntervalUnit != UnitDays {
+		t.Fatalf("%+v %v", s, err)
+	}
+	if _, err := NormalizeSettings(map[string]any{"intervalHours": float64(721)}); err == nil {
+		t.Fatal("超过 720 小时应拒绝")
+	}
+	for _, bad := range []any{"weeks", 3.0, nil} {
+		if _, err := NormalizeSettings(map[string]any{"intervalUnit": bad}); err == nil {
+			t.Fatalf("intervalUnit=%v 应拒绝", bad)
+		}
+	}
 }
 
 func TestQueue(t *testing.T) {

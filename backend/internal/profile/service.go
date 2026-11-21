@@ -9,6 +9,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/bandwidth"
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
+	"github.com/timeflysoon/Open-Box/backend/internal/scoreweights"
 	"github.com/timeflysoon/Open-Box/backend/internal/shareservers"
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
 )
@@ -112,6 +113,9 @@ func (s *Service) Patch(ctx context.Context, patch map[string]any) (map[string]a
 			return &ValidationError{Msg: err.Error()}
 		}
 		if err := normalizeBandwidth(clean); err != nil {
+			return &ValidationError{Msg: err.Error()}
+		}
+		if err := normalizeNodeScoreWeights(clean); err != nil {
 			return &ValidationError{Msg: err.Error()}
 		}
 		if err := normalizeServers(clean); err != nil {
@@ -301,6 +305,19 @@ func (a CoreAdapter) NormalizeGroups(ctx context.Context, groups []any) ([]any, 
 	return out, nil
 }
 
+func normalizeNodeScoreWeights(clean map[string]any) error {
+	v, ok := clean["nodeScoreWeights"]
+	if !ok {
+		return nil
+	}
+	w, err := scoreweights.Normalize(v)
+	if err != nil {
+		return err
+	}
+	clean["nodeScoreWeights"] = map[string]any{"latency": w.Latency, "download": w.Download, "jitter": w.Jitter}
+	return nil
+}
+
 func normalizeBandwidth(clean map[string]any) error {
 	v, ok := clean["bandwidth"]
 	if !ok {
@@ -312,6 +329,7 @@ func normalizeBandwidth(clean map[string]any) error {
 	}
 	clean["bandwidth"] = map[string]any{
 		"intervalHours": float64(norm.IntervalHours),
+		"intervalUnit":  norm.IntervalUnit,
 		"maxDownloadMB": float64(norm.MaxDownloadMB),
 	}
 	return nil

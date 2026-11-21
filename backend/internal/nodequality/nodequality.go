@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/scoreweights"
 	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
 )
@@ -80,6 +81,8 @@ type Service struct {
 	Conns func(ctx context.Context) (singbox.KernelSnapshot, error)
 	// Period 是带宽测速周期;nil 或 <=0 用 12 小时。下载样本超过两个周期不算「当前」。
 	Period func(ctx context.Context) time.Duration
+	// Weights 取档案里的评分权重;nil 或 ok=false 用默认 40 / 30 / 30。
+	Weights func(ctx context.Context) (scoreweights.Weights, bool)
 	// Bandwidth 取一个节点的下载测速历史(从旧到新);nil 时没有下载数据。不能在回调里再进本服务。
 	Bandwidth func(tag string) []BWSample
 	// History 取一个节点的延迟历史,图表里和自己攒的探测合并;nil 时只用自己攒的。不能在回调里再进本服务。

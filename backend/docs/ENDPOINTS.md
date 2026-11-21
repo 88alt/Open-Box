@@ -280,7 +280,8 @@
 
 相关的校验和字段(不在这三个接口里,但配套):
 
-- **档案 `bandwidth`**:`{intervalHours, maxDownloadMB}`,`intervalHours` 是 1~24 的整数、`maxDownloadMB` 是 1~1024 的整数,默认 6 小时和 50 MB;缺哪个键就补默认;不是对象或超出范围回 400。保存时会规整成这两个键。这个键是测速参数,不进 sing-box 配置,已列入 `profileKeyIgnored`,改它不会让服务状态误报「需要重启」。
+- **档案 `bandwidth`**:`{intervalHours, intervalUnit, maxDownloadMB}`,`intervalHours` 是 1~720 的整数(最长 30 天;面板可按「天」输入,折成小时存)、`intervalUnit` 是 `hours` / `days`(只决定面板怎么显示,默认 `hours`)、`maxDownloadMB` 是 1~1024 的整数,默认 6 小时和 50 MB;缺哪个键就补默认;不是对象、单位不认得或超出范围回 400。保存时会规整成这三个键。上限 720 小时是按「面板有天单位」推断的,上游 v0.1.472 的实际上限未核实。这个键是测速参数,不进 sing-box 配置,已列入 `profileKeyIgnored`,改它不会让服务状态误报「需要重启」。
+- **档案 `nodeScoreWeights`**:`{latency, download, jitter}`,节点评分三项权重(百分点)。三项必须齐全,每项 0~100 的数(可以是 0、可以有小数,按 10 位小数规整),合计 100(容许 1e-6 的浮点误差);没设就是 40 / 30 / 30;缺项、越界、合计不是 100 或不是对象回 400。`/api/openbox/node-quality` 的节点与订阅分数按它算:某项权重为 0 就不计入,测到的项权重全是 0 时按等权重算。和 `bandwidth` 一样已列入 `profileKeyIgnored`,改它不提示重启。**注意**:目前只有后端的节点质量评分用它;节点组(urltest / loadbalance / failover)在内核里的带宽择优还是内核自带的固定权重,见 STATUS「需要 core 配合」。
 - **节点组 `bandwidth`**:必须是布尔(启用带宽择优),可以不带;其他类型回 400「节点组 … 的 bandwidth 必须是布尔」。组上为真时由 core 把 `bandwidth: true` 写进 urltest / loadbalance 出站(和故障转移多节点自动页签里的内部 urltest),内核自己择优,**后端不改组成员顺序**。客户端配置的 `disableBandwidth` 选项不写。
 - **订阅 `bandwidthCheck`**:创建和修改订阅时落盘,只决定自动入队,不进 sing-box 配置。
 

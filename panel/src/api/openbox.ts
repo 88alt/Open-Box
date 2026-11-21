@@ -272,8 +272,10 @@ export interface OpenboxProfile {
   testExpectedStatus?: string
   // 每日流量这些分析数据留多久(月,1~36)
   traffic?: { keepMonths?: number }
-  // 带宽择优的统一测速参数:周期(小时,1~24,默认 2)、单次下载流量上限(MB,1~1024,默认 64)
+  // 带宽测试的统一参数:周期(小时,1~720)、周期的显示单位、单次下载流量上限(MB,1~1024)
   bandwidth?: OpenboxBandwidthSettings
+  // 节点评分权重(百分点,三项合计 100,可以为 0);没设置时是 40 / 30 / 30
+  nodeScoreWeights?: OpenboxNodeScoreWeights
   rulesetDir?: string
 }
 
@@ -838,9 +840,17 @@ export const recheckFailover = async (id: string, signal?: AbortSignal): Promise
 }
 
 // 带宽择优:所有启用的组共用一套测速参数,设置卡片改的就是档案里的 bandwidth
+export interface OpenboxNodeScoreWeights {
+  latency: number
+  download: number
+  jitter: number
+}
+
 export interface OpenboxBandwidthSettings {
-  // 统一测速周期(小时,1~24)
+  // 统一测速周期(小时,1~720);界面按「天」输入时也折成小时存
   intervalHours: number
+  // 周期在界面上的显示单位,只影响怎么显示,不影响实际周期
+  intervalUnit?: 'hours' | 'days'
   // 单次测试最多下载多少 MB(1~1024)
   maxDownloadMB: number
 }

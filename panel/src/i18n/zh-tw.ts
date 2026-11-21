@@ -2219,12 +2219,8 @@ const zhTW: LANG_MESSAGE = {
   bandwidthSettingsTitle: '帶寬測試',
   bandwidthPeriod: '統一帶寬測試周期',
   bandwidthHours: '小時',
-  bandwidthPeriodSummary: '統一帶寬測試周期：{hours} 小時',
   bandwidthDownloadCap: '單次下載流量上限',
-  bandwidthDaily:
-    '當前去重後 {count} 個符合條件的節點，每日 {times} 次，按當前上限預計最多消耗 {size}/天。',
-  bandwidthBudgetHint:
-    '只測試啟用定期檢查的訂閱與啟用帶寬擇優的組，同一實際節點跨訂閱與群組共用一次測試。此處估算週期性下載正文，不含首次/新增節點測試、協議開銷及機場流量倍率。客戶端不執行帶寬測試。',
+  bandwidthDaily: '去重後有 {count} 個符合條件的節點，單個節點一天最多測試 {times} 次，按目前上限最多消耗 {size}/天。',
   bandwidthHealthFirst:
     '節點健康、可用是第一前提。已確認故障及尚未確認恢復的節點繼續排除，歷史帶寬再高也不參與選擇。沒有帶寬記錄不等於節點不可用。',
   bandwidthOff: '關閉時',
@@ -2339,6 +2335,37 @@ const zhTW: LANG_MESSAGE = {
   nodeInfoIpTypeSource: 'IP 類型來源',
   qualityPreviousScore: '上次評分',
   nodeScoreWeightJitter: '抖動',
+  nodeScoreWeights: '評分權重',
+  nodeScoreWeightLatency: '延遲',
+  nodeScoreWeightDownload: '頻寬',
+  nodeScoreWeightFirstDivider: '延遲與頻寬分界',
+  nodeScoreWeightSecondDivider: '頻寬與抖動分界',
+  nodeScoreWeightValues: '延遲 {latency}%，頻寬 {download}%，抖動 {jitter}%',
+  bandwidthDays: '天',
+  bandwidthPeriodUnit: '頻寬測試週期單位',
+  bandwidthPeriodInvalid: '請輸入至少 1 小時的有效週期。',
+  bandwidthSettingsHelpLabel: '{title}說明',
+  bandwidthHelpCurrent: '目前設定',
+  bandwidthHelpCurrentTest: '頻寬測試每 {hours} 小時，每次最多 {maxMB} MB',
+  bandwidthHelpEditLocation: '在「設定 → 後端設定 → {section}」修改',
+  bandwidthHelpLoading: '正在讀取…',
+  bandwidthHelpUnavailable: '無法讀取已儲存的值',
+  bandwidthSettingsHelpExampleHeading: '範例',
+  bandwidthSettingsHelpIntro:
+    '路由器透過節點下載測試資料，估算節點的下載速度。啟用定期頻寬檢查的訂閱和啟用節點評分的群組會將符合條件的節點納入測速。同一個實際節點出現在多個訂閱或群組裡，也共用一次測試。',
+  bandwidthSettingsHelpInterval: '決定每個符合條件的節點隔多久安排一次測速。',
+  bandwidthSettingsHelpCap: '限制一次測速最多下載多少測試資料。測速可能提前結束。',
+  bandwidthSettingsHelpExample:
+    '週期設為 2 小時，單次上限設為 64 MB。若有 99 個去重後的節點，每個節點每天安排 12 次。每次都用滿上限時，99 × 12 × 64 MB 約為 76.03 GB/天。首次或新增節點測速、協定開銷和機場流量倍率另計。',
+  nodeScoreWeightsHelpIntro:
+    '系統把延遲、下載頻寬和 HTTP 抖動各自換算成 0–100 分，再按權重算出總分。HTTP 抖動反映多次 HTTP 探測的耗時波動。預設權重依次為 40%、30%、30%。某項設為 0%，這項就不計入總分。',
+  nodeScoreWeightsHelpDrag:
+    '拖曳任一分界點，會一起調整相鄰的兩項權重，合計始終為 100%。也可用方向鍵調整 1 個百分點，按住 Shift 時可微調 0.1 個百分點。',
+  nodeScoreWeightsHelpExample:
+    '兩個節點都健康，且各項測試資料有效。在啟用節點評分的自動擇優群組裡，預設權重下 B 得分更高。把延遲權重提高到 70% 後，A 得分更高。',
+  nodeScoreWeightMetric: '項目',
+  nodeScoreWeightsDefaultExample: '預設權重得分（40 / 30 / 30）',
+  nodeScoreWeightsAdjustedExample: '調整後得分（70 / 15 / 15）',
 }
 
 export default zhTW

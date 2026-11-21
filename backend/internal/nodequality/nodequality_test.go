@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/scoreweights"
 	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
 )
@@ -172,40 +173,40 @@ func TestEvaluateScoreAndProvisional(t *testing.T) {
 	now, period, fresh := t0.UnixMilli(), int64(12*hourMs), defaultFreshMs
 	dl := &download{At: now - 1000, Mbps: 50, Count: 10}
 	// 延时 100(90)、波动 10(90)、下载 50(70):(90×40 + 70×30 + 90×30) / 100 = 84
-	ev := evaluate(okSummary(100, 10, 10, 10), dl, now, period, fresh)
+	ev := evaluate(okSummary(100, 10, 10, 10), dl, now, period, fresh, scoreweights.Default())
 	if ev.State != "healthy" || ev.Score == nil || *ev.Score != 84 || ev.Provisional {
 		t.Fatalf("%+v score=%v", ev, ev.Score)
 	}
 	// 没下载:只按延时 + 波动归一,(90×40 + 90×30) / 70 = 90,且是暂估
-	ev = evaluate(okSummary(100, 10, 10, 10), nil, now, period, fresh)
+	ev = evaluate(okSummary(100, 10, 10, 10), nil, now, period, fresh, scoreweights.Default())
 	if ev.Score == nil || *ev.Score != 90 || !ev.Provisional || ev.Download != nil {
 		t.Fatalf("无下载:%+v score=%v", ev, ev.Score)
 	}
 	// 样本数不足 10 个 → 暂估
-	if ev = evaluate(okSummary(100, 10, 9, 10), dl, now, period, fresh); !ev.Provisional {
+	if ev = evaluate(okSummary(100, 10, 9, 10), dl, now, period, fresh, scoreweights.Default()); !ev.Provisional {
 		t.Fatal("延时样本不足该是暂估")
 	}
-	if ev = evaluate(okSummary(100, 10, 10, 9), dl, now, period, fresh); !ev.Provisional {
+	if ev = evaluate(okSummary(100, 10, 10, 9), dl, now, period, fresh, scoreweights.Default()); !ev.Provisional {
 		t.Fatal("波动样本不足该是暂估")
 	}
-	if ev = evaluate(okSummary(100, 10, 10, 10), &download{At: now - 1000, Mbps: 50, Count: 9}, now, period, fresh); !ev.Provisional {
+	if ev = evaluate(okSummary(100, 10, 10, 10), &download{At: now - 1000, Mbps: 50, Count: 9}, now, period, fresh, scoreweights.Default()); !ev.Provisional {
 		t.Fatal("下载样本不足该是暂估")
 	}
 	// 没有波动(只有一次成功探测)
 	sm := okSummary(100, 10, 1, 0)
 	sm.Jitter = nil
-	if ev = evaluate(sm, dl, now, period, fresh); ev.Score == nil || !ev.Provisional {
+	if ev = evaluate(sm, dl, now, period, fresh, scoreweights.Default()); ev.Score == nil || !ev.Provisional {
 		t.Fatalf("没波动也该给暂估分:%+v", ev)
 	}
 	// 不是 healthy 不给分
 	down := okSummary(100, 10, 10, 10)
 	down.LastOK = false
-	if ev = evaluate(down, dl, now, period, fresh); ev.State != "down" || ev.Score != nil {
+	if ev = evaluate(down, dl, now, period, fresh, scoreweights.Default()); ev.State != "down" || ev.Score != nil {
 		t.Fatalf("down 不该给分:%+v", ev)
 	}
 	// 没有延时(全失败)不给分
 	none := summary{Failure: 3, LastAt: now - 1000}
-	if ev = evaluate(none, dl, now, period, fresh); ev.Score != nil || ev.State != "down" {
+	if ev = evaluate(none, dl, now, period, fresh, scoreweights.Default()); ev.Score != nil || ev.State != "down" {
 		t.Fatalf("%+v", ev)
 	}
 }
@@ -214,17 +215,17 @@ func TestEvaluateDownloadFreshness(t *testing.T) {
 	now, period := t0.UnixMilli(), int64(12*hourMs)
 	sm := okSummary(100, 10, 10, 10)
 	// 超过一个周期但不到两个:还在用,标 downloadStale
-	ev := evaluate(sm, &download{At: now - 13*hourMs, Mbps: 40, Count: 10, LowerBound: true}, now, period, defaultFreshMs)
+	ev := evaluate(sm, &download{At: now - 13*hourMs, Mbps: 40, Count: 10, LowerBound: true}, now, period, defaultFreshMs, scoreweights.Default())
 	if ev.Download == nil || !ev.DownloadStale || !ev.LowerBound || ev.DownloadAt == nil {
 		t.Fatalf("%+v", ev)
 	}
 	// 满两个周期:不再算当前,但 downloadAt 还在
-	ev = evaluate(sm, &download{At: now - 24*hourMs, Mbps: 40, Count: 10}, now, period, defaultFreshMs)
+	ev = evaluate(sm, &download{At: now - 24*hourMs, Mbps: 40, Count: 10}, now, period, defaultFreshMs, scoreweights.Default())
 	if ev.Download != nil || ev.DownloadAt == nil {
 		t.Fatalf("%+v", ev)
 	}
 	// 在将来的样本也不算
-	ev = evaluate(sm, &download{At: now + hourMs, Mbps: 40, Count: 10}, now, period, defaultFreshMs)
+	ev = evaluate(sm, &download{At: now + hourMs, Mbps: 40, Count: 10}, now, period, defaultFreshMs, scoreweights.Default())
 	if ev.Download != nil {
 		t.Fatal("将来的下载样本不该算")
 	}
@@ -573,5 +574,34 @@ func TestOldFormatFileIsIgnored(t *testing.T) {
 	s2 := &Service{Store: s.Store, Now: c.now, Catalog: s.Catalog}
 	if r := query(t, s2, Query{}); r.Subscriptions[0].Checks != 0 {
 		t.Fatal("旧格式的文件应当忽略而不是报错")
+	}
+}
+
+func TestEvaluateCustomWeights(t *testing.T) {
+	now, period, fresh := t0.UnixMilli(), int64(12*hourMs), defaultFreshMs
+	dl := &download{At: now - 1000, Mbps: 50, Count: 10}
+	sm := okSummary(100, 10, 10, 10) // 延时 90、波动 90、下载 70
+	score := func(w scoreweights.Weights) int {
+		ev := evaluate(sm, dl, now, period, fresh, w)
+		if ev.Score == nil {
+			t.Fatal("没有分数")
+		}
+		return *ev.Score
+	}
+	if got := score(scoreweights.Default()); got != 84 {
+		t.Fatalf("默认 40/30/30 应是 84,得 %d", got)
+	}
+	// 下载权重 0:不计入,只剩延时和波动
+	if got := score(scoreweights.Weights{Latency: 50, Download: 0, Jitter: 50}); got != 90 {
+		t.Fatalf("下载 0%% 应是 90,得 %d", got)
+	}
+	// 下载占 100:只看下载(70)
+	if got := score(scoreweights.Weights{Latency: 0, Download: 100, Jitter: 0}); got != 70 {
+		t.Fatalf("只看下载应是 70,得 %d", got)
+	}
+	// 测到的项权重都是 0:退成等权重,不出 NaN
+	nodl := evaluate(sm, nil, now, period, fresh, scoreweights.Weights{Latency: 0, Download: 100, Jitter: 0})
+	if nodl.Score == nil || *nodl.Score != 90 {
+		t.Fatalf("测到的项权重全 0 应按等权重算 90: %+v", nodl.Score)
 	}
 }

@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/timeflysoon/Open-Box/backend/internal/scoreweights"
 )
 
 const (
@@ -236,6 +238,12 @@ func (s *Service) Query(ctx context.Context, q Query) (Result, error) {
 		}
 	}
 	periodMs := period.Milliseconds()
+	weights := scoreweights.Default()
+	if s.Weights != nil {
+		if w, ok := s.Weights(ctx); ok {
+			weights = w
+		}
+	}
 	fresh := defaultFreshMs
 	if s.FreshFor > 0 {
 		fresh = s.FreshFor.Milliseconds()
@@ -288,7 +296,7 @@ func (s *Service) Query(ctx context.Context, q Query) (Result, error) {
 			if hours != nil {
 				sm = hours.summarize(nowMs, union)
 			}
-			ev := evaluate(sm, downloadOf(bw[ni.Tag], nowMs, periodMs), nowMs, periodMs, fresh)
+			ev := evaluate(sm, downloadOf(bw[ni.Tag], nowMs, periodMs), nowMs, periodMs, fresh, weights)
 			rows = append(rows, nodeRow{ev: ev, up: sm.Up, down: sm.Down})
 			n := Node{
 				Availability: ev.Availability, Latency: ev.Latency, Jitter: ev.Jitter, Download: ev.Download,
