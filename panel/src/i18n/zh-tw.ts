@@ -2119,7 +2119,7 @@ const zhTW: LANG_MESSAGE = {
   clientRouteNameLabel: '名稱',
   clientRouteNamePlaceholder: '例如:客廳電視',
   clientRouteSourcesLabel: '終端',
-  clientRouteSourcesPlaceholder: '每行一個 IP 或網段,如 10.0.0.209 或 10.0.0.0/24',
+  clientRouteSourcesPlaceholder: '輸入 IP 或網段，如 10.0.0.209 或 10.0.0.0/24',
   clientRouteKnownLabel: '從已知終端新增',
   clientRouteKnownPlaceholder: '從 DHCP 租約 / 近期流量裡選',
   clientRouteOutboundLabel: '出站',
@@ -2137,7 +2137,7 @@ const zhTW: LANG_MESSAGE = {
   clientRouteBypassLabel: '不進核心（直連放行）',
   clientRouteBypassHint:
     '像 OpenClash 的黑名單:這些終端的流量在入口就放行,完全不經過核心,NAT 和沒裝時一樣——遊戲加速器、對 NAT 類型敏感的裝置用它。需要 auto_redirect;退到純 tun 相容模式時按「直連」出站處理。',
-  clientRouteMacsPlaceholder: '每行一個,如 aa:bb:cc:dd:ee:ff;從已知終端新增會自動帶上',
+  clientRouteMacsPlaceholder: '輸入 MAC 位址，如 aa:bb:cc:dd:ee:ff',
   clientRouteErrMacs: '無效的 MAC 位址:{value}',
   clientRouteErrNoMacs: '按 MAC 認終端,至少填一個 MAC 位址',
   clientRouteBypassBadge: '不進核心',
@@ -2169,10 +2169,8 @@ const zhTW: LANG_MESSAGE = {
   chainProxyNameLabel: '名稱',
   chainProxyNamePlaceholder: '例如:住宅-美國',
   chainProxyLinkLabel: '節點',
-  chainProxyLinkPlaceholder:
-    '貼上一條分享連結（socks5:// ss:// vless:// trojan:// 等）、HTTP 代理（http:// https:// 或住宅代理的 主機:連接埠:使用者名稱:密碼）,或一段 Clash / sing-box 節點設定',
-  chainProxyLinkHint:
-    '這個節點不直接連,而是經下面選的上游去連它。伺服器填網域也可以,網域由上游那頭解析。住宅代理商給的 http:// https:// 或 主機:連接埠:使用者名稱:密碼 都按 HTTP 代理接。',
+  chainProxyLinkPlaceholder: '使用者名稱:密碼{\'@\'}主機:連接埠',
+  chainProxyLinkHint: '也可貼上完整分享連結或節點設定。',
   chainProxyUpstreamLabel: '上游',
   chainProxyHint:
     '透過選定的節點或節點群組連線。',

@@ -1,5 +1,5 @@
 <template>
-  <!-- 新建 / 编辑一条终端分流规则:名称、终端(每行一个 IP 或网段,也可从已知终端里选)、出口 -->
+  <!-- 新建 / 编辑一条终端分流规则:名称、终端(IP 或网段 / MAC 标签输入,也可从已知终端里选)、出口 -->
   <DialogWrapper
     v-model="isOpen"
     :title="$t(route ? 'clientRouteEditTitle' : 'clientRouteAddTitle')"
@@ -34,18 +34,22 @@
             </a>
           </div>
         </div>
-        <textarea
+        <TagInput
           v-if="form.match === 'ip'"
-          v-model="form.sourcesText"
-          rows="4"
-          class="textarea textarea-sm w-full font-mono"
+          ref="addressInput"
+          key="ip"
+          v-model="form.sources"
+          :label="$t('clientRouteMatchIp')"
+          :separator="ADDRESS_SEPARATOR"
           :placeholder="$t('clientRouteSourcesPlaceholder')"
         />
-        <textarea
+        <TagInput
           v-else
-          v-model="form.macsText"
-          rows="4"
-          class="textarea textarea-sm w-full font-mono"
+          ref="addressInput"
+          key="mac"
+          v-model="form.macs"
+          :label="$t('clientRouteMatchMac')"
+          :separator="ADDRESS_SEPARATOR"
           :placeholder="$t('clientRouteMacsPlaceholder')"
         />
         <p class="text-base-content/50 text-xs">
@@ -201,11 +205,13 @@ import type { OpenboxClientRoute } from '@/api/openbox'
 import CustomDnsFields from '@/components/common/CustomDnsFields.vue'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import OutboundPicker, { type OutboundPickerOptions } from '@/components/common/OutboundPicker.vue'
+import TagInput from '@/components/common/TagInput.vue'
 import TextInput from '@/components/common/TextInput.vue'
 import { useAnchoredDropdown } from '@/composables/anchoredDropdown'
 import { createDnsDraft, dnsDraftError, dnsDraftValue } from '@/helper/customDns'
 import { showNotification } from '@/helper/notification'
 import { getDeviceName } from '@/helper/sourceip'
+import { ADDRESS_SEPARATOR } from '@/helper/tagInput'
 import { CheckIcon, ChevronDownIcon } from '@heroicons/vue/24/outline'
 import { computed, reactive, ref, useId, watch } from 'vue'
 
@@ -235,10 +241,12 @@ const form = reactive({
   name: '',
   match: 'ip' as ClientMatch,
   mode: 'route' as ClientMode,
-  sourcesText: '',
+  sources: [] as string[],
   outbound: '',
-  macsText: '',
+  macs: [] as string[],
 })
+// 终端输入框:保存前把还没回车的那一段也收成标签
+const addressInput = ref<{ commit: () => void } | null>(null)
 
 // 终端按 IP / 网段认,还是按 MAC 认(编辑框里二选一)
 const MATCH_TABS: { value: ClientMatch; label: string }[] = [
@@ -267,30 +275,29 @@ watch(
     form.id = r?.id || newId()
     form.enabled = r ? r.enabled !== false : true
     form.name = r?.name || ''
-    form.sourcesText = (r?.sources || []).join('\n')
+    form.sources = [...(r?.sources || [])]
     form.outbound = r?.outbound || ''
     form.mode = r?.admit ? 'admit' : r?.bypass ? 'bypass' : 'route'
     form.match = r?.match === 'ip' || r?.match === 'mac' ? r.match : (r?.bypass || r?.admit) && r?.macs?.length ? 'mac' : 'ip'
-    form.macsText = (r?.macs || []).join('\n')
+    form.macs = [...(r?.macs || [])]
     dnsDraft.value = createDnsDraft(r?.dns)
     dnsOpen.value = false
   },
 )
 
-const sourceLines = () => form.sourcesText.split('\n').map((x) => x.trim()).filter(Boolean)
-const hasSource = (ip: string) => sourceLines().includes(ip) || sourceLines().includes(`${ip}/32`)
-const macLines = () => form.macsText.split(/[\n,;\s]+/).map((x) => x.trim().toLowerCase()).filter(Boolean)
+const hasSource = (ip: string) => form.sources.includes(ip) || form.sources.includes(`${ip}/32`)
+const macLines = () => form.macs.map((x) => x.trim().toLowerCase()).filter(Boolean)
 const hasPicked = (c: { ip: string; mac?: string }) =>
   form.match === 'mac' ? Boolean(c.mac) && macLines().includes((c.mac || '').toLowerCase()) : hasSource(c.ip)
 // 从已知终端加:按 IP 认的加 IP,按 MAC 认的加租约里的 MAC
 const addKnown = (c: { ip: string; mac?: string }) => {
+  if (hasPicked(c)) return
   if (form.match === 'mac') {
     const mac = (c.mac || '').toLowerCase()
-    if (mac && !macLines().includes(mac)) form.macsText = [...macLines(), mac].join('\n')
+    if (mac) form.macs = [...macLines(), mac]
     return
   }
-  if (!c.ip || hasSource(c.ip)) return
-  form.sourcesText = [...sourceLines(), c.ip].join('\n')
+  if (c.ip) form.sources = [...form.sources, c.ip]
 }
 
 // 已知终端的浮层
@@ -343,12 +350,13 @@ const fail = (content: string, params?: Record<string, string>) => {
 // 和 server/engine/client-routes.mjs 的 normalizeMac 同一套:六组十六进制,冒号或横线
 const MAC = /^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/i
 const submit = () => {
+  addressInput.value?.commit()
   const name = form.name.trim()
   if (!name) return fail('clientRouteErrName')
   let sources: string[] = []
   let macs: string[] = []
   if (form.match === 'ip') {
-    sources = [...new Set(form.sourcesText.split(/[\n,;]+/).map((x) => x.trim()).filter(Boolean))]
+    sources = [...new Set(form.sources.map((x) => x.trim()).filter(Boolean))]
     if (!sources.length) return fail('clientRouteErrNoSources')
     const bad = sources.find((x) => !isIpOrCidr(x))
     if (bad) return fail('clientRouteErrSources', { value: bad })

@@ -2118,7 +2118,7 @@ const zh: LANG_MESSAGE = {
   clientRouteNameLabel: '名称',
   clientRouteNamePlaceholder: '例如:客厅电视',
   clientRouteSourcesLabel: '终端',
-  clientRouteSourcesPlaceholder: '每行一个 IP 或网段,如 10.0.0.209 或 10.0.0.0/24',
+  clientRouteSourcesPlaceholder: '输入 IP 或网段，如 10.0.0.209 或 10.0.0.0/24',
   clientRouteKnownLabel: '从已知终端添加',
   clientRouteKnownPlaceholder: '从 DHCP 租约 / 近期流量里选',
   clientRouteOutboundLabel: '出站',
@@ -2136,7 +2136,7 @@ const zh: LANG_MESSAGE = {
   clientRouteBypassLabel: '不进内核（直连放行）',
   clientRouteBypassHint:
     '像 OpenClash 的黑名单:这些终端的流量在入口就放行,完全不经过内核,NAT 和没装时一样——游戏加速器、对 NAT 类型敏感的设备用它。需要 auto_redirect;退到纯 tun 兼容模式时按「直连」出站处理。',
-  clientRouteMacsPlaceholder: '每行一个,如 aa:bb:cc:dd:ee:ff;从已知终端添加会自动带上',
+  clientRouteMacsPlaceholder: '输入 MAC 地址，如 aa:bb:cc:dd:ee:ff',
   clientRouteErrMacs: '无效的 MAC 地址:{value}',
   clientRouteErrNoMacs: '按 MAC 认终端,至少填一个 MAC 地址',
   clientRouteBypassBadge: '不进内核',
@@ -2168,10 +2168,8 @@ const zh: LANG_MESSAGE = {
   chainProxyNameLabel: '名称',
   chainProxyNamePlaceholder: '例如:住宅-美国',
   chainProxyLinkLabel: '节点',
-  chainProxyLinkPlaceholder:
-    '粘贴一条分享链接（socks5:// ss:// vless:// trojan:// 等）、HTTP 代理（http:// https:// 或住宅代理的 主机:端口:用户名:密码）,或一段 Clash / sing-box 节点配置',
-  chainProxyLinkHint:
-    '这个节点不直接连,而是经下面选的上游去连它。服务器填域名也可以,域名由上游那头解析。住宅代理商给的 http:// https:// 或 主机:端口:用户名:密码 都按 HTTP 代理接。',
+  chainProxyLinkPlaceholder: '用户名:密码{\'@\'}主机:端口',
+  chainProxyLinkHint: '也可粘贴完整分享链接或节点配置。',
   chainProxyUpstreamLabel: '上游',
   chainProxyHint:
     '通过选定的节点或节点组连接。',

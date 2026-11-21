@@ -158,47 +158,56 @@
           />
         </div>
 
-        <!-- 节点:「链接」粘一条分享链接 / 节点配置;「字段」按住宅代理商表格里的账号一栏栏填,保存时拼成链接 -->
+        <!-- 节点:「链接」粘一条分享链接 / 节点配置,也认「用户名:密码@主机:端口」;「字段」按住宅代理商表格里的账号一栏栏填。
+             协议(HTTP / HTTPS / SOCKS5)两种填法共用,保存时拼成链接 -->
         <div class="flex flex-col gap-1">
-          <div class="flex items-center justify-between gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <label class="text-xs font-medium">{{ $t('chainProxyLinkLabel') }}</label>
             <div
               role="tablist"
               class="tabs-box tabs tabs-xs w-fit"
             >
-              <a
+              <button
                 v-for="m in MODES"
                 :key="m.value"
+                type="button"
                 role="tab"
                 class="tab"
                 :class="mode === m.value && 'tab-active'"
+                :aria-selected="mode === m.value"
                 @click="setMode(m.value)"
-              >{{ $t(m.label) }}</a>
+              >{{ $t(m.label) }}</button>
+            </div>
+            <div
+              role="tablist"
+              class="tabs-box tabs tabs-xs ml-auto w-fit"
+            >
+              <button
+                v-for="s in SCHEMES"
+                :key="s.value"
+                type="button"
+                role="tab"
+                class="tab"
+                :class="fields.scheme === s.value && 'tab-active'"
+                :aria-selected="fields.scheme === s.value"
+                @click="setScheme(s.value)"
+              >{{ s.label }}</button>
             </div>
           </div>
 
           <template v-if="mode === 'link'">
             <textarea
-              v-model="draft.link"
+              :value="draft.link"
               rows="4"
               spellcheck="false"
               class="textarea textarea-sm w-full font-mono"
               :placeholder="$t('chainProxyLinkPlaceholder')"
+              @input="onLinkInput"
             />
             <p class="text-base-content/50 text-xs">{{ $t('chainProxyLinkHint') }}</p>
           </template>
           <template v-else>
-            <div class="grid grid-cols-2 gap-2 sm:grid-cols-[7rem_1fr_6rem]">
-              <select
-                v-model="fields.scheme"
-                class="select select-sm w-full"
-              >
-                <option
-                  v-for="s in SCHEMES"
-                  :key="s.value"
-                  :value="s.value"
-                >{{ s.label }}</option>
-              </select>
+            <div class="grid grid-cols-[minmax(0,1fr)_6rem] gap-2">
               <input
                 v-model.trim="fields.host"
                 type="text"
@@ -477,8 +486,6 @@ const emptyFields = () => ({ scheme: 'http' as Scheme, host: '', port: '', usern
 const mode = ref<Mode>('fields')
 const fields = ref(emptyFields())
 
-// 只认「协议://[用户名:密码@]主机:端口」这一种形状;别的(ss:// vless:// 或一段配置)只能用「链接」填
-const LINK_RE = /^(https?|socks5):\/\/(?:([^:@/\s]*):([^@/\s]*)@)?(\[[^\]]+\]|[^:/\s@]+):(\d{1,5})\/?$/i
 const safeDecode = (text: string) => {
   try {
     return decodeURIComponent(text)
@@ -486,57 +493,106 @@ const safeDecode = (text: string) => {
     return text
   }
 }
-const parseLink = (link: string) => {
-  const m = LINK_RE.exec(link.trim())
-  if (!m) return null
+
+// 链接开头的协议;socks / socks5h 都算 SOCKS5。没有协议头(或是 ss:// vless:// 这类)返回 undefined
+const SCHEME_PREFIX = /^(https?|socks5h?|socks):\/\//i
+const schemeOf = (link: string): Scheme | undefined => {
+  const name = SCHEME_PREFIX.exec(link.trim())?.[1]?.toLowerCase()
+  return name === 'http' || name === 'https' ? name : name ? 'socks5' : undefined
+}
+
+// 没带协议头的简写补成完整链接:「主机:端口」「用户名:密码@主机:端口」「主机:端口:用户名:密码」;认不出来返回 ''
+const BARE_HOST = /^[A-Za-z0-9.-]+$|^\[[0-9A-Fa-f:.]+\]$/
+const BARE_PORT = /^\d{1,5}$/
+const completeBare = (text: string, scheme: Scheme): string => {
+  if (/\s|:\/\//.test(text)) return ''
+  const enc = encodeURIComponent
+  const at = text.lastIndexOf('@')
+  if (at > 0) {
+    const cred = text.slice(0, at)
+    const addr = text.slice(at + 1)
+    const colon = addr.lastIndexOf(':')
+    if (colon <= 0) return ''
+    const host = addr.slice(0, colon)
+    const port = addr.slice(colon + 1)
+    const split = cred.indexOf(':')
+    if (!BARE_HOST.test(host) || !BARE_PORT.test(port) || split <= 0) return ''
+    return `${scheme}://${enc(cred.slice(0, split))}:${enc(cred.slice(split + 1))}@${host}:${port}`
+  }
+  const parts = text.split(':')
+  if (parts.length === 2 && BARE_HOST.test(parts[0]) && BARE_PORT.test(parts[1])) return `${scheme}://${parts[0]}:${parts[1]}`
+  if (parts.length >= 4 && BARE_HOST.test(parts[0]) && BARE_PORT.test(parts[1]) && parts[2]) {
+    return `${scheme}://${enc(parts[2])}:${enc(parts.slice(3).join(':'))}@${parts[0]}:${parts[1]}`
+  }
+  return ''
+}
+
+// 链接 / 简写拆成字段;不是「协议://[账号@]主机:端口」这种形状(ss:// vless:// 或一段配置)就拆不了
+const LINK_RE = /^(?:https?|socks5h?|socks):\/\/(?:([^@/?#]*)@)?(\[[^\]]+\]|[^:/?#@]+):(\d{1,5})(?:[/?#].*)?$/i
+const parseLink = (raw: string, fallback: Scheme = 'http') => {
+  const text = raw.trim()
+  const link = completeBare(text, fallback) || text
+  const scheme = schemeOf(link)
+  const m = LINK_RE.exec(link)
+  if (!scheme || !m) return null
+  const auth = m[1] ?? ''
+  const split = auth.indexOf(':')
   return {
-    scheme: m[1].toLowerCase() as Scheme,
-    host: m[4].replace(/^\[|\]$/g, ''),
-    port: m[5],
-    username: safeDecode(m[2] ?? ''),
-    password: safeDecode(m[3] ?? ''),
+    scheme,
+    host: m[2],
+    port: m[3],
+    username: safeDecode(split >= 0 ? auth.slice(0, split) : auth),
+    password: split >= 0 ? safeDecode(auth.slice(split + 1)) : '',
   }
 }
-const composeLink = (): string | null => {
+const composeLink = (): string => {
   const f = fields.value
-  const host = f.host.trim()
-  const port = Number(f.port)
-  if (!host || !Number.isInteger(port) || port < 1 || port > 65535) return null
-  const hostText = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
-  const auth = f.username ? `${encodeURIComponent(f.username)}:${encodeURIComponent(f.password)}@` : ''
-  return `${f.scheme}://${auth}${hostText}:${port}`
+  const auth = f.username || f.password ? `${encodeURIComponent(f.username.trim())}:${encodeURIComponent(f.password)}@` : ''
+  return `${f.scheme}://${auth}${f.host.trim()}:${f.port.trim()}`
+}
+
+// 「链接」里手输 / 粘贴时,协议头跟着协议标签走
+const onLinkInput = (event: Event) => {
+  draft.value.link = (event.target as HTMLTextAreaElement).value
+  fields.value.scheme = schemeOf(draft.value.link) ?? fields.value.scheme
+}
+
+// 切协议标签:「链接」里已经带着协议头的,把协议头一并换掉
+const setScheme = (next: Scheme) => {
+  if (mode.value === 'link' && schemeOf(draft.value.link) && next !== fields.value.scheme) {
+    draft.value.link = draft.value.link.trim().replace(SCHEME_PREFIX, `${next}://`)
+  }
+  fields.value.scheme = next
 }
 
 const setMode = (next: Mode) => {
   if (mode.value === next) return
-  if (next === 'link') {
-    // 字段填全了就把拼好的链接带过去,免得切过去是一片空白
-    const link = composeLink()
-    if (link) draft.value.link = link
-  } else {
-    const parsed = parseLink(draft.value.link)
-    if (parsed) fields.value = parsed
+  if (next === 'fields') {
+    // 链接拆得开就拆进字段,拆不开字段清空(协议留着)
+    fields.value = parseLink(draft.value.link, fields.value.scheme) ?? { ...emptyFields(), scheme: fields.value.scheme }
+  } else if (fields.value.host.trim() && fields.value.port.trim()) {
+    // 字段填了主机和端口就把链接带过去,免得切过去是一片空白;能写成简写的就写简写
+    const full = composeLink()
+    const f = fields.value
+    const bare = `${f.username || f.password ? `${f.username.trim()}:${f.password}@` : ''}${f.host.trim()}:${f.port.trim()}`
+    draft.value.link = completeBare(bare, f.scheme) === full ? bare : full
   }
   mode.value = next
 }
 
-// 当前这种填法下要保存 / 测速的链接;填得不对就提示并返回 null
-const effectiveLink = (): string | null => {
-  if (mode.value === 'link') {
-    const link = draft.value.link.trim()
-    if (!link) {
-      showNotification({ content: 'chainProxyErrLink', type: 'alert-error' })
-      return null
-    }
-    return link
+// 当前这种填法下要保存 / 测速的链接;填得不对返回要提示的文案键。先查链接本身,再查上游
+const resolveLink = (): { link: string } | { error: string } => {
+  let link = draft.value.link.trim()
+  if (mode.value === 'fields') {
+    if (!fields.value.host.trim()) return { error: 'chainProxyErrHost' }
+    const port = Number(fields.value.port.trim())
+    if (!/^\d{1,5}$/.test(fields.value.port.trim()) || port < 1 || port > 65535) return { error: 'chainProxyErrPort' }
+    link = composeLink()
+  } else {
+    link = completeBare(link, fields.value.scheme) || link
   }
-  if (!fields.value.host.trim()) {
-    showNotification({ content: 'chainProxyErrHost', type: 'alert-error' })
-    return null
-  }
-  const link = composeLink()
-  if (!link) showNotification({ content: 'chainProxyErrPort', type: 'alert-error' })
-  return link
+  if (!link) return { error: 'chainProxyErrLink' }
+  return draft.value.upstream.trim() ? { link } : { error: 'chainProxyErrUpstream' }
 }
 
 // ---------- 编辑 ----------
@@ -558,9 +614,10 @@ const openEditor = (chain: OpenboxChainProxy | null) => {
   dnsDraft.value = createDnsDraft(chain?.dns)
   dnsOpen.value = !!chain?.dns?.url
   // 新建默认按字段填;编辑时链接是标准的 http / socks5 就拆成字段,否则留在「链接」里
-  const parsed = chain ? parseLink(chain.link) : null
-  fields.value = parsed ?? emptyFields()
-  mode.value = !chain || parsed ? 'fields' : 'link'
+  const link = chain?.link ?? ''
+  const parsed = link ? parseLink(link) : null
+  fields.value = parsed ?? { ...emptyFields(), scheme: schemeOf(link) ?? 'http' }
+  mode.value = parsed || !link ? 'fields' : 'link'
   testResult.value = null
   showEditor.value = true
 }
@@ -582,12 +639,12 @@ const pickerOptions = computed(() => {
 
 const saveDraft = async () => {
   const name = draft.value.name.trim()
-  const upstream = draft.value.upstream.trim()
   if (!name) return showNotification({ content: 'chainProxyErrName', type: 'alert-error' })
-  if (!upstream) return showNotification({ content: 'chainProxyErrUpstream', type: 'alert-error' })
+  const resolved = resolveLink()
+  if ('error' in resolved) return showNotification({ content: resolved.error, type: 'alert-error' })
+  const { link } = resolved
+  const upstream = draft.value.upstream.trim()
   if (upstream === name) return showNotification({ content: 'chainProxyErrSelf', type: 'alert-error' })
-  const link = effectiveLink()
-  if (!link) return
   const dnsError = dnsDraftError(dnsDraft.value)
   if (dnsError) {
     dnsOpen.value = true
@@ -646,10 +703,10 @@ const requestChainTest = async (base: ChainTestBase) => {
 
 const runTest = async () => {
   if (testing.value) return
-  const link = effectiveLink()
-  if (!link) return
+  const resolved = resolveLink()
+  if ('error' in resolved) return showNotification({ content: resolved.error, type: 'alert-error' })
+  const { link } = resolved
   const upstream = draft.value.upstream.trim()
-  if (!upstream) return showNotification({ content: 'chainProxyErrUpstream', type: 'alert-error' })
   testing.value = true
   testResult.value = null
   try {

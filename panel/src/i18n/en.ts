@@ -2247,7 +2247,7 @@ const en = {
   clientRouteNameLabel: 'Name',
   clientRouteNamePlaceholder: 'e.g. Living room TV',
   clientRouteSourcesLabel: 'Clients',
-  clientRouteSourcesPlaceholder: 'One IP or CIDR per line, e.g. 10.0.0.209 or 10.0.0.0/24',
+  clientRouteSourcesPlaceholder: 'Enter an IP or CIDR, e.g. 10.0.0.209 or 10.0.0.0/24',
   clientRouteKnownLabel: 'Add a known client',
   clientRouteKnownPlaceholder: 'Pick from DHCP leases / recent traffic',
   clientRouteOutboundLabel: 'Outbound',
@@ -2265,8 +2265,7 @@ const en = {
   clientRouteBypassLabel: 'Bypass the kernel (direct)',
   clientRouteBypassHint:
     'Like an OpenClash blacklist: traffic from these devices is let through at the entry and never enters the kernel, so NAT behaves as if nothing were installed - use it for game accelerators and NAT-sensitive devices. Requires auto_redirect; in the pure-tun fallback mode it is handled as the direct outbound.',
-  clientRouteMacsPlaceholder:
-    'One per line, e.g. aa:bb:cc:dd:ee:ff; picking a known device fills it in',
+  clientRouteMacsPlaceholder: 'Enter a MAC address, e.g. aa:bb:cc:dd:ee:ff',
   clientRouteErrMacs: 'Invalid MAC address: {value}',
   clientRouteErrNoMacs: 'Matching by MAC: add at least one MAC address',
   clientRouteBypassBadge: 'Bypass kernel',
@@ -2299,10 +2298,8 @@ const en = {
   chainProxyNameLabel: 'Name',
   chainProxyNamePlaceholder: 'e.g. Residential-US',
   chainProxyLinkLabel: 'Node',
-  chainProxyLinkPlaceholder:
-    'Paste one share link (socks5:// ss:// vless:// trojan:// …), an HTTP proxy (http:// https:// or a residential host:port:user:pass), or a Clash / sing-box node snippet',
-  chainProxyLinkHint:
-    'This node is not dialed directly; it is reached through the upstream chosen below. A domain server is fine: the upstream resolves it. Residential http:// https:// or host:port:user:pass credentials are used as an HTTP proxy.',
+  chainProxyLinkPlaceholder: 'username:password{\'@\'}host:port',
+  chainProxyLinkHint: 'You can also paste a share link or node config.',
   chainProxyUpstreamLabel: 'Upstream',
   chainProxyHint:
     'Connect through the selected node or group.',
