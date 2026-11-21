@@ -537,6 +537,8 @@ const zh: LANG_MESSAGE = {
   bandwidthManualFailed: '带宽检测失败：{message}',
   bandwidthManualComplete: '{name}：{value} Mbps',
   subscriptionBandwidthCheck: '启用带宽定期检查',
+  subscriptionDirectUrl: '订阅链接直连',
+  subscriptionDirectNodes: '节点直连',
   subscriptionBandwidthHelpTitle: '带宽定期检查',
   subscriptionBandwidthHelp:
     '路由器按统一带宽测试周期检测本订阅的有效节点。只对已确认健康的节点测速，健康检查和手动测速优先。',
@@ -1167,6 +1169,8 @@ const zh: LANG_MESSAGE = {
   subscriptionNamePlaceholder: '比如"我的订阅"',
   subscriptionUrlLabel: '订阅链接',
   subscriptionUrlAdd: '添加订阅',
+  subscriptionUrlDisable: '停用这条链接',
+  subscriptionUrlEnable: '启用这条链接',
   subscriptionAutoUpdate: '定期更新',
   subscriptionEnabledToggle: '启用这条订阅;关掉后它的节点不进内核',
   subscriptionDisabledBadge: '已停用',

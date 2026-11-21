@@ -224,7 +224,7 @@
 </template>
 
 <script setup lang="ts">
-import type { OpenboxLatencyResult, OpenboxRenameOptions, OpenboxSubscriptionNodeDns, OpenboxSubscriptionPreview, OpenboxSkippedNode } from '@/api/openbox'
+import type { OpenboxLatencyResult, OpenboxRenameOptions, OpenboxSubscriptionNodeDns, OpenboxSubscriptionPreview, OpenboxSubscriptionUrlEntry, OpenboxSkippedNode } from '@/api/openbox'
 import { testNodeLatency } from '@/api/openbox'
 import LatencyPill from '@/components/common/LatencyPill.vue'
 import { latencyReasonText } from '@/helper/latencyReason'
@@ -247,7 +247,7 @@ const props = defineProps<{
   preview: OpenboxSubscriptionPreview | null
   overrides?: Record<string, string>
   // 测速要重新解析订阅,所以要把来源和当前规则一并带上
-  source?: { url?: string; urls?: string[]; content?: string; name?: string; loginId?: string; userAgent?: string } | null
+  source?: { url?: string; urls?: string[]; urlEntries?: OpenboxSubscriptionUrlEntry[]; content?: string; name?: string; loginId?: string; userAgent?: string } | null
   renameOptions?: OpenboxRenameOptions
   // 这份订阅的节点域名专用解析;测速要按同样的解析重新拉订阅
   nodeDns?: OpenboxSubscriptionNodeDns | null

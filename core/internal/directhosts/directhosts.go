@@ -58,17 +58,43 @@ func Collect(nodes, subscriptions any) Hosts {
 			domains.add(h)
 		}
 	}
+	// directSubscription / directNodes 是订阅上的两个开关,没设置(或不是 false)都按开。
+	// directNodes 关了的订阅,它名下节点的服务器地址不进直连。
+	noDirectNodes := map[string]bool{}
+	if arr, ok := subscriptions.([]any); ok {
+		for _, s := range arr {
+			if jsx.Get(s, "directNodes") == false {
+				if id, ok := jsx.Get(s, "id").(string); ok && id != "" {
+					noDirectNodes[id] = true
+				}
+			}
+		}
+	}
 	if arr, ok := nodes.([]any); ok {
 		for _, n := range arr {
+			if id, ok := jsx.Get(n, "subscriptionId").(string); ok && noDirectNodes[id] {
+				continue
+			}
 			add(jsx.Get(n, "server"))
 		}
 	}
 	if arr, ok := subscriptions.([]any); ok {
 		for _, s := range arr {
-			// 一条订阅可以有多个地址(urls);老记录只有 url
+			if jsx.Get(s, "directSubscription") == false {
+				continue
+			}
+			// 一条订阅可以有多个地址:有 urlEntries 就只取启用的;否则看 urls,老记录只有 url
 			urls := []any{jsx.Get(s, "url")}
 			if l, ok := jsx.Get(s, "urls").([]any); ok && len(l) > 0 {
 				urls = l
+			}
+			if l, ok := jsx.Get(s, "urlEntries").([]any); ok && len(l) > 0 {
+				urls = urls[:0:0]
+				for _, e := range l {
+					if jsx.Get(e, "enabled") != false {
+						urls = append(urls, jsx.Get(e, "url"))
+					}
+				}
 			}
 			for _, raw := range urls {
 				str, isStr := raw.(string)

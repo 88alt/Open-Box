@@ -363,6 +363,11 @@ export interface OpenboxSubscriptionAccount {
   expiryKnown?: boolean
 }
 
+export interface OpenboxSubscriptionUrlEntry {
+  url: string
+  enabled: boolean
+}
+
 export interface OpenboxSubscription {
   id: string
   name: string
@@ -372,8 +377,14 @@ export interface OpenboxSubscription {
   // 停用(false)的订阅节点不进内核,重启内核生效;没有这个字段 = 启用
   enabled?: boolean
   autoUpdate?: OpenboxSubscriptionAutoUpdate | null
-  // 全部订阅地址(可以有多个,节点合在一起);url 是其中第一条,老记录只有 url
+  // 全部订阅地址(可以有多个,节点合在一起);url 是其中第一条,老记录只有 url。
+  // 有 urlEntries 时 url / urls 只剩启用的那些
   urls?: string[]
+  // 带「启用 / 停用」的链接列表;停用的链接留在列表里,但不拉取、也不进直连
+  urlEntries?: OpenboxSubscriptionUrlEntry[]
+  // 订阅链接直连 / 节点直连:关了就不把这条订阅的链接主机 / 节点服务器地址加进直连;没有这个字段 = 开
+  directSubscription?: boolean
+  directNodes?: boolean
   // 「节点」模式(粘贴保存)的订阅没有 url,内容存在这里
   content?: string
   format: string
@@ -600,6 +611,8 @@ export const deleteSubscriptionShare = async (id: string): Promise<void> => {
 export const previewSubscription = async (payload: {
   url?: string
   urls?: string[]
+  urlEntries?: OpenboxSubscriptionUrlEntry[]
+  directSubscription?: boolean
   content?: string
   userAgent?: string
   loginId?: string
@@ -634,6 +647,9 @@ export const loginSubscription = async (payload: {
 export const createSubscription = async (payload: {
   url?: string
   urls?: string[]
+  urlEntries?: OpenboxSubscriptionUrlEntry[]
+  directSubscription?: boolean
+  directNodes?: boolean
   content?: string
   userAgent?: string
   loginId?: string
@@ -653,7 +669,7 @@ export const createSubscription = async (payload: {
 // so a plain rename works even while the provider is unreachable (see subscriptions.mjs PATCH).
 export const updateSubscription = async (
   id: string,
-  payload: { name?: string; url?: string; urls?: string[]; content?: string; userAgent?: string; loginId?: string; renameOptions?: OpenboxRenameOptions; autoUpdate?: OpenboxSubscriptionAutoUpdate; nodeDns?: OpenboxSubscriptionNodeDns | null; enabled?: boolean },
+  payload: { name?: string; url?: string; urls?: string[]; urlEntries?: OpenboxSubscriptionUrlEntry[]; directSubscription?: boolean; directNodes?: boolean; content?: string; userAgent?: string; loginId?: string; renameOptions?: OpenboxRenameOptions; autoUpdate?: OpenboxSubscriptionAutoUpdate; nodeDns?: OpenboxSubscriptionNodeDns | null; enabled?: boolean },
 ): Promise<OpenboxSubscriptionSaveResult> => {
   return requestJson(`/api/openbox/subscriptions/${encodeURIComponent(id)}`, {
     method: 'PATCH',
@@ -675,6 +691,7 @@ export interface OpenboxLatencyResult {
 export const testNodeLatency = async (payload: {
   url?: string
   urls?: string[]
+  urlEntries?: OpenboxSubscriptionUrlEntry[]
   content?: string
   userAgent?: string
   loginId?: string

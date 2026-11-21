@@ -171,3 +171,30 @@ func TestNodeDirectNamesAndRuleSets(t *testing.T) {
 		t.Errorf("NodeDirectRuleSets = %#v", got)
 	}
 }
+
+func TestCollectDirectSwitches(t *testing.T) {
+	subs := []any{
+		M{"id": "a", "url": "https://sub-a.example.com/x"},                              // 没设置:都开
+		M{"id": "b", "url": "https://sub-b.example.com/x", "directSubscription": false}, // 链接不直连
+		M{"id": "c", "url": "https://sub-c.example.com/x", "directNodes": false},        // 节点不直连
+		M{"id": "d", "url": "https://sub-d.example.com/x", "directSubscription": true, "directNodes": true},
+	}
+	nodes := []any{
+		M{"server": "n-a.example.com", "subscriptionId": "a"},
+		M{"server": "n-b.example.com", "subscriptionId": "b"},
+		M{"server": "n-c.example.com", "subscriptionId": "c"},
+		M{"server": "n-x.example.com"}, // 没有订阅归属(手动节点等):照旧直连
+	}
+	collect(t, nodes, subs,
+		[]string{"n-a.example.com", "n-b.example.com", "n-x.example.com", "sub-a.example.com", "sub-c.example.com", "sub-d.example.com"},
+		[]string{})
+}
+
+func TestCollectURLEntriesSkipDisabled(t *testing.T) {
+	subs := []any{M{"id": "a", "url": "https://one.example.com/x", "urls": []any{"https://one.example.com/x", "https://two.example.com/x"},
+		"urlEntries": []any{
+			M{"url": "https://one.example.com/x", "enabled": true},
+			M{"url": "https://two.example.com/x", "enabled": false},
+		}}}
+	collect(t, nil, subs, []string{"one.example.com"}, []string{})
+}

@@ -120,7 +120,7 @@ func cleanRecord(r Record, nodeCount int, now int64) (Record, error) {
 		}
 		return Record{}, bad("订阅「%s」:%v", name, err)
 	}
-	src, err := normalizeSource(Source{URL: r.URL, URLs: r.URLs, Content: r.Content, UserAgent: r.UserAgent})
+	src, err := normalizeSource(Source{URL: r.URL, URLs: r.URLs, URLEntries: r.URLEntries, Content: r.Content, UserAgent: r.UserAgent})
 	if err != nil {
 		return fail(err)
 	}

@@ -91,6 +91,10 @@ type subInput struct {
 	URL     string         `json:"url"`
 	URLs    []string       `json:"urls,omitempty"`
 	NodeDNS map[string]any `json:"nodeDns"`
+	// 下面三个影响「订阅和节点站点直连」的主机集合
+	URLEntries         []subs.URLEntry `json:"urlEntries,omitempty"`
+	DirectSubscription *bool           `json:"directSubscription,omitempty"`
+	DirectNodes        *bool           `json:"directNodes,omitempty"`
 }
 
 // ComputeFingerprint 按原因分组算指纹。同样的输入永远得到同样的结果(map 键由 encoding/json 排序)。
@@ -115,7 +119,7 @@ func ComputeFingerprint(in FingerprintInput) Fingerprint {
 	var subList []subInput
 	for _, r := range in.Subs {
 		if r.Enabled {
-			subList = append(subList, subInput{ID: r.ID, Name: r.Name, URL: r.URL, URLs: r.URLs, NodeDNS: r.NodeDNS})
+			subList = append(subList, subInput{ID: r.ID, Name: r.Name, URL: r.URL, URLs: r.URLs, NodeDNS: r.NodeDNS, URLEntries: r.URLEntries, DirectSubscription: r.DirectSubscription, DirectNodes: r.DirectNodes})
 		}
 	}
 	parts[ReasonNodes]["subscriptions"] = subList

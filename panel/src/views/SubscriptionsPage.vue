@@ -137,6 +137,7 @@
       v-model="showEditDialog"
       :subscription="editing"
       @saved="handleEdited"
+      @refresh="handleSaved"
     />
 
     <DialogWrapper

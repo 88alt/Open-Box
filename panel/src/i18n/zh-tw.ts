@@ -538,6 +538,8 @@ const zhTW: LANG_MESSAGE = {
   bandwidthManualFailed: '頻寬檢測失敗：{message}',
   bandwidthManualComplete: '{name}：{value} Mbps',
   subscriptionBandwidthCheck: '啟用頻寬定期檢查',
+  subscriptionDirectUrl: '訂閱連結直連',
+  subscriptionDirectNodes: '節點直連',
   subscriptionBandwidthHelpTitle: '頻寬定期檢查',
   subscriptionBandwidthHelp:
     '路由器按統一頻寬測試週期檢測本訂閱的有效節點。只對已確認健康的節點測速，健康檢查與手動測速優先。',
@@ -1168,6 +1170,8 @@ const zhTW: LANG_MESSAGE = {
   subscriptionNamePlaceholder: '例如「我的訂閱」',
   subscriptionUrlLabel: '訂閱連結',
   subscriptionUrlAdd: '新增訂閱',
+  subscriptionUrlDisable: '停用這條連結',
+  subscriptionUrlEnable: '啟用這條連結',
   subscriptionAutoUpdate: '定期更新',
   subscriptionEnabledToggle: '啟用這條訂閱;關掉後它的節點不進核心',
   subscriptionDisabledBadge: '已停用',

@@ -481,3 +481,87 @@ func TestPersistsAcrossRestart(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+func TestURLEntriesDisabledLinkIsNotFetched(t *testing.T) {
+	e := newEnv(t)
+	e.pages["https://a/1"] = links("A", "B")
+	e.pages["https://a/2"] = links("C")
+	code, m := e.do("POST", "/api/openbox/subscriptions", map[string]any{"name": "开关", "urlEntries": []map[string]any{
+		{"url": " https://a/1 ", "enabled": true}, {"url": "https://a/2", "enabled": false},
+	}, "renameOptions": map[string]any{"enabled": false}})
+	if code != 200 || m["nodeCount"] != float64(2) || e.calls.Load() != 1 {
+		t.Fatalf("停用的链接不该拉取: %d %v calls=%d", code, m, e.calls.Load())
+	}
+	s := e.list(t)[0]
+	entries, _ := s["urlEntries"].([]any)
+	if len(entries) != 2 || entries[0].(map[string]any)["url"] != "https://a/1" || entries[1].(map[string]any)["enabled"] != false {
+		t.Fatalf("urlEntries 要原样保留停用项: %v", s["urlEntries"])
+	}
+	if s["url"] != "https://a/1" || s["urls"] != nil {
+		t.Fatalf("url / urls 只留启用的: %v %v", s["url"], s["urls"])
+	}
+	// 启用第二条 → 重新拉取并并入节点
+	id := s["id"].(string)
+	code, m = e.do("PATCH", "/api/openbox/subscriptions/"+id, map[string]any{"urlEntries": []map[string]any{
+		{"url": "https://a/1", "enabled": true}, {"url": "https://a/2", "enabled": true},
+	}})
+	if code != 200 || m["nodeCount"] != float64(3) {
+		t.Fatalf("启用后要重新拉取: %d %v", code, m)
+	}
+}
+
+func TestURLEntriesValidation(t *testing.T) {
+	e := newEnv(t)
+	for name, body := range map[string]any{
+		"全部停用":    map[string]any{"name": "x", "urlEntries": []map[string]any{{"url": "https://a/1", "enabled": false}}},
+		"不是数组":    map[string]any{"name": "x", "urlEntries": "https://a/1"},
+		"项不是对象":   map[string]any{"name": "x", "urlEntries": []string{"https://a/1"}},
+		"enabled": map[string]any{"name": "x", "urlEntries": []map[string]any{{"url": "https://a/1", "enabled": "yes"}}},
+		"地址非法":    map[string]any{"name": "x", "urlEntries": []map[string]any{{"url": "ftp://a/1", "enabled": true}}},
+	} {
+		if code, m := e.do("POST", "/api/openbox/subscriptions", body); code != 400 {
+			t.Errorf("%s 应该 400: %d %v", name, code, m)
+		}
+	}
+}
+
+func TestLegacyURLsReadAsEnabledEntries(t *testing.T) {
+	e := newEnv(t)
+	e.pages["https://a/1"] = links("A")
+	e.create(t, "旧写法", "https://a/1", nil)
+	entries, _ := e.list(t)[0]["urlEntries"].([]any)
+	if len(entries) != 1 || entries[0].(map[string]any)["enabled"] != true {
+		t.Fatalf("url 写法要按启用读成 urlEntries: %v", entries)
+	}
+}
+
+func TestDirectSwitchesStoredAndReportConfigChange(t *testing.T) {
+	e := newEnv(t)
+	e.pages["https://a/1"] = links("A")
+	id := e.create(t, "直连", "https://a/1", nil)
+	s := e.list(t)[0]
+	if _, has := s["directSubscription"]; has {
+		t.Fatalf("没设置时不写出(默认就是开): %v", s)
+	}
+	n := e.calls.Load()
+	code, m := e.do("PATCH", "/api/openbox/subscriptions/"+id, map[string]any{"directSubscription": false})
+	if code != 200 || m["changed"] != true || e.calls.Load() != n {
+		t.Fatalf("改直连开关要标记配置变了、且不重新拉取: %d %v", code, m)
+	}
+	s = e.list(t)[0]
+	if s["directSubscription"] != false || s["directNodes"] != nil {
+		t.Fatalf("只写出明确关掉的: %v", s)
+	}
+	// 同一个值再设一次 → 没变
+	if _, m = e.do("PATCH", "/api/openbox/subscriptions/"+id, map[string]any{"directSubscription": false}); m["changed"] != false {
+		t.Fatalf("没变就不该标记: %v", m)
+	}
+	// 设回 true → 回到默认(不再写出)
+	e.do("PATCH", "/api/openbox/subscriptions/"+id, map[string]any{"directSubscription": true})
+	if _, has := e.list(t)[0]["directSubscription"]; has {
+		t.Fatal("设回开就清掉字段")
+	}
+	if code, _ = e.do("PATCH", "/api/openbox/subscriptions/"+id, map[string]any{"directNodes": "no"}); code != 400 {
+		t.Fatal("必须是布尔值")
+	}
+}

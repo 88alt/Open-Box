@@ -57,6 +57,8 @@ type Record struct {
 	Enabled    bool           `json:"enabled"`
 	AutoUpdate map[string]any `json:"autoUpdate"`
 	URLs       []string       `json:"urls,omitempty"`
+	// URLEntries 是带「启用 / 停用」的链接列表(对齐上游 v0.1.473 的 urlEntries);url / urls 只留启用的,给旧读法用。
+	URLEntries []URLEntry     `json:"urlEntries,omitempty"`
 	Content    string         `json:"content,omitempty"`
 	Format     string         `json:"format"`
 	NodeCount  int            `json:"nodeCount"`
@@ -70,6 +72,11 @@ type Record struct {
 	Skipped    []sub.Skipped  `json:"skipped,omitempty"` // 最近一次解析没能导入的条目(前端不读,留给诊断)
 	// BandwidthCheck 是「定期带宽检查」(前端 bandwidthCheck)。只影响自动测速入队,不进 sing-box 配置。
 	BandwidthCheck bool `json:"bandwidthCheck,omitempty"`
+	// DirectSubscription / DirectNodes 是「订阅链接直连」「节点直连」(对齐上游 v0.1.473):
+	// 前者关了,这条订阅的链接主机不进直连;后者关了,它名下节点的服务器地址不进直连。
+	// nil(没设置)= 开,所以老记录行为不变;只在明确设成 false 时才写出。
+	DirectSubscription *bool `json:"directSubscription,omitempty"`
+	DirectNodes        *bool `json:"directNodes,omitempty"`
 }
 
 type subsFile struct {
@@ -102,15 +109,23 @@ func New(st *store.Store, fetch Fetcher) *Service {
 
 // Source 是订阅来源:urls 与 content 二选一(content 优先)。
 type Source struct {
-	URL       string
-	URLs      []string
-	Content   string
-	UserAgent string
-	LoginID   string
+	URL        string
+	URLs       []string
+	URLEntries []URLEntry // 传了就以它为准(url / urls 忽略)
+	Content    string
+	UserAgent  string
+	LoginID    string
+}
+
+// URLEntry 是一条订阅链接和它的开关;停用的链接保留在列表里,但不拉取。
+type URLEntry struct {
+	URL     string `json:"url"`
+	Enabled bool   `json:"enabled"`
 }
 
 type resolved struct {
-	urls    []string
+	urls    []string   // 启用的链接(拉取用)
+	entries []URLEntry // 全部链接(含停用)
 	content string
 	ua      string
 }
@@ -130,11 +145,16 @@ func normalizeSource(s Source) (*resolved, error) {
 		r.content = s.Content
 		return r, nil
 	}
-	// url 是 urls 里的第一条;两个都传时 url 排最前,按字面去重
-	list := append([]string{s.URL}, s.URLs...)
+	// 传了 urlEntries 就以它为准;否则 url 是 urls 里的第一条,两个都传时 url 排最前,都按「启用」处理。按字面去重
+	list := s.URLEntries
+	if len(list) == 0 {
+		for _, u := range append([]string{s.URL}, s.URLs...) {
+			list = append(list, URLEntry{URL: u, Enabled: true})
+		}
+	}
 	seen := map[string]bool{}
-	for _, u := range list {
-		u = strings.TrimSpace(u)
+	for _, e := range list {
+		u := strings.TrimSpace(e.URL)
 		if u == "" || seen[u] {
 			continue
 		}
@@ -143,13 +163,19 @@ func normalizeSource(s Source) (*resolved, error) {
 			return nil, bad("订阅地址必须是 http:// 或 https:// 开头的有效地址")
 		}
 		seen[u] = true
-		r.urls = append(r.urls, u)
+		r.entries = append(r.entries, URLEntry{URL: u, Enabled: e.Enabled})
+		if e.Enabled {
+			r.urls = append(r.urls, u)
+		}
 	}
-	if len(r.urls) == 0 {
+	if len(r.entries) == 0 {
 		return nil, bad("请填写订阅地址或粘贴节点内容")
 	}
-	if len(r.urls) > MaxURLs {
+	if len(r.entries) > MaxURLs {
 		return nil, bad("订阅地址最多 %d 条", MaxURLs)
+	}
+	if len(r.urls) == 0 {
+		return nil, bad("至少启用一条订阅链接")
 	}
 	return r, nil
 }
@@ -400,6 +426,9 @@ type Input struct {
 	NodeDNSSet     bool
 	Enabled        *bool
 	BandwidthCheck *bool // nil = 没传
+	// DirectSubscription / DirectNodes:nil = 没传;传 true 存成 nil(默认就是开)
+	DirectSubscription *bool
+	DirectNodes        *bool
 }
 
 func validateName(n string) (string, error) {
@@ -540,6 +569,7 @@ func (s *Service) Create(ctx context.Context, in Input) (*SaveResult, error) {
 	if in.BandwidthCheck != nil {
 		rec.BandwidthCheck = *in.BandwidthCheck
 	}
+	rec.DirectSubscription, rec.DirectNodes = directFlag(in.DirectSubscription), directFlag(in.DirectNodes)
 	rec.setSource(r)
 	nodes[rec.ID] = ap.Nodes
 	recs = append(recs, rec)
@@ -553,20 +583,37 @@ func (rec *Record) setSource(r *resolved) {
 	rec.Content = r.content
 	rec.URLs = nil
 	rec.URL = ""
+	rec.URLEntries = nil
 	if len(r.urls) > 0 {
 		rec.URL = r.urls[0]
 		if len(r.urls) > 1 {
 			rec.URLs = r.urls
 		}
 	}
+	if len(r.entries) > 0 {
+		rec.URLEntries = append([]URLEntry(nil), r.entries...)
+	}
 }
 
 func (rec *Record) source() *resolved {
 	r := &resolved{content: rec.Content, ua: rec.UserAgent}
-	if len(rec.URLs) > 0 {
+	switch {
+	case len(rec.URLEntries) > 0:
+		r.entries = append([]URLEntry(nil), rec.URLEntries...)
+		for _, e := range rec.URLEntries {
+			if e.Enabled {
+				r.urls = append(r.urls, e.URL)
+			}
+		}
+	case len(rec.URLs) > 0:
 		r.urls = rec.URLs
-	} else if rec.URL != "" {
+	case rec.URL != "":
 		r.urls = []string{rec.URL}
+	}
+	if len(rec.URLEntries) == 0 {
+		for _, u := range r.urls {
+			r.entries = append(r.entries, URLEntry{URL: u, Enabled: true})
+		}
 	}
 	return r
 }
@@ -624,6 +671,7 @@ func (s *Service) Update(ctx context.Context, id string, in Input) (*SaveResult,
 	rec := recs[i]
 	before := nodes[id]
 	wasEnabled := rec.Enabled
+	wasDirect := rec.directKey()
 
 	rebuild := false
 	nameChanged := false
@@ -636,7 +684,7 @@ func (s *Service) Update(ctx context.Context, id string, in Input) (*SaveResult,
 		rec.Name = n
 	}
 	if in.Source != nil || in.UserAgent != nil {
-		src := Source{URLs: rec.source().urls, Content: rec.Content, UserAgent: rec.UserAgent}
+		src := Source{URLEntries: rec.source().entries, Content: rec.Content, UserAgent: rec.UserAgent}
 		if in.Source != nil {
 			src = *in.Source
 			src.UserAgent = rec.UserAgent
@@ -673,6 +721,12 @@ func (s *Service) Update(ctx context.Context, id string, in Input) (*SaveResult,
 	if in.BandwidthCheck != nil {
 		rec.BandwidthCheck = *in.BandwidthCheck
 	}
+	if in.DirectSubscription != nil {
+		rec.DirectSubscription = directFlag(in.DirectSubscription)
+	}
+	if in.DirectNodes != nil {
+		rec.DirectNodes = directFlag(in.DirectNodes)
+	}
 	after := before
 	if rebuild {
 		after, err = s.rebuild(ctx, &rec, recs, nodes)
@@ -686,8 +740,29 @@ func (s *Service) Update(ctx context.Context, id string, in Input) (*SaveResult,
 	if err := s.persist(recs, nodes); err != nil {
 		return nil, err
 	}
-	changed := rec.Enabled != wasEnabled || (rec.Enabled && !reflect.DeepEqual(before, after))
+	// 直连开关、启用的链接主机变了,生成的配置就变了(即使节点没变)
+	changed := rec.Enabled != wasEnabled || (rec.Enabled && (!reflect.DeepEqual(before, after) || rec.directKey() != wasDirect))
 	return &SaveResult{ID: rec.ID, Name: rec.Name, NodeCount: rec.NodeCount, Skipped: nonNilSkipped(rec.Skipped), Changed: changed}, nil
+}
+
+// directFlag 把「开」存成 nil(默认值),只有明确关才存 false。
+func directFlag(v *bool) *bool {
+	if v == nil || *v {
+		return nil
+	}
+	off := false
+	return &off
+}
+
+// directKey 把影响「订阅和节点站点直连」的字段拼成一个串,前后比较就知道配置要不要重新生成。
+func (rec *Record) directKey() string {
+	on := func(v *bool) string {
+		if v != nil && !*v {
+			return "0"
+		}
+		return "1"
+	}
+	return on(rec.DirectSubscription) + on(rec.DirectNodes) + "|" + strings.Join(rec.source().urls, "\n")
 }
 
 // rebuild 按记录里保存的来源重新拉取 / 解析 / 改名,更新 rec 的格式、用量、节点数、skipped。

@@ -476,7 +476,7 @@
 
 ## `/api/openbox/subscriptions`
 
-实现约定(M1):错误码 400 = 输入有问题(含订阅内容里没有可用节点),404 = 订阅不存在,501 = `login`(账号登录来源暂不支持),502 = 订阅服务器那头出错(连不上 / 超时 / HTTP 非 2xx)。`url` 与 `urls` 同时给时 `url` 排第一;`content` 优先于地址。时间戳 `createdAt` / `updatedAt` 是毫秒。`PATCH` 只改传了的字段,`autoUpdate` / `nodeDns` 传 `null` = 清除。
+实现约定(M1):错误码 400 = 输入有问题(含订阅内容里没有可用节点),404 = 订阅不存在,501 = `login`(账号登录来源暂不支持),502 = 订阅服务器那头出错(连不上 / 超时 / HTTP 非 2xx)。`url` 与 `urls` 同时给时 `url` 排第一;`content` 优先于地址。传 `urlEntries`(`[{url, enabled}]`)时以它为准,停用的链接保留在列表里但不拉取,至少要启用一条(400);记录里 `url` / `urls` 只含启用的,老记录按全部启用读。`directSubscription` / `directNodes`(布尔,没设置 = 开)控制这条订阅的链接主机 / 节点服务器地址是否进「订阅和节点站点直连」,只写出明确关掉的那个,改它们不重新拉取、`changed` 为真。时间戳 `createdAt` / `updatedAt` 是毫秒。`PATCH` 只改传了的字段,`autoUpdate` / `nodeDns` 传 `null` = 清除。
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|

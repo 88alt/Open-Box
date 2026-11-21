@@ -113,7 +113,32 @@ func parse(w http.ResponseWriter, raw map[string]any) (subs.Input, subs.Source, 
 			src.URLs = append(src.URLs, s)
 		}
 	}
-	if u != nil || c != nil || len(src.URLs) > 0 || src.LoginID != "" {
+	if v, ok := raw["urlEntries"]; ok && v != nil {
+		arr, isArr := v.([]any)
+		if !isArr {
+			return fail("urlEntries 必须是数组")
+		}
+		for _, e := range arr {
+			m, isObj := e.(map[string]any)
+			if !isObj {
+				return fail("urlEntries 的每一项必须是对象")
+			}
+			us, isStr := m["url"].(string)
+			if !isStr {
+				return fail("urlEntries 的 url 必须是字符串")
+			}
+			en := true
+			if ev, has := m["enabled"]; has && ev != nil {
+				b, isBool := ev.(bool)
+				if !isBool {
+					return fail("urlEntries 的 enabled 必须是布尔值")
+				}
+				en = b
+			}
+			src.URLEntries = append(src.URLEntries, subs.URLEntry{URL: us, Enabled: en})
+		}
+	}
+	if u != nil || c != nil || len(src.URLs) > 0 || len(src.URLEntries) > 0 || src.LoginID != "" {
 		cp := src
 		in.Source = &cp
 	}
@@ -133,6 +158,21 @@ func parse(w http.ResponseWriter, raw map[string]any) (subs.Input, subs.Source, 
 			return fail("enabled 必须是布尔值")
 		}
 		in.Enabled = &b
+	}
+	for _, k := range []string{"directSubscription", "directNodes"} {
+		v, has := raw[k]
+		if !has || v == nil {
+			continue
+		}
+		b, isBool := v.(bool)
+		if !isBool {
+			return fail(k + " 必须是布尔值")
+		}
+		if k == "directSubscription" {
+			in.DirectSubscription = &b
+		} else {
+			in.DirectNodes = &b
+		}
 	}
 	if v, has := raw["bandwidthCheck"]; has && v != nil {
 		b, isBool := v.(bool)

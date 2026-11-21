@@ -73,15 +73,16 @@ type storedJob struct {
 
 type nodesReq struct {
 	// 预览(订阅还没保存):有 url / urls / content / loginId 之一
-	URL           string         `json:"url"`
-	URLs          []string       `json:"urls"`
-	Content       string         `json:"content"`
-	UserAgent     string         `json:"userAgent"`
-	LoginID       string         `json:"loginId"`
-	Name          string         `json:"name"`
-	RenameOptions map[string]any `json:"renameOptions"`
-	NodeDNS       map[string]any `json:"nodeDns"`
-	Tags          []string       `json:"tags"`
+	URL           string          `json:"url"`
+	URLs          []string        `json:"urls"`
+	URLEntries    []subs.URLEntry `json:"urlEntries"` // 带启用开关的链接(对齐上游 v0.1.473);有它就以它为准
+	Content       string          `json:"content"`
+	UserAgent     string          `json:"userAgent"`
+	LoginID       string          `json:"loginId"`
+	Name          string          `json:"name"`
+	RenameOptions map[string]any  `json:"renameOptions"`
+	NodeDNS       map[string]any  `json:"nodeDns"`
+	Tags          []string        `json:"tags"`
 	// 已保存节点
 	Jobs     []storedJob `json:"jobs"`
 	Progress bool        `json:"progress"`
@@ -90,7 +91,7 @@ type nodesReq struct {
 }
 
 func (r *nodesReq) isPreview() bool {
-	return r.URL != "" || len(r.URLs) > 0 || r.Content != "" || r.LoginID != ""
+	return r.URL != "" || len(r.URLs) > 0 || len(r.URLEntries) > 0 || r.Content != "" || r.LoginID != ""
 }
 
 func timeoutOf(ms int) time.Duration {
@@ -155,7 +156,7 @@ func (h *handlers) nodes(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, http.StatusBadRequest, "一次测的节点太多")
 			return
 		}
-		src := subs.Source{URL: req.URL, URLs: req.URLs, Content: req.Content, UserAgent: req.UserAgent, LoginID: req.LoginID}
+		src := subs.Source{URL: req.URL, URLs: req.URLs, URLEntries: req.URLEntries, Content: req.Content, UserAgent: req.UserAgent, LoginID: req.LoginID}
 		nodes, err := h.Subs.PreviewNodes(ctx, src, req.Name, req.RenameOptions)
 		if err != nil {
 			fail(w, err, "解析订阅失败")

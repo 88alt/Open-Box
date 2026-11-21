@@ -565,6 +565,8 @@ const en = {
   bandwidthManualFailed: 'Bandwidth check failed: {message}',
   bandwidthManualComplete: '{name}: {value} Mbps',
   subscriptionBandwidthCheck: 'Enable periodic bandwidth checks',
+  subscriptionDirectUrl: 'Direct subscription URL',
+  subscriptionDirectNodes: 'Direct nodes',
   subscriptionBandwidthHelpTitle: 'Periodic bandwidth checks',
   subscriptionBandwidthHelp:
     'The router checks eligible nodes in this subscription on the shared bandwidth schedule. Only healthy nodes are tested. Health checks and manual probes have priority.',
@@ -1213,6 +1215,8 @@ const en = {
   subscriptionNamePlaceholder: 'e.g. "My subscription"',
   subscriptionUrlLabel: 'Subscription link',
   subscriptionUrlAdd: 'Add link',
+  subscriptionUrlDisable: 'Disable this link',
+  subscriptionUrlEnable: 'Enable this link',
   subscriptionAutoUpdate: 'Auto update',
   subscriptionEnabledToggle: 'Enable this subscription; when off its nodes stay out of the kernel',
   subscriptionDisabledBadge: 'Disabled',
