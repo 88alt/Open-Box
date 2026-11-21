@@ -1251,7 +1251,7 @@ const en = {
   subscriptionDefaultName: 'Subscription',
   subscriptionPreviewEmptyHint: 'Enter a link or paste content to see a live preview here.',
   subscriptionPreviewLoading: 'Loading…',
-  subscriptionSkippedSummary: '{count} skipped',
+  subscriptionSkippedSummary: 'Skipped {count} nodes\n{list}',
   subscriptionSkippedReason: '{name} — unrecognized type ({type})',
   subscriptionSkippedPlugin:
     '{name} — plugin "{plugin}" is not supported by the kernel (obfs and v2ray-plugin are)',
@@ -1271,13 +1271,17 @@ const en = {
   subscriptionPreviewNoNodes: 'No nodes parsed from this yet.',
   subscriptionRenameOriginalColumn: 'Original name',
   subscriptionRenameNewColumn: 'New name',
-  subscriptionRenameEditorTitle: 'Rename rules',
+  subscriptionRenameEditorTitle: 'Rename nodes',
   subscriptionRenameTokenRegion: 'Region',
   subscriptionRenameTokenFeature: 'Feature',
   subscriptionRenameTokenSeq: 'Number',
   subscriptionRenameTemplateExample: 'Result: {example}',
   subscriptionRenameSampleRegion: 'US',
   subscriptionRenameSampleFeature: 'IEPL',
+  subscriptionSkippedPreviewMore: '{count} more nodes were skipped',
+  subscriptionLatencyNodeFailed: '{name} · Test failed ({reason})',
+  subscriptionRenameRestoreDefaults: 'Restore defaults',
+  subscriptionRenameSampleOriginal: 'US IEPL 1',
   groupDroppedEmpty:
     'These groups have no usable members and will not be written to the config: {names}',
   groupDroppedCycle:
@@ -1310,8 +1314,7 @@ const en = {
   iconCategoryBrands: 'Brands',
   iconCategoryMisc: 'Other',
   subscriptionRenameCountryNoMatch: 'No matching country/region',
-  subscriptionRenamePrefixLabel:
-    'Prefix node names with the subscription name (e.g. "Airport {sep} HK-01")',
+  subscriptionRenamePrefixLabel: 'Prefix node names with the subscription name',
   subscriptionRenameTokensHint: 'Drag to reorder:',
   subscriptionRenameUnknownLabel: 'Label for unrecognized region',
   subscriptionRenameSeqPadHint:

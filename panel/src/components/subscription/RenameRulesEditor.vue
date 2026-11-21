@@ -13,7 +13,7 @@
           type="checkbox"
           class="checkbox checkbox-xs"
         />
-        {{ $t('subscriptionRenamePrefixLabel', { sep: '|' }) }}
+        {{ $t('subscriptionRenamePrefixLabel') }}
       </label>
 
       <!-- 重命名规则:标题后面是总开关,关掉时下面的规则整块收起、节点保留机场原始名字 -->
@@ -33,7 +33,7 @@
           @click="resetToDefaults"
         >
           <ArrowUturnLeftIcon class="h-3.5 w-3.5" />
-          {{ $t('reset') }}
+          {{ $t('subscriptionRenameRestoreDefaults') }}
         </button>
       </div>
       <!-- Template + unknown label + seq padding -->
@@ -87,10 +87,11 @@
             />
           </label>
         </div>
-        <p class="text-base-content/60 text-xs">
-          {{ $t('subscriptionRenameTemplateExample', { example: templateExample }) }}
-        </p>
       </div>
+      <!-- 效果示例:重命名关着时显示机场原始名字的样子,前缀开着时带上订阅名 -->
+      <p class="text-base-content/60 text-xs">
+        {{ $t('subscriptionRenameTemplateExample', { example: templateExample }) }}
+      </p>
 
       <!-- Region dictionary:关了重命名也要留着——地区识别给国旗和按地区选成员的节点组用 -->
       <div class="flex flex-col gap-2">
@@ -238,7 +239,7 @@ const emit = defineEmits<{
 // 编辑已有订阅时用它的已存规则起步。没有这个 prop 的话编辑器总是从默认词典起步,
 // 而它挂载时就会 emit 一次(watch immediate),等于一打开编辑弹窗就把用户辛苦调过的
 // 重命名规则悄悄改回默认——保存下去才发现节点名全变了。
-const props = defineProps<{ initial?: OpenboxRenameOptions | null }>()
+const props = defineProps<{ initial?: OpenboxRenameOptions | null; subscriptionName?: string }>()
 
 const { t, locale } = useI18n()
 
@@ -401,10 +402,14 @@ const removeRegionRow = (id: string) => {
 // 和真正改名时的行为一致,免得示例和结果对不上。
 const templateExample = computed(() => {
   const pad = Number.isFinite(seqPad.value) && seqPad.value > 0 ? Math.floor(seqPad.value) : DEFAULT_SEQ_PAD
-  return (template.value || DEFAULT_RENAME_TEMPLATE)
-    .replace(/\{region\}/g, t('subscriptionRenameSampleRegion'))
-    .replace(/\{feature\}/g, t('subscriptionRenameSampleFeature'))
-    .replace(/\{seq\}/g, String(1).padStart(pad, '0'))
+  const sample = enabled.value
+    ? (template.value || DEFAULT_RENAME_TEMPLATE)
+        .replace(/\{region\}/g, t('subscriptionRenameSampleRegion'))
+        .replace(/\{feature\}/g, t('subscriptionRenameSampleFeature'))
+        .replace(/\{seq\}/g, String(1).padStart(pad, '0'))
+    : t('subscriptionRenameSampleOriginal')
+  const name = props.subscriptionName?.trim()
+  return usePrefix.value && name ? `${name} | ${sample}` : sample
 })
 
 const resetToDefaults = () => {

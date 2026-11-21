@@ -332,6 +332,7 @@
         <RenameRulesEditor
           :key="subscription?.id || 'new'"
           :initial="subscription?.renameOptions"
+          :subscription-name="name"
           @change="handleRenameOptionsChange"
         />
       </div>
