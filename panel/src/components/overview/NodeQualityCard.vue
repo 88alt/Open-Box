@@ -85,7 +85,7 @@
             <div class="quality-metrics grid w-full min-w-0 grid-cols-2 gap-3 sm:grid-cols-3">
               <div class="quality-score">
                 <span class="quality-label text-base-content/60 mb-1 block text-xs">{{ $t('qualityOverall') }}</span>
-                <template v-if="sub.coverage >= 0.8 && sub.score !== null">
+                <template v-if="sub.score !== null && (sub.scoreStale || sub.coverage >= 0.8)">
                   <div
                     class="text-lg font-bold"
                     :class="gradeClass(sub)"
@@ -96,8 +96,14 @@
                     class="mt-1 text-xs"
                     :class="gradeClass(sub)"
                   >
-                    {{ $t(`qualityGrade_${sub.grade}`) }}
-                    <span v-if="sub.provisional"> · {{ $t('qualityProvisional') }}</span>
+                    <span
+                      v-if="sub.scoreStale"
+                      v-tip="timeAt(sub.scoreAt || 0)"
+                    >{{ $t('qualityPreviousScore') }}</span>
+                    <template v-else>
+                      {{ $t(`qualityGrade_${sub.grade}`) }}
+                      <span v-if="sub.provisional"> · {{ $t('qualityProvisional') }}</span>
+                    </template>
                   </div>
                 </template>
                 <template v-else>
@@ -368,7 +374,13 @@ const bytes = (v: number) => prettyBytesHelper(v, { maximumFractionDigits: 1 })
 const timeText = (ms: number) => t('qualityTime', { hours: Math.floor(ms / 3_600_000), minutes: Math.floor((ms % 3_600_000) / 60_000) })
 const timeAt = (v: number | string | null) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : t('qualityNever'))
 const gradeClass = (s: OpenboxQualitySubscription) =>
-  s.grade === 'attention' ? 'text-error' : s.grade === 'fair' ? 'text-warning' : 'text-success'
+  s.scoreStale || s.grade === 'pending'
+    ? 'text-base-content/70'
+    : s.grade === 'attention'
+      ? 'text-error'
+      : s.grade === 'fair'
+        ? 'text-warning'
+        : 'text-success'
 
 const summary = computed(() => {
   const subs = data.value?.subscriptions || []

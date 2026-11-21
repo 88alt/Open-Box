@@ -553,7 +553,7 @@ const en = {
   qualityUsable: '{usable} / {total} nodes available',
   qualityPoints: 'points',
   qualityMeasuredScore: 'Measured average {score}',
-  qualityGrade_pending: 'More data needed',
+  qualityGrade_pending: 'No score yet',
   qualityGrade_attention: 'Needs attention',
   qualityGrade_excellent: 'Excellent',
   qualityGrade_good: 'Good',
@@ -566,11 +566,11 @@ const en = {
   subscriptionBandwidthCheck: 'Enable periodic bandwidth checks',
   subscriptionBandwidthHelpTitle: 'Periodic bandwidth checks',
   subscriptionBandwidthHelp:
-    'The router checks this subscription’s eligible nodes at the shared interval from backend settings: {hours} hours, up to {maxMB} MB per download. Only healthy nodes are admitted; health and manual probes have priority.',
+    'The router checks eligible nodes in this subscription on the shared bandwidth schedule. Only healthy nodes are tested. Health checks and manual probes have priority.',
   subscriptionBandwidthDedupe:
     'Identical effective connections share one durable measurement across subscriptions and bandwidth-enabled groups. Renaming, reordering or restarting does not start a duplicate download. Disabling this subscription does not cancel a test still needed by another subscription or group.',
   subscriptionBandwidthBudget:
-    'The backend bandwidth settings show the daily upper bound for all unique eligible nodes. It is download payload only; protocol overhead, initial/new-node tests and provider multipliers may add traffic. This switch does not enable bandwidth preference or change routing.',
+    'The backend bandwidth settings show the daily upper bound for all unique eligible nodes. It is download payload only; protocol overhead, initial/new-node tests and provider multipliers may add traffic. This switch does not enable node scoring or change routing.',
   qualityState_down: 'Probe failed',
   qualityState_unknown: 'Not tested',
   qualityState_stale: 'Outdated',
@@ -586,16 +586,16 @@ const en = {
   qualityCollapse: 'Collapse {name} nodes',
   qualityShowAllNodes: 'Show all',
   qualityShowFirstNodes: 'Show first 10',
-  qualityHelp: 'Node quality explained',
+  qualityHelp: 'Node scoring explained',
   qualityNever: 'Not tested',
   qualityTime: '{hours} h {minutes} min',
   qualityNotMeasured: 'Not tested',
   qualityDetailScope:
     'Latency is the median of up to ten successful probes. Timing variation and download bandwidth use the average of up to ten valid values.',
   qualityHealthHelp:
-    'Availability comes first. Confirmed failed nodes count as zero in subscription quality. Unmeasured or outdated nodes lower coverage. Below 80% coverage, the main label shows “More data needed”.',
+    'Confirmed failures count as zero in subscription quality. Current coverage counts nodes with fresh assessments. Below 80% coverage, the previous score is shown when available.',
   qualityModelHelp:
-    'Healthy nodes use the same score as bandwidth-aware routing. Latency counts for 40%, download bandwidth for 30% and HTTP timing variation for 30%. Missing metrics are omitted and the remaining weights are normalized. Missing data or fewer than ten samples in a metric marks the score provisional.',
+    'Healthy nodes use the same score as bandwidth-aware routing. Latency, download bandwidth and HTTP jitter use the weights from Backend Settings. Missing metrics are omitted and the remaining weights are normalized. Missing data or fewer than ten samples in a weighted metric marks the score provisional.',
   qualityExampleHelp:
     'Example: one 95-point node and nine failed nodes score about 10 overall. One 95-point node and nine unmeasured nodes require more data instead of an excellent rating.',
   qualityMeasurementHelp:
@@ -605,7 +605,7 @@ const en = {
   qualityMode_login: 'Login',
   qualityMode_subscription: 'Subscription',
   qualityMode_node: 'Node',
-  qualityLoadFailed: 'Failed to load node quality: {message}',
+  qualityLoadFailed: 'Failed to load node scores: {message}',
   nodeInfoProtocol: 'Protocol',
   nodeInfoServer: 'Server',
   nodeInfoEntryIp: 'Entry IPv4',
@@ -1004,7 +1004,7 @@ const en = {
   groupInterval: 'Test interval',
   groupTolerance: 'Latency tolerance',
   groupUrltestHint:
-    'Latency selection switches only when the new node is faster by the tolerance. Bandwidth preference uses the combined score when a healthy candidate has valid bandwidth data.',
+    'Latency selection switches only when the new node is faster by the tolerance. Node scoring uses the combined score when a healthy candidate has valid bandwidth data.',
   groupMembersLabel: 'Members',
   groupFilterAllSubscriptions: 'All subscriptions',
   groupSubscriptionMissing: 'Deleted subscription',
@@ -1063,7 +1063,7 @@ const en = {
   failoverSummary: 'Failover · {lanes} lanes · {count} nodes',
   failoverTolerance: 'In-lane latency tolerance',
   failoverToleranceHint:
-    'Applies to latency selection inside automatic lanes. Skip it when bandwidth preference is enabled and a healthy candidate in the lane has valid bandwidth data. Lane priority is preserved.',
+    'Applies to latency selection inside automatic lanes. Skip it when node scoring is enabled and a healthy candidate in the lane has valid bandwidth data. Lane priority is preserved.',
   failoverToleranceUnused:
     'Every lane has a single valid node, so there is nothing to pick between inside a lane; not used for now',
   failoverTimeout: 'Probe timeout',
@@ -2342,8 +2342,8 @@ const en = {
   outboundPickerTestOne: 'Test latency',
   outboundPickerTestGroupNow: "Test the group's current node",
 
-  bandwidthEnable: 'Prefer bandwidth',
-  bandwidthHelpTitle: 'Bandwidth preference',
+  bandwidthEnable: 'Node scoring',
+  bandwidthHelpTitle: 'Node scoring',
   bandwidthSettingsTitle: 'Bandwidth testing',
   bandwidthPeriod: 'Shared bandwidth test interval',
   bandwidthHours: 'hours',
@@ -2356,27 +2356,27 @@ const en = {
   bandwidthOn: 'When enabled',
   bandwidthExample: 'Example',
   bandwidthOff_urltest:
-    'Keep one node selected by latency, with the existing latency tolerance to avoid unnecessary switches.',
+    'Choose the default node by latency, with the existing latency tolerance to avoid unnecessary switches.',
   bandwidthOn_urltest:
-    'If at least one healthy candidate has fresh download data, rank by latency 40%, download bandwidth 30% and timing variation 30%. Latency tolerance is skipped in this mode. Keep the current node on ties and hold a healthy selection for 60 seconds. If no healthy candidate has valid bandwidth data, use latency and tolerance.',
+    'Rank healthy candidates by the weights in Backend Settings. When download bandwidth has a positive weight, at least one candidate needs fresh download data. Latency tolerance is skipped in this mode. Keep the current node on ties and hold a healthy selection for 60 seconds. Without usable scores, use latency and tolerance.',
   bandwidthExample_urltest:
-    'A is selected at 150 ms and 10 Mbps. B offers 100 ms and 300 Mbps with the same timing variation. A 100 ms tolerance can keep A in latency mode. With bandwidth preference and fresh samples, B wins after the hold.',
+    'A is selected at 150 ms and 10 Mbps. B offers 100 ms and 300 Mbps with the same timing variation. A 100 ms tolerance can keep A in latency mode. With node scoring and fresh samples, B wins after the hold.',
   bandwidthOff_failover:
     'Keep primary/backup tab priority, failure confirmation and failback settings. Automatic tabs choose internally by latency; manual tabs keep the user’s selection.',
   bandwidthOn_failover:
-    'Automatic tabs use the same 40/30/30 score and skip latency tolerance when a healthy candidate in that tab has valid bandwidth data. Otherwise they use latency tolerance. Tab priority, recovery confirmation, failback and manual selections are preserved.',
+    'Automatic tabs use the configured score and skip latency tolerance when scores are available. Otherwise they use latency tolerance. Tab priority, recovery confirmation, failback and manual selections are preserved.',
   bandwidthExample_failover:
     'A healthy primary offers 50 Mbps and a backup offers 500 Mbps: keep the primary. Inside an automatic primary tab, two healthy nodes have the same latency and offer 200 Mbps and 50 Mbps: prefer the 200 Mbps node within that tab.',
   bandwidthOff_loadbalance:
     'Each new connection goes to a healthy node with fewer active connections/pending dials. Among equally loaded nodes, prefer the low-latency range and rotate ties.',
   bandwidthOn_loadbalance:
-    'Use the same 40/30/30 score to weight new connections. Prefer idle nodes first. Among equally busy nodes, favor higher quality. Groups share active connections and pending dials. When all healthy candidates lack bandwidth data, use the original distribution rule.',
+    'Use the configured scores to weight new connections. Prefer idle nodes first. Among equally busy nodes, favor higher quality. Groups share active connections and pending dials. Without usable scores, use the original distribution rule.',
   bandwidthExample_loadbalance:
     'A scores 93 and B scores 64. Both idle, the first connection goes to A and the next goes to B if A is still busy. If A fails, B receives new connections regardless of past bandwidth.',
   bandwidthSharedHelp:
-    'One shared test per effective node every {hours} hours, with up to {maxMB} MB per task. Average up to ten successful samples. If the newest is two intervals old, the average expires. An unmeasured candidate temporarily uses the median of the other measured candidates. Reading scores adds no probes.',
+    'Each effective node shares one test across subscriptions and groups. The score uses the average of up to ten successful samples, which expires when the newest sample is two intervals old. An unmeasured candidate temporarily uses the median of the other measured candidates. Reading scores adds no probes.',
   bandwidthClientDisabled:
-    'Android, iOS, Windows, macOS and Linux clients do not enable bandwidth preference or download testing. In node mode the router can still apply its own policy. Measurements estimate current conditions; combined throughput is not guaranteed.',
+    'Android, iOS, Windows, macOS and Linux clients do not enable node scoring or download testing. In node mode the router can still apply its own policy. Measurements estimate current conditions; combined throughput is not guaranteed.',
   nodeInfoExpandText: 'Expand {field}',
   nodeInfoCollapseText: 'Collapse {field}',
   nodeTrafficEstimate: 'Human / bot (estimate)',
@@ -2406,7 +2406,7 @@ const en = {
   nodeRiskVeryClean: 'Very clean',
   nodeRiskVeryLow: 'Very low risk',
   nodeRiskVeryHigh: 'Very high risk',
-  qualityTitle: 'Node quality',
+  qualityTitle: 'Node scoring',
 
   // ===== 对齐上游 catch-up v0.1.412 缺失键 =====
 

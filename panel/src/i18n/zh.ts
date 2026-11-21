@@ -525,7 +525,7 @@ const zh: LANG_MESSAGE = {
   qualityUsable: '{usable} / {total} 节点可用',
   qualityPoints: '分',
   qualityMeasuredScore: '已测均分 {score}',
-  qualityGrade_pending: '待补数据',
+  qualityGrade_pending: '暂无评分',
   qualityGrade_attention: '需关注',
   qualityGrade_excellent: '优秀',
   qualityGrade_good: '良好',
@@ -538,11 +538,11 @@ const zh: LANG_MESSAGE = {
   subscriptionBandwidthCheck: '启用带宽定期检查',
   subscriptionBandwidthHelpTitle: '带宽定期检查',
   subscriptionBandwidthHelp:
-    '由路由器按后端设置的统一周期检测本订阅的有效节点：每 {hours} 小时一次，单次下载上限 {maxMB} MB。只对已确认健康的节点下载，健康检查和手动测速优先。',
+    '路由器按统一带宽测试周期检测本订阅的有效节点。只对已确认健康的节点测速，健康检查和手动测速优先。',
   subscriptionBandwidthDedupe:
-    '同一有效连接在订阅与启用带宽择优的分组之间共用持久化记录。更名、排序或重启不会重复下载。关闭本订阅的检查后，若其他订阅或分组仍需要该节点，仍会共用检测。',
+    '同一有效连接在订阅与启用节点评分的分组之间共用持久化记录。更名、排序或重启不会重复下载。关闭本订阅的检查后，若其他订阅或分组仍需要该节点，仍会共用检测。',
   subscriptionBandwidthBudget:
-    '后端设置显示全部去重节点的每日下载流量上界；协议开销、首次或新增节点测试、机场倍率另计。此开关不自动开启带宽择优，也不改变分流出口。',
+    '后端设置显示全部去重节点的每日下载流量上界；协议开销、首次或新增节点测试、机场倍率另计。此开关不自动开启节点评分，也不改变分流出口。',
   qualityState_down: '检测失败',
   qualityState_unknown: '未检测',
   qualityState_stale: '已过期',
@@ -558,18 +558,18 @@ const zh: LANG_MESSAGE = {
   qualityCollapse: '收起「{name}」节点',
   qualityShowAllNodes: '显示全部',
   qualityShowFirstNodes: '收起',
-  qualityHelp: '节点质量说明',
+  qualityHelp: '节点评分说明',
   qualityNever: '尚未检测',
   qualityTime: '{hours} 小时 {minutes} 分',
   qualityNotMeasured: '未检测',
   qualityDetailScope:
     '延时取最近最多 10 次成功探测的中位数。抖动和下载带宽各取最近最多 10 个有效值的均值。',
   qualityHealthHelp:
-    '节点健康是第一前提。确认失败的节点在订阅整体质量中按 0 分计入；未检测、已过期节点降低覆盖率。覆盖率不足 80% 时，主位置显示“待补数据”。',
+    '确认失败的节点按 0 分计入订阅质量。覆盖率按有效的近期检测计算。覆盖率不足 80% 时，优先显示上一次评分。',
   qualityModelHelp:
-    '健康节点使用和带宽择优相同的评分标准。延时占 40%、下载带宽占 30%、HTTP 探测抖动占 30%。缺测项跳过，其余权重按比例折算。缺测或任一项不足 10 个样本时标为暂估。',
+    '健康节点使用和节点评分相同的评分标准。延时、下载带宽和 HTTP 抖动使用后端设置中的权重。缺测项跳过，其余权重按比例折算。参与评分的指标缺测或不足 10 个样本时标为暂估。',
   qualityExampleHelp:
-    '例如：1 个 95 分节点与 9 个失败节点，整体约 10 分；1 个 95 分节点与 9 个未测节点，显示“待补数据”，不能评为优秀。',
+    '例如：1 个 95 分节点与 9 个失败节点，整体约 10 分；1 个 95 分节点与 9 个未测节点，显示“暂无评分”，不能评为优秀。',
   qualityMeasurementHelp:
     '按当前有效连接、网络环境和全局测速目标统计，保留最近 24 个小时桶。抖动指连续成功 HTTP 探测耗时之差的均值，不等同于 UDP 抖动或 IP 丢包率。时长与业务流量为采样估算，排除面板探测，不参与加分；并发使用时长只计一次。',
   qualityBandwidthHelp:
@@ -577,7 +577,7 @@ const zh: LANG_MESSAGE = {
   qualityMode_login: '登录',
   qualityMode_subscription: '订阅',
   qualityMode_node: '节点',
-  qualityLoadFailed: '节点质量读取失败：{message}',
+  qualityLoadFailed: '节点评分读取失败：{message}',
   nodeInfoProtocol: '协议',
   nodeInfoServer: '服务器',
   nodeInfoEntryIp: '入口 IPv4',
@@ -969,7 +969,7 @@ const zh: LANG_MESSAGE = {
   groupInterval: '检测间隔',
   groupTolerance: '延时容差',
   groupUrltestHint:
-    '按延时选择时，新节点快出设定的容差才切换。启用带宽择优且健康候选有有效带宽时，改用综合评分。',
+    '按延时选择时，新节点快出设定的容差才切换。启用节点评分且健康候选有有效带宽时，改用综合评分。',
   groupMembersLabel: '成员',
   groupFilterAllSubscriptions: '全部',
   groupSubscriptionMissing: '已删除的订阅',
@@ -1025,7 +1025,7 @@ const zh: LANG_MESSAGE = {
   failoverSummary: '故障转移 · {lanes} 个页签 · {count} 个节点',
   failoverTolerance: '组内延时容差',
   failoverToleranceHint:
-    '仅在自动页签按延时选节点时使用。开启带宽择优且该页签有有效带宽数据时跳过此项，主备顺序照常生效。',
+    '仅在自动页签按延时选节点时使用。开启节点评分且该页签有有效带宽数据时跳过此项，主备顺序照常生效。',
   failoverToleranceUnused: '所有页签都只有一个有效节点,组内没有可择优的对象,这项暂时用不上',
   failoverTimeout: '单次检测超时',
   failoverRestore: '主用恢复后切回',
@@ -2211,8 +2211,8 @@ const zh: LANG_MESSAGE = {
   outboundPickerTestOne: '测速',
   outboundPickerTestGroupNow: '测速该组当前选中的节点',
 
-  bandwidthEnable: '启用带宽择优',
-  bandwidthHelpTitle: '带宽择优说明',
+  bandwidthEnable: '节点评分',
+  bandwidthHelpTitle: '节点评分说明',
   bandwidthSettingsTitle: '带宽测试',
   bandwidthPeriod: '统一带宽测试周期',
   bandwidthHours: '小时',
@@ -2224,27 +2224,27 @@ const zh: LANG_MESSAGE = {
   bandwidthOn: '开启时',
   bandwidthExample: '选择例子',
   bandwidthOff_urltest:
-    '按延时稳定选择一个节点，保留原有延时容差，避免小幅波动导致频繁切换。',
+    '默认节点按延时稳定选择，保留原有延时容差，避免小幅波动导致频繁切换。',
   bandwidthOn_urltest:
-    '至少一个健康候选有有效下载带宽时，按延时 40%、下载带宽 30%、抖动 30% 评分。此时跳过延时容差。同分保留当前节点，健康节点至少保持 60 秒。健康候选均无有效带宽时，按延时和容差选节点。',
+    '按后端设置中的权重给健康候选评分。下载带宽权重大于 0 时，至少一个候选需要有效的下载带宽数据。此时跳过延时容差。同分保留当前节点，健康节点至少保持 60 秒。没有可用评分时，按延时和容差选节点。',
   bandwidthExample_urltest:
-    'A 当前为 150 ms、10 Mbps，B 为 100 ms、300 Mbps，抖动相同。容差为 100 ms 时，按延时可保留 A。开启带宽择优且样本有效时，保持期结束后选 B。',
+    'A 当前为 150 ms、10 Mbps，B 为 100 ms、300 Mbps，抖动相同。容差为 100 ms 时，按延时可保留 A。开启节点评分且样本有效时，保持期结束后选 B。',
   bandwidthOff_failover:
     '先遵守主用、备用页签顺序，以及原有故障确认和恢复回切设置；自动页签内部按延时选择，手动页签保持用户指定的节点。',
   bandwidthOn_failover:
-    '自动页签内沿用 40/30/30 评分。有健康候选具备有效带宽时，跳过组内延时容差。否则按延时和容差选择。主备顺序、恢复确认、回切设置及手动选择继续生效。',
+    '自动页签使用后端设置中的评分权重。有可用评分时，跳过组内延时容差。否则按延时和容差选择。主备顺序、恢复确认、回切设置及手动选择继续生效。',
   bandwidthExample_failover:
     '主用健康、带宽 50 Mbps，备用带宽 500 Mbps，仍使用主用。如果主用的自动页签内有两个同延时的健康节点，分别为 200 Mbps 和 50 Mbps，则在这个页签内优先 200 Mbps 的节点。',
   bandwidthOff_loadbalance:
     '每个新连接优先分配给健康且连接/拨号较少的节点；占用相同时在低延时范围内轮换。',
   bandwidthOn_loadbalance:
-    '新连接使用同一套 40/30/30 质量分加权。先用空闲节点，占用相同时优先质量更高的节点。各组共享活动连接与正在拨号的占用。健康候选均无有效带宽时，恢复原分配规则。',
+    '新连接按后端设置中的权重计算质量分。先用空闲节点，占用相同时优先质量更高的节点。各组共享活动连接与正在拨号的占用。没有可用评分时，沿用原分配规则。',
   bandwidthExample_loadbalance:
     'A 得 93 分、B 得 64 分。都空闲时先选 A，A 仍有活动连接时下一条先给空闲的 B。A 确认故障后，新连接交给 B。',
   bandwidthSharedHelp:
-    '每 {hours} 小时每个实际节点共用一次带宽测试，每次最多下载 {maxMB} MB。带宽取最近最多 10 次成功结果的均值。最新结果达到两个周期时，整组样本停止参与评分。缺测候选暂用其他候选实测带宽的中位数。计算评分无需增加探测。',
+    '同一实际节点跨订阅和分组共用一次带宽测试。带宽取最近最多 10 次成功结果的均值。最新结果达到两个周期时，整组样本停止参与评分。缺测候选暂用其他候选实测带宽的中位数。计算评分无需增加探测。',
   bandwidthClientDisabled:
-    'Android、iOS、Windows、macOS、Linux 客户端不启用带宽择优及下载测速；节点分流仍可由路由器执行自身策略。实测值反映当时条件，不保证总带宽叠加比例。',
+    'Android、iOS、Windows、macOS、Linux 客户端不启用节点评分及下载测速；节点分流仍可由路由器执行自身策略。实测值反映当时条件，不保证总带宽叠加比例。',
   nodeInfoExpandText: '展开{field}',
   nodeInfoCollapseText: '收起{field}',
   nodeTrafficEstimate: '人机流量（估算）',
@@ -2274,7 +2274,7 @@ const zh: LANG_MESSAGE = {
   nodeRiskVeryClean: '极度纯净',
   nodeRiskVeryLow: '极低风险',
   nodeRiskVeryHigh: '极高风险',
-  qualityTitle: '节点质量',
+  qualityTitle: '节点评分',
 
   // ===== 对齐上游 catch-up v0.1.412 缺失键 =====
 

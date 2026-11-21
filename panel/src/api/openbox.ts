@@ -2071,6 +2071,9 @@ export type OpenboxQualitySubscription = OpenboxQualityStats & {
   assessed: number
   coverage: number
   score: number | null
+  // 覆盖率不足 80% 时沿用上一次的订阅整体评分,scoreAt 是那一次的时间
+  scoreStale?: boolean
+  scoreAt?: number | string | null
   grade: OpenboxQualityGrade
   provisional?: boolean
   bandwidthCount: number

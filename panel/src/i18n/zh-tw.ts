@@ -526,7 +526,7 @@ const zhTW: LANG_MESSAGE = {
   qualityUsable: '{usable} / {total} 節點可用',
   qualityPoints: '分',
   qualityMeasuredScore: '已測均分 {score}',
-  qualityGrade_pending: '待補資料',
+  qualityGrade_pending: '暫無評分',
   qualityGrade_attention: '需關注',
   qualityGrade_excellent: '優秀',
   qualityGrade_good: '良好',
@@ -539,11 +539,11 @@ const zhTW: LANG_MESSAGE = {
   subscriptionBandwidthCheck: '啟用頻寬定期檢查',
   subscriptionBandwidthHelpTitle: '頻寬定期檢查',
   subscriptionBandwidthHelp:
-    '由路由器按後端設定的統一週期檢測本訂閱的有效節點：每 {hours} 小時一次，單次下載上限 {maxMB} MB。只對已確認健康的節點下載，健康檢查與手動測速優先。',
+    '路由器按統一頻寬測試週期檢測本訂閱的有效節點。只對已確認健康的節點測速，健康檢查與手動測速優先。',
   subscriptionBandwidthDedupe:
-    '同一有效連線在訂閱與啟用頻寬擇優的分組間共用持久化紀錄。更名、排序或重啟不會重複下載。關閉本訂閱檢查後，若其他訂閱或分組仍需要該節點，仍會共用檢測。',
+    '同一有效連線在訂閱與啟用節點評分的分組間共用持久化紀錄。更名、排序或重啟不會重複下載。關閉本訂閱檢查後，若其他訂閱或分組仍需要該節點，仍會共用檢測。',
   subscriptionBandwidthBudget:
-    '後端設定顯示全部去重節點的每日下載流量上界；協定開銷、首次或新增節點測試、機場倍率另計。此開關不自動啟用頻寬擇優，也不改變分流出口。',
+    '後端設定顯示全部去重節點的每日下載流量上界；協定開銷、首次或新增節點測試、機場倍率另計。此開關不自動啟用節點評分，也不改變分流出口。',
   qualityState_down: '檢測失敗',
   qualityState_unknown: '未檢測',
   qualityState_stale: '已過期',
@@ -559,18 +559,18 @@ const zhTW: LANG_MESSAGE = {
   qualityCollapse: '收起「{name}」節點',
   qualityShowAllNodes: '顯示全部',
   qualityShowFirstNodes: '收起',
-  qualityHelp: '節點品質說明',
+  qualityHelp: '節點評分說明',
   qualityNever: '尚未檢測',
   qualityTime: '{hours} 小時 {minutes} 分',
   qualityNotMeasured: '未檢測',
   qualityDetailScope:
     '延遲取最近最多 10 次成功探測的中位數。抖動和下載頻寬各取最近最多 10 個有效值的平均值。',
   qualityHealthHelp:
-    '節點健康是第一前提。確認失敗的節點在訂閱整體品質中按 0 分計入；未檢測、已過期節點降低涵蓋率。涵蓋率不足 80% 時，主位置顯示「待補資料」。',
+    '確認失敗的節點按 0 分計入訂閱品質。涵蓋率按有效的近期檢測計算。涵蓋率不足 80% 時，優先顯示上一次評分。',
   qualityModelHelp:
-    '健康節點使用和頻寬擇優相同的評分標準。延遲佔 40%、下載頻寬佔 30%、HTTP 探測抖動佔 30%。缺測項跳過，其餘權重按比例換算。缺測或任一項不足 10 個樣本時標為暫估。',
+    '健康節點使用和節點評分相同的評分標準。延遲、下載頻寬和 HTTP 抖動使用後端設定中的權重。缺測項跳過，其餘權重按比例換算。參與評分的指標缺測或不足 10 個樣本時標為暫估。',
   qualityExampleHelp:
-    '例如：1 個 95 分節點與 9 個失敗節點，整體約 10 分；1 個 95 分節點與 9 個未測節點，顯示「待補資料」，不能評為優秀。',
+    '例如：1 個 95 分節點與 9 個失敗節點，整體約 10 分；1 個 95 分節點與 9 個未測節點，顯示「暫無評分」，不能評為優秀。',
   qualityMeasurementHelp:
     '按目前有效連線、網路環境及全域測速目標統計，保留最近 24 個小時桶。抖動指連續成功 HTTP 探測耗時之差的平均，不等同於 UDP 抖動或 IP 丟包率。時長與業務流量為取樣估算，排除面板探測，不參與加分；並發使用時長只計一次。',
   qualityBandwidthHelp:
@@ -578,7 +578,7 @@ const zhTW: LANG_MESSAGE = {
   qualityMode_login: '登入',
   qualityMode_subscription: '訂閱',
   qualityMode_node: '節點',
-  qualityLoadFailed: '節點品質讀取失敗：{message}',
+  qualityLoadFailed: '節點評分讀取失敗：{message}',
   nodeInfoProtocol: '協定',
   nodeInfoServer: '伺服器',
   nodeInfoEntryIp: '入口 IPv4',
@@ -970,7 +970,7 @@ const zhTW: LANG_MESSAGE = {
   groupInterval: '檢測間隔',
   groupTolerance: '延遲容差',
   groupUrltestHint:
-    '按延遲選擇時，新節點快出設定的容差才切換。啟用帶寬擇優且健康候選有有效帶寬時，改用綜合評分。',
+    '按延遲選擇時，新節點快出設定的容差才切換。啟用節點評分且健康候選有有效帶寬時，改用綜合評分。',
   groupMembersLabel: '成員',
   groupFilterAllSubscriptions: '全部',
   groupSubscriptionMissing: '已刪除的訂閱',
@@ -1026,7 +1026,7 @@ const zhTW: LANG_MESSAGE = {
   failoverSummary: '故障轉移 · {lanes} 個頁籤 · {count} 個節點',
   failoverTolerance: '組內延遲容差',
   failoverToleranceHint:
-    '僅在自動頁籤按延遲選節點時使用。啟用帶寬擇優且該頁籤有有效帶寬資料時跳過此項，主備順序照常生效。',
+    '僅在自動頁籤按延遲選節點時使用。啟用節點評分且該頁籤有有效帶寬資料時跳過此項，主備順序照常生效。',
   failoverToleranceUnused: '所有頁籤都只有一個有效節點,組內沒有可擇優的對象,這項暫時用不上',
   failoverTimeout: '單次檢測逾時',
   failoverRestore: '主用恢復後切回',
@@ -2212,8 +2212,8 @@ const zhTW: LANG_MESSAGE = {
   outboundPickerTestOne: '測速',
   outboundPickerTestGroupNow: '測速該組目前選中的節點',
 
-  bandwidthEnable: '啟用帶寬擇優',
-  bandwidthHelpTitle: '帶寬擇優說明',
+  bandwidthEnable: '節點評分',
+  bandwidthHelpTitle: '節點評分說明',
   bandwidthSettingsTitle: '帶寬測試',
   bandwidthPeriod: '統一帶寬測試周期',
   bandwidthHours: '小時',
@@ -2227,25 +2227,25 @@ const zhTW: LANG_MESSAGE = {
   bandwidthOff_urltest:
     '按延時穩定選擇一個節點，保留原有延時容差，避免小幅波動導致頻繁切換。',
   bandwidthOn_urltest:
-    '至少一個健康候選有有效下載帶寬時，按延遲 40%、下載帶寬 30%、抖動 30% 評分。此時跳過延遲容差。同分保留目前節點，健康節點至少保持 60 秒。健康候選均無有效帶寬時，按延遲和容差選節點。',
+    '按後端設定中的權重給健康候選評分。下載頻寬權重大於 0 時，至少一個候選需要有效的下載頻寬資料。此時跳過延遲容差。同分保留目前節點，健康節點至少保持 60 秒。沒有可用評分時，按延遲和容差選節點。',
   bandwidthExample_urltest:
-    'A 目前為 150 ms、10 Mbps，B 為 100 ms、300 Mbps，抖動相同。容差為 100 ms 時，按延遲可保留 A。啟用帶寬擇優且樣本有效時，保持期結束後選 B。',
+    'A 目前為 150 ms、10 Mbps，B 為 100 ms、300 Mbps，抖動相同。容差為 100 ms 時，按延遲可保留 A。啟用節點評分且樣本有效時，保持期結束後選 B。',
   bandwidthOff_failover:
     '先遵守主用、備用頁籤順序，以及原有故障確認和恢復回切設置；自動頁籤內部按延時選擇，手動頁籤保持用戶指定的節點。',
   bandwidthOn_failover:
-    '自動頁籤內沿用 40/30/30 評分。有健康候選具備有效帶寬時，跳過組內延遲容差。否則按延遲和容差選擇。主備順序、恢復確認、回切設定及手動選擇繼續生效。',
+    '自動頁籤使用後端設定中的評分權重。有可用評分時，跳過組內延遲容差。否則按延遲和容差選擇。主備順序、恢復確認、回切設定及手動選擇繼續生效。',
   bandwidthExample_failover:
     '主用健康、帶寬 50 Mbps，備用帶寬 500 Mbps，仍使用主用。如果主用的自動頁籤內有兩個同延時的健康節點，分別為 200 Mbps 和 50 Mbps，則在這個頁籤內優先 200 Mbps 的節點。',
   bandwidthOff_loadbalance:
     '每個新連接優先分配給健康且連接/撥號較少的節點；佔用相同時在低延時範圍內輪換。',
   bandwidthOn_loadbalance:
-    '新連線使用同一套 40/30/30 品質分加權。先用空閒節點，佔用相同時優先品質更高的節點。各組共享活動連線與正在撥號的佔用。健康候選均無有效帶寬時，恢復原分配規則。',
+    '新連線按後端設定中的權重計算品質分。先用空閒節點，佔用相同時優先品質更高的節點。各組共享活動連線與正在撥號的佔用。沒有可用評分時，沿用原分配規則。',
   bandwidthExample_loadbalance:
     'A 得 93 分、B 得 64 分。都空閒時先選 A，A 仍有活動連線時下一條先給空閒的 B。A 確認故障後，新連線交給 B。',
   bandwidthSharedHelp:
-    '每 {hours} 小時每個實際節點共用一次帶寬測試，每次最多下載 {maxMB} MB。帶寬取最近最多 10 次成功結果的平均值。最新結果達到兩個週期時，整組樣本停止參與評分。缺測候選暫用其他候選實測帶寬的中位數。計算評分無需增加探測。',
+    '同一實際節點跨訂閱和群組共用一次頻寬測試。頻寬取最近最多 10 次成功結果的平均值。最新結果達到兩個週期時，整組樣本停止參與評分。缺測候選暫用其他候選實測頻寬的中位數。計算評分無需增加探測。',
   bandwidthClientDisabled:
-    'Android、iOS、Windows、macOS、Linux 客戶端不啟用帶寬擇優及下載測速；節點分流仍可由路由器執行自身策略。實測值反映當時條件，不保證總帶寬疊加比例。',
+    'Android、iOS、Windows、macOS、Linux 客戶端不啟用節點評分及下載測速；節點分流仍可由路由器執行自身策略。實測值反映當時條件，不保證總帶寬疊加比例。',
   nodeInfoExpandText: '展開{field}',
   nodeInfoCollapseText: '收起{field}',
   nodeTrafficEstimate: '人機流量（估算）',
@@ -2275,7 +2275,7 @@ const zhTW: LANG_MESSAGE = {
   nodeRiskVeryClean: '極度純淨',
   nodeRiskVeryLow: '極低風險',
   nodeRiskVeryHigh: '極高風險',
-  qualityTitle: '節點品質',
+  qualityTitle: '節點評分',
 
   // ===== 对齐上游 catch-up v0.1.412 缺失键 =====
 
