@@ -1,5 +1,6 @@
 // DoH 地址的输入 / 展示:界面上拆成「域名或 IP」「端口」,路径不显示、但原样保留;
 // 存进档案的仍是完整的 https:// 地址,所以后端和线上格式不变。
+import { isDnsHost } from './dnsProtocol'
 
 export interface DohPath {
   host: string
@@ -13,23 +14,6 @@ export interface DohEndpoint {
 
 const DEFAULT_DOH_PORT = 443
 const DEFAULT_DOH_SUFFIX = '/dns-query'
-
-const IPV4_RE = /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/
-const IPV6_RE = /^[0-9a-f:]+$/i
-
-export const isIpAddress = (value: string) => {
-  const host = value.trim()
-  if (!host) return false
-  if (IPV4_RE.test(host)) return host !== '0.0.0.0'
-  if (!host.includes(':')) return false
-  return IPV6_RE.test(host) && host !== '::' && host.split('::').length <= 2 && host.split(':').length <= 8
-}
-
-export const isDomainHost = (value: string) => {
-  const host = value.trim()
-  if (!host || isIpAddress(host) || host.length > 253 || !host.includes('.')) return false
-  return host.split('.').every((label) => label.length <= 63 && /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label))
-}
 
 export const isValidPort = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 65535
@@ -70,7 +54,7 @@ export const parseDohInput = (text: string, fallbackPort: number): DohEndpoint |
 // 框里的主机是不是能用的:IP、域名,或和已保存路径同一个主机
 export const dohHost = ({ server, dohPath }: Pick<DohEndpoint, 'server' | 'dohPath'>) => {
   const host = stripBrackets(server)
-  return isIpAddress(host) || isDomainHost(host) || host === dohPath?.host ? host : ''
+  return isDnsHost(host) || host === dohPath?.host ? host : ''
 }
 
 // 拼回存档用的完整地址;主机或端口不对返回空串
