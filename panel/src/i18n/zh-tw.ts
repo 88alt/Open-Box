@@ -2339,12 +2339,17 @@ const zhTW: LANG_MESSAGE = {
   nodeScoreWeightFirstDivider: '延遲與頻寬分界',
   nodeScoreWeightSecondDivider: '頻寬與抖動分界',
   nodeScoreWeightValues: '延遲 {latency}%，頻寬 {download}%，抖動 {jitter}%',
+  businessPreference: '業務優選',
+  businessReliabilityHalfLife: '可靠性衰減',
+  businessPerformanceTtl: '可信度效期',
+  businessPreferenceMinutes: '分鐘',
   bandwidthDays: '天',
   bandwidthPeriodUnit: '頻寬測試週期單位',
   bandwidthPeriodInvalid: '請輸入至少 1 小時的有效週期。',
   bandwidthSettingsHelpLabel: '{title}說明',
   bandwidthHelpCurrent: '目前設定',
   bandwidthHelpCurrentTest: '頻寬測試每 {hours} 小時，每次最多 {maxMB} MB',
+  bandwidthHelpCurrentBusiness: '可靠性衰減 {minutes} 分鐘，可信度效期 {seconds} 秒',
   bandwidthHelpEditLocation: '在「設定 → 後端設定 → {section}」修改',
   bandwidthHelpLoading: '正在讀取…',
   bandwidthHelpUnavailable: '無法讀取已儲存的值',
@@ -2364,6 +2369,18 @@ const zhTW: LANG_MESSAGE = {
   nodeScoreWeightMetric: '項目',
   nodeScoreWeightsDefaultExample: '預設權重得分（40 / 30 / 30）',
   nodeScoreWeightsAdjustedExample: '調整後得分（70 / 15 / 15）',
+  businessSettingsHelpIntro:
+    '自動優選、故障轉移的自動頁籤和負載均衡可參考同一目標的實際 TCP 連線證據。新目標證據不足時，沿用群組原有規則。選路調整只用於新連線，已建立的連線繼續走原出口。',
+  businessSettingsHelpScope:
+    '證據按目標主機/IP、連接埠和位址家族區分。UDP/QUIC 及重用既有連線的請求不觸發這套 TCP 選擇。計時包含建連和首寫至回覆耗時，不計用戶端等待首寫的閒置。首個傳輸回覆可能只是 TLS 握手，不能代表 HTTP 內容成功或持續下載速度。用戶端本機分流不啟用這項路由器功能。',
+  businessSettingsHelpReliability:
+    '決定觀測到的連續連線失敗影響消退得有多快。預設 1 小時，一次失敗的權重在 1 小時後減半，2 小時後剩四分之一。節點成功收到回覆後，連續失敗重新計數。用戶端主動取消不算節點失敗。',
+  businessSettingsHelpReliabilityExample:
+    'A 最近連續兩次連線某個目標失敗，而合格候選 B 最近連線同一目標時成功收到回覆。新的同目標連線就可以優先走 B。首次存取其他網站時，仍按群組原有規則選節點。',
+  businessSettingsHelpPerformance:
+    '決定用於新效能比較的證據要有多新，預設 60 秒。替換健康節點需要多次可比較的回覆樣本。自動群組為某目標選中的節點若仍健康且持續成功，不會僅因比較證據到期就被強制換回預設節點。',
+  businessSettingsHelpPerformanceExample:
+    '在可比較條件下，A 多次約 200 ms 回覆，B 多次約 120 ms 回覆，自動群組可為這個目標保持使用 B。比較證據到期後，需要新證據才能晉升其他節點；不會只因近期沒再使用 A，就丟棄 B 持續成功的結果。',
 }
 
 export default zhTW

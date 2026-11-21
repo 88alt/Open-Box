@@ -2338,12 +2338,17 @@ const zh: LANG_MESSAGE = {
   nodeScoreWeightFirstDivider: '延时与带宽分界',
   nodeScoreWeightSecondDivider: '带宽与抖动分界',
   nodeScoreWeightValues: '延时 {latency}%，带宽 {download}%，抖动 {jitter}%',
+  businessPreference: '业务优选',
+  businessReliabilityHalfLife: '可靠性衰减',
+  businessPerformanceTtl: '可信度效期',
+  businessPreferenceMinutes: '分钟',
   bandwidthDays: '天',
   bandwidthPeriodUnit: '带宽测试周期单位',
   bandwidthPeriodInvalid: '请输入至少 1 小时的有效周期。',
   bandwidthSettingsHelpLabel: '{title}说明',
   bandwidthHelpCurrent: '当前设置',
   bandwidthHelpCurrentTest: '带宽测试每 {hours} 小时，每次最多 {maxMB} MB',
+  bandwidthHelpCurrentBusiness: '可靠性衰减 {minutes} 分钟，可信度效期 {seconds} 秒',
   bandwidthHelpEditLocation: '在「设置 → 后端设置 → {section}」修改',
   bandwidthHelpLoading: '正在读取…',
   bandwidthHelpUnavailable: '未能读取已保存的值',
@@ -2363,6 +2368,18 @@ const zh: LANG_MESSAGE = {
   nodeScoreWeightMetric: '项目',
   nodeScoreWeightsDefaultExample: '默认权重得分（40 / 30 / 30）',
   nodeScoreWeightsAdjustedExample: '调整后得分（70 / 15 / 15）',
+  businessSettingsHelpIntro:
+    '自动优选、故障转移的自动页签和负载均衡可参考同一目标的真实 TCP 连接证据。新目标证据不足时，沿用分组原有规则。选路调整只用于新连接，已建立的连接继续走原出口。',
+  businessSettingsHelpScope:
+    '证据按目标主机/IP、端口和地址族区分。UDP/QUIC 及复用已有连接的请求不触发这套 TCP 选择。计时包含建连和首写至回包耗时，不计客户端等待首写的空闲。首个传输回包可能只是 TLS 握手，不能代表 HTTP 内容成功或持续下载速度。客户端本地分流不启用这项路由器功能。',
+  businessSettingsHelpReliability:
+    '决定观测到的连续连接失败影响消退得有多快。默认 1 小时，一次失败的权重在 1 小时后减半，2 小时后剩四分之一。节点成功收到回包后，连续失败重新计数。客户端主动取消不算节点失败。',
+  businessSettingsHelpReliabilityExample:
+    'A 最近连续两次连接某个目标失败，而合格候选 B 最近连接同一目标时成功收到回包。新的同目标连接就可以优先走 B。首次访问其他网站时，仍按分组原有规则选节点。',
+  businessSettingsHelpPerformance:
+    '决定用于新性能比较的证据要有多新，默认 60 秒。替换健康节点需要多次可比的回包样本。自动组为某目标选中的节点若仍健康且持续成功，不会仅因比较证据到期就被强制换回默认节点。',
+  businessSettingsHelpPerformanceExample:
+    '在可比条件下，A 多次约 200 ms 回包，B 多次约 120 ms 回包，自动组可为这个目标保持使用 B。比较证据到期后，需要新证据才能晋升其他节点；不会只因近期没再使用 A，就丢弃 B 持续成功的结果。',
 }
 
 export default zh

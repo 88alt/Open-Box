@@ -280,6 +280,8 @@ export interface OpenboxProfile {
   bandwidth?: OpenboxBandwidthSettings
   // 节点评分权重(百分点,三项合计 100,可以为 0);没设置时是 40 / 30 / 30
   nodeScoreWeights?: OpenboxNodeScoreWeights
+  // 业务优选的两个时间参数(对齐上游 v0.1.473);没设置时都是 60
+  businessPreference?: OpenboxBusinessPreference
   rulesetDir?: string
 }
 
@@ -852,6 +854,12 @@ export interface OpenboxNodeScoreWeights {
   latency: number
   download: number
   jitter: number
+}
+
+// 业务优选:可靠性衰减(分钟,1~1440,默认 60)、可信度效期(秒,1~3600,默认 60)
+export interface OpenboxBusinessPreference {
+  reliabilityHalfLifeMinutes: number
+  performanceTtlSeconds: number
 }
 
 export interface OpenboxBandwidthSettings {

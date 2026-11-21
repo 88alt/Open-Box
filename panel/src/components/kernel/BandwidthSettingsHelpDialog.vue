@@ -45,6 +45,27 @@
         </div>
       </template>
 
+      <template v-else-if="section === 'businessPreference'">
+        <p>{{ $t('businessSettingsHelpIntro') }}</p>
+        <section class="flex flex-col gap-1">
+          <h3 class="font-semibold">{{ $t('businessReliabilityHalfLife') }}</h3>
+          <p>{{ $t('businessSettingsHelpReliability') }}</p>
+          <div class="bg-base-200 rounded-lg p-3">
+            <h4 class="mb-1 font-semibold">{{ $t('bandwidthSettingsHelpExampleHeading') }}</h4>
+            <p>{{ $t('businessSettingsHelpReliabilityExample') }}</p>
+          </div>
+        </section>
+        <section class="flex flex-col gap-1">
+          <h3 class="font-semibold">{{ $t('businessPerformanceTtl') }}</h3>
+          <p>{{ $t('businessSettingsHelpPerformance') }}</p>
+          <div class="bg-base-200 rounded-lg p-3">
+            <h4 class="mb-1 font-semibold">{{ $t('bandwidthSettingsHelpExampleHeading') }}</h4>
+            <p>{{ $t('businessSettingsHelpPerformanceExample') }}</p>
+          </div>
+        </section>
+        <p class="text-base-content/75">{{ $t('businessSettingsHelpScope') }}</p>
+      </template>
+
       <template v-else>
         <p>{{ $t('nodeScoreWeightsHelpIntro') }}</p>
         <p>{{ $t('nodeScoreWeightsHelpDrag') }}</p>
@@ -114,8 +135,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
-  // 当前展示哪一块的说明:带宽测试,或评分权重
-  section: 'bandwidthSettingsTitle' | 'nodeScoreWeights'
+  // 当前展示哪一块的说明:带宽测试、评分权重,或业务优选
+  section: 'bandwidthSettingsTitle' | 'nodeScoreWeights' | 'businessPreference'
   profile?: OpenboxProfile | null
   loading?: boolean
 }>()
@@ -131,6 +152,12 @@ const currentText = computed(() => {
     return t('bandwidthHelpCurrentTest', {
       hours: p.bandwidth?.intervalHours ?? 12,
       maxMB: p.bandwidth?.maxDownloadMB ?? 64,
+    })
+  }
+  if (props.section === 'businessPreference') {
+    return t('bandwidthHelpCurrentBusiness', {
+      minutes: p.businessPreference?.reliabilityHalfLifeMinutes ?? 60,
+      seconds: p.businessPreference?.performanceTtlSeconds ?? 60,
     })
   }
   const w = p.nodeScoreWeights ?? { latency: 40, download: 30, jitter: 30 }
