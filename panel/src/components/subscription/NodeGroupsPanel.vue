@@ -403,13 +403,9 @@
             </button>
           </div>
           <!-- 成员怎么来:动态组按关键词现算,静态组手工挑。放在这儿是因为下面整块
-               (穿梭框 / 关键词框)都归它管。故障转移只有静态一种,不给切换 -->
-          <p
-            v-if="isFailover"
-            class="text-base-content/60 text-xs"
-          >{{ $t('failoverStaticHint') }}</p>
+               (穿梭框 / 关键词框)都归它管。故障转移只有静态一种,不给切换(也没有说明文字,与上游 v0.1.473 一致) -->
           <div
-            v-else
+            v-if="!isFailover"
             class="flex flex-wrap items-center justify-between gap-2"
           >
             <div

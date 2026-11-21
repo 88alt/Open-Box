@@ -1,36 +1,24 @@
 <template>
-  <!-- 故障转移组展开后最上面一条:兜底拒绝时的提示和原因、检测进度、测速跟不上的警告,右边是「重新检测」 -->
+  <!-- 故障转移组展开后最上面一条(对齐上游 v0.1.473,没有「重新检测」按钮):兜底拒绝时的提示和原因、检测进度、测速跟不上的警告 -->
   <div
-    v-if="group || overload"
-    class="mb-2 flex items-start gap-2 text-xs"
+    v-if="rejected || progress || overload"
+    class="mb-2 space-y-0.5 text-xs"
   >
-    <div class="min-w-0 flex-1 space-y-0.5 pt-1">
-      <template v-if="rejected">
-        <p class="text-error">{{ $t('failoverRejectedHint') }}</p>
-        <p
-          v-if="reasons"
-          class="text-error"
-        >{{ $t('failoverFailReason', { reasons }) }}</p>
-      </template>
+    <template v-if="rejected">
+      <p class="text-error">{{ $t('failoverRejectedHint') }}</p>
       <p
-        v-if="progress"
-        class="text-base-content/60 tabular-nums"
-      >{{ $t('failoverChecking', progress) }}</p>
-      <p
-        v-if="overload"
-        class="text-warning"
-      >{{ $t('probeOverloaded', { demand: overload.demand.toFixed(1), done: overload.done.toFixed(1) }) }}</p>
-    </div>
-    <button
-      v-if="group"
-      type="button"
-      class="btn btn-sm bg-base-200 border-base-200 text-base-content/80 hover:text-base-content h-6 min-h-6 shrink-0 cursor-pointer px-2 text-xs font-medium shadow-none"
-      :disabled="rechecking"
-      v-tip="$t('failoverRecheckHint')"
-      @click.stop="recheck"
-    >
-      {{ $t('failoverRecheck') }}
-    </button>
+        v-if="reasons"
+        class="text-error"
+      >{{ $t('failoverFailReason', { reasons }) }}</p>
+    </template>
+    <p
+      v-if="progress"
+      class="text-base-content/60 tabular-nums"
+    >{{ $t('failoverChecking', progress) }}</p>
+    <p
+      v-if="overload"
+      class="text-warning"
+    >{{ $t('probeOverloaded', { demand: overload.demand.toFixed(1), done: overload.done.toFixed(1) }) }}</p>
   </div>
 </template>
 
@@ -40,9 +28,8 @@ import {
   failoverGroupByTag,
   failoverProbeOverload,
   isFailoverRejected,
-  recheckFailoverGroup,
 } from '@/store/openboxFailover'
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
 const props = defineProps<{ groupName: string }>()
 
@@ -55,17 +42,4 @@ const progress = computed(() => {
   return round && round.total > 0 ? { done: round.done, total: round.total } : null
 })
 const overload = failoverProbeOverload
-
-// 点下去到服务端回话之前、以及服务端还在做这一轮手动重测时,按钮都灰着,免得连点
-const clicked = ref(false)
-const rechecking = computed(() => clicked.value || !!group.value?.manualRecheck)
-const recheck = async () => {
-  if (rechecking.value) return
-  clicked.value = true
-  try {
-    await recheckFailoverGroup(props.groupName)
-  } finally {
-    clicked.value = false
-  }
-}
 </script>

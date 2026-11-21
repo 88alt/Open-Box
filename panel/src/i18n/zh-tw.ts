@@ -1024,8 +1024,6 @@ const zhTW: LANG_MESSAGE = {
   loadBalanceNodesOnly: '負載均衡只能選擇真實節點，請移除節點群組或失效成員。',
   groupUnitSecond: '秒',
   failoverSummary: '故障轉移 · {lanes} 個頁籤 · {count} 個節點',
-  failoverStaticHint:
-    '從左側選節點加入目前頁籤;最前面的頁籤是主用,後面依次備用。單節點頁籤直接使用;多節點頁籤可選自動優選(按測速選)或手動選擇(在代理頁點選)。',
   failoverTolerance: '組內延遲容差',
   failoverToleranceHint:
     '僅在自動頁籤按延遲選節點時使用。啟用帶寬擇優且該頁籤有有效帶寬資料時跳過此項，主備順序照常生效。',
@@ -1082,10 +1080,6 @@ const zhTW: LANG_MESSAGE = {
   failoverFailItem: '{reason}({n} 個)',
   failoverFailStatusCode: '狀態碼 {code}',
   failoverChecking: '檢測中 {done}/{total}',
-  failoverRecheck: '重新檢測',
-  failoverRecheckHint: '馬上把這個組的節點全部重測一遍',
-  failoverRecheckStarted: '「{name}」開始重新檢測',
-  failoverRecheckFailed: '重新檢測沒能開始:{error}',
   probeOverloaded:
     '測速跟不上:每秒要測約 {demand} 個,核心每秒測完約 {done} 個,檢測會變慢;可減少組裡的節點或加大檢測間隔。',
   groupUnitMs: '毫秒',

@@ -1023,8 +1023,6 @@ const zh: LANG_MESSAGE = {
   loadBalanceNodesOnly: '负载均衡只能选择真实节点，请移除节点组或失效成员。',
   groupUnitSecond: '秒',
   failoverSummary: '故障转移 · {lanes} 个页签 · {count} 个节点',
-  failoverStaticHint:
-    '从左侧选节点加入当前页签;最前面的页签是主用,后面依次备用。单节点页签直接使用;多节点页签可选自动优选(按测速选)或手动选择(在代理页点选)。',
   failoverTolerance: '组内延时容差',
   failoverToleranceHint:
     '仅在自动页签按延时选节点时使用。开启带宽择优且该页签有有效带宽数据时跳过此项，主备顺序照常生效。',
@@ -1081,10 +1079,6 @@ const zh: LANG_MESSAGE = {
   failoverFailItem: '{reason}({n} 个)',
   failoverFailStatusCode: '状态码 {code}',
   failoverChecking: '检测中 {done}/{total}',
-  failoverRecheck: '重新检测',
-  failoverRecheckHint: '马上把这个组的节点全部重测一遍',
-  failoverRecheckStarted: '「{name}」开始重新检测',
-  failoverRecheckFailed: '重新检测没能开始:{error}',
   probeOverloaded:
     '测速跟不上:每秒要测约 {demand} 个,内核每秒测完约 {done} 个,检测会变慢;可减少组里的节点或加大检测间隔。',
   groupUnitMs: '毫秒',

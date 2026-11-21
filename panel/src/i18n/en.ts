@@ -1061,8 +1061,6 @@ const en = {
     'Select real proxy nodes. Remove groups or missing members.',
   groupUnitSecond: 's',
   failoverSummary: 'Failover · {lanes} lanes · {count} nodes',
-  failoverStaticHint:
-    'Pick nodes on the left into the current lane; the first lane is primary, the rest are backups in order. A single-node lane is used directly; a multi-node lane is either Auto (picks by latency) or Manual (you choose on the Proxies page).',
   failoverTolerance: 'In-lane latency tolerance',
   failoverToleranceHint:
     'Applies to latency selection inside automatic lanes. Skip it when bandwidth preference is enabled and a healthy candidate in the lane has valid bandwidth data. Lane priority is preserved.',
@@ -1123,10 +1121,6 @@ const en = {
   failoverFailItem: '{reason} ({n})',
   failoverFailStatusCode: 'status {code}',
   failoverChecking: 'Checking {done}/{total}',
-  failoverRecheck: 'Re-check',
-  failoverRecheckHint: 'Test every node in this group again now',
-  failoverRecheckStarted: 'Re-checking "{name}"',
-  failoverRecheckFailed: 'Could not start the re-check: {error}',
   probeOverloaded:
     'Tests cannot keep up: about {demand} needed per second, the core finishes about {done}. Checks will lag; use fewer nodes or longer intervals.',
   groupUnitMs: 'ms',

@@ -1,7 +1,6 @@
 import type { OpenboxFailoverGroupStatus, OpenboxFailoverStatus } from '@/api/openbox'
 import { fetchFailoverStatus, recheckFailover } from '@/api/openbox'
 import { latencyReasonText } from '@/helper/latencyReason'
-import { showNotification } from '@/helper/notification'
 import { i18n } from '@/i18n'
 import { managedOutbounds } from '@/store/openboxSiteSets'
 import { computed, ref } from 'vue'
@@ -185,21 +184,15 @@ export const failoverProbeOverload = computed(() => {
   return { demand: p.demandPerSec, done: p.throughputPerSec }
 })
 
-// 故障转移组的「测速」就是重新检测(与上游 v0.1.338 一致):通知服务端马上把这个组的节点全部重测一遍,
-// 然后每秒看一次状态,直到服务端做完(最多等 2 分钟)。同一个组正在检测时再点不重复发
-// 点「重新检测」:让服务端马上把这个组的节点全部重测一遍,只发一次请求;检测进度由状态轮询显示
+// 故障转移组的「测速」:通知服务端马上把这个组的节点全部重测一遍,再拉一次状态。
+// 上游 v0.1.473 起没有「重新检测」按钮和成功 / 失败提示,这里只静默触发,失败就等下一轮状态轮询
 export const recheckFailoverGroup = async (groupName: string) => {
   const group = failoverGroupByTag.value.get(groupName)
   if (!group) return
   try {
     await recheckFailover(group.id)
-    showNotification({ content: 'failoverRecheckStarted', params: { name: groupName }, type: 'alert-success' })
-  } catch (error) {
-    showNotification({
-      content: 'failoverRecheckFailed',
-      params: { error: error instanceof Error ? error.message : String(error) },
-      type: 'alert-error',
-    })
+  } catch {
+    // 不弹提示
   }
   await loadFailoverStatus()
 }
