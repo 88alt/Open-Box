@@ -2306,6 +2306,9 @@ const en = {
   chainProxyUpstreamLabel: 'Upstream',
   chainProxyHint:
     'Connect through the selected node or group.',
+  clientRouteDnsLabel: 'Custom DNS',
+  clientRouteDnsHint: 'These devices use the DNS server specified here. Leave it blank to use the default settings. Requires DNS interception.',
+  chainProxyDnsHint: 'Used by devices that select this node directly. Device DNS takes priority.',
   chainProxyTest: 'Test',
   chainProxyTestFailed: 'Unreachable',
   chainProxyIpUnknown: 'IP location unknown',

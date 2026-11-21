@@ -281,6 +281,22 @@ func BuildDNS(profile any, o DNSOptions) (DNSResult, error) {
 	answersPerTerminal := func(cr clientroutes.Route) bool {
 		return dnsMode == "hijack" || clientroutes.TerminalDNSRedirected(cr, tdo)
 	}
+	// 自定义 DNS:配了专用解析器的终端,查询一律交给它(排在本地主机名、域名过滤之后,其余规则之前),
+	// 路由侧「先解析再判 IP 规则」的 resolve 也用它,和终端实际拿到的地址一致。
+	terminalCustomRules := []any{}
+	for _, cr := range o.ClientRoutes {
+		if cr.DNSTag == "" || !answersPerTerminal(cr) {
+			continue
+		}
+		match := clientroutes.SourceMatch(cr)
+		if match == nil {
+			continue
+		}
+		terminalCustomRules = append(terminalCustomRules, merge(match, map[string]any{"server": cr.DNSTag}))
+		if _, byIP := match["source_ip_cidr"]; byIP {
+			resolvers.Clients = append(resolvers.Clients, ClientResolver{cr.Sources, cr.DNSTag})
+		}
+	}
 	// 「只让这些终端进内核」名单外终端的专用入站:查询一律直连解析。
 	admitInbound := o.Terminal.AdmitDirect
 	// dnsmasq 模式下转进来的终端不再经过 dnsmasq:本地主机名照劫持模式的办法交回 dnsmasq,只管这些终端。
@@ -313,11 +329,15 @@ func BuildDNS(profile any, o DNSOptions) (DNSResult, error) {
 		servers = append(servers, rewriteServers...)
 		servers = append(servers, localServers...)
 		only := map[string]any{"servers": servers, "final": "dns-direct", "strategy": strategy, "reverse_mapping": true}
-		if len(rewriteRules) > 0 || len(localRules) > 0 || len(filterRules) > 0 {
+		if len(rewriteRules) > 0 || len(localRules) > 0 || len(filterRules) > 0 || len(terminalCustomRules) > 0 {
 			rules := []any{}
 			rules = append(rules, rewriteRules...)
 			rules = append(rules, localRules...)
 			rules = append(rules, filterRules...)
+			if len(terminalCustomRules) > 0 {
+				ruleOwners = append(ruleOwners, RuleOwner{From: len(rules), To: len(rules) + len(terminalCustomRules), Kind: "client", Index: 0, Name: ""})
+				rules = append(rules, terminalCustomRules...)
+			}
 			only["rules"] = rules
 		}
 		return DNSResult{DNS: only, Resolvers: resolvers, RuleOwners: ruleOwners}, nil
@@ -360,6 +380,10 @@ func BuildDNS(profile any, o DNSOptions) (DNSResult, error) {
 	rules = append(rules, terminalLocalRules...)
 	rules = append(rules, httpsRRRule())
 	rules = append(rules, filterRules...)
+	if len(terminalCustomRules) > 0 {
+		ruleOwners = append(ruleOwners, RuleOwner{From: len(rules), To: len(rules) + len(terminalCustomRules), Kind: "client", Index: 0, Name: ""})
+		rules = append(rules, terminalCustomRules...)
+	}
 
 	own := func(kind string, index int, name string, body func()) {
 		from := len(rules)

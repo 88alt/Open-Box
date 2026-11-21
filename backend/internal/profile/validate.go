@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -64,6 +65,9 @@ func Check(p map[string]any) error {
 		return err
 	}
 	if err := checkDNS(p); err != nil {
+		return err
+	}
+	if err := checkEntryDNS(p); err != nil {
 		return err
 	}
 	if err := checkTraffic(p); err != nil {
@@ -428,6 +432,72 @@ func checkUpdates(p map[string]any) error {
 		return err
 	} else if ok && (n < 1 || n > 365) {
 		return fmt.Errorf("updates.openbox.days 只能是 1~365")
+	}
+	return nil
+}
+
+// checkEntryDNS 校验链式代理和终端分流条目里的自定义 DNS({ url, bootstrap? },对齐上游 v0.1.473 的面板):
+// url 是 https:// tls:// tcp:// udp:// 地址;主机是域名时要有 IP 形式的 bootstrap。没有这个字段或 url 为空 = 沿用默认。
+func checkEntryDNS(p map[string]any) error {
+	for _, key := range []string{"chainProxies", "clientRoutes"} {
+		list, ok := p[key].([]any)
+		if !ok {
+			continue
+		}
+		for i, e := range list {
+			m, isObj := e.(map[string]any)
+			if !isObj {
+				continue
+			}
+			if err := checkEntryDNSValue(m, fmt.Sprintf("%s[%d].dns", key, i)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func checkEntryDNSValue(entry map[string]any, label string) error {
+	raw, ok := entry["dns"]
+	if !ok || raw == nil {
+		return nil
+	}
+	m, isObj := raw.(map[string]any)
+	if !isObj {
+		return fmt.Errorf("%s 必须是对象", label)
+	}
+	addr, _, err := wantString(m, "url", label+".url")
+	if err != nil {
+		return err
+	}
+	bootstrap, _, err := wantString(m, "bootstrap", label+".bootstrap")
+	if err != nil {
+		return err
+	}
+	addr, bootstrap = strings.TrimSpace(addr), strings.TrimSpace(bootstrap)
+	if addr == "" {
+		return nil
+	}
+	if len(addr) > maxURLLen {
+		return fmt.Errorf("%s.url 太长", label)
+	}
+	u, perr := url.Parse(addr)
+	if perr != nil || u.Host == "" || u.User != nil || u.Fragment != "" || !slices.Contains(dnsProtocols, u.Scheme) {
+		return fmt.Errorf("%s.url 必须是 https:// tls:// tcp:// 或 udp:// 开头的地址", label)
+	}
+	if port := u.Port(); port != "" {
+		if n, perr := strconv.Atoi(port); perr != nil || n < 1 || n > 65535 {
+			return fmt.Errorf("%s.url 的端口只能是 1~65535", label)
+		}
+	}
+	if _, perr := netip.ParseAddr(u.Hostname()); perr == nil {
+		return nil
+	}
+	if u.Scheme == "udp" || u.Scheme == "tcp" {
+		return fmt.Errorf("%s.url 的 udp / tcp 地址只能是 IP", label)
+	}
+	if _, perr := netip.ParseAddr(bootstrap); perr != nil {
+		return fmt.Errorf("%s.bootstrap 必须是 IP 地址(服务器是域名时用它来解析)", label)
 	}
 	return nil
 }

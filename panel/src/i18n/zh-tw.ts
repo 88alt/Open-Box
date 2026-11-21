@@ -2175,6 +2175,9 @@ const zhTW: LANG_MESSAGE = {
   chainProxyUpstreamLabel: '上游',
   chainProxyHint:
     '透過選定的節點或節點群組連線。',
+  clientRouteDnsLabel: '自訂 DNS',
+  clientRouteDnsHint: '這些終端的 DNS 查詢使用此處指定的伺服器。留空時沿用預設設定。須開啟 DNS 接管。',
+  chainProxyDnsHint: '終端直接選擇此節點時可用，終端 DNS 優先。',
   chainProxyTest: '測速',
   chainProxyTestFailed: '不通',
   chainProxyIpUnknown: 'IP 歸屬地沒查到',

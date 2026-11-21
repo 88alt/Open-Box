@@ -233,6 +233,8 @@ func BuildDetailed(args any) (map[string]any, error) {
 		"ipv6Bindings":   jsx.Get(args, "clientBindings"),
 		"clientBindings": jsx.Get(args, "clientBindings"),
 	})
+	// 自定义 DNS:终端分流自己配的,或直选的链式代理配的(规则自己的优先);每条给一台专用 DNS 服务器
+	clientRoutes, clientDNSServers := PlanClientDNS(clientRoutes, profile)
 	knownOutbounds := map[string]bool{}
 	for _, o := range append(append([]any{}, outbounds...), endpoints...) {
 		if t, ok := jsx.Get(o, "tag").(string); ok {
@@ -290,6 +292,9 @@ func BuildDetailed(args any) (map[string]any, error) {
 		for _, s := range nodeDns.Servers {
 			appendTo(dns, "servers", s)
 		}
+	}
+	for _, s := range clientDNSServers {
+		appendTo(dns, "servers", s)
 	}
 
 	// ---- 路由 ----

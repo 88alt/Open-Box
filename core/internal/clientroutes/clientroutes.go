@@ -81,6 +81,11 @@ type Route struct {
 	Sources []string `json:"sources"`
 	// 只在 mac 模式出现,去重、非空;ip 模式整个字段不出现
 	Macs []string `json:"macs,omitempty"`
+	// 自定义 DNS:这些终端的 DNS 查询用这台服务器({url, bootstrap?},url 是 https:// tls:// tcp:// udp://);
+	// 没配或「不进内核」的规则没有这个字段。链式代理自己的 dns 在 config 里按出口并进来
+	DNS map[string]any `json:"dns,omitempty"`
+	// 自定义 DNS 在内核 dns.servers 里的 tag,由 config 的 PlanClientDNS 填;空表示这条规则没有专用解析器
+	DNSTag string `json:"dnsTag,omitempty"`
 }
 
 // ClientMatch:一条终端规则按什么认终端。显式写了 match(ip / mac)就用它;老档案没有这个字段,
@@ -183,6 +188,9 @@ func NormalizeClientRoutes(list any, opts any) []Route {
 			continue
 		}
 		route := Route{ID: orEmpty(jsx.Get(r, "id")), Name: orEmpty(jsx.Get(r, "name")), Match: match, Outbound: outbound, Bypass: bypass}
+		if !bypass {
+			route.DNS = cleanDNS(jsx.Get(r, "dns"))
+		}
 		if match == "mac" {
 			macs := cleanMacs(r)
 			if len(macs) == 0 {
@@ -197,6 +205,24 @@ func NormalizeClientRoutes(list any, opts any) []Route {
 			route.Sources = ExpandSourcesWithBindings(sources, bindings)
 		}
 		out = append(out, route)
+	}
+	return out
+}
+
+// cleanDNS:自定义 DNS 只认 {url, bootstrap?} 两个字符串;url 空就当没配。地址合不合法由 config.ClientDNSServers 判。
+func cleanDNS(raw any) map[string]any {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	url, _ := m["url"].(string)
+	url = jsx.Trim(url)
+	if url == "" {
+		return nil
+	}
+	out := map[string]any{"url": url}
+	if b, _ := m["bootstrap"].(string); jsx.Trim(b) != "" {
+		out["bootstrap"] = jsx.Trim(b)
 	}
 	return out
 }
@@ -244,12 +270,20 @@ type TerminalDNSOptions struct {
 //     劫持模式下它们的查询内核本来就接得到;
 //   - dnsmasq 模式下出口是节点 / 节点组的终端(整台进内核,解析也跟着它的出口)。
 //
+// 配了自定义 DNS 的终端(DNSTag 非空)也要转,查询才能到专用解析器。
 // 拒绝的终端整台进内核,dnsmasq 模式下解析仍按域名规则答。没开分流解析(dns.split)时所有查询都是直连解析,不用转。
 func TerminalDNSRedirected(cr Route, o TerminalDNSOptions) bool {
-	if !o.AutoRedirect || !o.SplitDNS {
+	if !o.AutoRedirect {
 		return false
 	}
 	if o.DNSMode != "dnsmasq" && o.DNSMode != "hijack" {
+		return false
+	}
+	// 配了自定义 DNS 的终端:查询要进内核才能按终端指到那台服务器,和有没有开分流解析无关
+	if cr.DNSTag != "" {
+		return true
+	}
+	if !o.SplitDNS {
 		return false
 	}
 	if cr.Bypass {

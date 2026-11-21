@@ -141,13 +141,37 @@
         v-if="form.mode === 'route'"
         class="flex flex-col gap-1"
       >
-        <label class="text-xs font-medium">{{ $t('clientRouteOutboundLabel') }}</label>
+        <div class="flex items-center justify-between gap-2">
+          <label class="text-xs font-medium">{{ $t('clientRouteOutboundLabel') }}</label>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs shrink-0 gap-1 font-normal"
+            :aria-controls="dnsPanelId"
+            :aria-expanded="dnsOpen"
+            @click="dnsOpen = !dnsOpen"
+          >
+            {{ $t('clientRouteDnsLabel') }}
+            <ChevronDownIcon
+              class="h-3.5 w-3.5 transition-transform"
+              :class="{ 'rotate-180': dnsOpen }"
+              aria-hidden="true"
+            />
+          </button>
+        </div>
         <OutboundPicker
           v-model="form.outbound"
           :options="options"
           :placeholder="$t('outboundPickerPlaceholder')"
         />
         <p class="text-base-content/50 text-xs">{{ $t('clientRouteHint') }}</p>
+        <div
+          v-show="dnsOpen"
+          :id="dnsPanelId"
+          class="flex flex-col gap-1"
+        >
+          <CustomDnsFields :draft="dnsDraft" />
+          <p class="text-base-content/50 text-xs">{{ $t('clientRouteDnsHint') }}</p>
+        </div>
       </div>
     </div>
 
@@ -174,14 +198,16 @@
 
 <script setup lang="ts">
 import type { OpenboxClientRoute } from '@/api/openbox'
+import CustomDnsFields from '@/components/common/CustomDnsFields.vue'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import OutboundPicker, { type OutboundPickerOptions } from '@/components/common/OutboundPicker.vue'
 import TextInput from '@/components/common/TextInput.vue'
 import { useAnchoredDropdown } from '@/composables/anchoredDropdown'
+import { createDnsDraft, dnsDraftError, dnsDraftValue } from '@/helper/customDns'
 import { showNotification } from '@/helper/notification'
 import { getDeviceName } from '@/helper/sourceip'
 import { CheckIcon, ChevronDownIcon } from '@heroicons/vue/24/outline'
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, useId, watch } from 'vue'
 
 const props = defineProps<{
   modelValue: boolean
@@ -226,6 +252,11 @@ const MODES: { value: ClientMode; label: string; hint: string }[] = [
   { value: 'admit', label: 'clientRouteAdmitLabel', hint: 'clientRouteAdmitHint' },
 ]
 
+// 自定义 DNS:这些终端的 DNS 查询用这台服务器。默认收起,已设置过就展开;校验没过也会展开
+const dnsDraft = ref(createDnsDraft())
+const dnsOpen = ref(false)
+const dnsPanelId = `client-route-dns-${useId()}`
+
 const modeHint = computed(() => MODES.find((m) => m.value === form.mode)?.hint)
 
 watch(
@@ -241,6 +272,8 @@ watch(
     form.mode = r?.admit ? 'admit' : r?.bypass ? 'bypass' : 'route'
     form.match = r?.match === 'ip' || r?.match === 'mac' ? r.match : (r?.bypass || r?.admit) && r?.macs?.length ? 'mac' : 'ip'
     form.macsText = (r?.macs || []).join('\n')
+    dnsDraft.value = createDnsDraft(r?.dns)
+    dnsOpen.value = false
   },
 )
 
@@ -330,7 +363,13 @@ const submit = () => {
     emit('saved', { ...base, outbound: '', ...(form.mode === 'admit' ? { admit: true } : { bypass: true }) })
   } else {
     if (!form.outbound) return fail('clientRouteErrOutbound')
-    emit('saved', { ...base, outbound: form.outbound })
+    const dnsError = dnsDraftError(dnsDraft.value)
+    if (dnsError) {
+      dnsOpen.value = true
+      return fail(dnsError)
+    }
+    const dns = dnsDraftValue(dnsDraft.value)
+    emit('saved', { ...base, outbound: form.outbound, ...(dns ? { dns } : {}) })
   }
   isOpen.value = false
 }

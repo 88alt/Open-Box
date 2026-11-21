@@ -226,6 +226,8 @@ export interface OpenboxClientRoute {
   match?: 'ip' | 'mac'
   // 只让这些终端进内核(白名单):不指定出口,只决定谁进内核
   admit?: boolean
+  // 自定义 DNS:这些终端的 DNS 查询用这台服务器;没有就沿用默认(需开启 DNS 接管)
+  dns?: { url: string; bootstrap?: string }
 }
 
 // 链式代理:一个节点不直接拨号,而是经另一个节点 / 节点组去连(内核里的 detour),见 server/engine/chain-proxy.mjs。
@@ -238,6 +240,8 @@ export interface OpenboxChainProxy {
   link: string
   // 上游:某个节点或节点组的名字
   upstream: string
+  // 自定义 DNS:终端直选这个节点时,DNS 查询用这台服务器(终端 DNS 优先);没有就沿用默认
+  dns?: { url: string; bootstrap?: string }
   // 保存时服务端按 link 解析出来的摘要,只读(界面列表显示用)
   node?: { type: string; server: string; port: number }
 }

@@ -235,13 +235,37 @@
         </div>
 
         <div class="flex flex-col gap-1">
-          <label class="text-xs font-medium">{{ $t('chainProxyUpstreamLabel') }}</label>
+          <div class="flex items-center justify-between gap-2">
+            <label class="text-xs font-medium">{{ $t('chainProxyUpstreamLabel') }}</label>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs shrink-0 gap-1 font-normal"
+              :aria-controls="dnsPanelId"
+              :aria-expanded="dnsOpen"
+              @click="dnsOpen = !dnsOpen"
+            >
+              {{ $t('clientRouteDnsLabel') }}
+              <ChevronDownIcon
+                class="h-3.5 w-3.5 transition-transform"
+                :class="{ 'rotate-180': dnsOpen }"
+                aria-hidden="true"
+              />
+            </button>
+          </div>
           <OutboundPicker
             v-model="draft.upstream"
             :options="pickerOptions"
             :placeholder="$t('outboundPickerPlaceholder')"
           />
           <p class="text-base-content/50 text-xs">{{ $t('chainProxyHint') }}</p>
+          <div
+            v-show="dnsOpen"
+            :id="dnsPanelId"
+            class="flex flex-col gap-1"
+          >
+            <CustomDnsFields :draft="dnsDraft" />
+            <p class="text-base-content/50 text-xs">{{ $t('chainProxyDnsHint') }}</p>
+          </div>
         </div>
 
         <!-- 测速:结果和按钮同一行,出口信息只占一行小字 -->
@@ -345,11 +369,13 @@
 <script setup lang="ts">
 import { fetchNodeGroups, fetchProfile, saveProfile, testChainLatency } from '@/api/openbox'
 import type { OpenboxChainLatencyResult, OpenboxChainProxy } from '@/api/openbox'
+import CustomDnsFields from '@/components/common/CustomDnsFields.vue'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import LatencyPill from '@/components/common/LatencyPill.vue'
 import OutboundPicker from '@/components/common/OutboundPicker.vue'
 import PasswordInput from '@/components/common/PasswordInput.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
+import { createDnsDraft, dnsDraftError, dnsDraftValue } from '@/helper/customDns'
 import { showNotification } from '@/helper/notification'
 import { speedtestTimeout, speedtestUrl } from '@/store/settings'
 import {
@@ -361,7 +387,8 @@ import {
   PowerIcon,
   TrashIcon,
 } from '@heroicons/vue/24/outline'
-import { computed, onMounted, ref } from 'vue'
+import { ChevronDownIcon } from '@heroicons/vue/24/outline'
+import { computed, onMounted, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -410,7 +437,14 @@ const inKernel = (chain: OpenboxChainProxy) => chain.enabled !== false && !upstr
 const persist = async (next: OpenboxChainProxy[]) => {
   saving.value = true
   try {
-    const plain = next.map(({ id, enabled, name, link, upstream }) => ({ id, enabled, name, link, upstream }))
+    const plain = next.map(({ id, enabled, name, link, upstream, dns }) => ({
+      id,
+      enabled,
+      name,
+      link,
+      upstream,
+      ...(dns?.url ? { dns } : {}),
+    }))
     const profile = await saveProfile({ chainProxies: plain })
     chains.value = profile.chainProxies ?? []
     showNotification({ content: 'chainProxySaved', type: 'alert-success' })
@@ -509,6 +543,10 @@ const effectiveLink = (): string | null => {
 const showEditor = ref(false)
 const editing = ref<OpenboxChainProxy | null>(null)
 const draft = ref({ id: '', enabled: true, name: '', link: '', upstream: '' })
+// 自定义 DNS:终端直选这个节点时用。默认收起,已设置过就展开;校验没过也会展开
+const dnsDraft = ref(createDnsDraft())
+const dnsOpen = ref(false)
+const dnsPanelId = `chain-dns-${useId()}`
 const testing = ref(false)
 const testResult = ref<OpenboxChainLatencyResult | null>(null)
 
@@ -517,6 +555,8 @@ const openEditor = (chain: OpenboxChainProxy | null) => {
   draft.value = chain
     ? { id: chain.id, enabled: chain.enabled !== false, name: chain.name, link: chain.link, upstream: chain.upstream }
     : { id: `chain-${Date.now().toString(36)}`, enabled: true, name: '', link: '', upstream: '' }
+  dnsDraft.value = createDnsDraft(chain?.dns)
+  dnsOpen.value = !!chain?.dns?.url
   // 新建默认按字段填;编辑时链接是标准的 http / socks5 就拆成字段,否则留在「链接」里
   const parsed = chain ? parseLink(chain.link) : null
   fields.value = parsed ?? emptyFields()
@@ -548,7 +588,20 @@ const saveDraft = async () => {
   if (upstream === name) return showNotification({ content: 'chainProxyErrSelf', type: 'alert-error' })
   const link = effectiveLink()
   if (!link) return
-  const item: OpenboxChainProxy = { id: draft.value.id, enabled: draft.value.enabled, name, link, upstream }
+  const dnsError = dnsDraftError(dnsDraft.value)
+  if (dnsError) {
+    dnsOpen.value = true
+    return showNotification({ content: dnsError, type: 'alert-error' })
+  }
+  const dns = dnsDraftValue(dnsDraft.value)
+  const item: OpenboxChainProxy = {
+    id: draft.value.id,
+    enabled: draft.value.enabled,
+    name,
+    link,
+    upstream,
+    ...(dns ? { dns } : {}),
+  }
   const next = editing.value ? chains.value.map((c) => (c.id === item.id ? item : c)) : [...chains.value, item]
   if (await persist(next)) {
     delete rowTests.value[item.id]
