@@ -1011,6 +1011,7 @@ const en = {
   groupMembersLabel: 'Members',
   groupFilterAllSubscriptions: 'All subscriptions',
   groupSubscriptionMissing: 'Deleted subscription',
+  groupChainSource: 'Chain proxies',
   groupFilterAllGroups: 'All groups',
   groupFilterAllNodes: 'All nodes',
   groupMoveRight: 'Add checked',

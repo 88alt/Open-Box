@@ -976,6 +976,7 @@ const zh: LANG_MESSAGE = {
   groupMembersLabel: '成员',
   groupFilterAllSubscriptions: '全部',
   groupSubscriptionMissing: '已删除的订阅',
+  groupChainSource: '链式代理',
   groupFilterAllGroups: '全部节点组',
   groupFilterAllNodes: '全部节点',
   groupMoveRight: '添加勾选的',

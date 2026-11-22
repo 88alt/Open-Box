@@ -174,7 +174,7 @@ func TestAvailableNodesCarrySubscriptionAndChain(t *testing.T) {
 		t.Fatalf("first=%v", first)
 	}
 	chain := nodes[2].(map[string]any)
-	if chain["name"] != "链1" || chain["chain"] != true || chain["upstream"] != "HK 01" {
+	if chain["name"] != "链1" || chain["chain"] != true || chain["upstream"] != "HK 01" || chain["subscriptionId"] != "chain-proxy" {
 		t.Fatalf("chain=%v", chain)
 	}
 	subsList := list(m, "subscriptions")
@@ -404,5 +404,59 @@ func TestAvailableNodeRegionName(t *testing.T) {
 	}
 	if r, _ := nodes[0].(map[string]any)["region"].(string); r == "" {
 		t.Fatalf("没有地区名: %v", nodes[0])
+	}
+}
+
+// 动态组的订阅范围:保存后读得回来(以前 core 规整时会把 subscriptionIds 丢掉),范围里能选「链式代理」(chain-proxy)。
+func TestDynamicGroupScopePersists(t *testing.T) {
+	e := newEnv(t)
+	id := e.addSub(t, "机场A", "HK 01", "US 01")
+	e.addSub(t, "机场B", "JP 01")
+	if _, err := e.prof.Patch(context.Background(), map[string]any{"chainProxies": []any{
+		map[string]any{"id": "c1", "enabled": true, "name": "链1", "link": "trojan://p@h.example.com:443#x", "upstream": "HK 01"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	_, cur := e.do("GET", "/api/openbox/groups", nil)
+	groups := append(list(cur, "groups"), map[string]any{
+		"id": "g-1", "name": "动态A", "type": "urltest", "mode": "dynamic", "subscriptionIds": []any{id, "chain-proxy", id},
+	}, map[string]any{
+		"id": "g-2", "name": "旧写法", "type": "selector", "mode": "dynamic", "subscriptionId": id,
+	})
+	code, res := e.do("PUT", "/api/openbox/groups", map[string]any{"groups": groups})
+	if code != 200 || res["ok"] != true || len(list(res, "dropped")) != 0 {
+		t.Fatalf("code=%d %v", code, res)
+	}
+	_, again := e.do("GET", "/api/openbox/groups", nil)
+	got := map[string][]any{}
+	for _, g := range list(again, "groups") {
+		m := g.(map[string]any)
+		got[m["name"].(string)], _ = m["subscriptionIds"].([]any)
+	}
+	if a := got["动态A"]; len(a) != 2 || a[0] != id || a[1] != "chain-proxy" {
+		t.Fatalf("范围要去重并保留 chain-proxy: %v", got["动态A"])
+	}
+	if a := got["旧写法"]; len(a) != 1 || a[0] != id {
+		t.Fatalf("老的单个 subscriptionId 要折进数组: %v", got["旧写法"])
+	}
+}
+
+// 链式节点的上游是动态组自己 → 会成环,不收进这个组,也不影响别的组保存。
+func TestDynamicGroupScopeSkipsChainCycle(t *testing.T) {
+	e := newEnv(t)
+	e.addSub(t, "机场A", "HK 01")
+	if _, err := e.prof.Patch(context.Background(), map[string]any{"chainProxies": []any{
+		map[string]any{"id": "c1", "enabled": true, "name": "链环", "link": "trojan://p@h.example.com:443#x", "upstream": "只链式"},
+		map[string]any{"id": "c2", "enabled": true, "name": "链好", "link": "trojan://p@h2.example.com:443#y", "upstream": "HK 01"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	_, cur := e.do("GET", "/api/openbox/groups", nil)
+	groups := append(list(cur, "groups"), map[string]any{
+		"id": "g-1", "name": "只链式", "type": "selector", "mode": "dynamic", "subscriptionIds": []any{"chain-proxy"},
+	})
+	code, res := e.do("PUT", "/api/openbox/groups", map[string]any{"groups": groups})
+	if code != 200 || res["ok"] != true || len(list(res, "dropped")) != 0 {
+		t.Fatalf("code=%d %v", code, res)
 	}
 }

@@ -78,8 +78,11 @@ type Group struct {
 	// 非空时才序列化 excludeKeywords / excludeKeywordMode
 	ExcludeKeywordMode string // or / and
 	ExcludeKeywords    []string
-	Members            []string
-	Kind               string // direct / block / 空
+	// 订阅范围(对齐上游 v0.1.476):只对动态组生效,只在这些订阅(或 ChainProxyScope = 链式代理)的节点里按关键词匹配;
+	// 空 = 不限范围(链式代理的节点仍不进动态组)。非空时才序列化 subscriptionIds
+	SubscriptionIDs []string
+	Members         []string
+	Kind            string // direct / block / 空
 
 	// 只有对应类型才有的字段;extras 记录它们来自哪种类型(内置出站会改写 Type,但这些字段原样保留)
 	extras  string // "" / urltest / failover / loadbalance
@@ -141,6 +144,9 @@ func (g *Group) MarshalJSON() ([]byte, error) {
 	if len(g.ExcludeKeywords) > 0 {
 		put("excludeKeywords", g.ExcludeKeywords)
 		put("excludeKeywordMode", g.ExcludeKeywordMode)
+	}
+	if len(g.SubscriptionIDs) > 0 {
+		put("subscriptionIds", g.SubscriptionIDs)
 	}
 	put("members", g.Members)
 	// 只在开着时才写:关着的组和旧档案的序列化结果保持一致
@@ -240,6 +246,25 @@ func strList(v any) []string {
 	return out
 }
 
+// scopeIDs 读订阅范围:subscriptionIds 数组;老记录只有一个 subscriptionId 字符串,折进来。去空去重,顺序保留。
+func scopeIDs(raw any) []string {
+	ids := strList(jsx.Get(raw, "subscriptionIds"))
+	if len(ids) == 0 {
+		if one, ok := jsx.NonEmpty(jsx.Get(raw, "subscriptionId")); ok {
+			ids = []string{one}
+		}
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 func normalizeLanes(raw any) []Lane {
 	arr, _ := raw.([]any)
 	if len(arr) > failoverMaxLanes {
@@ -310,6 +335,9 @@ func normalizeGroup(raw any, index int) *Group {
 		g.ExcludeKeywordMode = "and"
 	}
 	g.Members = strList(jsx.Get(raw, "members"))
+	if g.Mode == "dynamic" {
+		g.SubscriptionIDs = scopeIDs(raw)
+	}
 
 	switch g.Type {
 	case "urltest":

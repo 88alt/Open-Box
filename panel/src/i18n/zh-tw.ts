@@ -977,6 +977,7 @@ const zhTW: LANG_MESSAGE = {
   groupMembersLabel: '成員',
   groupFilterAllSubscriptions: '全部',
   groupSubscriptionMissing: '已刪除的訂閱',
+  groupChainSource: '鏈式代理',
   groupFilterAllGroups: '全部節點組',
   groupFilterAllNodes: '全部節點',
   groupMoveRight: '加入勾選的',

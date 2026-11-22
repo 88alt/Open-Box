@@ -149,22 +149,7 @@ func hasKeyword(kws []string) bool {
 // 剔除重复 / 自引用 / 指向不存在的东西的条目。
 func resolveMembers(g *Group, dynamicTags []string, nodeTagSet, memberNames map[string]bool, matchText map[string]string) []string {
 	if g.Mode == "dynamic" {
-		out := []string{}
-		for _, tag := range dynamicTags {
-			text, ok := matchText[tag]
-			if !ok {
-				text = normalizeForMatch(tag)
-			}
-			if len(g.Keywords) > 0 && !keywordsHit(text, g.Keywords, g.KeywordMode) {
-				continue
-			}
-			// 排除关键词:or = 命中任一就移出,and = 所有(非空)关键词都命中才移出
-			if hasKeyword(g.ExcludeKeywords) && keywordsHit(text, g.ExcludeKeywords, g.ExcludeKeywordMode) {
-				continue
-			}
-			out = append(out, tag)
-		}
-		return out
+		return dynamicMatch(g, dynamicTags, matchText)
 	}
 	seen := map[string]bool{}
 	out := []string{}
@@ -177,6 +162,26 @@ func resolveMembers(g *Group, dynamicTags []string, nodeTagSet, memberNames map[
 		}
 		seen[m] = true
 		out = append(out, m)
+	}
+	return out
+}
+
+// dynamicMatch:动态组按关键词(和排除关键词)从候选里挑。
+func dynamicMatch(g *Group, cands []string, matchText map[string]string) []string {
+	out := []string{}
+	for _, tag := range cands {
+		text, ok := matchText[tag]
+		if !ok {
+			text = normalizeForMatch(tag)
+		}
+		if len(g.Keywords) > 0 && !keywordsHit(text, g.Keywords, g.KeywordMode) {
+			continue
+		}
+		// 排除关键词:or = 命中任一就移出,and = 所有(非空)关键词都命中才移出
+		if hasKeyword(g.ExcludeKeywords) && keywordsHit(text, g.ExcludeKeywords, g.ExcludeKeywordMode) {
+			continue
+		}
+		out = append(out, tag)
 	}
 	return out
 }
@@ -219,8 +224,13 @@ func dropCycles(groups []*Group) []*Group {
 
 type nodeInfo struct {
 	tag, regionName string
-	chain           bool // 链式代理节点
+	chain           bool   // 链式代理节点
+	subscriptionID  string // 节点所属订阅(链式代理的节点不看这项,范围里用 ChainProxyScope)
+	detour          string // 链式代理节点的上游(线路 / 节点 / 组),环路检测用
 }
+
+// ChainProxyScope 是动态组「订阅范围」里代表链式代理的那一项(对齐上游 v0.1.476 的 chain-proxy)。
+const ChainProxyScope = "chain-proxy"
 
 func parseNodes(v any) ([]nodeInfo, error) {
 	if !jsx.Truthy(v) {
@@ -235,6 +245,8 @@ func parseNodes(v any) ([]nodeInfo, error) {
 		out[i].tag, _ = jsx.Get(n, "tag").(string)
 		out[i].regionName, _ = jsx.Get(n, "regionName").(string)
 		out[i].chain = jsx.Truthy(jsx.Get(n, "chain"))
+		out[i].subscriptionID, _ = jsx.Get(n, "subscriptionId").(string)
+		out[i].detour, _ = jsx.Get(n, "detour").(string)
 	}
 	return out, nil
 }
@@ -272,11 +284,17 @@ func EmitUserGroups(groupsRaw any, nodesRaw any, options any) (*EmitResult, erro
 	dynamicTags := []string{}
 	matchText := map[string]string{}
 	nodeTagSet := map[string]bool{}
+	scopeOf := map[string]string{} // 节点 → 订阅范围里的 id(链式代理统一是 ChainProxyScope)
+	chainTag := map[string]bool{}
 	for i, n := range nodes {
 		nodeTags[i] = n.tag
 		nodeTagSet[n.tag] = true
 		if !n.chain {
 			dynamicTags = append(dynamicTags, n.tag)
+			scopeOf[n.tag] = n.subscriptionID
+		} else {
+			scopeOf[n.tag] = ChainProxyScope
+			chainTag[n.tag] = true
 		}
 		matchText[n.tag] = normalizeForMatch(n.regionName + " " + n.tag)
 	}
@@ -315,6 +333,69 @@ func EmitUserGroups(groupsRaw any, nodesRaw any, options any) (*EmitResult, erro
 	}
 	if builtin.BlockEnabled {
 		memberNames[builtin.Block] = true
+	}
+
+	// 动态组的成员:没有订阅范围 = 所有非链式节点按关键词挑(和以前一样);有范围 = 只在范围内订阅的节点里挑,
+	// 范围含 ChainProxyScope 时链式代理的节点也是候选。链式节点的上游线路绕回这个组(会成环)就不收。
+	// 边:链式节点 → 它的上游,静态组 / 故障转移 → 成员,动态组 → 已挑出的成员;按依赖顺序挨个挑,后面的组能看到前面的边。
+	edges := map[string][]string{}
+	for _, n := range nodes {
+		if n.chain && n.detour != "" {
+			edges[n.tag] = []string{n.detour}
+		}
+	}
+	for _, g := range withoutCycles {
+		switch {
+		case g.Mode == "dynamic":
+		case g.Type == "failover":
+			for _, lane := range g.Lanes {
+				edges[g.Name] = append(edges[g.Name], lane.Members...)
+			}
+		default:
+			edges[g.Name] = g.Members
+		}
+	}
+	reaches := func(from, target string) bool {
+		seen := map[string]bool{}
+		var walk func(cur string) bool
+		walk = func(cur string) bool {
+			for _, next := range edges[cur] {
+				if next == target {
+					return true
+				}
+				if seen[next] {
+					continue
+				}
+				seen[next] = true
+				if walk(next) {
+					return true
+				}
+			}
+			return false
+		}
+		return walk(from)
+	}
+	dynMembers := map[*Group][]string{}
+	for _, g := range withoutCycles {
+		if g.Mode != "dynamic" {
+			continue
+		}
+		cands := dynamicTags
+		if len(g.SubscriptionIDs) > 0 {
+			inScope := map[string]bool{}
+			for _, id := range g.SubscriptionIDs {
+				inScope[id] = true
+			}
+			cands = []string{}
+			for _, t := range nodeTags {
+				if !inScope[scopeOf[t]] || (chainTag[t] && reaches(t, g.Name)) {
+					continue
+				}
+				cands = append(cands, t)
+			}
+		}
+		dynMembers[g] = dynamicMatch(g, cands, matchText)
+		edges[g.Name] = dynMembers[g]
 	}
 
 	outbounds := []Outbound{}
@@ -432,7 +513,12 @@ func EmitUserGroups(groupsRaw any, nodesRaw any, options any) (*EmitResult, erro
 			emitFailover(g)
 			continue
 		}
-		members := resolveMembers(g, dynamicTags, nodeTagSet, memberNames, matchText)
+		var members []string
+		if g.Mode == "dynamic" {
+			members = dynMembers[g]
+		} else {
+			members = resolveMembers(g, dynamicTags, nodeTagSet, memberNames, matchText)
+		}
 		if g.Type == "loadbalance" {
 			// 负载均衡只接真实节点:引用的组、不存在的名字一律不写进出站
 			nodesOnly := make([]string, 0, len(members))

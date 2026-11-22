@@ -122,6 +122,10 @@ type AvailableNode struct {
 	Region         string `json:"region,omitempty"`
 }
 
+// ChainProxyScope 是动态组订阅范围里代表「链式代理」的那一项(对齐上游 v0.1.476 的 chain-proxy);
+// 链式节点的 subscriptionId 统一是它,和 core 里分组匹配用的值一致。
+const ChainProxyScope = "chain-proxy"
+
 // SubRef 是订阅范围下拉的一项。
 type SubRef struct {
 	ID   string `json:"id"`
@@ -182,7 +186,7 @@ func (s *Service) nodes(ctx context.Context) ([]AvailableNode, []SubRef, error) 
 			return nil, nil, err
 		}
 		for _, c := range cs {
-			nodes = append(nodes, AvailableNode{Name: c.Name, Chain: true, Upstream: c.Upstream})
+			nodes = append(nodes, AvailableNode{Name: c.Name, Chain: true, Upstream: c.Upstream, SubscriptionID: ChainProxyScope})
 		}
 	}
 	return nodes, subsList, nil
@@ -461,7 +465,7 @@ func (s *Service) finish(ctx context.Context, norm []any, nodes []AvailableNode,
 	// 环:按保存后的内容让核心算一遍(只看会不会被丢弃,不落配置)。
 	emitNodes := make([]any, 0, len(nodes))
 	for _, n := range nodes {
-		emitNodes = append(emitNodes, map[string]any{"tag": n.Name, "regionName": n.Region, "chain": n.Chain})
+		emitNodes = append(emitNodes, map[string]any{"tag": n.Name, "regionName": n.Region, "chain": n.Chain, "subscriptionId": n.SubscriptionID, "detour": n.Upstream})
 	}
 	dropped, err := s.core.EmitGroups(ctx, norm, emitNodes)
 	if err != nil {
