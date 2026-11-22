@@ -16,31 +16,28 @@
         </div>
 
         <template v-if="isMiddleScreen">
-          <div
-            class="bg-base-100/20 dock dock-xs z-10 h-14 w-auto backdrop-blur-sm"
-            :style="{
-              padding: '0',
-              bottom: 'calc(var(--spacing) * 2 + env(safe-area-inset-bottom))',
-            }"
+          <nav
+            v-segmented="{ active: '.dock-active', variant: 'dock' }"
+            class="dock mobile-bottom-nav"
             ref="dockRef"
           >
             <button
               v-for="r in renderRoutes"
               :key="r"
+              type="button"
               @click="router.push({ name: r })"
-              class="h-14 flex-col items-center justify-center pt-2"
               :class="r === route.name && 'dock-active'"
+              :aria-current="r === route.name ? 'page' : undefined"
             >
               <component
                 :is="ROUTE_ICON_MAP[r]"
-                class="h-5 w-5 flex-shrink-0"
+                class="mobile-bottom-nav-icon"
               />
               <span class="dock-label">
                 {{ $t(r) }}
               </span>
             </button>
-          </div>
-          <div class="dock-shadow"></div>
+          </nav>
         </template>
       </div>
     </RouterView>
@@ -73,7 +70,7 @@ useKernelConflictToast()
 const router = useRouter()
 const { swiperRef } = useSwipeRouter()
 
-const dockRef = ref<HTMLDivElement>()
+const dockRef = ref<HTMLElement>()
 const { top: dockRefTop } = useElementBounding(dockRef)
 
 watch(

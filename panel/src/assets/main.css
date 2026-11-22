@@ -355,7 +355,7 @@ body:has(.sortable-chosen) * {
 #app-content .input,
 #app-content .select,
 #app-content .table,
-#app-content .dock,
+#app-content .dock:not(.mobile-bottom-nav),
 #app-content .modal-box,
 #app-content .shadow-sm,
 #app-content .shadow-md,
@@ -727,21 +727,6 @@ div::-webkit-scrollbar-thumb:hover {
   }
 }
 
-.dock-shadow {
-  background: linear-gradient(
-    to top,
-    rgba(0, 0, 0, 0.3),
-    rgba(0, 0, 0, 0.16),
-    rgba(0, 0, 0, 0.08),
-    rgba(0, 0, 0, 0.02),
-    rgba(0, 0, 0, 0)
-  );
-  width: 100%;
-  height: env(safe-area-inset-bottom);
-  position: fixed;
-  bottom: 0;
-  z-index: 10;
-}
 .ctrls-bar {
   @media screen and (max-width: 768px) {
     background: linear-gradient(
@@ -1155,5 +1140,125 @@ dialog .overflow-y-scroll,
   #app-content .seg.seg-animate > .seg-highlight,
   #app-content .seg.seg-animate.seg-dock::before {
     transition-duration: 0.15s;
+  }
+}
+
+/* ===== 移动端底部导航(对齐上游 v0.1.477:胶囊形悬浮 dock,选中项由 v-segmented 的 dock 变体滑动高亮)===== */
+#app-content .mobile-bottom-nav {
+  --mobile-nav-height: 64px;
+  --mobile-nav-inset: 6px;
+  --mobile-nav-solid: var(--color-base-100);
+  --mobile-nav-surface: color-mix(in srgb, var(--color-base-100) 76%, transparent);
+  --mobile-nav-border: color-mix(in srgb, var(--color-base-content) 14%, transparent);
+  --mobile-nav-idle: color-mix(in srgb, var(--color-base-content) 72%, transparent);
+  --mobile-nav-shadow:
+    0 8px 24px #00000021,
+    inset 0 1px 0 #ffffff8c;
+  right: calc(20px + env(safe-area-inset-right, 0px));
+  bottom: calc(var(--app-card-space, 12px) + env(safe-area-inset-bottom, 0px));
+  left: calc(20px + env(safe-area-inset-left, 0px));
+  z-index: 30;
+  width: auto;
+  max-width: 34rem;
+  height: var(--mobile-nav-height);
+  padding: calc(var(--mobile-nav-inset) - 1px);
+  border: 1px solid var(--mobile-nav-border);
+  border-radius: calc(var(--mobile-nav-height) / 2);
+  background-color: var(--mobile-nav-surface);
+  box-shadow: var(--mobile-nav-shadow);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  backdrop-filter: blur(18px) saturate(1.35);
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  align-items: center;
+  margin-inline: auto;
+  display: grid;
+  position: absolute;
+}
+body[data-theme='forest'] #app-content .mobile-bottom-nav {
+  --mobile-nav-surface: color-mix(in srgb, var(--color-base-100) 84%, transparent);
+  --mobile-nav-border: #94a3b84d;
+  --mobile-nav-idle: #cbd5e1;
+  --mobile-nav-shadow:
+    0 10px 28px #0000006b,
+    inset 0 1px 0 #ffffff1f;
+}
+[data-theme='emerald'] #app-content .mobile-bottom-nav {
+  border-color: var(--app-card-border);
+}
+#app-content .mobile-bottom-nav.seg-dock {
+  --seg-r: calc(var(--mobile-nav-height) / 2 - var(--mobile-nav-inset));
+  --seg-bg: var(--color-neutral);
+  --seg-fg: var(--color-neutral-content);
+}
+#app-content .mobile-bottom-nav > button {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: calc(var(--mobile-nav-height) - 2 * var(--mobile-nav-inset));
+  border-radius: var(--seg-r);
+  color: var(--mobile-nav-idle);
+  transition:
+    transform 0.16s var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)),
+    color 0.15s var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1));
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  margin: 0;
+  padding: 6px 0;
+  display: flex;
+}
+#app-content .mobile-bottom-nav > .dock-active {
+  color: var(--seg-fg);
+}
+#app-content .mobile-bottom-nav .mobile-bottom-nav-icon {
+  flex-shrink: 0;
+  width: 21px;
+  height: 21px;
+}
+#app-content .mobile-bottom-nav .dock-label {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 15px;
+  overflow: hidden;
+}
+#app-content .mobile-bottom-nav > .dock-active .dock-label {
+  font-weight: 700;
+}
+#app-content .mobile-bottom-nav > button::after {
+  content: none;
+}
+#app-content .mobile-bottom-nav > button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -3px;
+}
+#app-content .mobile-bottom-nav > button:active:not(:focus-visible) {
+  transform: scale(0.97);
+}
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  #app-content .mobile-bottom-nav {
+    background-color: var(--mobile-nav-solid);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  #app-content .mobile-bottom-nav {
+    background-color: var(--mobile-nav-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #app-content .mobile-bottom-nav > button,
+  #app-content .mobile-bottom-nav.seg.seg-animate::before {
+    transition: none;
+  }
+  #app-content .mobile-bottom-nav > button:active {
+    transform: none;
   }
 }
