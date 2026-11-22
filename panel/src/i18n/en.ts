@@ -2487,6 +2487,8 @@ const en = {
   bandwidthHelpCurrentTest: 'Bandwidth test every {hours} h, up to {maxMB} MB per test',
   bandwidthHelpCurrentBusiness: 'Reliability decay {minutes} min, confidence lifetime {seconds} s',
   bandwidthHelpEditLocation: 'Edit in Settings → Backend Settings → {section}',
+  bandwidthHelpSwitchOn: 'Switch on in this draft',
+  bandwidthHelpSwitchOff: 'Switch off in this draft',
   bandwidthHelpLoading: 'Loading…',
   bandwidthHelpUnavailable: 'Could not load saved values',
   bandwidthSettingsHelpExampleHeading: 'Example',

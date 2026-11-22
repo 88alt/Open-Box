@@ -2356,6 +2356,8 @@ const zh: LANG_MESSAGE = {
   bandwidthHelpCurrentTest: '带宽测试每 {hours} 小时，每次最多 {maxMB} MB',
   bandwidthHelpCurrentBusiness: '可靠性衰减 {minutes} 分钟，可信度效期 {seconds} 秒',
   bandwidthHelpEditLocation: '在「设置 → 后端设置 → {section}」修改',
+  bandwidthHelpSwitchOn: '当前编辑的开关已开启',
+  bandwidthHelpSwitchOff: '当前编辑的开关已关闭',
   bandwidthHelpLoading: '正在读取…',
   bandwidthHelpUnavailable: '未能读取已保存的值',
   bandwidthSettingsHelpExampleHeading: '示例',

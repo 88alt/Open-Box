@@ -61,8 +61,8 @@ export default defineComponent({
     const { isLargeCtrlsBar } = useCtrlsBar(useConnectionCard.value ? 860 : 720)
 
     return () => {
-      // 窄屏用「排序」,宽屏用「排序方式」;窄屏的紧凑样式与上游 v0.1.413 一致
-      const sortLabel = t(isMiddleScreen.value ? 'connectionSort' : 'sortBy')
+      // 排序标签宽窄屏都用「排序」(connectionSort),与上游 v0.1.476 一致;sortBy 键保留但不引用
+      const sortLabel = t('connectionSort')
       // 按钮点一下会切到的方向:当前升序 → 提示「降序」,反之亦然(与上游一致)
       const sortDirectionLabel = t(
         connectionSortDirection.value === SORT_DIRECTION.ASC

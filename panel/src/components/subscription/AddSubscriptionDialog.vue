@@ -426,33 +426,19 @@
     </template>
   </DialogWrapper>
 
-  <DialogWrapper
+  <BandwidthSettingsHelpDialog
     v-model="bandwidthHelpOpen"
-    :title="$t('subscriptionBandwidthHelpTitle')"
-    box-class="w-full max-w-2xl"
-    modal-class="z-[100]"
-    header-class="pr-10!"
-  >
-    <template #footer>
-      <button
-        type="button"
-        class="btn btn-primary btn-sm"
-        @click="bandwidthHelpOpen = false"
-      >
-        {{ $t('close') }}
-      </button>
-    </template>
-    <div class="flex flex-col gap-4 text-sm leading-relaxed">
-      <p>{{ $t('subscriptionBandwidthHelp', { hours: bandwidthSettings.intervalHours, maxMB: bandwidthSettings.maxDownloadMB }) }}</p>
-      <p>{{ $t('subscriptionBandwidthDedupe') }}</p>
-      <p>{{ $t('subscriptionBandwidthBudget') }}</p>
-      <p class="text-base-content/70">{{ $t('bandwidthClientDisabled') }}</p>
-    </div>
-  </DialogWrapper>
+    section="bandwidthSettingsTitle"
+    :profile="helpProfile"
+    :loading="helpLoading"
+    :switch-enabled="bandwidthCheck"
+    subscription
+  />
 </template>
 
 <script setup lang="ts">
 import type {
+  OpenboxProfile,
   OpenboxRenameOptions,
   OpenboxSubscription,
   OpenboxSubscriptionAccount,
@@ -466,6 +452,7 @@ import CustomDnsFields from '@/components/common/CustomDnsFields.vue'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import ExpandTransition from '@/components/common/ExpandTransition.vue'
 import PasswordInput from '@/components/common/PasswordInput.vue'
+import BandwidthSettingsHelpDialog from '@/components/kernel/BandwidthSettingsHelpDialog.vue'
 import { ChevronDownIcon, InformationCircleIcon, PlusIcon, PowerIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { debounce } from 'lodash'
 import { createDnsDraft, dnsDraftError, dnsDraftValue } from '@/helper/customDns'
@@ -656,7 +643,9 @@ const setDirect = async (key: 'directSubscription' | 'directNodes', value: boole
   }
 }
 const bandwidthHelpOpen = ref(false)
-const bandwidthSettings = ref({ intervalHours: 12, maxDownloadMB: 64 })
+// 帮助弹窗要看档案里已保存的测速参数和评分权重;弹窗打开时取一次
+const helpProfile = ref<OpenboxProfile | null>(null)
+const helpLoading = ref(false)
 // 订阅 DNS 解析:协议 / 地址 / 端口 / 引导 DNS 的输入和校验都在 CustomDnsFields 和 helper/customDns 里。
 // 存的仍是 nodeDns.url(https:// tls:// tcp:// udp://)+ 可选的 bootstrap。
 // 填写有错就不能保存,并自动展开输入框把提示显示出来。
@@ -854,11 +843,17 @@ const resetForm = () => {
 watch(isOpen, (open) => {
   if (open) {
     resetForm()
+    helpLoading.value = true
     fetchProfile()
       .then((profile) => {
-        if (isOpen.value && profile.bandwidth) bandwidthSettings.value = profile.bandwidth
+        if (isOpen.value) helpProfile.value = profile
       })
-      .catch(() => {})
+      .catch(() => {
+        if (isOpen.value) helpProfile.value = null
+      })
+      .finally(() => {
+        helpLoading.value = false
+      })
   } else {
     // 关掉就别让密码留在内存里,也别让还在飞的登录结果落回表单
     loginSeq += 1

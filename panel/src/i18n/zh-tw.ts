@@ -2357,6 +2357,8 @@ const zhTW: LANG_MESSAGE = {
   bandwidthHelpCurrentTest: '頻寬測試每 {hours} 小時，每次最多 {maxMB} MB',
   bandwidthHelpCurrentBusiness: '可靠性衰減 {minutes} 分鐘，可信度效期 {seconds} 秒',
   bandwidthHelpEditLocation: '在「設定 → 後端設定 → {section}」修改',
+  bandwidthHelpSwitchOn: '編輯中的開關已開啟',
+  bandwidthHelpSwitchOff: '編輯中的開關已關閉',
   bandwidthHelpLoading: '正在讀取…',
   bandwidthHelpUnavailable: '無法讀取已儲存的值',
   bandwidthSettingsHelpExampleHeading: '範例',

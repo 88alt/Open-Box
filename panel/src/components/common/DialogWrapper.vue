@@ -5,6 +5,7 @@
         v-show="isOpen"
         ref="backdropRef"
         class="modal modal-open"
+        :class="modalClass"
         role="dialog"
         aria-modal="true"
         :aria-labelledby="title ? 'dialog-title' : undefined"
@@ -87,6 +88,7 @@ import { useSlots } from 'vue'
 const isOpen = defineModel<boolean>()
 defineProps<{
   noPadding?: boolean
+  modalClass?: string
   boxClass?: string
   contentClass?: string
   headerClass?: string

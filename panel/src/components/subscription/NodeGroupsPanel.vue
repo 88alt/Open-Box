@@ -795,11 +795,13 @@
       </template>
     </DialogWrapper>
 
-    <BandwidthHelpDialog
+    <BandwidthSettingsHelpDialog
       v-model="showBandwidthHelp"
+      section="nodeScoreWeights"
       :mode="draft?.type || 'urltest'"
-      :hours="bandwidthSettings.intervalHours"
-      :max-m-b="bandwidthSettings.maxDownloadMB"
+      :switch-enabled="draft?.bandwidth === true"
+      :profile="helpProfile"
+      :loading="helpLoading"
     />
 
     <!-- 故障转移「参数设定」:在副本上改,确认才写回草稿;取消 / 关闭不留痕 -->
@@ -1119,13 +1121,13 @@
 
 <script setup lang="ts">
 import type {
-  OpenboxBandwidthSettings,
   OpenboxFailoverLane,
   OpenboxFailoverSettings,
   OpenboxGroupType,
+  OpenboxProfile,
   OpenboxUserGroup,
 } from '@/api/openbox'
-import { fetchDefaultNodeGroups, fetchNodeGroups, saveNodeGroups } from '@/api/openbox'
+import { fetchDefaultNodeGroups, fetchNodeGroups, fetchProfile, saveNodeGroups } from '@/api/openbox'
 import BulkPick from '@/components/subscription/BulkPick.vue'
 import SubscriptionFilter from '@/components/subscription/SubscriptionFilter.vue'
 import TagInput from '@/components/common/TagInput.vue'
@@ -1138,7 +1140,7 @@ import { keywordMatches, normalizeForMatch } from '@/helper/keywordMatch'
 import { showNotification } from '@/helper/notification'
 import { fetchProxies } from '@/store/proxies'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
-import BandwidthHelpDialog from '@/components/subscription/BandwidthHelpDialog.vue'
+import BandwidthSettingsHelpDialog from '@/components/kernel/BandwidthSettingsHelpDialog.vue'
 import {
   Bars3Icon,
   ChevronDownIcon,
@@ -1166,9 +1168,24 @@ const availableNodes = ref<
 // 动态组的「订阅范围」下拉:订阅 id + 名字
 const groupSubscriptions = ref<Array<{ id: string; name: string }>>([])
 const loading = ref(false)
-// 带宽择优的统一测速参数(档案里的 bandwidth),只读:帮助弹窗和开关旁的周期说明用,改它去「内核」页
-const bandwidthSettings = ref<OpenboxBandwidthSettings>({ intervalHours: 2, maxDownloadMB: 64 })
 const showBandwidthHelp = ref(false)
+// 帮助弹窗要看档案里已保存的评分权重和测速参数;每次打开取一次最新的
+const helpProfile = ref<OpenboxProfile | null>(null)
+const helpLoading = ref(false)
+watch(showBandwidthHelp, (open) => {
+  if (!open) return
+  helpLoading.value = true
+  fetchProfile()
+    .then((profile) => {
+      helpProfile.value = profile
+    })
+    .catch(() => {
+      helpProfile.value = null
+    })
+    .finally(() => {
+      helpLoading.value = false
+    })
+})
 
 // 关键词标签输入:还没回车提交的文字放在 pending 里,保存 / 关弹窗时由 commit() 收进标签
 const keywordInput = ref<InstanceType<typeof TagInput> | null>(null)
@@ -1215,7 +1232,6 @@ const load = async () => {
     groups.value = data.groups
     availableNodes.value = data.availableNodes
     groupSubscriptions.value = data.subscriptions || []
-    bandwidthSettings.value = data.bandwidth || { intervalHours: 2, maxDownloadMB: 64 }
   } catch (err) {
     notifyError(err)
   } finally {

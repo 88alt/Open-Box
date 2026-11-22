@@ -1,8 +1,9 @@
 <template>
   <DialogWrapper
     v-model="open"
-    :title="$t(section)"
-    box-class="w-full max-w-xl"
+    :title="title"
+    :box-class="mode || subscription ? 'w-full max-w-2xl' : 'w-full max-w-xl'"
+    :modal-class="subscription ? 'z-[1000]' : undefined"
     header-class="pr-10!"
   >
     <template #footer>
@@ -22,12 +23,32 @@
         >
           {{ $t('bandwidthHelpCurrent') }} · {{ currentText }}
         </p>
+        <p
+          v-if="section === 'nodeScoreWeights' && mode && profile"
+          class="font-medium tabular-nums"
+        >
+          {{ $t('bandwidthHelpCurrentTest', testParams) }}
+        </p>
         <p class="text-base-content/75 text-xs">
-          {{ $t('bandwidthHelpEditLocation', { section: $t(section) }) }}
+          {{ $t('bandwidthHelpEditLocation', { section: editLocation }) }}
+          <template v-if="switchEnabled !== null">
+            · {{ $t(switchEnabled ? 'bandwidthHelpSwitchOn' : 'bandwidthHelpSwitchOff') }}
+          </template>
         </p>
       </div>
 
-      <template v-if="section === 'bandwidthSettingsTitle'">
+      <template v-if="subscription">
+        <p>{{ $t('subscriptionBandwidthHelp') }}</p>
+        <p>{{ $t('subscriptionBandwidthDedupe') }}</p>
+        <p>{{ $t('subscriptionBandwidthBudget') }}</p>
+        <div class="bg-base-200 rounded-lg p-3">
+          <h3 class="mb-1 font-semibold">{{ $t('bandwidthSettingsHelpExampleHeading') }}</h3>
+          <p>{{ $t('bandwidthSettingsHelpExample') }}</p>
+        </div>
+        <p class="text-base-content/75">{{ $t('bandwidthClientDisabled') }}</p>
+      </template>
+
+      <template v-else-if="section === 'bandwidthSettingsTitle'">
         <p>{{ $t('bandwidthSettingsHelpIntro') }}</p>
         <dl class="flex flex-col gap-2">
           <div>
@@ -43,6 +64,24 @@
           <h3 class="mb-1 font-semibold">{{ $t('bandwidthSettingsHelpExampleHeading') }}</h3>
           <p>{{ $t('bandwidthSettingsHelpExample') }}</p>
         </div>
+      </template>
+
+      <template v-else-if="section === 'nodeScoreWeights' && mode">
+        <p class="font-medium">{{ $t('bandwidthHealthFirst') }}</p>
+        <div>
+          <h3 class="font-semibold">{{ $t('bandwidthOff') }}</h3>
+          <p>{{ $t(`bandwidthOff_${mode}`) }}</p>
+        </div>
+        <div>
+          <h3 class="font-semibold">{{ $t('bandwidthOn') }}</h3>
+          <p>{{ $t(`bandwidthOn_${mode}`) }}</p>
+        </div>
+        <div class="bg-base-200 rounded-lg p-3">
+          <h3 class="mb-1 font-semibold">{{ $t('bandwidthExample') }}</h3>
+          <p>{{ $t(`bandwidthExample_${mode}`) }}</p>
+        </div>
+        <p class="text-base-content/75">{{ $t('bandwidthSharedHelp') }}</p>
+        <p class="text-base-content/75">{{ $t('bandwidthClientDisabled') }}</p>
       </template>
 
       <template v-else-if="section === 'businessPreference'">
@@ -134,14 +173,44 @@ import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-const props = defineProps<{
-  // 当前展示哪一块的说明:带宽测试、评分权重,或业务优选
-  section: 'bandwidthSettingsTitle' | 'nodeScoreWeights' | 'businessPreference'
-  profile?: OpenboxProfile | null
-  loading?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    // 当前展示哪一块的说明:带宽测试、评分权重,或业务优选
+    section: 'bandwidthSettingsTitle' | 'nodeScoreWeights' | 'businessPreference'
+    profile?: OpenboxProfile | null
+    loading?: boolean
+    // 分组类型(urltest / failover / loadbalance);分组编辑器里打开时传,决定标题和「关闭时 / 开启时 / 例子」文案
+    mode?: string
+    // 正在编辑的那个开关此刻开没开;null 表示不是从某个开关旁打开的,不显示这一句
+    switchEnabled?: boolean | null
+    // 订阅添加 / 编辑弹窗里打开:显示订阅侧的带宽检查说明
+    subscription?: boolean
+  }>(),
+  { switchEnabled: null },
+)
 const open = defineModel<boolean>({ required: true })
 const { t } = useI18n()
+
+const title = computed(() => {
+  if (props.subscription) return t('subscriptionBandwidthHelpTitle')
+  if (props.mode) {
+    const base = props.section === 'nodeScoreWeights' ? t('bandwidthHelpTitle') : t(props.section)
+    return `${base} · ${t(`groupType_${props.mode}`)}`
+  }
+  return t(props.section)
+})
+
+// 分组编辑器里的评分说明同时讲测速,所以「修改位置」写成「节点评分 / 带宽测试」两处
+const editLocation = computed(() =>
+  props.mode && props.section === 'nodeScoreWeights'
+    ? `${t('nodeScoreWeights')} / ${t('bandwidthSettingsTitle')}`
+    : t(props.section),
+)
+
+const testParams = computed(() => ({
+  hours: props.profile?.bandwidth?.intervalHours ?? 12,
+  maxMB: props.profile?.bandwidth?.maxDownloadMB ?? 64,
+}))
 
 // 「当前设置」一行:档案里已保存的值(不是输入框里还没保存的草稿)
 const currentText = computed(() => {
@@ -149,10 +218,7 @@ const currentText = computed(() => {
   const p = props.profile
   if (!p) return t('bandwidthHelpUnavailable')
   if (props.section === 'bandwidthSettingsTitle') {
-    return t('bandwidthHelpCurrentTest', {
-      hours: p.bandwidth?.intervalHours ?? 12,
-      maxMB: p.bandwidth?.maxDownloadMB ?? 64,
-    })
+    return t('bandwidthHelpCurrentTest', testParams.value)
   }
   if (props.section === 'businessPreference') {
     return t('bandwidthHelpCurrentBusiness', {
