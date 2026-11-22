@@ -7,6 +7,7 @@ import (
 	"github.com/timeflysoon/Open-Box/core/internal/authz"
 	"github.com/timeflysoon/Open-Box/core/internal/config"
 	"github.com/timeflysoon/Open-Box/core/internal/groups"
+	"github.com/timeflysoon/Open-Box/core/internal/mihomo"
 	"github.com/timeflysoon/Open-Box/core/internal/protocol"
 	"github.com/timeflysoon/Open-Box/core/internal/routing"
 )
@@ -16,6 +17,7 @@ func newRegistry() *protocol.Registry {
 	routing.Register(r)
 	groups.Register(r)
 	config.Register(r)
+	mihomo.Register(r)
 	authz.Register(r)
 	return r
 }

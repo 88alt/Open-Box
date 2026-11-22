@@ -10,20 +10,21 @@
 - 第一次调用先发 `hello`,返回 `implementation:"go-native"`、`protocol:1`、`buildID`;
   `buildID` 必须等于 Node 里写死的期望值(构建脚本从 `panel/server/index.mjs` 读出并注入)
 
-## 方法(共 15 个 + hello)
+## 方法(共 16 个 + hello)
 | 包 | 方法 | 状态 |
 |---|---|---|
 | routing | normalizePolicy normalizeRouting routingFingerprint migrateStoredRouting classes forwardPlan bypassPlan | 已实现(对照基线的金标准测试) |
 | routing | entryPlan | 已实现(含 whitelist,按基线 entryModePlan 对齐) |
 | groups | normalizeGroups builtinTags emitGroups | 已实现(对照基线的金标准测试,含逐字节键序);组类型 urltest / selector / failover / loadbalance,负载均衡的行为见 HANDOFF 第五节授权记录和 loadbalance_test.go |
 | config | configDetailed | 已实现(返回 config / dnsRuleOwners / directHosts / failover,另多带 flipFlags、nativeBypass;对照基线 engine/config.mjs 的 buildConfigDetailed 的金标准测试 + 官方 sing-box check,见下) |
+| mihomo | mihomoProxies | 已实现(节点 → Mihomo proxies;自写向量 + 可选真实 Mihomo `-t`,见 HANDOFF 第三节) |
 | authz | checkActivationCode activationState authorizationState | 已实现(一律解锁) |
 
 ## 目录
 - `cmd/openbox-core/` 入口与方法注册
 - `internal/protocol/` 协议、hello、大小限制
 - `internal/{routing,groups,config,authz}/` 各类方法;`internal/config/` 是 configDetailed 的装配(`build.go`)和链式代理核对(`chain.go`),以及 node-dns / tun-options / 常量
-- `internal/emit/` 节点 → sing-box 出站 / endpoint
+- `internal/emit/` 节点 → sing-box 出站 / endpoint;`internal/mihomo/` 节点 → Mihomo proxies(先走 emit 再翻字段)
 - `internal/ipx/` Node 同款 isIPv4/isIPv6 正则 + CIDR 运算(解析、重叠、包含、挖洞)
 - `internal/clientroutes/` 终端分流;`internal/servers/` 共享网络服务端入站;`internal/directhosts/` 订阅和节点站点直连;
   `internal/dnsrewrite/` DNS 重写;`internal/idna/` 域名转 punycode;`internal/urlx/` 按 WHATWG 规则取 `new URL(x).hostname`

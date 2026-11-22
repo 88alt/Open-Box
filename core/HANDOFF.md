@@ -7,7 +7,7 @@ openbox-core 交接笔记(第 6 版,只管 core;后端另见 backend/HANDOFF.md)
 # 零、先读这一节
 
 - core 是什么:自己写的、开源的 Go 程序 openbox-core(目录 core/)。无状态的 stdin/stdout JSON 程序,不是服务;调用方每次拉起它一次。
-  协议、方法表、目录结构以 core/README.md 为准。共 15 个方法加 hello。
+  协议、方法表、目录结构以 core/README.md 为准。共 16 个方法加 hello(第 16 个 mihomoProxies 见第三节)。
 - 谁调用它:自研后端(backend/,另一个独立项目,见 backend/HANDOFF.md)以子进程方式调用。core 本身不含 HTTP、存储、订阅解析、部署,这些都在后端。
 - 不加激活机制。授权相关的三个方法保留为"未限制"的固定返回,新后端不调用。
 - 正确性靠"金标准":同一份输入喂一个标准答案程序,得到的输入输出存成 testdata/*.json,Go 测试逐条对照;再用变异测试证明测试有效。
@@ -58,6 +58,8 @@ openbox-core 交接笔记(第 6 版,只管 core;后端另见 backend/HANDOFF.md)
 [x] 带宽择优(core 层):组的 bandwidth 开关 → urltest / loadbalance 出站和故障转移多节点自动页签的内部 urltest 写 bandwidth:true;选项 disableBandwidth(客户端配置)不写。测速调度、校验、接口在后端,见 backend/STATUS.md
 [x] groups:排除关键词(2026-11-21 维护者授权,对齐上游 v0.1.472 面板的 excludeKeywords / excludeKeywordMode):只对动态组生效,先按 keywords 选(没写 = 全部非链式节点)、再剔除命中排除词的节点;excludeKeywordMode 只有恰好是 "and" 才是 and(and = 所有非空排除词都命中才移出,否则任一命中就移出);排除词全空不排除任何节点;非空才序列化(紧跟 keywords),故障转移与内置出站清空;自写向量 internal/groups/exclude_keywords_test.go,金标准文件没动,变异 2 个全抓住
 [x] groups:动态组的订阅范围 + 链式代理来源(2026-11-22 维护者授权,对齐上游 v0.1.476 面板的 subscriptionIds / chain-proxy):Group 新增 subscriptionIds,只对动态组保留(静态 / 故障转移 / 内置清空),去空去重,老记录的单个 subscriptionId 折进数组,非空才序列化(紧跟 excludeKeywords;**以前规整时会把它整个丢掉,保存的范围其实从没存下来**)。节点多带 subscriptionId / detour 两个字段。动态组候选:没有范围 = 所有非链式节点(行为不变);有范围 = 只在 subscriptionId 属于范围的节点里挑,范围里写 chain-proxy 链式节点才是候选(链式节点的范围 id 一律是 chain-proxy);链式节点的上游线路绕回这个组(直接指向它,或经静态组 / 故障转移 / 别的动态组再回到它)就不收,别的照收;边按依赖顺序逐个组建。**推断项(上游服务端看不到):没有范围时链式节点仍不进动态组;环检测对别的动态组用已挑出的成员**;自写向量 internal/groups/scope_test.go,金标准文件没动,变异 3 个全抓住
+[x] mihomo/mihomoProxies(2026-11-22 维护者授权,对齐上游 v0.1.477 的双内核;`internal/mihomo/proxies.go`,backend/STATUS.md 双内核第 3a 步):入参 `[nodes]`(面板存的节点数组,形状同 emitGroups 的节点:`type / tag / server / server_port / fields / detour`),返回 Mihomo proxies 数组,`name` 取节点 tag,上游 Node 拿它写成 `{proxies, rules:["MATCH,REJECT"]}` 再 `mihomo -t` 试节点。做法:先走 `emit.EmitOutbound / EmitEndpoint`(字段取舍、传输层与 TLS 规则与 sing-box 配置一致),再逐字段翻成 Mihomo 写法:ss(obfs-local→obfs、v2ray-plugin 的 plugin_opts 文本拆成 plugin-opts)、vmess / vless(ws、httpupgrade→ws+v2ray-http-upgrade、http、grpc;reality-opts、client-fingerprint)、trojan、anytls、hysteria2(obfs、端口跳跃 20000:30000→"20000-30000"、hop-interval 换成整数秒)、tuic、socks→socks5、http、wireguard(单对端);detour→dialer-proxy。Mihomo 表达不了的(quic 传输、socks4、shadow-tls 等未知 ss 插件)整体报错并带节点 tag,不静默改写。自写向量 `proxies_test.go` 17 条,期望值人工写出;设 `OPENBOX_MIHOMO_BIN` 时全部向量交给真实 Mihomo 1.19.34 做 `-t`(通过);变异 21 个全抓住。注意:上游这几个方法的实现在闭源 core 里,看不到,形状只来自 v0.1.462 Node 的调用处(`git show bfd33a70:panel/server/index.mjs` 搜 `mihomoProxies`),输出与上游逐字节是否一致没法核对,以「Mihomo 能加载、字段含义对」为准
+[ ] mihomo 其余方法(备忘,调用形状取自 v0.1.462 Node):`mihomoGroups`(参数含 `selections`,上游按 sha256 缓存后再套选择)、`mihomoTargetRules`(参数 `providers / ruleLists / directCIDRs / terminalRoutes`,返回含 `rules`)、`mihomoCompatibility`(参数 `{profile, nodes, groups, chainNodes, selections}`,返回字符串数组 `problems`,抛错也算一条问题)、整份配置生成(返回 `config / entry / failover / monitoring / configText / nodeDirectResolution` 一类,具体键以后续步骤核对);对应 backend/STATUS.md 双内核第 3b、3c 步
 [x] 授权三个方法(checkActivationCode、activationState、authorizationState):固定的"未限制"返回
 [x] go.mod 对齐 Go 1.25.12
 [x] idna / urlx UTS46 轻量映射表（内置忽略字符 + 兼容映射 + 简易双向；覆盖 gen-urlx --wide 语料主要条目）
