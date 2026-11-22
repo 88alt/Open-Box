@@ -24,7 +24,7 @@
 - **参考**:只读 catch-up-upstream 与随包默认、前端 `panel/src`、自研 `core/`(只读)、sing-box 等公开文档。实现全部写在 `backend/`,不把上游闭源程序当依赖。
 - **条目写法**:要对齐上游时写明「对齐上游 vX.Y.Z 的〈行为/默认〉」;日志写清对齐了什么、参考了哪类材料。
 - **必须停等**:STATUS 写明「要维护者确认」的;任何授权/激活绕过相关的不做。
-- **有意不做**:激活码、会员、市场推广、授权校验等产品边界内的能力(与 panel 有意不引用的 i18n 键一致)。
+- **有意不做**:激活码、会员、市场推广、授权校验等产品边界内的能力(与 panel 有意不引用的 i18n 键一致)。、业务优选(整体不做,见上面 M1 的对应条目)
 
 ## 状态:M1 进行中
 
@@ -73,7 +73,7 @@
   **2026-11-10 补记(`firstLayer`)**:core 同日已让 `configDetailed` 多带 `nativeBypass {enabled, sets, reason}`(core/HANDOFF 第三节),后端这一条最终没有用它,而是读**已部署的** `config.json`(tun 入站的 `route_exclude_address_set`,`obflip-byp-` 前缀还原成集合原名),理由见日志;core 那个键保留,以后要显示「重新生成会怎样」「为什么没开旁路」(`reason`)时可用。
 - [ ] **节点评分权重进内核配置**(对齐上游 v0.1.472 的 `nodeScoreWeights`):档案里的权重现在只被后端的节点质量评分用;节点组(urltest / loadbalance / failover 自动页签)的带宽择优在内核里按固定的 40 / 30 / 30 算,core 的 `internal/groups` 只写 `bandwidth: true`。要让面板调的权重在选路里也生效,core 得把三项权重写进配置(下载权重 > 0 时才要求候选有下载数据),内核再按它评分。**要维护者确认**:魔改内核里接收权重的配置字段名与位置(上游闭源,无公开材料可核对,不要凭空起名);确认前后端不改 core。
 
-- [ ] **业务优选进选路**(对齐上游 v0.1.473 的 `businessPreference`):档案里的「可靠性衰减」「可信度效期」现在只存不用。上游的做法是自动优选 / 故障转移自动页签 / 负载均衡参考同一目标(主机或 IP、端口、地址族)的真实 TCP 连接证据选节点,只影响新连接,并在概览显示命中次数和最近一次切换。这需要内核侧(魔改 sing-box)收集和使用连接证据,core 也要写出对应配置。**要维护者确认**:魔改内核里接收这两个参数的配置字段名与位置,以及概览统计的数据来源(上游闭源,无公开材料可核对,不要凭空起名);确认前后端不改 core,也不做概览统计接口。
+- [-] **业务优选(整体不做,2026-11-22 维护者决定)**:上游 v0.1.473 起的业务优选(设置页「业务优选」卡的可靠性衰减 / 可信度效期、概览的「业务优选」统计卡、内核按连接证据选路)面板、后端、core 一律不做,也不预留接口;相关 i18n 键(`businessOverview*`、`businessPreference*`、`businessReliabilityHalfLife`、`businessPerformanceTtl`、`businessSettingsHelp*`、`bandwidthHelpCurrentBusiness`)在 main 里有意缺失,不算缺口,同步上游时不要补回。档案不再校验 `businessPreference`。
 
 ## M2 DNS 与过滤
 - [~] `/api/openbox/dns/wan`(上游 DNS,只读;`internal/system/wandns.go` 的 `ReadWANDNS`、`internal/api/dns`):按 `WANResolverFiles` 的顺序取第一份读得出非回环地址的文件,读不到回 `{"servers":[]}`。**需真机**确认文件位置
@@ -176,6 +176,7 @@
 
 ## 日志(新的在最上面)
 
+- 2026-11-22 backend+panel: 删除业务优选(维护者决定整体不要;配合面板删除设置页「业务优选」卡)。撤销 2026-11-21 加的 `profile.normalizeBusinessPreference` 与取值范围常量、`TestPatchBusinessPreference`,`profileKeyIgnored` 去掉 `businessPreference`。补丁里再带 `businessPreference` 不再校验,按未知键原样合并(已存进档案的旧值不会被清除)。
 - 2026-11-22 backend+core: 动态组订阅范围 + 链式代理来源(对齐上游 v0.1.476;面板批次 9b)。core 规整分组时现在保留 `subscriptionIds`(以前整个丢掉,范围从没存下来),动态组按范围挑节点,范围里写 `chain-proxy` 链式节点才是候选,链式节点的上游绕回这个组就不收(细节见 core/HANDOFF.md)。nodegroups:`availableNodes` 里链式节点的 `subscriptionId` 统一是 `chain-proxy`(`nodegroups.ChainProxyScope`,推断项);保存时的环检测传给 core 的节点多带 `subscriptionId` / `detour`。测试:`api/groups` 2 个(范围存取、链式环),core `scope_test.go`。
 - 2026-11-21 backend+core: 订阅链接可单条停用、订阅链接直连 / 节点直连开关(对齐上游 v0.1.473;配合面板批次 9a、9c)。订阅新增 `urlEntries: [{url, enabled}]`(`subs.URLEntry`):传了就以它为准,停用的链接保留但不拉取;`url` / `urls` 只留启用的,老记录按「全部启用」读;至少要有一条启用(否则 400「至少启用一条订阅链接」,**上游行为未确认,为推断**)。订阅新增 `directSubscription` / `directNodes`(`*bool`,没设置 = 开,只有明确关才写出);改它们或启用的链接集合会让 PATCH 的 `changed` 为真,配置指纹(`subInput`)也带上这三个字段。测速预览请求(`/nodes/latency`)同样认 `urlEntries`。core `directhosts.Collect`:`directSubscription=false` 的订阅不收链接主机,`directNodes=false` 的订阅名下节点(按 `subscriptionId`)不收服务器地址,有 `urlEntries` 时只收启用的链接(停用的不进直连为推断);没有归属的节点照旧。测试:`api/subscriptions` 3+1 个、`directhosts` 2 个。
 - 2026-11-21 backend: 档案新增 `businessPreference`(对齐上游 v0.1.473;配合面板批次 4)。`profile.normalizeBusinessPreference`:必须是对象,带来的 `reliabilityHalfLifeMinutes`(1~1440 的整数,默认 60)和 `performanceTtlSeconds`(1~3600 的整数,默认 60)才保存,不认得的字段丢掉,非法 400 且不改动已存的值;没设置时档案里不写默认值,由面板和说明弹窗按 60 / 60 显示;`businessPreference` 列入 `profileKeyIgnored`(只存档案,改它不提示重启)。范围取自面板设置卡的输入限制(**推断**:上游后端的真实取值范围无公开材料可核对)。测试:`TestPatchBusinessPreference`(保存、丢掉不认得的字段、边界值、六种非法值、失败不改动已存值);go vet、go test ./... 全绿。**未做**:这两个参数真正参与选路(见「需要 core 配合」),以及概览「业务优选」卡的接口。

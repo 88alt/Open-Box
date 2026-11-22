@@ -61,7 +61,8 @@ const zhTW: LANG_MESSAGE = {
   dfSaved: '已儲存。',
   dfUpdating: '正在下載清單…',
   dfApplied: '清單已更新。',
-  dfDescription: '依名單過濾 DNS 查詢，DNS 重寫優先。',
+  dfDescription:
+    '依名單過濾 DNS 查詢，DNS 重寫優先。',
   dfAuto: '自動更新',
   dfAutoEvery: '每',
   dfAutoAt: '在',
@@ -92,7 +93,8 @@ const zhTW: LANG_MESSAGE = {
   dfPreviewFilterAllow: '放行',
   dfPreviewFilterBlock: '攔截',
   dfAllow: '放行網域',
-  dfAllowHint: '每行一個網域，*.example.com 比對子網域。',
+  dfAllowHint:
+    '每行一個網域，*.example.com 比對子網域。',
   dfSaveAllow: '儲存放行網域',
   dfRecords: '網域解析查詢',
   dfSearch: '搜尋網域…',
@@ -104,7 +106,8 @@ const zhTW: LANG_MESSAGE = {
   dfUnknown: '未觀測到結果',
   dfPolicy: 'DNS 策略',
   dfQuery: '查詢 / 重新整理',
-  dfRecordHint: '顯示 Open-Box 最近 24 小時的查詢，最多 20,000 筆。',
+  dfRecordHint:
+    '顯示 Open-Box 最近 24 小時的查詢，最多 20,000 筆。',
   dfCollectDisabled: '過濾未啟用,目前不收集新紀錄。',
   dfDisconnected: '正在等待核心 DNS 事件,統計可能不完整。',
   dfTime: '時間',
@@ -158,8 +161,7 @@ const zhTW: LANG_MESSAGE = {
   cpuLoadLowDesc: '負載很小（綠色）',
   cpuLoadMediumDesc: '負載一般（橙黃色）',
   statActiveTerminals: '活躍終端',
-  statActiveTerminalsHint:
-    'Open-Box 目前連線中觀察到的終端；已知 MAC 合併 IPv4 / IPv6，不含路由器自身及測試探針。直連旁路裝置可能未計入。',
+  statActiveTerminalsHint: 'Open-Box 目前連線中觀察到的終端；已知 MAC 合併 IPv4 / IPv6，不含路由器自身及測試探針。直連旁路裝置可能未計入。',
   showPassword: '顯示密碼',
   hidePassword: '隱藏密碼',
   hardwareLoad: '硬體負載',
@@ -277,8 +279,7 @@ const zhTW: LANG_MESSAGE = {
   testUrlDescription: '自動優選群組和代理頁的延遲測試用這兩個位址;每個自動優選群組也可以單獨指定。',
   trafficRetentionTitle: '分析資料保留時長',
   diagnosticsTitle: '匯出診斷包',
-  diagnosticsDescription:
-    '版本、韌體、核心狀態、脫敏設定和最近日誌打成一個檔案,回報問題時貼到 {link}',
+  diagnosticsDescription: '版本、韌體、核心狀態、脫敏設定和最近日誌打成一個檔案,回報問題時貼到 {link}',
   diagnosticsExport: '匯出診斷包',
   diagnosticsHint: '已去掉密碼、金鑰、節點和訂閱位址,可以直接貼到公開的 issue 裡。',
   diagnosticsExported: '已匯出 {file}',
@@ -324,8 +325,7 @@ const zhTW: LANG_MESSAGE = {
   clientSystemDnsHint:
     '預設使用手機或電腦目前網路的 DNS；關閉後同步路由器設定的直連 DNS 上游，請確保離開區域網路後仍可存取。',
   clientConfigTitle: '本地分流（用戶端）',
-  clientConfigDescription:
-    'Open-Box App 用這台路由器的節點和分流規則自己上網,不經過路由器。匯入要輸入配對碼,碼和檔案外洩了別人也用不了。',
+  clientConfigDescription: 'Open-Box App 用這台路由器的節點和分流規則自己上網,不經過路由器。匯入要輸入配對碼,碼和檔案外洩了別人也用不了。',
   clientConfigLastSync: '最後同步 {time}',
   clientConfigNeverSynced: '還沒同步過',
   clientConfigPowerOff: '關閉同步(防止碼外洩)',
@@ -334,8 +334,7 @@ const zhTW: LANG_MESSAGE = {
   clientConfigSyncDisabled: '本地分流同步已關閉,要同步時再開啟',
   clientConfigSyncOffHint: '同步已關閉:App 掃碼匯入、同步前,先點電源圖示開啟。',
   clientConfigPowerFailed: '開關本地分流同步失敗:{message}',
-  clientConfigScanHint:
-    '用 Open-Box App 掃碼或複製連結匯入，並輸入下方的配對碼。請連接路由器所在的區域網路，或確認可透過網際網路存取路由器面板。',
+  clientConfigScanHint: '用 Open-Box App 掃碼或複製連結匯入，並輸入下方的配對碼。請連接路由器所在的區域網路，或確認可透過網際網路存取路由器面板。',
   clientConfigNoLan:
     '沒讀到路由器的區域網路位址:請用公網位址(網域)開啟面板再掃碼,不然 App 連不上面板。',
   clientConfigExportFile: '匯出設定檔',
@@ -1045,7 +1044,8 @@ const zhTW: LANG_MESSAGE = {
   failoverAddLane: '新增備用頁籤',
   failoverMaxLanes: '最多 {n} 個頁籤',
   failoverDeleteLane: '刪除頁籤',
-  failoverDeleteLaneConfirm: '確定刪除「{lane}」及其成員設定？',
+  failoverDeleteLaneConfirm:
+    '確定刪除「{lane}」及其成員設定？',
   failoverLaneOrderHint: '拖曳頁籤調整優先順序，最左側為主用，其餘依序備用。',
   failoverParameters: '參數設定',
   failoverLaneNamePlaceholder: '頁籤名（可選）',
@@ -1192,8 +1192,7 @@ const zhTW: LANG_MESSAGE = {
   subscriptionNodeDnsLabel: '節點網域解析（可選）',
   subscriptionNodeDnsIpPlaceholder: 'DNS IP,如 223.5.5.5 或 2001:4860:4860::8888',
   subscriptionNodeDnsInvalidIp: 'DNS 位址只能填有效的 IPv4 或 IPv6 位址',
-  subscriptionNodeDnsPlainHint:
-    '僅解析這份訂閱的節點伺服器網域,一般網站和區域網路 DNS 不受影響;節點檢測使用相同解析器。',
+  subscriptionNodeDnsPlainHint: '僅解析這份訂閱的節點伺服器網域,一般網站和區域網路 DNS 不受影響;節點檢測使用相同解析器。',
   subscriptionNodeDnsInvalidBootstrap: 'DoH/DoT 解析 DNS 須填寫有效的 IP 位址',
   subscriptionNodeDnsNeedBootstrap: '上游位址是網域，請填寫 DoH/DoT 解析 DNS（IP）',
   subscriptionContentPlaceholder:
@@ -1391,11 +1390,14 @@ const zhTW: LANG_MESSAGE = {
   dnsModeOff: '停用',
   dnsModeDnsmasqNote: 'dnsmasq 將外部 DNS 查詢轉給核心。',
   dnsModeHijackNote: '防火牆將 53 連接埠的查詢轉給核心。',
-  dnsModeOffNote: '關閉全域接管，可手動指定 DNS。',
-  dnsModeUpstreamHint: 'AdGuard Home / Pi-hole 上游可填 {addr}。',
+  dnsModeOffNote:
+    '關閉全域接管，可手動指定 DNS。',
+  dnsModeUpstreamHint:
+    'AdGuard Home / Pi-hole 上游可填 {addr}。',
   dnsModeSaved: 'DNS 劫持方式已儲存。',
   dnsUpstreamTitle: 'DNS 上游',
-  dnsUpstreamDescription: '直連和代理分別設定，測試通過後儲存。',
+  dnsUpstreamDescription:
+    '直連和代理分別設定，測試通過後儲存。',
   dnsUpstreamDirect: '直連 DNS',
   dnsUpstreamDirectNote: '解析直連網域用。預設是上游 DNS。',
   dnsUpstreamWan: '上游 DNS',
@@ -1403,16 +1405,19 @@ const zhTW: LANG_MESSAGE = {
   dnsUpstreamWanLast: '這一側至少留一條;刪光了也是上游 DNS',
   dnsUpstreamSourceIp: '指定位址',
   dnsUpstreamSourceWan: '上游 DNS',
-  dnsUpstreamWanNotInCn: '中國大陸的代理側須指定 DNS 位址。',
+  dnsUpstreamWanNotInCn:
+    '中國大陸的代理側須指定 DNS 位址。',
   dnsUpstreamWanDirectTag: '直連,不經代理',
   dnsUpstreamWanProxyNote: '代理 DNS 選上游 DNS 時直接問它,不經代理',
   dnsRegionLabel: '路由器在',
   dnsRegionCn: '中國大陸',
   dnsRegionIntl: '中國大陸之外',
   dnsRegionCnNote: '境外網域建議用代理 DNS 解析。',
-  dnsRegionDetecting: '正在依出口 IP 判斷地區。',
+  dnsRegionDetecting:
+    '正在依出口 IP 判斷地區。',
   dnsRegionDetected: '已按出口公網 IP 判斷:路由器在「{region}」',
-  dnsRegionIntlNote: '直連和代理預設使用上游 DNS。',
+  dnsRegionIntlNote:
+    '直連和代理預設使用上游 DNS。',
   dnsRegionDefaultsCn: '直連用上游 DNS,代理用 TCP 1.1.1.1',
   dnsRegionDefaultsIntl: '兩側都用上游 DNS',
   dnsRegionScopeCn: '不含香港、澳門、台灣,它們屬於中國大陸之外',
@@ -1421,7 +1426,8 @@ const zhTW: LANG_MESSAGE = {
     '切換到「{region}」:{scope}。兩側換成這個地區的預設值({defaults}),備用清空。確定嗎?',
   dnsRegionSwitched: '已切換到「{region}」',
   dnsUpstreamProxy: '代理 DNS',
-  dnsUpstreamProxyNote: '代理 DNS 線路由目標分流決定。',
+  dnsUpstreamProxyNote:
+    '代理 DNS 線路由目標分流決定。',
   dnsUpstreamProtocol: '協定',
   dnsUpstreamPort: '連接埠',
   dnsUpstreamEncryptedBootstrap: 'DoH/DoT 解析 DNS',
@@ -1451,7 +1457,8 @@ const zhTW: LANG_MESSAGE = {
   dnsUpstreamBackupTag: '備用',
   dnsUpstreamProxyExtras: '代理 DNS 備用上游',
   dnsUpstreamAddExtra: '新增備用上游',
-  dnsUpstreamExtrasNote: '同側主備並行查詢，採用首個成功結果。',
+  dnsUpstreamExtrasNote:
+    '同側主備並行查詢，採用首個成功結果。',
   dnsUpstreamExtraDuplicate: '這個位址已經用過了',
   dnsUpstreamTestVia: '經「{policy}」→ {node}',
   dnsUpstreamTestOk: '{side}可用（{detail}）。',
@@ -1466,20 +1473,25 @@ const zhTW: LANG_MESSAGE = {
   smartBlockConnection: '攔截連線',
   dnsUpstreamSaved: '{side}已儲存（{detail}）。',
   dnsRewriteTitle: 'DNS 重寫',
-  dnsRewriteDescription: '將網域解析改為指定網域或 IP。',
-  dnsRewriteNote: '儲存後立即更新，舊結果隨 DNS 快取過期。',
+  dnsRewriteDescription:
+    '將網域解析改為指定網域或 IP。',
+  dnsRewriteNote:
+    '儲存後立即更新，舊結果隨 DNS 快取過期。',
   dnsRewriteEmpty: '沒有重寫規則。',
   dnsRewriteAdd: '新增',
   dnsRewriteRestore: '恢復預設',
   dnsRewriteAddTitle: '新增 DNS 重寫',
   dnsRewriteEditTitle: '修改 DNS 重寫',
   dnsRewriteSource: '查詢網域',
-  dnsRewriteSourceHint: '使用 *.example.com 比對任意層級的子網域。',
+  dnsRewriteSourceHint:
+    '使用 *.example.com 比對任意層級的子網域。',
   dnsRewriteTarget: '改寫為',
   dnsRewriteKindDomain: '另一個網域',
   dnsRewriteKindIp: '固定 IP',
-  dnsRewriteDomainHint: '來源和目標都用 * 時，保留完整子網域。',
-  dnsRewriteIpHint: '每個標籤填一個 IPv4 或 IPv6 位址。',
+  dnsRewriteDomainHint:
+    '來源和目標都用 * 時，保留完整子網域。',
+  dnsRewriteIpHint:
+    '每個標籤填一個 IPv4 或 IPv6 位址。',
   dnsRewriteSavedRestart: 'DNS 重寫已儲存。',
   dnsRewriteSavedLive: 'DNS 重寫已儲存並生效;已快取的解析結果等過期後更新。',
   dnsRewriteBadSource: '查詢網域不合法:寫精確網域或 *.example.com。',
@@ -1492,7 +1504,8 @@ const zhTW: LANG_MESSAGE = {
   routeDnsRewrite: 'DNS 重寫',
   routeDnsRewriteHit: '重寫:{source} → {target}',
   dnsFakeIpTitle: '啟用 FakeIP',
-  dnsFakeIpNote: '代理網域交給支援網域轉送的節點解析。',
+  dnsFakeIpNote:
+    '代理網域交給支援網域轉送的節點解析。',
   bypassPortsTitle: '進核心前放行的連接埠',
   bypassPortsDescription:
     '自建服務(RustDesk、連接埠映射出去的 NAS 服務等)用到的連接埠:目標連接埠或來源連接埠是這些的 TCP / UDP 流量在進核心之前就放行,和沒裝 Open-Box 一樣,連接埠映射和打洞不受影響。和「前置自訂分流」裡的「連接埠 → 直連」不同:那種已經進了核心,由核心替它重新連線,NAT 會被打亂。黑名單、白名單各存一份,只有選中的那份生效。',
@@ -1709,11 +1722,9 @@ const zhTW: LANG_MESSAGE = {
   routeDnsV6Failed: 'IPv6 解析失敗:{message}',
   routeEntryKernel: '進入 Open-Box 核心',
   routeEntryDirectIp: '直連 IP 入口旁路已啟用',
-  routeEntryDirectIpDetail:
-    '直連 IP 段已寫進入口 interval 集合，命中的連線不進核心；本目標是否命中集合以右欄實測為準。',
+  routeEntryDirectIpDetail: '直連 IP 段已寫進入口 interval 集合，命中的連線不進核心；本目標是否命中集合以右欄實測為準。',
   routeEntryDirectAnswer: '直連應答放行',
-  routeEntryDirectAnswerDetail:
-    '直連網域解析出的位址會寫進入口放行集合，連線在入口直接放走；終端自帶加密 DNS 或查詢不經過核心時仍會進核心。',
+  routeEntryDirectAnswerDetail: '直連網域解析出的位址會寫進入口放行集合，連線在入口直接放走；終端自帶加密 DNS 或查詢不經過核心時仍會進核心。',
   routeEntryNoBypass: '直連集合未在入口原生旁路',
   routeEntryBypassHit: '本目標命中 {set},在入口旁路',
   routeEntryBypassUndetermined: '本目標是否旁路未判定',
@@ -2005,8 +2016,7 @@ const zhTW: LANG_MESSAGE = {
   serverPortCheckFailed: '連接埠檢測失敗:{message}',
   shareCodeButton: '掃碼',
   shareCodeTitle: '掃碼連線「{name}」',
-  shareCodeAppHint:
-    '用新版 Open-Box App 掃碼，輸入配對碼後依「地區分流」使用。請連接路由器所在的區域網路，或確認可透過網際網路存取路由器面板。',
+  shareCodeAppHint: '用新版 Open-Box App 掃碼，輸入配對碼後依「地區分流」使用。請連接路由器所在的區域網路，或確認可透過網際網路存取路由器面板。',
   shareCodeLinkHint: '一般節點連結,給其他客戶端用。',
   shareCodeLocalAddress: '連線位址 {address} 只在家裡能用,在外面連不上;要填公網 IP 或網域。',
   shareCodeNoLan:
@@ -2014,8 +2024,7 @@ const zhTW: LANG_MESSAGE = {
   shareCodeDisabled: '這台伺服器已停用,掃了也連不上。',
   shareCodeInfoFailed: '讀取路由器資訊失敗:{message}',
   shareAppCodesTitle: '節點分流（用戶端）',
-  shareAppCodesDescription:
-    '共享網路的每台伺服器一個碼和一個配對碼,Open-Box App 掃碼、輸入配對碼後經這台路由器上網。',
+  shareAppCodesDescription: '共享網路的每台伺服器一個碼和一個配對碼,Open-Box App 掃碼、輸入配對碼後經這台路由器上網。',
   shareAppCodesEmpty: '還沒有共享網路伺服器,先到「共享網路」頁籤新增。',
   serverInfoTitle: '路由器標識',
   serverInfoDescription:
@@ -2165,24 +2174,26 @@ const zhTW: LANG_MESSAGE = {
   chainProxyNameLabel: '名稱',
   chainProxyNamePlaceholder: '例如:住宅-美國',
   chainProxyLinkLabel: '節點',
-  chainProxyLinkPlaceholder: "使用者名稱:密碼{'@'}主機:連接埠",
+  chainProxyLinkPlaceholder: '使用者名稱:密碼{\'@\'}主機:連接埠',
   chainProxyLinkHint: '也可貼上完整分享連結或節點設定。',
   chainProxyUpstreamLabel: '上游',
-  chainProxyHint: '透過選定的節點或節點群組連線。',
+  chainProxyHint:
+    '透過選定的節點或節點群組連線。',
   clientRouteDnsLabel: '自訂 DNS',
-  clientRouteDnsHint:
-    '這些終端的 DNS 查詢使用此處指定的伺服器。留空時沿用預設設定。須開啟 DNS 接管。',
+  clientRouteDnsHint: '這些終端的 DNS 查詢使用此處指定的伺服器。留空時沿用預設設定。須開啟 DNS 接管。',
   chainProxyDnsHint: '終端直接選擇此節點時可用，終端 DNS 優先。',
   chainProxyTest: '測速',
   chainProxyTestFailed: '不通',
   chainProxyIpUnknown: 'IP 歸屬地沒查到',
-  chainProxyLatencyNotInKernel: '暫時啟動測試核心，延遲可能偏高。',
+  chainProxyLatencyNotInKernel:
+    '暫時啟動測試核心，延遲可能偏高。',
   chainProxyTestVia: '經 {via}',
   chainProxyExitIp: '出口 IP',
   chainProxyIpDetail: 'IP 詳情',
   chainProxyIpDetailTip: '在 {site} 查看這個出口 IP(新分頁)',
   chainProxyIpFailed: 'IP 資訊沒取到:{error}',
-  chainProxyTestHint: '透過上游測速，無需先儲存。',
+  chainProxyTestHint:
+    '透過上游測速，無需先儲存。',
   chainProxyVia: '經 {upstream}',
   chainProxyUpstreamMissing: '上游「{name}」已不存在',
   chainProxyErrName: '名稱不能為空',
@@ -2213,14 +2224,14 @@ const zhTW: LANG_MESSAGE = {
   bandwidthPeriod: '統一帶寬測試周期',
   bandwidthHours: '小時',
   bandwidthDownloadCap: '單次下載流量上限',
-  bandwidthDaily:
-    '去重後有 {count} 個符合條件的節點，單個節點一天最多測試 {times} 次，按目前上限最多消耗 {size}/天。',
+  bandwidthDaily: '去重後有 {count} 個符合條件的節點，單個節點一天最多測試 {times} 次，按目前上限最多消耗 {size}/天。',
   bandwidthHealthFirst:
     '節點健康、可用是第一前提。已確認故障及尚未確認恢復的節點繼續排除，歷史帶寬再高也不參與選擇。沒有帶寬記錄不等於節點不可用。',
   bandwidthOff: '關閉時',
   bandwidthOn: '開啟時',
   bandwidthExample: '選擇例子',
-  bandwidthOff_urltest: '按延時穩定選擇一個節點，保留原有延時容差，避免小幅波動導致頻繁切換。',
+  bandwidthOff_urltest:
+    '按延時穩定選擇一個節點，保留原有延時容差，避免小幅波動導致頻繁切換。',
   bandwidthOn_urltest:
     '按後端設定中的權重給健康候選評分。下載頻寬權重大於 0 時，至少一個候選需要有效的下載頻寬資料。此時跳過延遲容差。同分保留目前節點，健康節點至少保持 60 秒。沒有可用評分時，按延遲和容差選節點。',
   bandwidthExample_urltest:
@@ -2334,43 +2345,12 @@ const zhTW: LANG_MESSAGE = {
   nodeScoreWeightFirstDivider: '延遲與頻寬分界',
   nodeScoreWeightSecondDivider: '頻寬與抖動分界',
   nodeScoreWeightValues: '延遲 {latency}%，頻寬 {download}%，抖動 {jitter}%',
-  businessPreference: '業務優選',
-  businessOverviewEnabled: '已開啟 {count} 組',
-  businessOverviewHits: '近 {minutes} 分鐘改選 {count} 條連線',
-  businessOverviewWindow: '近 {minutes} 分鐘',
-  businessOverviewBreakdown: '因失敗改選 {reliability} 條 · 因回應更快改選 {performance} 條',
-  businessOverviewLatest: '最近改選 · {time} · {group} · {from} → {to} · {reason}',
-  businessOverviewSwitch: '最近改選 · {time} · {from} → {to} · {reason}',
-  businessOverviewLane: '目前分頁 · {name}',
-  businessOverviewExpand: '展開分組',
-  businessOverviewCollapse: '收合分組',
-  businessOverviewOff: '暫無分組開啟業務優選',
-  businessOverviewNoStats: '暫時無法統計改選次數',
-  businessOverviewSettings: '前往「設定 → 分組」',
-  businessOverviewLoading: '正在讀取狀態…',
-  businessOverview_running: '運作中',
-  businessOverview_waiting: '目前暫無有效改選依據',
-  businessOverview_no_backup: '無健康備用節點',
-  businessOverview_manual_lane: '目前分頁為手動選擇',
-  businessOverview_pending: '等待核心設定生效',
-  businessOverview_unavailable: '暫時無法讀取核心狀態',
-  businessOverviewReason_reliability: '可靠性',
-  businessOverviewReason_performance: '效能',
-  businessOverviewHelpCount:
-    '業務優選讓一條新 TCP 連線改變原本的節點選擇，並收到首個傳輸回覆後，計入一次改選。試用節點和撥號失敗後的一般備援不計入。收到回覆不代表 HTTP 請求成功或業務已解鎖。',
-  businessOverviewHelpExample:
-    '例如，節點 A 存取某網站多次失敗，業務優選讓下一條連線改走節點 B。B 收到回覆後，「可靠性改選」加 1。',
-  businessOverviewHelpWindow: '統計最近 1 小時。重新啟動核心或重建分組後，對應計數重新開始。',
-  businessReliabilityHalfLife: '可靠性衰減',
-  businessPerformanceTtl: '可信度效期',
-  businessPreferenceMinutes: '分鐘',
   bandwidthDays: '天',
   bandwidthPeriodUnit: '頻寬測試週期單位',
   bandwidthPeriodInvalid: '請輸入至少 1 小時的有效週期。',
   bandwidthSettingsHelpLabel: '{title}說明',
   bandwidthHelpCurrent: '目前設定',
   bandwidthHelpCurrentTest: '頻寬測試每 {hours} 小時，每次最多 {maxMB} MB',
-  bandwidthHelpCurrentBusiness: '可靠性衰減 {minutes} 分鐘，可信度效期 {seconds} 秒',
   bandwidthHelpEditLocation: '在「設定 → 後端設定 → {section}」修改',
   bandwidthHelpSwitchOn: '編輯中的開關已開啟',
   bandwidthHelpSwitchOff: '編輯中的開關已關閉',
@@ -2392,24 +2372,6 @@ const zhTW: LANG_MESSAGE = {
   nodeScoreWeightMetric: '項目',
   nodeScoreWeightsDefaultExample: '預設權重得分（40 / 30 / 30）',
   nodeScoreWeightsAdjustedExample: '調整後得分（70 / 15 / 15）',
-  businessSettingsHelpIntro:
-    '自動優選、故障轉移的自動頁籤和負載均衡可參考同一目標的實際 TCP 連線證據。新目標證據不足時，沿用群組原有規則。選路調整只用於新連線，已建立的連線繼續走原出口。',
-  businessSettingsHelpScope:
-    '證據按目標主機/IP、連接埠和位址家族區分。UDP/QUIC 及重用既有連線的請求不觸發這套 TCP 選擇。計時包含建連和首寫至回覆耗時，不計用戶端等待首寫的閒置。首個傳輸回覆可能只是 TLS 握手，不能代表 HTTP 內容成功或持續下載速度。用戶端本機分流不啟用這項路由器功能。',
-  businessSettingsHelp_loadbalance:
-    '負載均衡保留健康與佔用規則，再於符合目前佔用條件的候選中按目標業務證據擇優。有更空閒的合格節點時，不會把所有連線都固定給某個更快節點。',
-  businessSettingsHelp_failover:
-    '故障轉移先遵守主用、備用頁籤順序。業務優選只在目前自動頁籤有多個合格節點時參與選擇，不改變手動指定，也不會因為備用頁籤更快就繞過仍在使用的主用頁籤。',
-  businessSettingsHelp_urltest:
-    '自動優選保留用於新目標的預設節點，同時可為不同目標保持各自的目前節點。系統會限額試用其他合格候選；群組顯示的預設節點不一定等於每條連線的實際出口。',
-  businessSettingsHelpReliability:
-    '決定觀測到的連續連線失敗影響消退得有多快。預設 1 小時，一次失敗的權重在 1 小時後減半，2 小時後剩四分之一。節點成功收到回覆後，連續失敗重新計數。用戶端主動取消不算節點失敗。',
-  businessSettingsHelpReliabilityExample:
-    'A 最近連續兩次連線某個目標失敗，而合格候選 B 最近連線同一目標時成功收到回覆。新的同目標連線就可以優先走 B。首次存取其他網站時，仍按群組原有規則選節點。',
-  businessSettingsHelpPerformance:
-    '決定用於新效能比較的證據要有多新，預設 60 秒。替換健康節點需要多次可比較的回覆樣本。自動群組為某目標選中的節點若仍健康且持續成功，不會僅因比較證據到期就被強制換回預設節點。',
-  businessSettingsHelpPerformanceExample:
-    '在可比較條件下，A 多次約 200 ms 回覆，B 多次約 120 ms 回覆，自動群組可為這個目標保持使用 B。比較證據到期後，需要新證據才能晉升其他節點；不會只因近期沒再使用 A，就丟棄 B 持續成功的結果。',
 }
 
 export default zhTW

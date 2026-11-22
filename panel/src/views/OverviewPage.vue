@@ -6,25 +6,22 @@
       :style="padding"
     >
       <!-- 概览几张卡片:硬件负载、网络状态(站点延迟 + 汇总 + 四张实时图)、流量洞察和节点质量。网络信息、连接拓扑、连接统计已去掉。 -->
-      <div class="app-page-content app-card-gap flex flex-col">
+      <div class="flex flex-col app-page-content app-card-gap">
         <HardwareLoadCard />
         <PanelOverviewCard />
         <DnsFilterOverview />
         <!-- 手机屏太窄放不下 31 根柱子和明细表,每日流量只在桌面显示 -->
         <DailyTrafficCard v-if="!isMiddleScreen" />
         <NodeQualityCard />
-        <!-- 业务优选:手机屏放不下分行明细,和每日流量一样只在桌面显示 -->
-        <BusinessPreferenceOverview v-if="!isMiddleScreen" />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import BusinessPreferenceOverview from '@/components/overview/BusinessPreferenceOverview.vue'
-import DailyTrafficCard from '@/components/overview/DailyTrafficCard.vue'
-import DnsFilterOverview from '@/components/overview/DnsFilterOverview.vue'
 import HardwareLoadCard from '@/components/overview/HardwareLoadCard.vue'
+import DnsFilterOverview from '@/components/overview/DnsFilterOverview.vue'
+import DailyTrafficCard from '@/components/overview/DailyTrafficCard.vue'
 import NodeQualityCard from '@/components/overview/NodeQualityCard.vue'
 import PanelOverviewCard from '@/components/overview/PanelOverviewCard.vue'
 import OverviewCtrl from '@/components/sidebar/OverviewCtrl.vue'

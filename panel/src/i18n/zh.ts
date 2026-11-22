@@ -61,7 +61,8 @@ const zh: LANG_MESSAGE = {
   dfSaved: '已保存。',
   dfUpdating: '正在下载名单…',
   dfApplied: '名单已更新。',
-  dfDescription: '按名单过滤 DNS 查询，DNS 重写优先。',
+  dfDescription:
+    '按名单过滤 DNS 查询，DNS 重写优先。',
   dfAuto: '自动更新',
   dfAutoEvery: '每',
   dfAutoAt: '在',
@@ -92,7 +93,8 @@ const zh: LANG_MESSAGE = {
   dfPreviewFilterAllow: '放行',
   dfPreviewFilterBlock: '拦截',
   dfAllow: '放行域名',
-  dfAllowHint: '每行一个域名，*.example.com 匹配子域。',
+  dfAllowHint:
+    '每行一个域名，*.example.com 匹配子域。',
   dfSaveAllow: '保存放行域名',
   dfRecords: '域名解析查询',
   dfSearch: '搜索域名…',
@@ -104,7 +106,8 @@ const zh: LANG_MESSAGE = {
   dfUnknown: '未观测到结果',
   dfPolicy: 'DNS 策略',
   dfQuery: '查询 / 刷新',
-  dfRecordHint: '显示 Open-Box 最近 24 小时的查询，最多 20,000 条。',
+  dfRecordHint:
+    '显示 Open-Box 最近 24 小时的查询，最多 20,000 条。',
   dfCollectDisabled: '过滤未开启,当前不采集新记录。',
   dfDisconnected: '正在等待内核 DNS 事件,统计可能不完整。',
   dfTime: '时间',
@@ -158,8 +161,7 @@ const zh: LANG_MESSAGE = {
   cpuLoadLowDesc: '负载很小（绿色）',
   cpuLoadMediumDesc: '负载一般（橙黄色）',
   statActiveTerminals: '活跃终端',
-  statActiveTerminalsHint:
-    'Open-Box 当前连接中观察到的终端；已知 MAC 合并 IPv4 / IPv6，不含路由器自身和测试探针。直连旁路设备可能未计入。',
+  statActiveTerminalsHint: 'Open-Box 当前连接中观察到的终端；已知 MAC 合并 IPv4 / IPv6，不含路由器自身和测试探针。直连旁路设备可能未计入。',
   showPassword: '显示密码',
   hidePassword: '隐藏密码',
   hardwareLoad: '硬件负载',
@@ -277,8 +279,7 @@ const zh: LANG_MESSAGE = {
   testUrlDescription: '自动优选组和代理页的延迟测试用这两个地址;每个自动优选组也可以单独指定。',
   trafficRetentionTitle: '分析数据保留时长',
   diagnosticsTitle: '导出诊断包',
-  diagnosticsDescription:
-    '版本、固件、内核状态、脱敏配置和最近日志打成一个文件,反馈问题时贴到 {link}',
+  diagnosticsDescription: '版本、固件、内核状态、脱敏配置和最近日志打成一个文件,反馈问题时贴到 {link}',
   diagnosticsExport: '导出诊断包',
   diagnosticsHint: '已去掉密码、密钥、节点和订阅地址,可以直接贴到公开的 issue 里。',
   diagnosticsExported: '已导出 {file}',
@@ -324,8 +325,7 @@ const zh: LANG_MESSAGE = {
   clientSystemDnsHint:
     '默认使用手机或电脑当前网络的 DNS；关闭后同步路由器配置的直连 DNS 上游，请确保离开局域网后仍可访问。',
   clientConfigTitle: '本地分流（客户端）',
-  clientConfigDescription:
-    'Open-Box App 用这台路由器的节点和分流规则自己上网,不经过路由器。导入要输入配对码,码和文件泄露了别人也用不了。',
+  clientConfigDescription: 'Open-Box App 用这台路由器的节点和分流规则自己上网,不经过路由器。导入要输入配对码,码和文件泄露了别人也用不了。',
   clientConfigLastSync: '最后同步 {time}',
   clientConfigNeverSynced: '还没同步过',
   clientConfigPowerOff: '关闭同步(防止码泄露)',
@@ -334,8 +334,7 @@ const zh: LANG_MESSAGE = {
   clientConfigSyncDisabled: '本地分流同步已关闭,要同步时再打开',
   clientConfigSyncOffHint: '同步已关闭:App 扫码导入、同步前,先点电源图标打开。',
   clientConfigPowerFailed: '开关本地分流同步失败:{message}',
-  clientConfigScanHint:
-    '用 Open-Box App 扫码或复制链接导入，并输入下方的配对码。请连接路由器所在的局域网，或确认可通过公网访问路由器面板。',
+  clientConfigScanHint: '用 Open-Box App 扫码或复制链接导入，并输入下方的配对码。请连接路由器所在的局域网，或确认可通过公网访问路由器面板。',
   clientConfigNoLan:
     '没读到路由器的局域网地址:请用公网地址(域名)打开面板再扫码,不然 App 连不上面板。',
   clientConfigExportFile: '导出配置文件',
@@ -350,8 +349,7 @@ const zh: LANG_MESSAGE = {
   pairCodeRotateFailed: '更换配对码失败:{message}',
   pairCodeRotateTitle: '更换配对码？',
   pairCodeRotateLocalConfirm: '更换后,之前导入的设备和导出的文件都会失效,要用新的配对码重新导入。',
-  pairCodeRotateShareConfirm:
-    '这台服务器的密码会一起更换并立即生效(内核重启一下):之前导入的设备和用普通链接的客户端都会失效,要用新的二维码和配对码重新导入。',
+  pairCodeRotateShareConfirm: '这台服务器的密码会一起更换并立即生效(内核重启一下):之前导入的设备和用普通链接的客户端都会失效,要用新的二维码和配对码重新导入。',
   pairCodeRotatedApplied: '配对码已更换为 {code},新密码已生效',
   pairCodeApplyFailed: '配对码已更换为 {code},但新密码没能生效:{message}',
   pairCodeLoadFailed: '没读到配对码:{message}',
@@ -1045,7 +1043,8 @@ const zh: LANG_MESSAGE = {
   failoverAddLane: '添加备用页签',
   failoverMaxLanes: '最多 {n} 个页签',
   failoverDeleteLane: '删除页签',
-  failoverDeleteLaneConfirm: '确定删除「{lane}」及其成员设置？',
+  failoverDeleteLaneConfirm:
+    '确定删除「{lane}」及其成员设置？',
   failoverLaneOrderHint: '拖动页签调整优先级，最左侧为主用，其余依次备用。',
   failoverParameters: '参数设定',
   failoverLaneNamePlaceholder: '页签名（可选）',
@@ -1192,8 +1191,7 @@ const zh: LANG_MESSAGE = {
   subscriptionNodeDnsLabel: '节点域名解析（可选）',
   subscriptionNodeDnsIpPlaceholder: 'DNS IP,如 223.5.5.5 或 2001:4860:4860::8888',
   subscriptionNodeDnsInvalidIp: 'DNS 地址只能填有效的 IPv4 或 IPv6 地址',
-  subscriptionNodeDnsPlainHint:
-    '仅解析这份订阅的节点服务器域名,普通网站和局域网 DNS 不受影响;节点检测使用相同解析器。',
+  subscriptionNodeDnsPlainHint: '仅解析这份订阅的节点服务器域名,普通网站和局域网 DNS 不受影响;节点检测使用相同解析器。',
   subscriptionNodeDnsInvalidBootstrap: 'DoH/DoT 解析 DNS 要填有效的 IP 地址',
   subscriptionNodeDnsNeedBootstrap: '上游地址是域名，请填写 DoH/DoT 解析 DNS（IP）',
   subscriptionContentPlaceholder:
@@ -1391,11 +1389,14 @@ const zh: LANG_MESSAGE = {
   dnsModeOff: '禁用',
   dnsModeDnsmasqNote: 'dnsmasq 将外部 DNS 查询转给内核。',
   dnsModeHijackNote: '防火墙将 53 端口的查询转给内核。',
-  dnsModeOffNote: '关闭全局接管，可手动指定 DNS。',
-  dnsModeUpstreamHint: 'AdGuard Home / Pi-hole 上游可填 {addr}。',
+  dnsModeOffNote:
+    '关闭全局接管，可手动指定 DNS。',
+  dnsModeUpstreamHint:
+    'AdGuard Home / Pi-hole 上游可填 {addr}。',
   dnsModeSaved: 'DNS 劫持方式已保存。',
   dnsUpstreamTitle: 'DNS 上游',
-  dnsUpstreamDescription: '直连和代理分别设置，测试通过后保存。',
+  dnsUpstreamDescription:
+    '直连和代理分别设置，测试通过后保存。',
   dnsUpstreamDirect: '直连 DNS',
   dnsUpstreamDirectNote: '解析直连域名用。默认是上游 DNS。',
   dnsUpstreamWan: '上游 DNS',
@@ -1403,16 +1404,19 @@ const zh: LANG_MESSAGE = {
   dnsUpstreamWanLast: '这一侧至少留一条;删光了也是上游 DNS',
   dnsUpstreamSourceIp: '指定地址',
   dnsUpstreamSourceWan: '上游 DNS',
-  dnsUpstreamWanNotInCn: '中国大陆的代理侧须指定 DNS 地址。',
+  dnsUpstreamWanNotInCn:
+    '中国大陆的代理侧须指定 DNS 地址。',
   dnsUpstreamWanDirectTag: '直连,不经代理',
   dnsUpstreamWanProxyNote: '代理 DNS 选上游 DNS 时直接问它,不经代理',
   dnsRegionLabel: '路由器在',
   dnsRegionCn: '中国大陆',
   dnsRegionIntl: '中国大陆之外',
   dnsRegionCnNote: '境外域名建议用代理 DNS 解析。',
-  dnsRegionDetecting: '正在根据出口 IP 判断地区。',
+  dnsRegionDetecting:
+    '正在根据出口 IP 判断地区。',
   dnsRegionDetected: '已按出口公网 IP 判断:路由器在「{region}」',
-  dnsRegionIntlNote: '直连和代理默认使用上游 DNS。',
+  dnsRegionIntlNote:
+    '直连和代理默认使用上游 DNS。',
   dnsRegionDefaultsCn: '直连用上游 DNS,代理用 TCP 1.1.1.1',
   dnsRegionDefaultsIntl: '两侧都用上游 DNS',
   dnsRegionScopeCn: '不含香港、澳门、台湾,它们属于中国大陆之外',
@@ -1421,7 +1425,8 @@ const zh: LANG_MESSAGE = {
     '切换到「{region}」:{scope}。两侧换成这个地区的默认值({defaults}),备用清空。确定吗?',
   dnsRegionSwitched: '已切换到「{region}」',
   dnsUpstreamProxy: '代理 DNS',
-  dnsUpstreamProxyNote: '代理 DNS 线路由目标分流决定。',
+  dnsUpstreamProxyNote:
+    '代理 DNS 线路由目标分流决定。',
   dnsUpstreamProtocol: '协议',
   dnsUpstreamPort: '端口',
   dnsUpstreamEncryptedBootstrap: 'DoH/DoT 解析 DNS',
@@ -1451,7 +1456,8 @@ const zh: LANG_MESSAGE = {
   dnsUpstreamBackupTag: '备用',
   dnsUpstreamProxyExtras: '代理 DNS 备用上游',
   dnsUpstreamAddExtra: '添加备用上游',
-  dnsUpstreamExtrasNote: '同侧主备并发查询，采用首个成功结果。',
+  dnsUpstreamExtrasNote:
+    '同侧主备并发查询，采用首个成功结果。',
   dnsUpstreamExtraDuplicate: '这个地址已经用过了',
   dnsUpstreamTestVia: '经「{policy}」→ {node}',
   dnsUpstreamTestOk: '{side}可用（{detail}）。',
@@ -1466,20 +1472,25 @@ const zh: LANG_MESSAGE = {
   smartBlockConnection: '拦截连接',
   dnsUpstreamSaved: '{side}已保存（{detail}）。',
   dnsRewriteTitle: 'DNS 重写',
-  dnsRewriteDescription: '将域名解析改为指定域名或 IP。',
-  dnsRewriteNote: '保存后立即更新，旧结果随 DNS 缓存过期。',
+  dnsRewriteDescription:
+    '将域名解析改为指定域名或 IP。',
+  dnsRewriteNote:
+    '保存后立即更新，旧结果随 DNS 缓存过期。',
   dnsRewriteEmpty: '没有重写规则。',
   dnsRewriteAdd: '添加',
   dnsRewriteRestore: '恢复默认',
   dnsRewriteAddTitle: '添加 DNS 重写',
   dnsRewriteEditTitle: '修改 DNS 重写',
   dnsRewriteSource: '查询域名',
-  dnsRewriteSourceHint: '使用 *.example.com 匹配任意级子域。',
+  dnsRewriteSourceHint:
+    '使用 *.example.com 匹配任意级子域。',
   dnsRewriteTarget: '改写为',
   dnsRewriteKindDomain: '另一个域名',
   dnsRewriteKindIp: '固定 IP',
-  dnsRewriteDomainHint: '源和目标都用 * 时，保留完整子域。',
-  dnsRewriteIpHint: '每个标签填一个 IPv4 或 IPv6 地址。',
+  dnsRewriteDomainHint:
+    '源和目标都用 * 时，保留完整子域。',
+  dnsRewriteIpHint:
+    '每个标签填一个 IPv4 或 IPv6 地址。',
   dnsRewriteSavedRestart: 'DNS 重写已保存。',
   dnsRewriteSavedLive: 'DNS 重写已保存并生效;已缓存的解析结果等过期后更新。',
   dnsRewriteBadSource: '查询域名不合法:写精确域名或 *.example.com。',
@@ -1492,7 +1503,8 @@ const zh: LANG_MESSAGE = {
   routeDnsRewrite: 'DNS 重写',
   routeDnsRewriteHit: '重写:{source} → {target}',
   dnsFakeIpTitle: '启用 FakeIP',
-  dnsFakeIpNote: '代理域名交给支持域名转发的节点解析。',
+  dnsFakeIpNote:
+    '代理域名交给支持域名转发的节点解析。',
   bypassPortsTitle: '进内核前放行的端口',
   bypassPortsDescription:
     '自建服务(RustDesk、端口映射出去的 NAS 服务等)用到的端口:目标端口或来源端口是这些的 TCP / UDP 流量在进内核之前就放行,和没装 Open-Box 一样,端口映射和打洞不受影响。和「前置自定义分流」里的「端口 → 直连」不同:那种已经进了内核,由内核替它重新连接,NAT 会被打乱。黑名单、白名单各存一份,只有选中的那份生效。',
@@ -1709,11 +1721,9 @@ const zh: LANG_MESSAGE = {
   routeDnsV6Failed: 'IPv6 解析失败:{message}',
   routeEntryKernel: '进入 Open-Box 内核',
   routeEntryDirectIp: '直连 IP 入口旁路已启用',
-  routeEntryDirectIpDetail:
-    '直连 IP 段已写进入口 interval 集合，命中的连接不进内核；本目标是否命中集合以右栏实测为准。',
+  routeEntryDirectIpDetail: '直连 IP 段已写进入口 interval 集合，命中的连接不进内核；本目标是否命中集合以右栏实测为准。',
   routeEntryDirectAnswer: '直连应答放行',
-  routeEntryDirectAnswerDetail:
-    '直连域名解析出的地址会写进入口放行集合，连接在入口直接放走；终端自带加密 DNS 或查询不经过内核时仍会进内核。',
+  routeEntryDirectAnswerDetail: '直连域名解析出的地址会写进入口放行集合，连接在入口直接放走；终端自带加密 DNS 或查询不经过内核时仍会进内核。',
   routeEntryNoBypass: '直连集合未在入口原生旁路',
   routeEntryBypassHit: '本目标命中 {set},在入口旁路',
   routeEntryBypassUndetermined: '本目标是否旁路未判定',
@@ -2005,8 +2015,7 @@ const zh: LANG_MESSAGE = {
   serverPortCheckFailed: '端口检测失败:{message}',
   shareCodeButton: '扫码',
   shareCodeTitle: '扫码连接「{name}」',
-  shareCodeAppHint:
-    '用新版 Open-Box App 扫码，输入配对码后按「地区分流」使用。请连接路由器所在的局域网，或确认可通过公网访问路由器面板。',
+  shareCodeAppHint: '用新版 Open-Box App 扫码，输入配对码后按「地区分流」使用。请连接路由器所在的局域网，或确认可通过公网访问路由器面板。',
   shareCodeLinkHint: '普通节点链接,给其他客户端用。',
   shareCodeLocalAddress: '连接地址 {address} 只在家里能用,在外面连不上;要填公网 IP 或域名。',
   shareCodeNoLan:
@@ -2014,8 +2023,7 @@ const zh: LANG_MESSAGE = {
   shareCodeDisabled: '这台服务器已停用,扫了也连不上。',
   shareCodeInfoFailed: '读取路由器信息失败:{message}',
   shareAppCodesTitle: '节点分流（客户端）',
-  shareAppCodesDescription:
-    '共享网络的每台服务器一个码和一个配对码,Open-Box App 扫码、输入配对码后经这台路由器上网。',
+  shareAppCodesDescription: '共享网络的每台服务器一个码和一个配对码,Open-Box App 扫码、输入配对码后经这台路由器上网。',
   shareAppCodesEmpty: '还没有共享网络服务器,先到「共享网络」页签添加。',
   serverInfoTitle: '路由器标识',
   serverInfoDescription:
@@ -2165,24 +2173,26 @@ const zh: LANG_MESSAGE = {
   chainProxyNameLabel: '名称',
   chainProxyNamePlaceholder: '例如:住宅-美国',
   chainProxyLinkLabel: '节点',
-  chainProxyLinkPlaceholder: "用户名:密码{'@'}主机:端口",
+  chainProxyLinkPlaceholder: '用户名:密码{\'@\'}主机:端口',
   chainProxyLinkHint: '也可粘贴完整分享链接或节点配置。',
   chainProxyUpstreamLabel: '上游',
-  chainProxyHint: '通过选定的节点或节点组连接。',
+  chainProxyHint:
+    '通过选定的节点或节点组连接。',
   clientRouteDnsLabel: '自定义 DNS',
-  clientRouteDnsHint:
-    '这些终端的 DNS 查询使用这里指定的服务器。留空时沿用默认设置。需开启 DNS 接管。',
+  clientRouteDnsHint: '这些终端的 DNS 查询使用这里指定的服务器。留空时沿用默认设置。需开启 DNS 接管。',
   chainProxyDnsHint: '终端直选此节点时可用，终端 DNS 优先。',
   chainProxyTest: '测速',
   chainProxyTestFailed: '不通',
   chainProxyIpUnknown: 'IP 归属地没查到',
-  chainProxyLatencyNotInKernel: '临时启动测试内核，延时可能偏高。',
+  chainProxyLatencyNotInKernel:
+    '临时启动测试内核，延时可能偏高。',
   chainProxyTestVia: '经 {via}',
   chainProxyExitIp: '出口 IP',
   chainProxyIpDetail: 'IP 详情',
   chainProxyIpDetailTip: '在 {site} 查看这个出口 IP(新页签)',
   chainProxyIpFailed: 'IP 信息没取到:{error}',
-  chainProxyTestHint: '通过上游测速，无需先保存。',
+  chainProxyTestHint:
+    '通过上游测速，无需先保存。',
   chainProxyVia: '经 {upstream}',
   chainProxyUpstreamMissing: '上游「{name}」已不存在',
   chainProxyErrName: '名称不能为空',
@@ -2213,14 +2223,14 @@ const zh: LANG_MESSAGE = {
   bandwidthPeriod: '统一带宽测试周期',
   bandwidthHours: '小时',
   bandwidthDownloadCap: '单次下载流量上限',
-  bandwidthDaily:
-    '去重后有 {count} 个符合条件的节点，单个节点一天最多测试 {times} 次，按当前上限最多消耗 {size}/天。',
+  bandwidthDaily: '去重后有 {count} 个符合条件的节点，单个节点一天最多测试 {times} 次，按当前上限最多消耗 {size}/天。',
   bandwidthHealthFirst:
     '节点健康、可用是第一前提。已确认故障及尚未确认恢复的节点继续排除，历史带宽再高也不参与选择。没有带宽记录不等于节点不可用。',
   bandwidthOff: '关闭时',
   bandwidthOn: '开启时',
   bandwidthExample: '选择例子',
-  bandwidthOff_urltest: '默认节点按延时稳定选择，保留原有延时容差，避免小幅波动导致频繁切换。',
+  bandwidthOff_urltest:
+    '默认节点按延时稳定选择，保留原有延时容差，避免小幅波动导致频繁切换。',
   bandwidthOn_urltest:
     '按后端设置中的权重给健康候选评分。下载带宽权重大于 0 时，至少一个候选需要有效的下载带宽数据。此时跳过延时容差。同分保留当前节点，健康节点至少保持 60 秒。没有可用评分时，按延时和容差选节点。',
   bandwidthExample_urltest:
@@ -2334,43 +2344,12 @@ const zh: LANG_MESSAGE = {
   nodeScoreWeightFirstDivider: '延时与带宽分界',
   nodeScoreWeightSecondDivider: '带宽与抖动分界',
   nodeScoreWeightValues: '延时 {latency}%，带宽 {download}%，抖动 {jitter}%',
-  businessPreference: '业务优选',
-  businessOverviewEnabled: '已开启 {count} 组',
-  businessOverviewHits: '近 {minutes} 分钟改选 {count} 条连接',
-  businessOverviewWindow: '近 {minutes} 分钟',
-  businessOverviewBreakdown: '因失败改选 {reliability} 条 · 因响应更快改选 {performance} 条',
-  businessOverviewLatest: '最近改选 · {time} · {group} · {from} → {to} · {reason}',
-  businessOverviewSwitch: '最近改选 · {time} · {from} → {to} · {reason}',
-  businessOverviewLane: '当前页签 · {name}',
-  businessOverviewExpand: '展开分组',
-  businessOverviewCollapse: '收起分组',
-  businessOverviewOff: '暂无分组开启业务优选',
-  businessOverviewNoStats: '暂无法统计改选次数',
-  businessOverviewSettings: '前往「设置 → 分组」',
-  businessOverviewLoading: '正在读取状态…',
-  businessOverview_running: '运行中',
-  businessOverview_waiting: '当前暂无有效改选依据',
-  businessOverview_no_backup: '无健康备用节点',
-  businessOverview_manual_lane: '当前页签为手动选择',
-  businessOverview_pending: '等待内核配置生效',
-  businessOverview_unavailable: '暂时无法读取内核状态',
-  businessOverviewReason_reliability: '可靠性',
-  businessOverviewReason_performance: '性能',
-  businessOverviewHelpCount:
-    '业务优选让一条新 TCP 连接改变原本的节点选择，并收到首个传输回包后，计入一次改选。试用节点和拨号失败后的普通回退不计入。收到回包不代表 HTTP 请求成功或业务已解锁。',
-  businessOverviewHelpExample:
-    '例如，节点 A 访问某站点多次失败，业务优选让下一条连接改走节点 B。B 收到回包后，「可靠性改选」加 1。',
-  businessOverviewHelpWindow: '统计最近 1 小时。重启内核或重建分组后，对应计数重新开始。',
-  businessReliabilityHalfLife: '可靠性衰减',
-  businessPerformanceTtl: '可信度效期',
-  businessPreferenceMinutes: '分钟',
   bandwidthDays: '天',
   bandwidthPeriodUnit: '带宽测试周期单位',
   bandwidthPeriodInvalid: '请输入至少 1 小时的有效周期。',
   bandwidthSettingsHelpLabel: '{title}说明',
   bandwidthHelpCurrent: '当前设置',
   bandwidthHelpCurrentTest: '带宽测试每 {hours} 小时，每次最多 {maxMB} MB',
-  bandwidthHelpCurrentBusiness: '可靠性衰减 {minutes} 分钟，可信度效期 {seconds} 秒',
   bandwidthHelpEditLocation: '在「设置 → 后端设置 → {section}」修改',
   bandwidthHelpSwitchOn: '当前编辑的开关已开启',
   bandwidthHelpSwitchOff: '当前编辑的开关已关闭',
@@ -2392,24 +2371,6 @@ const zh: LANG_MESSAGE = {
   nodeScoreWeightMetric: '项目',
   nodeScoreWeightsDefaultExample: '默认权重得分（40 / 30 / 30）',
   nodeScoreWeightsAdjustedExample: '调整后得分（70 / 15 / 15）',
-  businessSettingsHelpIntro:
-    '自动优选、故障转移的自动页签和负载均衡可参考同一目标的真实 TCP 连接证据。新目标证据不足时，沿用分组原有规则。选路调整只用于新连接，已建立的连接继续走原出口。',
-  businessSettingsHelpScope:
-    '证据按目标主机/IP、端口和地址族区分。UDP/QUIC 及复用已有连接的请求不触发这套 TCP 选择。计时包含建连和首写至回包耗时，不计客户端等待首写的空闲。首个传输回包可能只是 TLS 握手，不能代表 HTTP 内容成功或持续下载速度。客户端本地分流不启用这项路由器功能。',
-  businessSettingsHelp_loadbalance:
-    '负载均衡保留健康与占用规则，再在符合当前占用条件的候选中按目标业务证据择优。有更空闲的合格节点时，不会把所有连接都固定给某个更快节点。',
-  businessSettingsHelp_failover:
-    '故障转移先遵守主用、备用页签顺序。业务优选只在当前自动页签有多个合格节点时参与选择，不改变手动指定，也不会因为备用页签更快就绕过仍在使用的主用页签。',
-  businessSettingsHelp_urltest:
-    '自动优选保留用于新目标的默认节点，同时可为不同目标保持各自的当前节点。系统会限额试用其他合格候选；分组显示的默认节点不一定等于每条连接的实际出口。',
-  businessSettingsHelpReliability:
-    '决定观测到的连续连接失败影响消退得有多快。默认 1 小时，一次失败的权重在 1 小时后减半，2 小时后剩四分之一。节点成功收到回包后，连续失败重新计数。客户端主动取消不算节点失败。',
-  businessSettingsHelpReliabilityExample:
-    'A 最近连续两次连接某个目标失败，而合格候选 B 最近连接同一目标时成功收到回包。新的同目标连接就可以优先走 B。首次访问其他网站时，仍按分组原有规则选节点。',
-  businessSettingsHelpPerformance:
-    '决定用于新性能比较的证据要有多新，默认 60 秒。替换健康节点需要多次可比的回包样本。自动组为某目标选中的节点若仍健康且持续成功，不会仅因比较证据到期就被强制换回默认节点。',
-  businessSettingsHelpPerformanceExample:
-    '在可比条件下，A 多次约 200 ms 回包，B 多次约 120 ms 回包，自动组可为这个目标保持使用 B。比较证据到期后，需要新证据才能晋升其他节点；不会只因近期没再使用 A，就丢弃 B 持续成功的结果。',
 }
 
 export default zh

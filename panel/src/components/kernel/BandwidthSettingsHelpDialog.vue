@@ -84,34 +84,6 @@
         <p class="text-base-content/75">{{ $t('bandwidthClientDisabled') }}</p>
       </template>
 
-      <template v-else-if="section === 'businessPreference'">
-        <p>{{ $t('businessSettingsHelpIntro') }}</p>
-        <!-- 从分组编辑器打开时补一句这种分组类型怎么用业务证据(上游 businessSettingsHelp_<类型>) -->
-        <p
-          v-if="businessMode"
-          class="text-base-content/75"
-        >
-          {{ $t(`businessSettingsHelp_${businessMode}`) }}
-        </p>
-        <section class="flex flex-col gap-1">
-          <h3 class="font-semibold">{{ $t('businessReliabilityHalfLife') }}</h3>
-          <p>{{ $t('businessSettingsHelpReliability') }}</p>
-          <div class="bg-base-200 rounded-lg p-3">
-            <h4 class="mb-1 font-semibold">{{ $t('bandwidthSettingsHelpExampleHeading') }}</h4>
-            <p>{{ $t('businessSettingsHelpReliabilityExample') }}</p>
-          </div>
-        </section>
-        <section class="flex flex-col gap-1">
-          <h3 class="font-semibold">{{ $t('businessPerformanceTtl') }}</h3>
-          <p>{{ $t('businessSettingsHelpPerformance') }}</p>
-          <div class="bg-base-200 rounded-lg p-3">
-            <h4 class="mb-1 font-semibold">{{ $t('bandwidthSettingsHelpExampleHeading') }}</h4>
-            <p>{{ $t('businessSettingsHelpPerformanceExample') }}</p>
-          </div>
-        </section>
-        <p class="text-base-content/75">{{ $t('businessSettingsHelpScope') }}</p>
-      </template>
-
       <template v-else>
         <p>{{ $t('nodeScoreWeightsHelpIntro') }}</p>
         <p>{{ $t('nodeScoreWeightsHelpDrag') }}</p>
@@ -182,8 +154,8 @@ import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(
   defineProps<{
-    // 当前展示哪一块的说明:带宽测试、评分权重,或业务优选
-    section: 'bandwidthSettingsTitle' | 'nodeScoreWeights' | 'businessPreference'
+    // 当前展示哪一块的说明:带宽测试,或评分权重
+    section: 'bandwidthSettingsTitle' | 'nodeScoreWeights'
     profile?: OpenboxProfile | null
     loading?: boolean
     // 分组类型(urltest / failover / loadbalance);分组编辑器里打开时传,决定标题和「关闭时 / 开启时 / 例子」文案
@@ -197,10 +169,6 @@ const props = withDefaults(
 )
 const open = defineModel<boolean>({ required: true })
 const { t } = useI18n()
-
-// 只有这三种分组类型有业务优选的说明文案(urltest / failover / loadbalance);selector 之类不给这一句
-const BUSINESS_MODES = ['urltest', 'failover', 'loadbalance']
-const businessMode = computed(() => (BUSINESS_MODES.includes(props.mode ?? '') ? props.mode : ''))
 
 const title = computed(() => {
   if (props.subscription) return t('subscriptionBandwidthHelpTitle')
@@ -230,12 +198,6 @@ const currentText = computed(() => {
   if (!p) return t('bandwidthHelpUnavailable')
   if (props.section === 'bandwidthSettingsTitle') {
     return t('bandwidthHelpCurrentTest', testParams.value)
-  }
-  if (props.section === 'businessPreference') {
-    return t('bandwidthHelpCurrentBusiness', {
-      minutes: p.businessPreference?.reliabilityHalfLifeMinutes ?? 60,
-      seconds: p.businessPreference?.performanceTtlSeconds ?? 60,
-    })
   }
   const w = p.nodeScoreWeights ?? { latency: 40, download: 30, jitter: 30 }
   return t('nodeScoreWeightValues', { ...w })

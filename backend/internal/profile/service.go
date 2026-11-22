@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/bandwidth"
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
@@ -117,9 +116,6 @@ func (s *Service) Patch(ctx context.Context, patch map[string]any) (map[string]a
 			return &ValidationError{Msg: err.Error()}
 		}
 		if err := normalizeNodeScoreWeights(clean); err != nil {
-			return &ValidationError{Msg: err.Error()}
-		}
-		if err := normalizeBusinessPreference(clean); err != nil {
 			return &ValidationError{Msg: err.Error()}
 		}
 		if err := normalizeServers(clean); err != nil {
@@ -319,48 +315,6 @@ func normalizeNodeScoreWeights(clean map[string]any) error {
 		return err
 	}
 	clean["nodeScoreWeights"] = map[string]any{"latency": w.Latency, "download": w.Download, "jitter": w.Jitter}
-	return nil
-}
-
-// 业务优选的两个时间参数的取值范围(对齐面板设置卡:可靠性衰减 1~1440 分钟、可信度效期 1~3600 秒)。
-// 没设置时两项都按 60 算,档案里不写默认值;这里只校验补丁里带来的字段。
-const (
-	businessReliabilityMinMinutes = 1
-	businessReliabilityMaxMinutes = 1440
-	businessPerformanceMinSeconds = 1
-	businessPerformanceMaxSeconds = 3600
-)
-
-// normalizeBusinessPreference 校验并规整补丁里的 businessPreference:必须是对象,
-// 带来的字段必须是范围内的整数,只保留认得的两项(其余丢掉)。非法返回错误信息(400)。
-func normalizeBusinessPreference(clean map[string]any) error {
-	v, ok := clean["businessPreference"]
-	if !ok {
-		return nil
-	}
-	m, ok := v.(map[string]any)
-	if !ok {
-		return fmt.Errorf("businessPreference must be an object")
-	}
-	out := map[string]any{}
-	for _, f := range []struct {
-		key      string
-		min, max int
-	}{
-		{"reliabilityHalfLifeMinutes", businessReliabilityMinMinutes, businessReliabilityMaxMinutes},
-		{"performanceTtlSeconds", businessPerformanceMinSeconds, businessPerformanceMaxSeconds},
-	} {
-		raw, present := m[f.key]
-		if !present {
-			continue
-		}
-		n, isNum := raw.(float64)
-		if !isNum || n != math.Trunc(n) || n < float64(f.min) || n > float64(f.max) {
-			return fmt.Errorf("businessPreference.%s must be an integer between %d and %d", f.key, f.min, f.max)
-		}
-		out[f.key] = n
-	}
-	clean["businessPreference"] = out
 	return nil
 }
 
