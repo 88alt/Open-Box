@@ -13,7 +13,10 @@
     <div :class="twMerge('app-card-gap flex h-full flex-col', isSidebarCollapsed ? 'w-9' : 'w-60')">
       <SidebarHeader />
       <!-- 菜单去掉 daisyUI 自带的 p-2:菜单项、顶部标题、底部卡片共用同一条左右边 -->
-      <ul class="menu app-card-gap w-full flex-1 p-0">
+      <ul
+        v-segmented="{ active: '.menu-active', variant: 'menu' }"
+        class="menu app-card-gap w-full flex-1 p-0"
+      >
         <li
           v-for="r in renderRoutes"
           :key="r"

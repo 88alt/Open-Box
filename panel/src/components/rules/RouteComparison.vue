@@ -78,6 +78,7 @@
             </select>
             <div
               role="tablist"
+              v-segmented
               class="tabs-box tabs tabs-xs flex-nowrap"
             >
               <button

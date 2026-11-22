@@ -412,6 +412,7 @@
               item-key="id"
               role="tablist"
               :aria-label="$t('routingCustomOutboundTabs')"
+              v-segmented
               class="tabs-box tabs tabs-xs flex w-fit max-w-full min-w-0 flex-wrap"
             >
               <template #item="{ element: tab }">

@@ -112,6 +112,7 @@
           <label class="text-xs font-medium">{{ $t('dnsUpstreamSide') }}</label>
           <div
             role="tablist"
+            v-segmented
             class="tabs-box tabs tabs-xs w-fit"
           >
             <a
@@ -130,6 +131,7 @@
         <div class="flex flex-col gap-1">
           <div
             role="tablist"
+            v-segmented
             class="tabs-box tabs tabs-xs w-fit"
           >
             <a

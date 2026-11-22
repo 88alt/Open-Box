@@ -361,6 +361,7 @@
           >
             <div
               role="tablist"
+              v-segmented
               class="tabs-box tabs tabs-xs w-fit shrink-0"
             >
               <a
@@ -393,6 +394,7 @@
               <div
                 role="tablist"
                 :aria-label="$t('groupKeywordsMode')"
+                v-segmented
                 class="tabs-box tabs tabs-xs shrink-0"
               >
                 <button
@@ -551,6 +553,7 @@
                     item-key="id"
                     role="tablist"
                     :aria-label="$t('failoverLaneOrderHint')"
+                    v-segmented
                     class="tabs-box tabs tabs-xs min-w-0 flex-nowrap overflow-x-auto overflow-y-hidden"
                   >
                     <template #item="{ element: lane, index }">
@@ -757,6 +760,7 @@
         <div
           role="tablist"
           :aria-label="$t('groupExcludeKeywordsMode')"
+          v-segmented
           class="tabs-box tabs tabs-xs w-fit"
         >
           <button

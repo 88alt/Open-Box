@@ -1,6 +1,6 @@
 <template>
   <!-- 连接页的分组方式:按终端 / 按目标。页签上的数字是当前分组方式下的组数 -->
-  <div class="connection-tabs tabs-box tabs tabs-xs flex-nowrap">
+  <div v-segmented="{ content: false }" class="connection-tabs tabs-box tabs tabs-xs flex-nowrap">
     <a
       v-for="mode in Object.values(CONNECTION_GROUP_MODE)"
       :key="mode"

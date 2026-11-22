@@ -13,6 +13,7 @@
       >
         <div
           role="tablist"
+          v-segmented
           class="tabs-box tabs tabs-xs w-fit"
         >
           <a
@@ -90,6 +91,7 @@
             <label class="text-xs font-medium">{{ $t('shareRegionsRegionsLabel') }}</label>
             <div
               role="tablist"
+              v-segmented
               class="tabs-box tabs tabs-xs"
             >
               <a

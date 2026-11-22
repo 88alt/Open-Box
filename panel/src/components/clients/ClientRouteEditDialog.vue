@@ -21,6 +21,7 @@
           <label class="text-xs font-medium">{{ $t('clientRouteSourcesLabel') }}</label>
           <div
             role="tablist"
+            v-segmented
             class="tabs-box tabs tabs-xs"
           >
             <a

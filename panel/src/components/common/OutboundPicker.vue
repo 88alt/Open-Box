@@ -32,6 +32,7 @@
         <div class="flex items-center gap-2">
           <div
             role="tablist"
+            v-segmented
             class="tabs-box tabs tabs-xs shrink-0"
           >
             <a

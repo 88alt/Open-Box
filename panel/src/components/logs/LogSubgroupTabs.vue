@@ -1,6 +1,7 @@
 <template>
   <!-- 展开的组里再分一层:不分 / 按分流 / 按另一个维度。点页签不触发外面的展开 / 收起 -->
   <div
+    v-segmented="{ content: false }"
     class="tabs-box tabs tabs-xs w-max flex-nowrap"
     role="tablist"
     :aria-label="$t('connectionSubgroup')"

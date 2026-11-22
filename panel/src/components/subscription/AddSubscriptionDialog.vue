@@ -17,6 +17,7 @@
              要换来源就新建一条。 -->
         <div
           role="tablist"
+          v-segmented
           class="tabs-box tabs tabs-xs"
           :class="isEditing && 'pointer-events-none opacity-60'"
           :aria-disabled="isEditing || undefined"
@@ -36,6 +37,7 @@
         <!-- 右:内容分区 -->
         <div
           role="tablist"
+          v-segmented
           class="tabs-box tabs tabs-xs"
         >
           <a

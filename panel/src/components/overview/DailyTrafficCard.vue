@@ -50,6 +50,7 @@
         </button>
         <div
           role="tablist"
+          v-segmented="{ content: false }"
           class="tabs-box tabs tabs-xs overflow-hidden"
         >
           <a
@@ -212,6 +213,7 @@
         <div class="flex flex-wrap items-center gap-2">
           <div
             role="tablist"
+            v-segmented
             class="tabs-box tabs tabs-xs"
           >
             <a

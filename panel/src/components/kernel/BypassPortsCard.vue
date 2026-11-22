@@ -8,6 +8,7 @@
         </div>
         <div
           role="tablist"
+          v-segmented
           class="tabs-box tabs tabs-xs shrink-0 rounded-full"
         >
           <a

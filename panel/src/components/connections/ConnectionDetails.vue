@@ -7,6 +7,7 @@
     <div class="flex flex-col md:flex-row">
       <div class="md:w-128">
         <div
+          v-segmented
           class="tabs-box tabs tabs-xs mb-2 w-fit"
           role="tablist"
         >

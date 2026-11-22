@@ -44,6 +44,7 @@
         <div
           v-if="brands"
           role="tablist"
+          v-segmented
           class="tabs-box tabs tabs-xs mt-1 w-full"
         >
           <a

@@ -113,6 +113,7 @@
     </div>
     <div
       role="tablist"
+      v-segmented
       class="node-tip-tabs tabs-box tabs tabs-xs flex-nowrap"
     >
       <a

@@ -275,6 +275,7 @@
                 :text="ipTypeText"
               />
               <div
+                v-segmented
                 class="node-ip-type-tabs tabs-box tabs tabs-xs shrink-0 flex-nowrap p-0.5 @max-[17.5rem]/node-info:col-span-2 @max-[17.5rem]/node-info:justify-self-end"
                 role="group"
                 :aria-label="$t('nodeInfoIpTypeSource')"

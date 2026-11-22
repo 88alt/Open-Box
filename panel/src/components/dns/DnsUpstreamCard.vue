@@ -36,6 +36,7 @@
           <span class="text-xs font-medium">{{ $t('dnsRegionLabel') }}</span>
           <div
             role="tablist"
+            v-segmented
             class="tabs-box tabs tabs-xs w-fit"
           >
             <a
@@ -195,6 +196,7 @@
             <label class="text-xs font-medium">{{ $t('dnsUpstreamSide') }}</label>
             <div
               role="tablist"
+              v-segmented
               class="tabs-box tabs tabs-xs w-fit"
             >
               <a
@@ -209,6 +211,7 @@
           </div>
           <div
             role="tablist"
+            v-segmented
             class="tabs-box tabs tabs-xs w-fit"
           >
             <a
@@ -314,6 +317,7 @@
             <label class="text-xs font-medium">{{ $t('dnsUpstreamEncryptedBootstrap') }}</label>
             <div
               role="tablist"
+              v-segmented
               class="tabs-box tabs tabs-xs w-fit"
             >
               <a

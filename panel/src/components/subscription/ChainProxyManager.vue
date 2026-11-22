@@ -165,6 +165,7 @@
             <label class="text-xs font-medium">{{ $t('chainProxyLinkLabel') }}</label>
             <div
               role="tablist"
+              v-segmented
               class="tabs-box tabs tabs-xs w-fit"
             >
               <button
@@ -180,6 +181,7 @@
             </div>
             <div
               role="tablist"
+              v-segmented
               class="tabs-box tabs tabs-xs ml-auto w-fit"
             >
               <button

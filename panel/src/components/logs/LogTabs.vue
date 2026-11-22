@@ -1,6 +1,7 @@
 <template>
   <!-- 日志的分组方式:不分组 / 按终端 / 按目标 -->
   <div
+    v-segmented="{ content: false }"
     class="connection-tabs tabs-box tabs tabs-xs flex-nowrap"
     role="tablist"
     :aria-label="$t('logGrouping')"

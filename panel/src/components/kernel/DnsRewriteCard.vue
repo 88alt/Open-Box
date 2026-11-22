@@ -146,6 +146,7 @@
           <label class="text-xs font-medium">{{ $t('dnsRewriteTarget') }}</label>
           <div
             role="tablist"
+            v-segmented
             class="tabs-box tabs tabs-xs w-fit"
           >
             <a
