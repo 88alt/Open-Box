@@ -294,7 +294,7 @@ const handleToggle = async (sub: OpenboxSubscription, enabled: boolean) => {
   try {
     const res = await updateSubscription(sub.id, { enabled })
     await loadSubscriptions()
-    notifySubscriptionSaved(res.changed, 'saved', res)
+    notifySubscriptionSaved(res.changed, 'saved', res.skipped, res.applied)
   } catch (error) {
     showNotification({
       content: 'saveFailed',
@@ -312,7 +312,7 @@ const handleRefresh = async (id: string) => {
   try {
     const res = await refreshSubscription(id)
     await loadSubscriptions()
-    notifySubscriptionSaved(res.changed, 'refreshed', res)
+    notifySubscriptionSaved(res.changed, 'refreshed', res.skipped, res.applied)
   } catch (error) {
     showNotification({
       content: 'subscriptionRefreshFailed',

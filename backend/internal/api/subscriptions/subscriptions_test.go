@@ -565,3 +565,50 @@ func TestDirectSwitchesStoredAndReportConfigChange(t *testing.T) {
 		t.Fatal("必须是布尔值")
 	}
 }
+
+// 保存 / 刷新的返回:节点池变了才带 applied;内核在跑且有待重启 → ok=false、pendingRestart.pending=true;
+// 没接判断、没变化、内核没跑 / 没有待重启 → 不带或 ok=true。
+func TestAppliedInSaveAndRefresh(t *testing.T) {
+	e := newEnv(t)
+	pending, reasons := true, []string{"nodes"}
+	mux := http.NewServeMux()
+	Register(mux, Deps{Subs: e.svc, Pending: func(context.Context) (bool, []string) { return pending, reasons }})
+	e.h = mux
+
+	e.pages["https://a"] = links("A")
+	body := map[string]any{"name": "S", "url": "https://a", "renameOptions": map[string]any{"enabled": false}}
+	code, m := e.do("POST", "/api/openbox/subscriptions", body)
+	if code != 200 || m["changed"] != true {
+		t.Fatal(code, m)
+	}
+	ap, _ := m["applied"].(map[string]any)
+	pr, _ := ap["pendingRestart"].(map[string]any)
+	if ap == nil || ap["ok"] != false || pr["pending"] != true || len(pr["reasons"].([]any)) != 1 {
+		t.Fatalf("节点变了且有待重启要带 applied.ok=false: %v", m)
+	}
+	id := m["id"].(string)
+
+	// 没变化:不带 applied(面板说「节点没有变化」)
+	code, m = e.do("POST", "/api/openbox/subscriptions/"+id+"/refresh", "{}")
+	if code != 200 || m["changed"] != false || m["applied"] != nil {
+		t.Fatal(code, m)
+	}
+
+	// 变了但内核没跑 / 没有待重启:ok=true,reasons 是数组而不是 null
+	e.pages["https://a"] = links("A", "NEW")
+	pending, reasons = false, nil
+	code, m = e.do("POST", "/api/openbox/subscriptions/"+id+"/refresh", "{}")
+	ap, _ = m["applied"].(map[string]any)
+	pr, _ = ap["pendingRestart"].(map[string]any)
+	if code != 200 || ap["ok"] != true || pr["pending"] != false || pr["reasons"] == nil {
+		t.Fatalf("没有待重启要 ok=true、reasons 为空数组: %v", m)
+	}
+
+	// 没接判断:不带 applied
+	e.h = func() http.Handler { mx := http.NewServeMux(); Register(mx, Deps{Subs: e.svc}); return mx }()
+	e.pages["https://a"] = links("A", "NEW", "MORE")
+	code, m = e.do("POST", "/api/openbox/subscriptions/"+id+"/refresh", "{}")
+	if code != 200 || m["changed"] != true || m["applied"] != nil {
+		t.Fatal(code, m)
+	}
+}

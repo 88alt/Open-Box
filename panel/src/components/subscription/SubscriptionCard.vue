@@ -25,6 +25,12 @@
               <!-- 来源徽标:登录账号 / 订阅链接 / 手动节点,与 v0.1.378 一致 -->
               <span class="badge badge-ghost badge-sm shrink-0 whitespace-nowrap">{{ $t(sourceKindKey) }}</span>
               <span class="text-base-content/60 truncate text-xs">({{ countText }})</span>
+              <!-- 订阅记的节点比运行中的内核加载的多(内核不支持的协议、或还没重启):给个提示,不说"内核里没有节点" -->
+              <span
+                v-if="unloadedCount > 0 && allProxies.length > 0"
+                v-tip="$t('subscriptionUnloadedNodesTip', { total: subscription.nodeCount, loaded: allProxies.length, unloaded: unloadedCount })"
+                class="badge badge-warning badge-outline badge-sm shrink-0 whitespace-nowrap"
+              >{{ $t('subscriptionUnloadedNodesBadge', { count: unloadedCount }) }}</span>
               <span
                 v-if="subscription.enabled === false"
                 class="badge badge-outline badge-sm shrink-0"
@@ -248,6 +254,10 @@ const countText = computed(() =>
     : kernelLoaded.value
       ? `0/${props.subscription.nodeCount}`
       : String(props.subscription.nodeCount),
+)
+// 订阅记的节点数 - 内核已加载的数。只在内核数据拉到、订阅启用时算;停用的订阅本来就不进内核
+const unloadedCount = computed(() =>
+  kernelLoaded.value && props.subscription.enabled !== false ? Math.max(0, props.subscription.nodeCount - allProxies.value.length) : 0,
 )
 const updatedAtText = computed(() => dayjs(props.subscription.updatedAt).fromNow())
 

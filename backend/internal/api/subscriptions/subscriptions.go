@@ -2,6 +2,7 @@
 package subscriptions
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -12,14 +13,54 @@ import (
 
 const maxBody = 16 << 20 // 粘贴的节点内容可能较大
 
-// Deps 是本分组的依赖。
-type Deps struct{ Subs *subs.Service }
+// PendingFunc 判断「配置改了、内核还没用上」。内核没在运行、或判断不了时返回 (false, nil)——
+// 与服务状态的 pendingRestart 同一个口径(main.go 用同一个 *singbox.Applied 接进来)。
+type PendingFunc func(ctx context.Context) (pending bool, reasons []string)
 
-type handlers struct{ s *subs.Service }
+// Deps 是本分组的依赖。
+type Deps struct {
+	Subs    *subs.Service
+	Pending PendingFunc // 为空 = 保存 / 刷新的返回里不带 applied
+}
+
+type handlers struct {
+	s       *subs.Service
+	pending PendingFunc
+}
+
+// applied 是保存 / 刷新之后「内核用上没有」:订阅的动作从不自动重启内核(重启会断开连接,什么时候重启由
+// 用户决定),所以节点变了而内核在跑时 ok=false、pendingRestart.pending=true,面板据此提示「重启内核后生效」。
+type applied struct {
+	OK             bool           `json:"ok"`
+	PendingRestart pendingRestart `json:"pendingRestart"`
+}
+
+type pendingRestart struct {
+	Pending bool     `json:"pending"`
+	Reasons []string `json:"reasons"`
+}
+
+// saved 在 subs.SaveResult 之外多带一个 applied(没有就不出现这个键)。
+type saved struct {
+	subs.SaveResult
+	Applied *applied `json:"applied,omitempty"`
+}
+
+// withApplied 给保存 / 刷新的结果补上 applied。节点池没变、或没接判断时原样返回。
+func (h *handlers) withApplied(ctx context.Context, res *subs.SaveResult) any {
+	if res == nil || h.pending == nil || !res.Changed {
+		return res
+	}
+	pending, reasons := h.pending(ctx)
+	if reasons == nil {
+		reasons = []string{}
+	}
+	return saved{SaveResult: *res, Applied: &applied{OK: !pending, PendingRestart: pendingRestart{Pending: pending, Reasons: reasons}}}
+}
 
 // Register 把本分组的接口挂到 mux 上。字面路径(preview / login / order)比 {id} 优先。
 func Register(mux *http.ServeMux, d Deps) {
-	h := &handlers{s: d.Subs}
+	h := &handlers{s: d.Subs, pending: d.Pending}
 	mux.HandleFunc("/api/openbox/subscriptions", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodGet: h.list, http.MethodPost: h.create,
 	}))
@@ -231,7 +272,7 @@ func (h *handlers) create(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, err, "保存订阅失败")
 		return
 	}
-	httpx.JSON(w, http.StatusOK, res)
+	httpx.JSON(w, http.StatusOK, h.withApplied(r.Context(), res))
 }
 
 func (h *handlers) preview(w http.ResponseWriter, r *http.Request) {
@@ -275,7 +316,7 @@ func (h *handlers) patch(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, err, "修改订阅失败")
 		return
 	}
-	httpx.JSON(w, http.StatusOK, res)
+	httpx.JSON(w, http.StatusOK, h.withApplied(r.Context(), res))
 }
 
 func (h *handlers) delete(w http.ResponseWriter, r *http.Request) {
@@ -317,5 +358,5 @@ func (h *handlers) refresh(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, err, "刷新订阅失败")
 		return
 	}
-	httpx.JSON(w, http.StatusOK, res)
+	httpx.JSON(w, http.StatusOK, h.withApplied(r.Context(), res))
 }

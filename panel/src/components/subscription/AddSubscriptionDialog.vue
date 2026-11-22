@@ -894,7 +894,7 @@ const handleSave = async () => {
       : await createSubscription(payload)
     emit('saved')
     isOpen.value = false
-    notifySubscriptionSaved(res.changed, 'saved', res)
+    notifySubscriptionSaved(res.changed, 'saved', res.skipped, res.applied)
   } catch (error) {
     showNotification({
       content: 'subscriptionSaveFailed',

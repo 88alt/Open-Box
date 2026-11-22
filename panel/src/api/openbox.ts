@@ -469,6 +469,8 @@ export interface OpenboxSubscriptionSaveResult {
   skipped: OpenboxSkippedNode[]
   // 节点池变没变:变了面板提示"重启内核生效"(订阅的动作从不自动重启内核)
   changed?: boolean
+  // 变了之后内核用上没有:ok=false 且 pendingRestart.pending=true 时提示"部分变更需重启内核后生效"。节点没变时不带
+  applied?: { ok?: boolean; pendingRestart?: { pending: boolean; reasons?: string[] } }
 }
 
 export interface OpenboxDeployResult {

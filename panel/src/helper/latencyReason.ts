@@ -6,6 +6,7 @@ const LATENCY_REASON_KEYS: Record<string, string> = {
   closed: 'latencyReasonClosed',
   refused: 'latencyReasonRefused',
   dns: 'latencyReasonDns',
+  'ech-dns': 'latencyReasonEchDns',
   resource: 'latencyReasonResource',
   tls: 'latencyReasonTls',
   unreachable: 'latencyReasonUnreachable',

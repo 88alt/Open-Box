@@ -202,7 +202,6 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	profileSvc := profile.New(st, coreAPI, log)
 	subsSvc := subs.New(st, nil)
 	profileapi.Register(srv.Mux(), profileapi.Deps{Profile: profileSvc})
-	subsapi.Register(srv.Mux(), subsapi.Deps{Subs: subsSvc})
 	groupsSvc := nodegroups.New(st, groupsCore, subsSvc, nodegroups.ChainsFromProfile(profileSvc))
 	groupsapi.Register(srv.Mux(), groupsapi.Deps{Groups: groupsSvc})
 
@@ -252,6 +251,19 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Kind:        initKind,
 		CoreService: cfg.CoreService, PanelName: cfg.PanelService, SingBox: cfg.SingBox,
 	})
+	// 订阅保存 / 刷新后的 applied:与服务状态的 pendingRestart 同一个判断(内核在跑才算,判断不了当作没有)
+	subsapi.Register(srv.Mux(), subsapi.Deps{Subs: subsSvc, Pending: func(ctx context.Context) (bool, []string) {
+		if initKind == system.InitNone {
+			return false, nil
+		}
+		if core, err := svcCtl.Status(ctx, cfg.CoreService); err != nil || !core.Running {
+			return false, nil
+		}
+		if p, err := applied.Pending(ctx); err == nil && p.Pending {
+			return true, p.Reasons
+		}
+		return false, nil
+	}})
 
 	// 节点测速和 DNS 上游测试共用的临时目录:临时配置放在数据目录下的 tmp(0700),用完即删
 	probeDir := filepath.Join(cfg.DataDir, "tmp")
