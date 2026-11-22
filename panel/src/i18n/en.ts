@@ -61,14 +61,12 @@ const en = {
   dfSaved: 'Saved.',
   dfUpdating: 'Downloading lists…',
   dfApplied: 'Lists updated.',
-  dfDescription:
-    'Filter DNS queries by list. Rewrites take priority.',
+  dfDescription: 'Filter DNS queries by list. Rewrites take priority.',
   dfAuto: 'Automatic updates',
   dfAutoEvery: 'Every',
   dfAutoAt: 'at',
   dfAutoDays: '{days} days',
-  dfAutoHint:
-    'Updated lists take effect automatically.',
+  dfAutoHint: 'Updated lists take effect automatically.',
   dfAdd: 'Add list',
   dfUpdate: 'Update lists',
   dfUpdateList: 'Update this list',
@@ -94,8 +92,7 @@ const en = {
   dfPreviewFilterAllow: 'Allow',
   dfPreviewFilterBlock: 'Block',
   dfAllow: 'Allow domains',
-  dfAllowHint:
-    'One domain per line. Use *.example.com for subdomains.',
+  dfAllowHint: 'One domain per line. Use *.example.com for subdomains.',
   dfSaveAllow: 'Save allowed domains',
   dfRecords: 'Domain resolution queries',
   dfSearch: 'Search domain…',
@@ -107,8 +104,7 @@ const en = {
   dfUnknown: 'Result not observed',
   dfPolicy: 'DNS policy',
   dfQuery: 'Search / refresh',
-  dfRecordHint:
-    'Open-Box DNS queries from the last 24 hours, up to 20,000.',
+  dfRecordHint: 'Open-Box DNS queries from the last 24 hours, up to 20,000.',
   dfCollectDisabled: 'Filtering is off; new records are not collected.',
   dfDisconnected: 'Waiting for the core DNS event stream; statistics may be incomplete.',
   dfTime: 'Time',
@@ -164,7 +160,8 @@ const en = {
   cpuLoadLowDesc: 'Low load (green)',
   cpuLoadMediumDesc: 'Moderate load (amber)',
   statActiveTerminals: 'Active devices',
-  statActiveTerminalsHint: 'Devices observed in current Open-Box connections. Known MAC addresses combine IPv4 / IPv6. Excludes the router and test probes; bypassed devices may not be counted.',
+  statActiveTerminalsHint:
+    'Devices observed in current Open-Box connections. Known MAC addresses combine IPv4 / IPv6. Excludes the router and test probes; bypassed devices may not be counted.',
   showPassword: 'Show password',
   hidePassword: 'Hide password',
   hardwareLoad: 'Hardware load',
@@ -286,7 +283,8 @@ const en = {
     'Used by url-test groups and the Proxies page latency test; each url-test group can override it.',
   trafficRetentionTitle: 'Analytics retention',
   diagnosticsTitle: 'Export diagnostics',
-  diagnosticsDescription: 'Versions, firmware, kernel state, redacted config and recent logs in one file to attach to a {link}',
+  diagnosticsDescription:
+    'Versions, firmware, kernel state, redacted config and recent logs in one file to attach to a {link}',
   diagnosticsExport: 'Export diagnostics',
   diagnosticsHint:
     'Passwords, keys, node and subscription addresses are removed; safe to attach to a public issue.',
@@ -561,7 +559,8 @@ const en = {
   qualityGrade_fair: 'Fair',
   qualityState_healthy: 'Available',
   bandwidthManualTest: 'Test download bandwidth',
-  bandwidthManualQueued: 'New bandwidth checks queued: {queued}; already queued or testing: {joined}.',
+  bandwidthManualQueued:
+    'New bandwidth checks queued: {queued}; already queued or testing: {joined}.',
   bandwidthManualFailed: 'Bandwidth check failed: {message}',
   bandwidthManualComplete: '{name}: {value} Mbps',
   subscriptionBandwidthCheck: 'Enable periodic bandwidth checks',
@@ -1061,8 +1060,7 @@ const en = {
   groupType_loadbalance: 'Load balance',
   loadBalanceHint:
     'Distribute new connections across available nodes, preferring fewer active connections and rotating ties. Parallel connections can combine throughput; established connections keep their outbound.',
-  loadBalanceNodesOnly:
-    'Select real proxy nodes. Remove groups or missing members.',
+  loadBalanceNodesOnly: 'Select real proxy nodes. Remove groups or missing members.',
   groupUnitSecond: 's',
   failoverSummary: 'Failover · {lanes} lanes · {count} nodes',
   failoverTolerance: 'In-lane latency tolerance',
@@ -1083,9 +1081,9 @@ const en = {
   failoverAddLane: 'Add backup lane',
   failoverMaxLanes: 'At most {n} lanes',
   failoverDeleteLane: 'Delete lane',
-  failoverDeleteLaneConfirm:
-    'Delete “{lane}” and its member settings?',
-  failoverLaneOrderHint: 'Drag tabs to set priority. The leftmost tab is primary, followed by backups.',
+  failoverDeleteLaneConfirm: 'Delete “{lane}” and its member settings?',
+  failoverLaneOrderHint:
+    'Drag tabs to set priority. The leftmost tab is primary, followed by backups.',
   failoverParameters: 'Parameters',
   failoverLaneNamePlaceholder: 'Lane name (optional)',
   failoverLaneIconInherit: 'Inherit group icon',
@@ -1193,7 +1191,8 @@ const en = {
   subscriptionLoginPassword: 'Password',
   subscriptionLoginUaPlaceholder: 'Leave blank for the default UA',
   subscriptionLoginPasswordSaved: 'Enter to sign in again',
-  subscriptionLoginHint: 'Supports Xboard / V2Board accounts: nodes, rates, plan and traffic usage.',
+  subscriptionLoginHint:
+    'Supports Xboard / V2Board accounts: nodes, rates, plan and traffic usage.',
   subscriptionLoginFetch: 'Log in and fetch',
   subscriptionLoginFetched: 'Fetched {count} nodes and account information',
   subscriptionLoginFailed: 'Login failed: {message}',
@@ -1239,7 +1238,8 @@ const en = {
   subscriptionNodeDnsLabel: 'Node domain resolver (optional)',
   subscriptionNodeDnsIpPlaceholder: 'DNS IP, e.g. 223.5.5.5 or 2001:4860:4860::8888',
   subscriptionNodeDnsInvalidIp: 'Enter a valid IPv4 or IPv6 DNS address',
-  subscriptionNodeDnsPlainHint: 'Resolves only server names in this subscription. Website and LAN DNS are unchanged; node checks use the same resolver.',
+  subscriptionNodeDnsPlainHint:
+    'Resolves only server names in this subscription. Website and LAN DNS are unchanged; node checks use the same resolver.',
   subscriptionNodeDnsInvalidBootstrap: 'Enter a valid IP address for the DoH/DoT resolver',
   subscriptionNodeDnsNeedBootstrap: 'Enter a DNS IP to resolve the DoH/DoT server hostname',
   subscriptionContentPlaceholder:
@@ -1347,8 +1347,7 @@ const en = {
   routingCustomNoDelete:
     'The pre-route rule is built in and cannot be deleted; disable it if you do not need it.',
   routingCustomEditTitle: 'Edit pre-route rule',
-  routingCustomOutboundRequired:
-    'Choose an exit for each tab that contains rules.',
+  routingCustomOutboundRequired: 'Choose an exit for each tab that contains rules.',
   routingCustomRulesHint:
     'Add a tab, then add or import rules and choose its exit. Drag tabs to set priority from left to right; rules within each tab match in order. IP / geoip rules only match connections made directly to an IP; use domain rules for domain-based access.',
   routingCustomOutboundTabs: 'Group by exit',
@@ -1452,18 +1451,13 @@ const en = {
   dnsModeDnsmasq: 'dnsmasq forwarding',
   dnsModeHijack: 'Firewall hijack',
   dnsModeOff: 'Off',
-  dnsModeDnsmasqNote:
-    'dnsmasq forwards external DNS queries to the core.',
-  dnsModeHijackNote:
-    'The firewall sends port 53 queries to the core.',
-  dnsModeOffNote:
-    'Global DNS interception is off.',
-  dnsModeUpstreamHint:
-    'AdGuard Home / Pi-hole can use {addr}.',
+  dnsModeDnsmasqNote: 'dnsmasq forwards external DNS queries to the core.',
+  dnsModeHijackNote: 'The firewall sends port 53 queries to the core.',
+  dnsModeOffNote: 'Global DNS interception is off.',
+  dnsModeUpstreamHint: 'AdGuard Home / Pi-hole can use {addr}.',
   dnsModeSaved: 'DNS hijack mode saved.',
   dnsUpstreamTitle: 'DNS upstreams',
-  dnsUpstreamDescription:
-    'Set direct and proxy DNS. Saving requires a test.',
+  dnsUpstreamDescription: 'Set direct and proxy DNS. Saving requires a test.',
   dnsUpstreamDirect: 'Direct DNS',
   dnsUpstreamDirectNote: 'Resolves direct domains. Defaults to the upstream DNS.',
   dnsUpstreamWan: 'Upstream DNS',
@@ -1471,21 +1465,17 @@ const en = {
   dnsUpstreamWanLast: 'Each side keeps at least one; with none left it is the upstream DNS anyway',
   dnsUpstreamSourceIp: 'IP address',
   dnsUpstreamSourceWan: 'Upstream DNS',
-  dnsUpstreamWanNotInCn:
-    'Proxy DNS needs an explicit address in mainland China.',
+  dnsUpstreamWanNotInCn: 'Proxy DNS needs an explicit address in mainland China.',
   dnsUpstreamWanDirectTag: 'direct, not via proxy',
   dnsUpstreamWanProxyNote:
     'With the upstream DNS, proxy DNS queries it directly, not through the proxy',
   dnsRegionLabel: 'Router is in',
   dnsRegionCn: 'Mainland China',
   dnsRegionIntl: 'Outside mainland China',
-  dnsRegionCnNote:
-    'Use proxy DNS for domains outside mainland China.',
-  dnsRegionDetecting:
-    'Detecting region from the egress IP.',
+  dnsRegionCnNote: 'Use proxy DNS for domains outside mainland China.',
+  dnsRegionDetecting: 'Detecting region from the egress IP.',
   dnsRegionDetected: 'Checked the public egress IP: router is in “{region}”',
-  dnsRegionIntlNote:
-    'Both sides use upstream DNS by default.',
+  dnsRegionIntlNote: 'Both sides use upstream DNS by default.',
   dnsRegionDefaultsCn: 'direct uses the upstream DNS, proxy uses TCP 1.1.1.1',
   dnsRegionDefaultsIntl: 'both sides use the upstream DNS',
   dnsRegionScopeCn:
@@ -1495,8 +1485,7 @@ const en = {
     'Switch to “{region}”? {scope}. Both sides get that region’s defaults ({defaults}) and backups are cleared.',
   dnsRegionSwitched: 'Switched to “{region}”',
   dnsUpstreamProxy: 'Proxy DNS',
-  dnsUpstreamProxyNote:
-    'Destination rules route proxy DNS queries.',
+  dnsUpstreamProxyNote: 'Destination rules route proxy DNS queries.',
   dnsUpstreamProtocol: 'Protocol',
   dnsUpstreamPort: 'Port',
   dnsUpstreamEncryptedBootstrap: 'DoH/DoT resolver DNS',
@@ -1531,8 +1520,7 @@ const en = {
   dnsUpstreamBackupTag: 'backup',
   dnsUpstreamProxyExtras: 'Extra proxy DNS upstreams',
   dnsUpstreamAddExtra: 'Add upstream',
-  dnsUpstreamExtrasNote:
-    'Each side uses the first successful DNS reply.',
+  dnsUpstreamExtrasNote: 'Each side uses the first successful DNS reply.',
   dnsUpstreamExtraDuplicate: 'That address is already in the list',
   dnsUpstreamTestVia: 'via “{policy}” → {node}',
   dnsUpstreamTestOk: '{side} is working ({detail}).',
@@ -1547,25 +1535,20 @@ const en = {
   smartBlockConnection: 'Block connection',
   dnsUpstreamSaved: '{side} saved ({detail}).',
   dnsRewriteTitle: 'DNS rewrites',
-  dnsRewriteDescription:
-    'Resolve a domain to a different domain or IP.',
-  dnsRewriteNote:
-    'Updates apply immediately as cached replies expire.',
+  dnsRewriteDescription: 'Resolve a domain to a different domain or IP.',
+  dnsRewriteNote: 'Updates apply immediately as cached replies expire.',
   dnsRewriteEmpty: 'No rewrite rules.',
   dnsRewriteAdd: 'Add',
   dnsRewriteRestore: 'Restore defaults',
   dnsRewriteAddTitle: 'Add DNS rewrite',
   dnsRewriteEditTitle: 'Edit DNS rewrite',
   dnsRewriteSource: 'Queried domain',
-  dnsRewriteSourceHint:
-    'Use *.example.com to match subdomains at any depth.',
+  dnsRewriteSourceHint: 'Use *.example.com to match subdomains at any depth.',
   dnsRewriteTarget: 'Rewrite to',
   dnsRewriteKindDomain: 'Another domain',
   dnsRewriteKindIp: 'Fixed IPs',
-  dnsRewriteDomainHint:
-    'Use * on both sides to preserve the subdomain.',
-  dnsRewriteIpHint:
-    'Enter one IPv4 or IPv6 address per tag.',
+  dnsRewriteDomainHint: 'Use * on both sides to preserve the subdomain.',
+  dnsRewriteIpHint: 'Enter one IPv4 or IPv6 address per tag.',
   dnsRewriteSavedRestart: 'DNS rewrites saved.',
   dnsRewriteSavedLive: 'DNS rewrites saved and active; cached answers update once they expire.',
   dnsRewriteBadSource: 'Invalid queried domain: use an exact domain or *.example.com.',
@@ -1580,8 +1563,7 @@ const en = {
   routeDnsRewrite: 'DNS rewrite',
   routeDnsRewriteHit: 'Rewrite: {source} → {target}',
   dnsFakeIpTitle: 'Enable FakeIP',
-  dnsFakeIpNote:
-    'Compatible proxy nodes resolve proxied domains.',
+  dnsFakeIpNote: 'Compatible proxy nodes resolve proxied domains.',
   bypassPortsTitle: 'Ports that skip the kernel',
   bypassPortsDescription:
     'Ports used by self-hosted services (RustDesk, NAS services behind port forwarding, etc.): TCP / UDP traffic whose destination or source port is one of these is let through before it reaches the kernel, as if Open-Box were not installed, so port forwarding and hole punching keep working. Unlike a "port → direct" row in the custom rules, which has already entered the kernel and is re-dialed by it, scrambling NAT. The blacklist and whitelist are kept separately; only the selected one applies.',
@@ -2119,7 +2101,8 @@ const en = {
   serverGenerate: 'Generate',
   serverOutboundLabel: 'Outbound',
   serverOutboundUnspecified: 'Unspecified',
-  serverOutboundHint: 'Unspecified follows existing routing rules. Select an outbound to use it for connections through this shared server.',
+  serverOutboundHint:
+    'Unspecified follows existing routing rules. Select an outbound to use it for connections through this shared server.',
   serverShareLinkLabel: 'Share link',
   serverShareLinkNeedAddress: 'Fill in the connect address to get a share link',
   serverNoAddress: 'No connect address, share link unavailable',
@@ -2303,26 +2286,24 @@ const en = {
   chainProxyNameLabel: 'Name',
   chainProxyNamePlaceholder: 'e.g. Residential-US',
   chainProxyLinkLabel: 'Node',
-  chainProxyLinkPlaceholder: 'username:password{\'@\'}host:port',
+  chainProxyLinkPlaceholder: "username:password{'@'}host:port",
   chainProxyLinkHint: 'You can also paste a share link or node config.',
   chainProxyUpstreamLabel: 'Upstream',
-  chainProxyHint:
-    'Connect through the selected node or group.',
+  chainProxyHint: 'Connect through the selected node or group.',
   clientRouteDnsLabel: 'Custom DNS',
-  clientRouteDnsHint: 'These devices use the DNS server specified here. Leave it blank to use the default settings. Requires DNS interception.',
+  clientRouteDnsHint:
+    'These devices use the DNS server specified here. Leave it blank to use the default settings. Requires DNS interception.',
   chainProxyDnsHint: 'Used by devices that select this node directly. Device DNS takes priority.',
   chainProxyTest: 'Test',
   chainProxyTestFailed: 'Unreachable',
   chainProxyIpUnknown: 'IP location unknown',
-  chainProxyLatencyNotInKernel:
-    'Starting a test core may increase latency.',
+  chainProxyLatencyNotInKernel: 'Starting a test core may increase latency.',
   chainProxyTestVia: 'via {via}',
   chainProxyExitIp: 'Exit IP',
   chainProxyIpDetail: 'IP details',
   chainProxyIpDetailTip: 'View this exit IP on {site} (new tab)',
   chainProxyIpFailed: 'Could not get IP info: {error}',
-  chainProxyTestHint:
-    'Test through the upstream before saving.',
+  chainProxyTestHint: 'Test through the upstream before saving.',
   chainProxyVia: 'via {upstream}',
   chainProxyUpstreamMissing: 'Upstream "{name}" no longer exists',
   chainProxyErrName: 'Name is required',
@@ -2425,8 +2406,10 @@ const en = {
   connectionDeviceIP: 'IP address',
   connectionDeviceMAC: 'MAC address',
   connectionDeviceRename: 'Rename',
-  connectionDeviceRenameByIP: 'This name is saved for the current IP address and is used throughout the dashboard.',
-  connectionDeviceRenameByMAC: 'This name follows the MAC address and is used throughout the dashboard.',
+  connectionDeviceRenameByIP:
+    'This name is saved for the current IP address and is used throughout the dashboard.',
+  connectionDeviceRenameByMAC:
+    'This name follows the MAC address and is used throughout the dashboard.',
   connectionDeviceRenameSaved: 'Device name saved',
   connectionDeviceRenameTitle: 'Rename device',
   connectionTarget: 'Target',
@@ -2437,20 +2420,25 @@ const en = {
   connectionTargetRoutingIp: 'IP',
   connectionTargetRoutingCidr: 'IP range',
   connectionTargetRoutingMatches: 'Matching destination policies',
-  connectionTargetRoutingNoMatches: 'No explicit destination rule matched. The fallback policy applies.',
+  connectionTargetRoutingNoMatches:
+    'No explicit destination rule matched. The fallback policy applies.',
   connectionTargetRoutingIncomplete: 'Some rule sets could not be checked.',
   connectionTargetRoutingReadOnly: 'Manage this entry at the rule set source.',
   connectionTargetRoutingRemove: 'Remove this rule',
   connectionTargetRoutingLoading: 'Looking up…',
   connectionTargetRoutingInvalid: 'Enter a valid domain, IP, or IP range.',
-  connectionTargetRoutingUnsupported: 'This router backend does not support this action. Update the panel and try again.',
+  connectionTargetRoutingUnsupported:
+    'This router backend does not support this action. Update the panel and try again.',
   connectionTargetRoutingNoSelection: 'Select a routing policy',
-  connectionTargetRoutingMatchOrder: 'If multiple policies match, only the first matching rule from top to bottom applies.',
+  connectionTargetRoutingMatchOrder:
+    'If multiple policies match, only the first matching rule from top to bottom applies.',
   connectionTargetRoutingAdd: 'Add',
   connectionTargetRoutingOriginal: 'Use existing rules',
-  connectionTargetRoutingHint: 'Applies to new connections to this domain or IP. Custom priority rules and device rules still take precedence.',
+  connectionTargetRoutingHint:
+    'Applies to new connections to this domain or IP. Custom priority rules and device rules still take precedence.',
   connectionTargetRoutingSaved: 'Destination routing updated',
-  connectionTargetRoutingDeferred: 'Destination routing saved. The core has yet to apply this change.',
+  connectionTargetRoutingDeferred:
+    'Destination routing saved. The core has yet to apply this change.',
   nodeRiskPing0: 'Risk score',
   nodeRiskPing0Neutral: 'Neutral',
   nodeRiskPing0Slight: 'Slight risk',
@@ -2476,6 +2464,34 @@ const en = {
   nodeScoreWeightSecondDivider: 'Divider between bandwidth and jitter',
   nodeScoreWeightValues: 'Latency {latency}%, bandwidth {download}%, jitter {jitter}%',
   businessPreference: 'Business preference',
+  businessOverviewEnabled: 'Enabled in {count} groups',
+  businessOverviewHits: '{count} reselected connections in the last {minutes} min',
+  businessOverviewWindow: 'Last {minutes} min',
+  businessOverviewBreakdown:
+    '{reliability} switched due to failures · {performance} switched for faster responses',
+  businessOverviewLatest: 'Latest · {time} · {group} · {from} → {to} · {reason}',
+  businessOverviewSwitch: 'Last switch · {time} · {from} → {to} · {reason}',
+  businessOverviewLane: 'Active lane · {name}',
+  businessOverviewExpand: 'Show groups',
+  businessOverviewCollapse: 'Hide groups',
+  businessOverviewOff: 'Business preference is off in all groups',
+  businessOverviewNoStats: 'Counts unavailable',
+  businessOverviewSettings: 'Go to Settings → Groups',
+  businessOverviewLoading: 'Loading status…',
+  businessOverview_running: 'Running',
+  businessOverview_waiting: 'No current evidence to switch',
+  businessOverview_no_backup: 'No healthy alternate',
+  businessOverview_manual_lane: 'Active lane uses manual selection',
+  businessOverview_pending: 'Waiting for kernel configuration',
+  businessOverview_unavailable: 'Kernel status unavailable',
+  businessOverviewReason_reliability: 'Reliability',
+  businessOverviewReason_performance: 'Performance',
+  businessOverviewHelpCount:
+    'A new TCP connection is counted when business preference changes the normal choice and the selected node returns its first transport reply. Trials and ordinary dial fallback are excluded. A reply does not prove HTTP success or access to a service.',
+  businessOverviewHelpExample:
+    'For example, if a site repeatedly fails through Node A, business preference may choose Node B for the next connection. Once B replies, Reliability increases by 1.',
+  businessOverviewHelpWindow:
+    'Counts cover the most recent hour. Restarting the kernel or rebuilding a group resets that group’s counts.',
   businessReliabilityHalfLife: 'Reliability decay',
   businessPerformanceTtl: 'Confidence lifetime',
   businessPreferenceMinutes: 'min',
@@ -2512,6 +2528,12 @@ const en = {
     'Automatic selection, automatic failover tabs and load balancing can use real TCP connection evidence for the same destination. For a new destination without enough evidence, they use their normal selection rules. Choices affect new connections; existing connections keep their route.',
   businessSettingsHelpScope:
     'Evidence is scoped to the destination host/IP, port and address family. UDP/QUIC and requests reusing an established connection do not trigger this TCP selection. Timing includes connection setup and the first write-to-reply interval, excluding client idle time before that write. A first transport reply may be part of TLS negotiation; it does not measure HTTP content success or sustained download speed. Local client routing does not enable this router feature.',
+  businessSettingsHelp_loadbalance:
+    'Load balancing keeps its health and occupancy rules. Among nodes in the eligible occupancy tier, business evidence can favor a node for this destination. A faster node does not receive every connection while less busy alternatives are available.',
+  businessSettingsHelp_failover:
+    'Failover first respects the primary/backup tab order. Business preference works within the active automatic tab when it has multiple eligible nodes. It does not override manual selection or choose a faster node from a backup tab while the primary tab remains active.',
+  businessSettingsHelp_urltest:
+    'Automatic selection keeps a default node for new destinations and can keep a different current node for each destination. Limited trials compare other eligible nodes; the group’s displayed default need not match every connection’s actual node.',
   businessSettingsHelpReliability:
     'Controls how fast consecutive observed connection failures lose influence. With the default 1-hour half-life, a failure has half its original weight after 1 hour and a quarter after 2 hours. A successful reply resets the failure streak. Client cancellation is not a node failure.',
   businessSettingsHelpReliabilityExample:

@@ -20,6 +20,7 @@ import (
 	authapi "github.com/timeflysoon/Open-Box/backend/internal/api/auth"
 	backupapi "github.com/timeflysoon/Open-Box/backend/internal/api/backup"
 	bandwidthapi "github.com/timeflysoon/Open-Box/backend/internal/api/bandwidth"
+	businessprefapi "github.com/timeflysoon/Open-Box/backend/internal/api/businesspref"
 	clientappapi "github.com/timeflysoon/Open-Box/backend/internal/api/clientapp"
 	clientsapi "github.com/timeflysoon/Open-Box/backend/internal/api/clients"
 	configpreviewapi "github.com/timeflysoon/Open-Box/backend/internal/api/configpreview"
@@ -205,6 +206,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	subsapi.Register(srv.Mux(), subsapi.Deps{Subs: subsSvc})
 	groupsSvc := nodegroups.New(st, groupsCore, subsSvc, nodegroups.ChainsFromProfile(profileSvc))
 	groupsapi.Register(srv.Mux(), groupsapi.Deps{Groups: groupsSvc})
+	// 概览「业务优选」卡:哪些组开着业务优选 + 改选统计(统计要内核侧给,当前读不到,如实回空)
+	businessprefapi.Register(srv.Mux(), businessprefapi.Deps{Groups: groupsSvc})
 
 	// 备份:导出(档案 + 节点组,可选订阅和节点,外加面板设置和背景图)和导入;两者共用一个服务(导入同一时刻只做一次)
 	backupSvc := &backup.Service{

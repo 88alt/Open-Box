@@ -1515,7 +1515,7 @@ const clampInt = (v: number, min: number, max: number, fallback: number) =>
 const openFailoverParams = () => {
   const d = draft.value
   if (d?.type !== 'failover' || !d.failover) return
-  paramsDraft.value = { interval: d.interval ?? '', tolerance: d.tolerance, failover: { ...d.failover } }
+  paramsDraft.value = { interval: d.interval ?? '', tolerance: d.tolerance ?? 100, failover: { ...d.failover } }
   showFailoverParams.value = true
 }
 const applyFailoverParams = () => {

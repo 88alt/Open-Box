@@ -41,7 +41,16 @@ export interface OpenboxRoutingPolicy {
 // 这里一行一条规则、一行一个出口,而且能选到具体节点。
 export interface OpenboxCustomRule {
   // port:目标端口(「51820」「1000-2000」,逗号分隔多个),只有前置自定义分流有这一档
-  type: 'domainSuffix' | 'domain' | 'domainKeyword' | 'ipCidr' | 'geosite' | 'geoip' | 'ruleUrl' | 'ruleset' | 'port'
+  type:
+    | 'domainSuffix'
+    | 'domain'
+    | 'domainKeyword'
+    | 'ipCidr'
+    | 'geosite'
+    | 'geoip'
+    | 'ruleUrl'
+    | 'ruleset'
+    | 'port'
   value: string
   // 这一行自己的出口:出站 tag(节点名或节点组名),或 direct / block 占位
   outbound: string
@@ -113,8 +122,17 @@ export interface OpenboxDnsRewriteRule {
 }
 // tls = DoT:地址收 IP 或域名(默认端口 853),域名时和 DoH 一样需要 bootstrap
 export type OpenboxDnsProtocol = 'udp' | 'tcp' | 'https' | 'tls'
-export interface OpenboxDnsBootstrap { server: string; protocol: 'udp' | 'tcp'; port: number }
-export interface OpenboxDnsExtra { server: string; protocol?: OpenboxDnsProtocol; port?: number; bootstrap?: OpenboxDnsBootstrap | null }
+export interface OpenboxDnsBootstrap {
+  server: string
+  protocol: 'udp' | 'tcp'
+  port: number
+}
+export interface OpenboxDnsExtra {
+  server: string
+  protocol?: OpenboxDnsProtocol
+  port?: number
+  bootstrap?: OpenboxDnsBootstrap | null
+}
 export interface OpenboxProfileDns {
   filter?: DnsFilterSettings
   split?: boolean
@@ -139,7 +157,12 @@ export interface OpenboxProfileDns {
   rewrite?: { enabled?: boolean; initialized?: number; rules: OpenboxDnsRewriteRule[] }
 }
 
-export interface DnsFilterList { id: string; name: string; url: string; enabled: boolean }
+export interface DnsFilterList {
+  id: string
+  name: string
+  url: string
+  enabled: boolean
+}
 export interface DnsFilterSettings {
   enabled: boolean
   lists: DnsFilterList[]
@@ -148,7 +171,16 @@ export interface DnsFilterSettings {
 }
 export interface DnsFilterStatus {
   settings: DnsFilterSettings
-  lists: Record<string, { count: number; unsupported: number; unsupportedExamples?: string[]; updatedAt: number; error?: string }>
+  lists: Record<
+    string,
+    {
+      count: number
+      unsupported: number
+      unsupportedExamples?: string[]
+      updatedAt: number
+      error?: string
+    }
+  >
   pending: boolean
   applied: { enabled: boolean; key: string } | null
   busy: boolean
@@ -156,35 +188,93 @@ export interface DnsFilterStatus {
   queryLog?: DnsFilterQueryLog
 }
 // dnsmasq 查询日志的接入情况:reason 为 user 表示日志去向被用户另行设置,failed 表示加日志后 dnsmasq 起不来
-export interface DnsFilterQueryLog { reason?: 'user' | 'failed' | string; syslog?: boolean }
+export interface DnsFilterQueryLog {
+  reason?: 'user' | 'failed' | string
+  syslog?: boolean
+}
 export interface DnsFilterSummary {
-  enabled: boolean; connected: boolean; queries: number; blocked: number; averageMs: number | null
+  enabled: boolean
+  connected: boolean
+  queries: number
+  blocked: number
+  averageMs: number | null
   hourly: { hour: number; queries: number; blocked: number; elapsed: number; timed: number }[]
   topDomains: { domain: string; count: number }[]
 }
-export interface DnsFilterRecord { id: number; at: number; domain: string; qtype: string; source: string; result: string; list: string; elapsed: number | null; via?: string }
+export interface DnsFilterRecord {
+  id: number
+  at: number
+  domain: string
+  qtype: string
+  source: string
+  result: string
+  list: string
+  elapsed: number | null
+  via?: string
+}
 export interface DnsFilterPreviewEntry {
-  type: string; value: string; rule: string; action: 'allow' | 'block'; important: boolean; conditional: boolean
+  type: string
+  value: string
+  rule: string
+  action: 'allow' | 'block'
+  important: boolean
+  conditional: boolean
 }
 export type DnsFilterPreviewAction = 'all' | DnsFilterPreviewEntry['action']
 export interface DnsFilterPreview {
-  rows: DnsFilterPreviewEntry[]; count: number; total: number; page: number; pageSize: number
-  ruleCount: number; unsupported: number; unsupportedExamples: string[]
-  source: 'downloaded' | 'url'; updatedAt: number | null
+  rows: DnsFilterPreviewEntry[]
+  count: number
+  total: number
+  page: number
+  pageSize: number
+  ruleCount: number
+  unsupported: number
+  unsupportedExamples: string[]
+  source: 'downloaded' | 'url'
+  updatedAt: number | null
 }
 export const fetchDnsFilter = () => requestJson<DnsFilterStatus>('/api/openbox/dns-filter')
-export const saveDnsFilter = (settings: DnsFilterSettings) => requestJson('/api/openbox/dns-filter', { method: 'PUT', body: JSON.stringify(settings) })
-export const applyDnsFilter = (update = false, listId = '') => requestJson<DnsFilterStatus>('/api/openbox/dns-filter/apply', { method: 'POST', body: JSON.stringify({ update, ...(listId ? { listId } : {}) }) })
-export const fetchDnsFilterSummary = () => requestJson<DnsFilterSummary>('/api/openbox/dns-filter/summary')
-export const fetchDnsFilterRecords = (search: string, result: string, page: number, pageSize = 20) => requestJson<{ rows: DnsFilterRecord[]; total: number; page: number; pageSize: number }>(`/api/openbox/dns-filter/records?${new URLSearchParams({ search, result, page: String(page), pageSize: String(pageSize) })}`)
-export const fetchDnsFilterPreview = (url: string, search: string, page: number, pageSize = 20, action: DnsFilterPreviewAction = 'all') => requestJson<DnsFilterPreview>(`/api/openbox/dns-filter/preview?${new URLSearchParams({ url, search, action, page: String(page), pageSize: String(pageSize) })}`)
+export const saveDnsFilter = (settings: DnsFilterSettings) =>
+  requestJson('/api/openbox/dns-filter', { method: 'PUT', body: JSON.stringify(settings) })
+export const applyDnsFilter = (update = false, listId = '') =>
+  requestJson<DnsFilterStatus>('/api/openbox/dns-filter/apply', {
+    method: 'POST',
+    body: JSON.stringify({ update, ...(listId ? { listId } : {}) }),
+  })
+export const fetchDnsFilterSummary = () =>
+  requestJson<DnsFilterSummary>('/api/openbox/dns-filter/summary')
+export const fetchDnsFilterRecords = (
+  search: string,
+  result: string,
+  page: number,
+  pageSize = 20,
+) =>
+  requestJson<{ rows: DnsFilterRecord[]; total: number; page: number; pageSize: number }>(
+    `/api/openbox/dns-filter/records?${new URLSearchParams({ search, result, page: String(page), pageSize: String(pageSize) })}`,
+  )
+export const fetchDnsFilterPreview = (
+  url: string,
+  search: string,
+  page: number,
+  pageSize = 20,
+  action: DnsFilterPreviewAction = 'all',
+) =>
+  requestJson<DnsFilterPreview>(
+    `/api/openbox/dns-filter/preview?${new URLSearchParams({ url, search, action, page: String(page), pageSize: String(pageSize) })}`,
+  )
 
 // The backend deep-merges patches onto this shape (see server/store/openbox-store.mjs), so a
 // profile is always fully populated — no field is ever missing on GET.
 // 自动更新计划(面板进程内的定时器)
 // channel 是自动更新走的通道;checkChannel 是卡片上手动检查 / 更新那个下拉框上次选的通道
 export interface OpenboxUpdatePlans {
-  openbox?: { auto?: boolean; hour?: number; days?: number; channel?: 'auto' | 'direct' | 'mirror'; checkChannel?: 'auto' | 'direct' | 'mirror' }
+  openbox?: {
+    auto?: boolean
+    hour?: number
+    days?: number
+    channel?: 'auto' | 'direct' | 'mirror'
+    checkChannel?: 'auto' | 'direct' | 'mirror'
+  }
 }
 
 // 「共享网络」里的一台服务器:本机开的一个入站(server/engine/servers.mjs)
@@ -266,7 +356,12 @@ export interface OpenboxProfile {
   // IPv6 开着时走代理的目标怎么处理:node 交给节点(默认)/ ipv4 降为 IPv4(走代理的域名不给 AAAA,裸 v6 明确拒绝)
   ipv6Proxy?: 'node' | 'ipv4' | 'bypass'
   // tun 参数(server/engine/tun-options.mjs):stack 默认 mixed;mtu / tcpMss 为 0 = 内核默认 / 不钳制
-  tun?: { autoRedirect?: boolean; stack?: 'mixed' | 'gvisor' | 'system'; mtu?: number; tcpMss?: number }
+  tun?: {
+    autoRedirect?: boolean
+    stack?: 'mixed' | 'gvisor' | 'system'
+    mtu?: number
+    tcpMss?: number
+  }
   dns: OpenboxProfileDns
   routing: OpenboxProfileRouting
   // 测速地址:testUrl 给自动择优组和面板延迟测试用;directTestUrl 只给内置直连用
@@ -339,7 +434,10 @@ export interface OpenboxSubscriptionAutoUpdate {
 }
 
 // url 是 https:// 的 DoH 地址;地址里是域名时 bootstrap 必填(用来解析这个域名的 DNS,IP)
-export interface OpenboxSubscriptionNodeDns { url: string; bootstrap?: string }
+export interface OpenboxSubscriptionNodeDns {
+  url: string
+  bootstrap?: string
+}
 
 // 机场在订阅响应头(subscription-userinfo)里给的流量用量 / 到期时间;字段都可能缺(null)
 export interface OpenboxSubscriptionUsage {
@@ -508,7 +606,6 @@ export interface OpenboxConfigPreview {
   [key: string]: unknown
 }
 
-
 // Error bodies aren't consistent across these routes — profile.mjs/subscriptions.mjs answer
 // with {error}, deploy.mjs/service.mjs/penetration.mjs answer with {message} — so both are
 // checked here (error takes priority since it was the original convention) rather than picking
@@ -536,9 +633,12 @@ const requestJson = async <T>(input: string, init?: RequestInit): Promise<T> => 
   const data = await response.json().catch(() => null)
 
   if (!response.ok) {
-    throw Object.assign(new Error(extractErrorMessage(data) || `request failed: ${response.status}`), {
-      status: response.status,
-    })
+    throw Object.assign(
+      new Error(extractErrorMessage(data) || `request failed: ${response.status}`),
+      {
+        status: response.status,
+      },
+    )
   }
 
   return data as T
@@ -551,7 +651,9 @@ export const fetchProfile = async (): Promise<OpenboxProfile> => {
 
 // 「DNS 重写」的两条默认项(恢复默认用)
 export const fetchDnsRewriteDefaults = async (): Promise<OpenboxDnsRewriteRule[]> => {
-  const data = await requestJson<{ dnsRewriteDefaults?: OpenboxDnsRewriteRule[] }>('/api/openbox/profile/defaults?region=cn')
+  const data = await requestJson<{ dnsRewriteDefaults?: OpenboxDnsRewriteRule[] }>(
+    '/api/openbox/profile/defaults?region=cn',
+  )
   return data.dnsRewriteDefaults ?? []
 }
 
@@ -571,38 +673,71 @@ export const saveProfile = async (patch: Record<string, unknown>): Promise<Openb
 }
 
 export const fetchSubscriptions = async (): Promise<OpenboxSubscription[]> => {
-  const data = await requestJson<{ subscriptions: OpenboxSubscription[] }>('/api/openbox/subscriptions')
+  const data = await requestJson<{ subscriptions: OpenboxSubscription[] }>(
+    '/api/openbox/subscriptions',
+  )
   return data.subscriptions
 }
 
 export const fetchSubscriptionShares = async (): Promise<OpenboxSubscriptionShare[]> => {
-  const data = await requestJson<{ shares: OpenboxSubscriptionShare[] }>('/api/openbox/subscription-shares')
+  const data = await requestJson<{ shares: OpenboxSubscriptionShare[] }>(
+    '/api/openbox/subscription-shares',
+  )
   return Array.isArray(data.shares) ? data.shares : []
 }
 
-export const createSubscriptionShare = async (payload: { name: string; host: string; protocol: 'http' | 'https'; subscriptionIds: string[]; token?: string }): Promise<OpenboxSubscriptionShare> => {
-  const data = await requestJson<{ share: OpenboxSubscriptionShare }>('/api/openbox/subscription-shares', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  })
+export const createSubscriptionShare = async (payload: {
+  name: string
+  host: string
+  protocol: 'http' | 'https'
+  subscriptionIds: string[]
+  token?: string
+}): Promise<OpenboxSubscriptionShare> => {
+  const data = await requestJson<{ share: OpenboxSubscriptionShare }>(
+    '/api/openbox/subscription-shares',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  )
   return data.share
 }
 
-export const updateSubscriptionShare = async (id: string, payload: { name: string; host: string; protocol: 'http' | 'https'; subscriptionIds: string[]; enabled?: boolean; regenerate?: boolean }): Promise<OpenboxSubscriptionShare> => {
-  const data = await requestJson<{ share: OpenboxSubscriptionShare }>(`/api/openbox/subscription-shares/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    body: JSON.stringify(payload),
-  })
+export const updateSubscriptionShare = async (
+  id: string,
+  payload: {
+    name: string
+    host: string
+    protocol: 'http' | 'https'
+    subscriptionIds: string[]
+    enabled?: boolean
+    regenerate?: boolean
+  },
+): Promise<OpenboxSubscriptionShare> => {
+  const data = await requestJson<{ share: OpenboxSubscriptionShare }>(
+    `/api/openbox/subscription-shares/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+  )
   return data.share
 }
 
-export const regenerateSubscriptionShare = async (id: string): Promise<OpenboxSubscriptionShare> => {
-  const data = await requestJson<{ share: OpenboxSubscriptionShare }>(`/api/openbox/subscription-shares/${encodeURIComponent(id)}/regenerate`, { method: 'POST' })
+export const regenerateSubscriptionShare = async (
+  id: string,
+): Promise<OpenboxSubscriptionShare> => {
+  const data = await requestJson<{ share: OpenboxSubscriptionShare }>(
+    `/api/openbox/subscription-shares/${encodeURIComponent(id)}/regenerate`,
+    { method: 'POST' },
+  )
   return data.share
 }
 
 export const deleteSubscriptionShare = async (id: string): Promise<void> => {
-  await requestJson(`/api/openbox/subscription-shares/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  await requestJson(`/api/openbox/subscription-shares/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
 }
 
 // Preview never persists — safe to call on every debounced keystroke. Accepts either a `url`
@@ -669,7 +804,21 @@ export const createSubscription = async (payload: {
 // so a plain rename works even while the provider is unreachable (see subscriptions.mjs PATCH).
 export const updateSubscription = async (
   id: string,
-  payload: { name?: string; url?: string; urls?: string[]; urlEntries?: OpenboxSubscriptionUrlEntry[]; directSubscription?: boolean; directNodes?: boolean; content?: string; userAgent?: string; loginId?: string; renameOptions?: OpenboxRenameOptions; autoUpdate?: OpenboxSubscriptionAutoUpdate; nodeDns?: OpenboxSubscriptionNodeDns | null; enabled?: boolean },
+  payload: {
+    name?: string
+    url?: string
+    urls?: string[]
+    urlEntries?: OpenboxSubscriptionUrlEntry[]
+    directSubscription?: boolean
+    directNodes?: boolean
+    content?: string
+    userAgent?: string
+    loginId?: string
+    renameOptions?: OpenboxRenameOptions
+    autoUpdate?: OpenboxSubscriptionAutoUpdate
+    nodeDns?: OpenboxSubscriptionNodeDns | null
+    enabled?: boolean
+  },
 ): Promise<OpenboxSubscriptionSaveResult> => {
   return requestJson(`/api/openbox/subscriptions/${encodeURIComponent(id)}`, {
     method: 'PATCH',
@@ -701,10 +850,13 @@ export const testNodeLatency = async (payload: {
   tags: string[]
   timeoutMs?: number
 }): Promise<OpenboxLatencyResult[]> => {
-  const data = await requestJson<{ results: OpenboxLatencyResult[] }>('/api/openbox/nodes/latency', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  })
+  const data = await requestJson<{ results: OpenboxLatencyResult[] }>(
+    '/api/openbox/nodes/latency',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  )
   return data.results
 }
 
@@ -808,7 +960,17 @@ export interface OpenboxFailoverLaneStatus {
   kernelNow: string | null
   confirmed: boolean | null
   // kind / error:失败的类别和原始错误(v0.1.305 起;旧服务端没有)。「状态码 404」就是 kind = 'status' + error = 'unexpected status 404'
-  nodes: Record<string, { ok: boolean | null; delay: number | null; at: number; reason: string | null; kind?: string | null; error?: string | null } | null>
+  nodes: Record<
+    string,
+    {
+      ok: boolean | null
+      delay: number | null
+      at: number
+      reason: string | null
+      kind?: string | null
+      error?: string | null
+    } | null
+  >
 }
 export interface OpenboxFailoverGroupStatus {
   id: string
@@ -820,19 +982,33 @@ export interface OpenboxFailoverGroupStatus {
   currentLaneId: string | null
   currentSince: number | null
   kernelNow: string | null
-  lastSwitch: { at: number; from: { laneId: string | null; ref: string }; to: { laneId: string | null; ref: string }; reason: string } | null
+  lastSwitch: {
+    at: number
+    from: { laneId: string | null; ref: string }
+    to: { laneId: string | null; ref: string }
+    reason: string
+  } | null
   lastRoundAt: number | null
   nextRoundAt: number | null
   // 已应用的页签顺序(稳定 id);用户改了顺序后的「按新顺序重选」待办,办完为 null
   laneOrder?: string[]
-  reorder?: { since: number; reason: 'priority-changed' | 'order-unknown'; evaluated: boolean } | null
+  reorder?: {
+    since: number
+    reason: 'priority-changed' | 'order-unknown'
+    evaluated: boolean
+  } | null
   inFlight: boolean
   // 正在跑的这一轮:节点测了几个(界面显示「检测中 x / y」);manualRecheck:点了「重新检测」还没做完(v0.1.305 起)
   round?: { startedAt: number; done: number; total: number } | null
   manualRecheck?: boolean
   // 重新检测已受理、还没轮到测(服务端 v0.1.305 起有这个字段;没有就按 status === 'failing' 判断)
   recheckPending?: boolean
-  settings: { interval?: string; intervalMs?: number; tolerance?: number; testUrl?: string } & Partial<OpenboxFailoverSettings>
+  settings: {
+    interval?: string
+    intervalMs?: number
+    tolerance?: number
+    testUrl?: string
+  } & Partial<OpenboxFailoverSettings>
   lanes: OpenboxFailoverLaneStatus[]
 }
 // 面板全局测速名额此刻的情况(v0.1.305 起):在测 / 排队的数量、上限、最近每秒测完几个、按各组间隔每秒要测几个
@@ -878,6 +1054,51 @@ export interface OpenboxBusinessPreference {
   reliabilityHalfLifeMinutes: number
   performanceTtlSeconds: number
 }
+
+// 概览「业务优选」卡(对齐上游 v0.1.476):每个开着业务优选的分组近一小时被改选了多少条连接。
+// 上游这段数据由内核侧统计,面板只负责显示;后端给不出统计时 reliability / performance 为 null,
+// 界面走「暂无法统计改选次数」那一支。
+export type OpenboxBusinessPreferenceState =
+  | 'running'
+  | 'waiting'
+  | 'no_backup'
+  | 'manual_lane'
+  | 'pending'
+  | 'unavailable'
+
+export interface OpenboxBusinessPreferenceHit {
+  // 最近一次改选的时间(毫秒时间戳)
+  at: number
+  from: string
+  to: string
+  reason: 'reliability' | 'performance'
+}
+
+export interface OpenboxBusinessPreferenceGroup {
+  id: string
+  name: string
+  state: OpenboxBusinessPreferenceState
+  // 当前页签名;分组没有页签概念时不给
+  lane?: string
+  // 近 windowMinutes 分钟内按原因分开的改选条数,统计不到为 null
+  reliability: number | null
+  performance: number | null
+  // 最近一次改选;没有就不给这个字段
+  last?: OpenboxBusinessPreferenceHit | null
+}
+
+// GET /api/openbox/business-preference/status
+export interface OpenboxBusinessPreferenceStatus {
+  windowMinutes: number
+  groups: OpenboxBusinessPreferenceGroup[]
+}
+
+export const fetchBusinessPreferenceStatus = async (
+  signal?: AbortSignal,
+): Promise<OpenboxBusinessPreferenceStatus> =>
+  requestJson<OpenboxBusinessPreferenceStatus>('/api/openbox/business-preference/status', {
+    signal,
+  })
 
 export interface OpenboxBandwidthSettings {
   // 统一测速周期(小时,1~720);界面按「天」输入时也折成小时存
@@ -937,15 +1158,23 @@ export const fetchBandwidthStatus = async (): Promise<OpenboxBandwidthStatus> =>
   requestJson<OpenboxBandwidthStatus>('/api/openbox/bandwidth')
 
 // 手动重测整条订阅 / 单个节点的带宽:只是把节点排进队,结果靠轮询 fetchBandwidthStatus 取
-export const queueSubscriptionBandwidth = async (id: string): Promise<OpenboxBandwidthQueueResult> =>
-  requestJson<OpenboxBandwidthQueueResult>(`/api/openbox/bandwidth/subscriptions/${encodeURIComponent(id)}`, {
-    method: 'POST',
-  })
+export const queueSubscriptionBandwidth = async (
+  id: string,
+): Promise<OpenboxBandwidthQueueResult> =>
+  requestJson<OpenboxBandwidthQueueResult>(
+    `/api/openbox/bandwidth/subscriptions/${encodeURIComponent(id)}`,
+    {
+      method: 'POST',
+    },
+  )
 
 export const queueNodeBandwidth = async (name: string): Promise<OpenboxBandwidthQueueResult> =>
-  requestJson<OpenboxBandwidthQueueResult>(`/api/openbox/bandwidth/nodes/${encodeURIComponent(name)}`, {
-    method: 'POST',
-  })
+  requestJson<OpenboxBandwidthQueueResult>(
+    `/api/openbox/bandwidth/nodes/${encodeURIComponent(name)}`,
+    {
+      method: 'POST',
+    },
+  )
 
 export interface OpenboxGroupsPayload {
   groups: OpenboxUserGroup[]
@@ -1021,15 +1250,21 @@ export const saveNodeGroups = async (
   // 成员里既不是节点也不是组的名字(生成配置时会被忽略);改名时服务端已把引用迁移过
   dangling?: Array<{ name: string; members: string[] }>
   renamed?: Array<{ from: string; to: string }>
-}> =>
-  requestJson('/api/openbox/groups', { method: 'PUT', body: JSON.stringify({ groups }) })
+}> => requestJson('/api/openbox/groups', { method: 'PUT', body: JSON.stringify({ groups }) })
 
 // 拖拽排序:传全部订阅 id 的新顺序;服务端把节点池也按这个顺序重排(选择器、内核出站顺序都跟着)
-export const reorderSubscriptions = async (ids: string[]): Promise<{ ok: boolean; subscriptions: OpenboxSubscription[]; changed?: boolean }> => {
-  return requestJson('/api/openbox/subscriptions/order', { method: 'PUT', body: JSON.stringify({ ids }) })
+export const reorderSubscriptions = async (
+  ids: string[],
+): Promise<{ ok: boolean; subscriptions: OpenboxSubscription[]; changed?: boolean }> => {
+  return requestJson('/api/openbox/subscriptions/order', {
+    method: 'PUT',
+    body: JSON.stringify({ ids }),
+  })
 }
 
-export const deleteSubscription = async (id: string): Promise<{ ok: boolean; changed?: boolean }> => {
+export const deleteSubscription = async (
+  id: string,
+): Promise<{ ok: boolean; changed?: boolean }> => {
   return requestJson(`/api/openbox/subscriptions/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
@@ -1079,7 +1314,6 @@ export const fetchConfigPreview = async (): Promise<OpenboxConfigPreview> => {
   return data.config
 }
 
-
 // --- Kernel/service management, emergency rollback & penetration query (P4b Task 7) ---
 
 export interface OpenboxServiceInfo {
@@ -1124,7 +1358,10 @@ export interface OpenboxServiceStatus {
     redirectsDisabled?: boolean
     nftables?: boolean
     // 策略路由顺序检查:conflicts 是提前查询主路由表的规则
-    routing?: { checked: boolean; conflicts: { priority: number | string; table: number | string }[] } | null
+    routing?: {
+      checked: boolean
+      conflicts: { priority: number | string; table: number | string }[]
+    } | null
   } | null
 }
 
@@ -1157,8 +1394,12 @@ export const fetchServiceStatus = async (): Promise<OpenboxServiceStatus> => {
 // actions (see server/api/service.mjs) — a false `ok` here means the underlying init.d command
 // itself failed (e.g. this dev machine has no /etc/init.d), not a request-level error, so it's
 // never thrown; callers read `.ok` to decide how to render the result.
-export const runServiceAction = async (action: OpenboxServiceAction): Promise<OpenboxServiceActionResult> => {
-  return requestJson<OpenboxServiceActionResult>(`/api/openbox/service/core/${action}`, { method: 'POST' })
+export const runServiceAction = async (
+  action: OpenboxServiceAction,
+): Promise<OpenboxServiceActionResult> => {
+  return requestJson<OpenboxServiceActionResult>(`/api/openbox/service/core/${action}`, {
+    method: 'POST',
+  })
 }
 
 export const fetchKernelVersion = async (): Promise<OpenboxKernelVersion> => {
@@ -1246,7 +1487,14 @@ export interface OpenboxPenetrationResult {
   dns?:
     | { skipped: true }
     | { error: string }
-    | { ruleIndex: number | null; rejected?: boolean; server?: { tag: string; type?: string; server?: string; detour?: string }; viaProxy?: boolean; assumed?: OpenboxDnsAssumption[]; rewrite?: OpenboxDnsRewriteHit }
+    | {
+        ruleIndex: number | null
+        rejected?: boolean
+        server?: { tag: string; type?: string; server?: string; detour?: string }
+        viaProxy?: boolean
+        assumed?: OpenboxDnsAssumption[]
+        rewrite?: OpenboxDnsRewriteHit
+      }
   // Starts with the resolved policy target (outbound) and drills down through clash_api's `now`
   // field to the leaf node; empty when the match was an outright reject (nothing to route).
   chain: string[]
@@ -1291,7 +1539,13 @@ export interface OpenboxPenetrationResult {
     dnsSourceRules: boolean
     // 入口放行方式:whitelist = 默认放行,只有名单里的地址才进内核(needSets 是进内核的集合,
     // needCidrs 是手写网段的段数);其它 = 默认进内核、名单里的放行,reason 说明为什么没用默认放行
-    entryMode?: { mode: string; needSets?: string[]; needCidrs?: number; reason?: string; directAnswer?: boolean }
+    entryMode?: {
+      mode: string
+      needSets?: string[]
+      needCidrs?: number
+      reason?: string
+      directAnswer?: boolean
+    }
     // 走直连出口、没有挂在原生旁路名单里的 IP 规则个数(旁路没开时,这些 IP 要先进内核才能放行)
     directIpBypassCount?: number
     // 走代理的域名由内核发占位地址(FakeIP 原型)
@@ -1366,12 +1620,19 @@ export interface OpenboxUpdateStatus {
   status: OpenboxUpdateProgress
   logTail: string
 }
-export const fetchUpdateStatus = () => requestJson<OpenboxUpdateStatus>('/api/openbox/update/status')
+export const fetchUpdateStatus = () =>
+  requestJson<OpenboxUpdateStatus>('/api/openbox/update/status')
 export const checkUpdate = () =>
-  requestJson<{ current: string; latest: string; via: string; hasUpdate: boolean }>('/api/openbox/update/check')
+  requestJson<{ current: string; latest: string; via: string; hasUpdate: boolean }>(
+    '/api/openbox/update/check',
+  )
 export const runUpdate = (channel: 'auto' | 'direct' | 'mirror') =>
-  requestJson<{ ok: boolean; output: string }>('/api/openbox/update/run', { method: 'POST', body: JSON.stringify({ channel }) })
-export const cancelUpdate = () => requestJson<{ result: string }>('/api/openbox/update/cancel', { method: 'POST' })
+  requestJson<{ ok: boolean; output: string }>('/api/openbox/update/run', {
+    method: 'POST',
+    body: JSON.stringify({ channel }),
+  })
+export const cancelUpdate = () =>
+  requestJson<{ result: string }>('/api/openbox/update/cancel', { method: 'POST' })
 
 export type OpenboxUpdateChannel = 'auto' | 'direct' | 'mirror'
 // 「真实路由」:DNS 决策 + 内核解析 + 真实访问一次并从连接表里读实际链路
@@ -1382,18 +1643,49 @@ export interface OpenboxRouteTest {
     | { error: string }
     // runtimeChain:代理侧解析时查询实际经过的线路,detour 的站点集 → 节点组 → 节点(按内核此刻的选择);runtimeLeaf 是它的末尾
     // fakeIpRule:内核自己的 fakeip 规则(FakeIP 原型)先命中,A / AAAA 拿占位地址;server 是其它查询类型走的真解析器
-    | { ruleIndex: number | null; rejected?: boolean; server?: { tag: string; type?: string; server?: string; detour?: string }; viaProxy?: boolean; stale?: 'direct' | 'proxy'; runtimeLeaf?: string; runtimeChain?: string[]; fakeIpRule?: number; assumed?: OpenboxDnsAssumption[]; rewrite?: OpenboxDnsRewriteHit }
+    | {
+        ruleIndex: number | null
+        rejected?: boolean
+        server?: { tag: string; type?: string; server?: string; detour?: string }
+        viaProxy?: boolean
+        stale?: 'direct' | 'proxy'
+        runtimeLeaf?: string
+        runtimeChain?: string[]
+        fakeIpRule?: number
+        assumed?: OpenboxDnsAssumption[]
+        rewrite?: OpenboxDnsRewriteHit
+      }
   // fakeIp:答案落在 fake-ip 段(198.15.0.0/15),不是配置里那台 DNS 答的;fakeIpFrom 是代理侧解析时
   // 截下查询并应答的那个节点(detour 此刻落到的节点),直连解析回 fake-ip 时没有这个字段;
   // fakeIpLocal:占位地址是内核自己发的(FakeIP 原型),连接时按它找回域名交给选中的节点解析
   // ttl:答案的剩余 TTL(秒);cached:代理侧解析几毫秒就回来了,是内核缓存里的答案,这次没有经线路去问
   // answers 是 A 记录;档案开了 IPv6 时再查一次 AAAA 放 answers6(没开就没有这个字段)
-  resolve?: { ok: boolean; status?: number; answers: string[]; answers6?: string[]; ok6?: boolean; status6?: number; error6?: string; ms: number; error?: string; fakeIp?: boolean; fakeIpFrom?: string; fakeIpLocal?: boolean; ttl?: number; cached?: boolean }
+  resolve?: {
+    ok: boolean
+    status?: number
+    answers: string[]
+    answers6?: string[]
+    ok6?: boolean
+    status6?: number
+    error6?: string
+    ms: number
+    error?: string
+    fakeIp?: boolean
+    fakeIpFrom?: string
+    fakeIpLocal?: boolean
+    ttl?: number
+    cached?: boolean
+  }
   // 有 AAAA 记录时按第一个 v6 地址再访问一次的结果(只有探测结果,没有连接表信息)
   exit6?: { connectTo: string; ok?: boolean; status?: number; ms?: number; error?: string }
   // 查询时指定了终端来源:上面的 DNS 判定是按该终端预测的;解析和访问仍是面板自己发起、没有该终端
   // 的来源,sourceVerified 恒为 false——终端的实际路径要在终端上观测
-  context?: { sourceIp: string; predictedFor: 'terminal'; probeOrigin: 'panel'; sourceVerified: false }
+  context?: {
+    sourceIp: string
+    predictedFor: 'terminal'
+    probeOrigin: 'panel'
+    sourceVerified: false
+  }
   exit: {
     url: string
     ok?: boolean
@@ -1423,7 +1715,10 @@ export interface OpenboxRouteTest {
 // method:探测方式,GET / HEAD(只看响应头)/ TCP(只测连通)/ TLS(连通加握手)
 export type OpenboxProbeMethod = 'GET' | 'HEAD' | 'TCP' | 'TLS'
 export const testRoute = (target: string, port?: number, method: OpenboxProbeMethod = 'GET') =>
-  requestJson<OpenboxRouteTest>('/api/openbox/route-test', { method: 'POST', body: JSON.stringify({ target, port, method }) })
+  requestJson<OpenboxRouteTest>('/api/openbox/route-test', {
+    method: 'POST',
+    body: JSON.stringify({ target, port, method }),
+  })
 
 // ---- 模拟 LAN 终端的真实路由测试(server/api/terminal-test.mjs)
 // 面板在路由器上建一个虚拟终端(独立网络命名空间 + veth 接到 LAN 网桥 + DHCP 取址),让它像一台普通 LAN 设备
@@ -1460,32 +1755,51 @@ export interface OpenboxTerminalEntry {
     tunDevice?: string
   }
 }
-export type OpenboxTerminalKernelDnsResult = 'exchanged' | 'cached' | 'optimistic' | 'failed' | 'rejected' | 'action' | 'pending'
+export type OpenboxTerminalKernelDnsResult =
+  | 'exchanged'
+  | 'cached'
+  | 'optimistic'
+  | 'failed'
+  | 'rejected'
+  | 'action'
+  | 'pending'
 export type OpenboxTerminalKernelDns =
   | { seen: false; reason: 'no-log' | 'not-seen'; error?: string }
   | {
-    seen: true
-    source: string
-    ruleIndex: number | null
-    ruleText: string
-    action: string
-    server: { tag: string; type: string; server: string; port: number | null; detour: string } | null
-    viaProxy: boolean
-    rewrite: boolean
-    // 日志里实际拨号的出站(节点);chain 是 detour 此刻的选择链,叶子以日志为准
-    outbound: string
-    chain: string[]
-    result: OpenboxTerminalKernelDnsResult
-    rcode: string
-    ttl: number | null
-    answers: string[]
-    ms: number | null
-    error: string
-    fakeIp: boolean
-    // 占位地址是内核自己的 FakeIP 服务器发的(不是上游 / 对端回的)
-    fakeIpLocal: boolean
-    v6?: { result: OpenboxTerminalKernelDnsResult; rcode: string; answers: string[]; ms: number | null; error: string }
-  }
+      seen: true
+      source: string
+      ruleIndex: number | null
+      ruleText: string
+      action: string
+      server: {
+        tag: string
+        type: string
+        server: string
+        port: number | null
+        detour: string
+      } | null
+      viaProxy: boolean
+      rewrite: boolean
+      // 日志里实际拨号的出站(节点);chain 是 detour 此刻的选择链,叶子以日志为准
+      outbound: string
+      chain: string[]
+      result: OpenboxTerminalKernelDnsResult
+      rcode: string
+      ttl: number | null
+      answers: string[]
+      ms: number | null
+      error: string
+      fakeIp: boolean
+      // 占位地址是内核自己的 FakeIP 服务器发的(不是上游 / 对端回的)
+      fakeIpLocal: boolean
+      v6?: {
+        result: OpenboxTerminalKernelDnsResult
+        rcode: string
+        answers: string[]
+        ms: number | null
+        error: string
+      }
+    }
 export interface OpenboxTerminalTest {
   target: string
   mode: 'lan'
@@ -1495,17 +1809,54 @@ export interface OpenboxTerminalTest {
   setupError?: string
   firstLayer?: { bypassEnabled: boolean; bypassSets: string[]; dnsMode: string; dnsForward: string }
   // override:旁路由场景,DHCP 给的网关不是本机,虚拟终端的网关和 DNS 已改指到本机(gateway 是改成的地址)
-  source?: { kind: 'virtual'; name: string; ip: string; mac: string; via: 'dhcp'; dns: string[]; gateway: string; lanDevice: string; reused: boolean; dhcpMs?: number; override?: { gateway: string } }
-  dns?: { skipped: true } | { server: string; ok: boolean; answers: string[]; answers6?: string[]; ms: number; error?: string; error6?: string }
+  source?: {
+    kind: 'virtual'
+    name: string
+    ip: string
+    mac: string
+    via: 'dhcp'
+    dns: string[]
+    gateway: string
+    lanDevice: string
+    reused: boolean
+    dhcpMs?: number
+    override?: { gateway: string }
+  }
+  dns?:
+    | { skipped: true }
+    | {
+        server: string
+        ok: boolean
+        answers: string[]
+        answers6?: string[]
+        ms: number
+        error?: string
+        error6?: string
+      }
   // dnsmasq 按转发清单把这个域名交给内核 DNS 还是直接问上游(配置推算)
-  dnsForward?: { forward: 'kernel' | 'upstream' | 'unknown'; plan: string; suffix?: string; to?: string }
+  dnsForward?: {
+    forward: 'kernel' | 'upstream' | 'unknown'
+    plan: string
+    suffix?: string
+    to?: string
+  }
   // conntrack 里虚拟终端发往 DNS 服务器的查询:回复方是不是它本人(被内核劫持时回复方是 tun 对端)
   dnsEvidence?: { flows: number; hijacked: boolean; answeredBy: string; line: string }
   // 内核侧的解析过程(server/system/dns-trace.mjs 从内核日志流里截的,不是推算):命中哪条 DNS 规则、交给哪个
   // 解析器、经哪个节点发出、上游回了什么。seen=false 时 reason:no-log 连不上日志流 / not-seen 日志里没这条查询
   kernelDns?: OpenboxTerminalKernelDns
   entry?: OpenboxTerminalEntry
-  kernel?: { seen: boolean; inbound?: string; rule?: string; rulePayload?: string; chains?: string[]; destinationIP?: string; host?: string; viaProxy?: boolean; noDomain?: boolean }
+  kernel?: {
+    seen: boolean
+    inbound?: string
+    rule?: string
+    rulePayload?: string
+    chains?: string[]
+    destinationIP?: string
+    host?: string
+    viaProxy?: boolean
+    noDomain?: boolean
+  }
   exit?: {
     url: string
     port: number
@@ -1524,22 +1875,35 @@ export interface OpenboxTerminalTest {
   probeStderr?: string
   timing?: { totalMs: number }
 }
-export const fetchTerminalCapability = () => requestJson<OpenboxTerminalCapability>('/api/openbox/terminal-test/capability')
+export const fetchTerminalCapability = () =>
+  requestJson<OpenboxTerminalCapability>('/api/openbox/terminal-test/capability')
 export const testTerminal = (target: string, port?: number, method: OpenboxProbeMethod = 'GET') =>
-  requestJson<OpenboxTerminalTest>('/api/openbox/terminal-test', { method: 'POST', body: JSON.stringify({ target, port, method }) })
+  requestJson<OpenboxTerminalTest>('/api/openbox/terminal-test', {
+    method: 'POST',
+    body: JSON.stringify({ target, port, method }),
+  })
 
 // ---- 延迟历史(server/api/latency-history.mjs):每个节点最近 10 次测速结果,服务端记、所有浏览器共享
 // node:组的样本带当时选中的节点;节点自己的样本没有
 export type OpenboxLatencySample = { time: string; delay: number; node?: string; reason?: string }
 export type OpenboxLatencyHistory = Record<string, OpenboxLatencySample[]>
-export const fetchLatencyHistory = () => requestJson<{ history: OpenboxLatencyHistory; updatedAt: number }>('/api/openbox/latency-history')
+export const fetchLatencyHistory = () =>
+  requestJson<{ history: OpenboxLatencyHistory; updatedAt: number }>('/api/openbox/latency-history')
 // 只回最近一次写入的时刻:代理页每 15 秒轮询它,变了才拉整份
-export const fetchLatencyHistoryVersion = () => requestJson<{ updatedAt: number }>('/api/openbox/latency-history/version')
+export const fetchLatencyHistoryVersion = () =>
+  requestJson<{ updatedAt: number }>('/api/openbox/latency-history/version')
 // 面板手动测出来的超时:内核那边只是删记录,得自己报上去
 export const postLatencySamples = (samples: Array<{ name: string; time: string; delay: number }>) =>
-  requestJson<{ ok: boolean; history: OpenboxLatencyHistory }>('/api/openbox/latency-history/samples', { method: 'POST', body: JSON.stringify({ samples }) })
+  requestJson<{ ok: boolean; history: OpenboxLatencyHistory }>(
+    '/api/openbox/latency-history/samples',
+    { method: 'POST', body: JSON.stringify({ samples }) },
+  )
 // 让服务端立刻读一次内核把新结果记下来(手动测完后调,不用等它下一个 tick)
-export const syncLatencyHistory = () => requestJson<{ history: OpenboxLatencyHistory }>('/api/openbox/latency-history/sync', { method: 'POST', body: '{}' })
+export const syncLatencyHistory = () =>
+  requestJson<{ history: OpenboxLatencyHistory }>('/api/openbox/latency-history/sync', {
+    method: 'POST',
+    body: '{}',
+  })
 
 // ---- 每日流量(server/api/traffic.mjs)。up = 发往外网的字节(出口),down = 收到的(入口)
 export interface OpenboxTrafficRow {
@@ -1615,9 +1979,16 @@ export const fetchTrafficUsage = () =>
 // countDirect=false 时带 direct=0:服务端把走直连出站的流量从数字里扣掉(概览「统计直连流量」开关)
 const directParam = (countDirect: boolean) => (countDirect ? '' : '&direct=0')
 export const fetchTrafficMonth = (month?: string, countDirect = true) =>
-  requestJson<OpenboxTrafficMonth>(`/api/openbox/traffic/month?${month ? `month=${encodeURIComponent(month)}` : ''}${directParam(countDirect)}`)
+  requestJson<OpenboxTrafficMonth>(
+    `/api/openbox/traffic/month?${month ? `month=${encodeURIComponent(month)}` : ''}${directParam(countDirect)}`,
+  )
 // hour 给了就只看那个小时的明细(0~23),不给是整天
-export const fetchTrafficDay = (day: string, limit = 500, hour?: number | null, countDirect = true) =>
+export const fetchTrafficDay = (
+  day: string,
+  limit = 500,
+  hour?: number | null,
+  countDirect = true,
+) =>
   requestJson<OpenboxTrafficDay>(
     `/api/openbox/traffic/day?day=${encodeURIComponent(day)}&limit=${limit}${hour === null || hour === undefined ? '' : `&hour=${hour}`}${directParam(countDirect)}`,
   )
@@ -1654,7 +2025,12 @@ export interface OpenboxBackup {
   exportedAt: string
   openboxVersion?: string
   // 导出时勾了哪些可选部分(老文件没有这个字段)
-  includes?: { subscriptions: boolean; chainProxies?: boolean; clientRoutes: boolean; servers: boolean }
+  includes?: {
+    subscriptions: boolean
+    chainProxies?: boolean
+    clientRoutes: boolean
+    servers: boolean
+  }
   profile: OpenboxProfile
   groups: unknown[]
   subscriptions?: unknown[]
@@ -1684,17 +2060,24 @@ export interface OpenboxBackupImportResult {
   }
 }
 // 诊断包(server/api/diagnostics.mjs):版本、固件、内核状态、脱敏配置、最近日志,给 issue 用
-export const fetchDiagnostics = () => requestJson<Record<string, unknown>>('/api/openbox/diagnostics')
+export const fetchDiagnostics = () =>
+  requestJson<Record<string, unknown>>('/api/openbox/diagnostics')
 
 export const fetchBackup = (opts: OpenboxBackupOptions) =>
   requestJson<OpenboxBackup>(
     `/api/openbox/backup?subscriptions=${opts.subscriptions ? 1 : 0}&chainProxies=${opts.chainProxies === false ? 0 : 1}&clientRoutes=${opts.clientRoutes ? 1 : 0}&servers=${opts.servers ? 1 : 0}`,
   )
-export const importBackup = (data: OpenboxBackup, subscriptionsMode: OpenboxBackupSubscriptionsMode = 'replace') =>
-  requestJson<OpenboxBackupImportResult>(`/api/openbox/backup/import?subscriptions=${subscriptionsMode}`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
+export const importBackup = (
+  data: OpenboxBackup,
+  subscriptionsMode: OpenboxBackupSubscriptionsMode = 'replace',
+) =>
+  requestJson<OpenboxBackupImportResult>(
+    `/api/openbox/backup/import?subscriptions=${subscriptionsMode}`,
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    },
+  )
 
 // ---- 系统类接口(对照 server/api/{dns-upstream-test,reset,deploy}.mjs 和 server/system/dns-cache.mjs)
 
@@ -1709,7 +2092,8 @@ export interface OpenboxDnsRegionState {
   pending: boolean
   region: string
 }
-export const fetchDnsRegionState = () => requestJson<OpenboxDnsRegionState>('/api/openbox/dns/region-detect')
+export const fetchDnsRegionState = () =>
+  requestJson<OpenboxDnsRegionState>('/api/openbox/dns/region-detect')
 
 // 按路由器出口公网 IP 判一次它在哪;判不出来 region 是 null
 export interface OpenboxDnsRegionDetect {
@@ -1717,7 +2101,8 @@ export interface OpenboxDnsRegionDetect {
   ip: string
   error?: string
 }
-export const detectDnsRegion = () => requestJson<OpenboxDnsRegionDetect>('/api/openbox/dns/region-detect', { method: 'POST' })
+export const detectDnsRegion = () =>
+  requestJson<OpenboxDnsRegionDetect>('/api/openbox/dns/region-detect', { method: 'POST' })
 
 // DNS 上游测试:保存前真的用内核按选的协议向那台服务器查一次。
 // server 可以填「上游 DNS」记号 wan(固定直连,协议和端口跟着上游走),回的 server 是实际测的那台地址。
@@ -1746,7 +2131,10 @@ export interface OpenboxDnsUpstreamTestResult {
   error?: string
 }
 export const testDnsUpstream = (payload: OpenboxDnsUpstreamTestPayload) =>
-  requestJson<OpenboxDnsUpstreamTestResult>('/api/openbox/dns/upstream-test', { method: 'POST', body: JSON.stringify(payload) })
+  requestJson<OpenboxDnsUpstreamTestResult>('/api/openbox/dns/upstream-test', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
 
 // 清空 DNS 缓存:内核的,加上 dnsmasq / systemd-resolved 各自那一层,有一层清掉就算成功;
 // 全都清不掉时后端回 503,requestJson 会抛出它的 error 文字
@@ -1755,7 +2143,8 @@ export interface OpenboxDnsFlushResult {
   dnsmasq: boolean
   resolved: boolean
 }
-export const flushDnsCache = () => requestJson<OpenboxDnsFlushResult>('/api/openbox/dns/flush-cache', { method: 'POST' })
+export const flushDnsCache = () =>
+  requestJson<OpenboxDnsFlushResult>('/api/openbox/dns/flush-cache', { method: 'POST' })
 
 // 恢复默认:拿到默认值之后走正常的 saveNodeGroups / saveProfile 写回(校验、落库不另开一条路)
 export const fetchDefaultNodeGroups = async (): Promise<OpenboxUserGroup[]> => {
@@ -1763,7 +2152,9 @@ export const fetchDefaultNodeGroups = async (): Promise<OpenboxUserGroup[]> => {
   return data.groups
 }
 export const fetchDefaultRouting = async (): Promise<OpenboxProfileRouting> => {
-  const data = await requestJson<{ routing: OpenboxProfileRouting }>('/api/openbox/defaults/routing')
+  const data = await requestJson<{ routing: OpenboxProfileRouting }>(
+    '/api/openbox/defaults/routing',
+  )
   return data.routing
 }
 
@@ -1775,7 +2166,8 @@ export interface OpenboxFactoryResetResult {
   profileSeeded: boolean
   kernelStopped: boolean
 }
-export const factoryReset = () => requestJson<OpenboxFactoryResetResult>('/api/openbox/factory-reset', { method: 'POST' })
+export const factoryReset = () =>
+  requestJson<OpenboxFactoryResetResult>('/api/openbox/factory-reset', { method: 'POST' })
 
 // ---- 系统类接口(续,对照 server/api/{updates,rulesets,timezone}.mjs 和 server/system/{updater,timezone}.mjs)
 
@@ -1797,7 +2189,9 @@ export interface OpenboxUpdateNotes {
   error?: string
 }
 export const fetchUpdateNotes = (latest = '') =>
-  requestJson<OpenboxUpdateNotes>(`/api/openbox/update/notes${latest ? `?latest=${encodeURIComponent(latest)}` : ''}`)
+  requestJson<OpenboxUpdateNotes>(
+    `/api/openbox/update/notes${latest ? `?latest=${encodeURIComponent(latest)}` : ''}`,
+  )
 
 // 路由器的系统时区(后端设置 · 时区)。定时任务按路由器本地时间的钟点跑,所以要让用户看得到、改得了。
 // zones 是可选的时区名单,countries 是时区 → 国家 / 地区两字母代码(UTC 没有),下拉框按国家名搜索用;
@@ -1813,7 +2207,10 @@ export interface OpenboxTimezoneState {
 export const fetchTimezone = () => requestJson<OpenboxTimezoneState>('/api/openbox/system/timezone')
 // 改系统时区:后端先把别名换成名单里的名字,不认识的回 400;改完返回同样的形状
 export const saveTimezone = (zone: string) =>
-  requestJson<OpenboxTimezoneState>('/api/openbox/system/timezone', { method: 'PUT', body: JSON.stringify({ zone }) })
+  requestJson<OpenboxTimezoneState>('/api/openbox/system/timezone', {
+    method: 'PUT',
+    body: JSON.stringify({ zone }),
+  })
 
 // 规则集链接「立即更新」:名单平时随部署 24 小时才重拉一次,自己维护名单的人改完点这个,立刻重拉重编。
 // 只有名单的构成变了(多出 / 少了 IP 或域名那一份)才要重启内核:needsRestart 为真时提示用户。
@@ -1827,7 +2224,10 @@ export interface OpenboxRulesetRefreshResult {
   needsRestart: boolean
 }
 export const refreshRuleList = (url: string) =>
-  requestJson<OpenboxRulesetRefreshResult>('/api/openbox/rulesets/refresh', { method: 'POST', body: JSON.stringify({ url }) })
+  requestJson<OpenboxRulesetRefreshResult>('/api/openbox/rulesets/refresh', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  })
 
 // 共享网络 · 保存前的端口检测(server/api/servers.mjs)
 export interface OpenboxPortCheck {
@@ -1836,10 +2236,15 @@ export interface OpenboxPortCheck {
   name?: string
 }
 export const checkServerPort = (port: number, id: string) =>
-  requestJson<OpenboxPortCheck>(`/api/openbox/servers/port-check?port=${port}&id=${encodeURIComponent(id)}`)
+  requestJson<OpenboxPortCheck>(
+    `/api/openbox/servers/port-check?port=${port}&id=${encodeURIComponent(id)}`,
+  )
 
 // 终端分流选来源用:DHCP 租约里的设备 + 今天流量里出现过的来源 IP
-export const fetchKnownClients = () => requestJson<{ clients: Array<{ ip: string; name: string; mac?: string }> }>('/api/openbox/clients')
+export const fetchKnownClients = () =>
+  requestJson<{ clients: Array<{ ip: string; name: string; mac?: string }> }>(
+    '/api/openbox/clients',
+  )
 
 // ---- 上游新增的延迟类接口(按 dist 反推,后端见 server/api/{site-latency,node-latency}.mjs)
 
@@ -1851,7 +2256,9 @@ export interface OpenboxSiteLatencyHistory {
   timeoutMs: number
 }
 export const fetchSiteLatencyHistory = async (): Promise<OpenboxSiteLatencyHistory> => {
-  const data = await requestJson<Partial<OpenboxSiteLatencyHistory>>('/api/openbox/site-latency/history')
+  const data = await requestJson<Partial<OpenboxSiteLatencyHistory>>(
+    '/api/openbox/site-latency/history',
+  )
   return { history: data.history ?? {}, timeoutMs: data.timeoutMs ?? 5000 }
 }
 // 站点表来自面板设置 → 测试站点:最多 8 个,id 只认小写字母数字和横线(与服务端 normalizeSites 一致)
@@ -1905,7 +2312,10 @@ export interface OpenboxChainLatencyResult {
   [key: string]: unknown
 }
 export const testChainLatency = (payload: OpenboxChainLatencyPayload) =>
-  requestJson<OpenboxChainLatencyResult>('/api/openbox/chain-proxies/latency', { method: 'POST', body: JSON.stringify(payload) })
+  requestJson<OpenboxChainLatencyResult>('/api/openbox/chain-proxies/latency', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
 
 // 已保存节点的测速(代理页 / 订阅卡片):按节点名让服务端去测,优先交给内核,不用把含密码的节点配置送来送去。
 // 和上面 testNodeLatency 是同一个接口,服务端按请求体里有没有 url / urls / content 区分:有 = 预览,没有 = 这里的 jobs
@@ -1953,7 +2363,8 @@ export const testStoredLatencyStream = async (
     const msg = JSON.parse(text) as { done?: number[]; error?: string; results?: unknown }
     if (Array.isArray(msg.done)) onDone(msg.done)
     else if (msg.error) throw new Error(msg.error)
-    else if (Array.isArray(msg.results)) state.final = msg as unknown as OpenboxStoredLatencyResponse
+    else if (Array.isArray(msg.results))
+      state.final = msg as unknown as OpenboxStoredLatencyResponse
   }
   for (;;) {
     const { value, done } = await reader.read()
@@ -2031,17 +2442,28 @@ export interface OpenboxNodeExit {
 
 // refresh = true 跳过服务端缓存重新解析入口(?refresh=1)
 export const fetchNodeInfo = (tag: string, refresh = false) =>
-  requestJson<OpenboxNodeInfo>(`/api/openbox/node-info/${encodeURIComponent(tag)}${refresh ? '?refresh=1' : ''}`)
-export const fetchNodeEntryCountry = (tag: string) => requestJson<{ ip: string; country: string }>(`/api/openbox/node-info/${encodeURIComponent(tag)}/entry-country`)
+  requestJson<OpenboxNodeInfo>(
+    `/api/openbox/node-info/${encodeURIComponent(tag)}${refresh ? '?refresh=1' : ''}`,
+  )
+export const fetchNodeEntryCountry = (tag: string) =>
+  requestJson<{ ip: string; country: string }>(
+    `/api/openbox/node-info/${encodeURIComponent(tag)}/entry-country`,
+  )
 // Ping0.cc 对出口 IP 的共享人数区间、风控值和 IP 类型;error 为 'challenge' 表示 Ping0 要求人工验证
 export interface OpenboxNodeSharing {
   range?: string
-  risk?: { tier: 'neutral' | 'slight' | 'elevated' | 'extreme' | 'clean' | 'veryClean'; percent: number } | null
+  risk?: {
+    tier: 'neutral' | 'slight' | 'elevated' | 'extreme' | 'clean' | 'veryClean'
+    percent: number
+  } | null
   ipTypes?: string[]
   error?: string
 }
 export const fetchNodeSharing = (ip: string, refresh = false, signal?: AbortSignal) =>
-  requestJson<OpenboxNodeSharing>(`/api/openbox/node-info/sharing/${encodeURIComponent(ip)}${refresh ? '?refresh=1' : ''}`, { signal })
+  requestJson<OpenboxNodeSharing>(
+    `/api/openbox/node-info/sharing/${encodeURIComponent(ip)}${refresh ? '?refresh=1' : ''}`,
+    { signal },
+  )
 // refresh = true 跳过 6 小时缓存重新查(服务端 15 秒内的重复刷新仍按缓存答)
 export const fetchNodeExit = (tag: string, refresh = false) =>
   requestJson<OpenboxNodeExit>(`/api/openbox/node-info/${encodeURIComponent(tag)}/exit`, {
@@ -2167,15 +2589,26 @@ export interface OpenboxTargetRoutingApplied {
 
 const TARGET_ROUTING_URL = '/api/openbox/profile/target-routing'
 
-export const fetchTargetRouting = (target: string, type: string, original: string, signal?: AbortSignal) =>
-  requestJson<OpenboxTargetRoutingLookup>(`${TARGET_ROUTING_URL}?${new URLSearchParams({ target, type, original })}`, {
-    signal,
-  })
+export const fetchTargetRouting = (
+  target: string,
+  type: string,
+  original: string,
+  signal?: AbortSignal,
+) =>
+  requestJson<OpenboxTargetRoutingLookup>(
+    `${TARGET_ROUTING_URL}?${new URLSearchParams({ target, type, original })}`,
+    {
+      signal,
+    },
+  )
 
 export const fetchTargetRoutingFirst = (target: string, signal?: AbortSignal) =>
-  requestJson<OpenboxTargetRoutingLookup>(`${TARGET_ROUTING_URL}?${new URLSearchParams({ target, first: '1' })}`, {
-    signal,
-  })
+  requestJson<OpenboxTargetRoutingLookup>(
+    `${TARGET_ROUTING_URL}?${new URLSearchParams({ target, first: '1' })}`,
+    {
+      signal,
+    },
+  )
 
 export const addTargetRouting = (target: string, type: string, policyIds: string[]) =>
   requestJson<{ applied?: OpenboxTargetRoutingApplied }>(TARGET_ROUTING_URL, {

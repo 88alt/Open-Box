@@ -86,6 +86,13 @@
 
       <template v-else-if="section === 'businessPreference'">
         <p>{{ $t('businessSettingsHelpIntro') }}</p>
+        <!-- 从分组编辑器打开时补一句这种分组类型怎么用业务证据(上游 businessSettingsHelp_<类型>) -->
+        <p
+          v-if="businessMode"
+          class="text-base-content/75"
+        >
+          {{ $t(`businessSettingsHelp_${businessMode}`) }}
+        </p>
         <section class="flex flex-col gap-1">
           <h3 class="font-semibold">{{ $t('businessReliabilityHalfLife') }}</h3>
           <p>{{ $t('businessSettingsHelpReliability') }}</p>
@@ -190,6 +197,10 @@ const props = withDefaults(
 )
 const open = defineModel<boolean>({ required: true })
 const { t } = useI18n()
+
+// 只有这三种分组类型有业务优选的说明文案(urltest / failover / loadbalance);selector 之类不给这一句
+const BUSINESS_MODES = ['urltest', 'failover', 'loadbalance']
+const businessMode = computed(() => (BUSINESS_MODES.includes(props.mode ?? '') ? props.mode : ''))
 
 const title = computed(() => {
   if (props.subscription) return t('subscriptionBandwidthHelpTitle')
