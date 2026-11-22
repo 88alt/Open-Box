@@ -261,6 +261,8 @@ export interface OpenboxProfile {
   bypassPorts?: string
   bypassPortsWhitelist?: string
   bypassPortsMode?: 'blacklist' | 'whitelist'
+  // Mihomo 额外嗅探 TLS 的端口,写法同 bypassPorts(「8443, 9443-9450」),默认只嗅探 TCP 443;只在内核是 Mihomo 时生效
+  mihomoTlsSniffPorts?: string
   region: string
   ipv6: boolean
   // IPv6 开着时走代理的目标怎么处理:node 交给节点(默认)/ ipv4 降为 IPv4(走代理的域名不给 AAAA,裸 v6 明确拒绝)
@@ -1134,13 +1136,17 @@ export interface OpenboxServiceActionResult {
   durationMs?: number
 }
 
+export type OpenboxRouterKernel = 'sing-box' | 'mihomo'
+
 export interface OpenboxKernelVersion {
   // 当前运行的内核;没报就是 sing-box
-  kernel?: 'sing-box' | 'mihomo'
+  kernel?: OpenboxRouterKernel
   version: string
   raw: string
   // false 表示没读到版本(sing-box 缺失或无法执行),此时 version 为空字符串。
   ok: boolean
+  // 安装包里带不带 Mihomo 可执行文件;不带时内核切换框旁边提示「当前安装包未包含 Mihomo」
+  mihomoAvailable?: boolean
 }
 
 export const fetchServiceStatus = async (): Promise<OpenboxServiceStatus> => {
@@ -1157,6 +1163,125 @@ export const runServiceAction = async (action: OpenboxServiceAction): Promise<Op
 
 export const fetchKernelVersion = async (): Promise<OpenboxKernelVersion> => {
   return requestJson<OpenboxKernelVersion>('/api/openbox/kernel/version')
+}
+
+// 内核切换预检:服务端按固定顺序逐项检查,每查完一项回一行 {check:{id,status,details?}},
+// 最后一行 {done:true,kernel}(对齐上游 v0.1.477 的 /kernel/switch/preflight)
+export const KERNEL_SWITCH_CHECK_IDS = [
+  'target',
+  'system',
+  'conflicts',
+  'compatibility',
+  'rulesets',
+  'config',
+  'firewall',
+  'dnsGuard',
+] as const
+export type OpenboxKernelSwitchCheckId = (typeof KERNEL_SWITCH_CHECK_IDS)[number]
+export type OpenboxKernelSwitchCheckStatus = 'passed' | 'failed' | 'blocked' | 'notApplicable'
+export interface OpenboxKernelSwitchCheck {
+  id: OpenboxKernelSwitchCheckId
+  status: OpenboxKernelSwitchCheckStatus
+  details?: string[]
+}
+
+const KERNEL_SWITCH_CHECK_STATUSES: OpenboxKernelSwitchCheckStatus[] = ['passed', 'failed', 'blocked', 'notApplicable']
+const KERNEL_SWITCH_PREFLIGHT_TIMEOUT_MS = 90_000
+
+// 逐项把检查结果交给 onCheck;返回的响应不合规(顺序、状态、details 类型不对,或没收齐)一律当失败抛出
+export const fetchKernelSwitchPreflight = async (
+  kernel: OpenboxRouterKernel,
+  signal: AbortSignal,
+  onCheck: (check: OpenboxKernelSwitchCheck) => void | Promise<void>,
+): Promise<void> => {
+  const controller = new AbortController()
+  const abort = () => controller.abort()
+  if (signal.aborted) abort()
+  else signal.addEventListener('abort', abort, { once: true })
+  const timer = setTimeout(abort, KERNEL_SWITCH_PREFLIGHT_TIMEOUT_MS)
+  const invalid = () => new Error('Invalid kernel switch preflight response')
+  try {
+    const response = await fetchServerApi(`/api/openbox/kernel/switch/preflight?kernel=${encodeURIComponent(kernel)}`, {
+      headers: { Accept: 'application/x-ndjson' },
+      signal: controller.signal,
+    })
+    if (!response.ok) throw new Error(`Kernel switch preflight returned ${response.status}`)
+
+    let received = 0
+    const accept = async (value: unknown) => {
+      const check = value as OpenboxKernelSwitchCheck | null
+      if (
+        !check ||
+        received >= KERNEL_SWITCH_CHECK_IDS.length ||
+        check.id !== KERNEL_SWITCH_CHECK_IDS[received] ||
+        !KERNEL_SWITCH_CHECK_STATUSES.includes(check.status) ||
+        (check.status === 'notApplicable' &&
+          check.id !== 'firewall' &&
+          check.id !== 'dnsGuard' &&
+          (check.id !== 'compatibility' || kernel !== 'sing-box')) ||
+        (check.details !== undefined &&
+          (!Array.isArray(check.details) || check.details.some((item) => typeof item !== 'string')))
+      ) {
+        throw invalid()
+      }
+      received++
+      await onCheck(check)
+    }
+
+    // 老接口 / 代理把流缓冲成一整份 JSON 时也认
+    if (!response.headers.get('content-type')?.includes('application/x-ndjson')) {
+      const data = (await response.json()) as { kernel?: string; checks?: unknown[] } | null
+      if (data?.kernel !== kernel || !Array.isArray(data.checks) || data.checks.length !== KERNEL_SWITCH_CHECK_IDS.length) {
+        throw invalid()
+      }
+      for (const check of data.checks) await accept(check)
+      return
+    }
+
+    if (!response.body) throw invalid()
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let done = false
+    try {
+      for (;;) {
+        const { value, done: finished } = await reader.read()
+        if (finished) {
+          buffer += decoder.decode()
+          break
+        }
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+        for (const line of lines) {
+          if (done) throw invalid()
+          const message = JSON.parse(line) as { done?: boolean; kernel?: string; check?: unknown } | null
+          if (message?.done === true) {
+            if (message.kernel !== kernel || received !== KERNEL_SWITCH_CHECK_IDS.length) throw invalid()
+            done = true
+          } else {
+            await accept(message?.check)
+          }
+        }
+      }
+      if (!done || buffer) throw invalid()
+    } finally {
+      await reader.cancel().catch(() => undefined)
+      reader.releaseLock()
+    }
+  } finally {
+    clearTimeout(timer)
+    signal.removeEventListener('abort', abort)
+  }
+}
+
+// 切到另一个内核并重启(服务端:预检 → 生成目标内核配置 → 写 router-kernel → 重启 → 确认在跑,失败回滚)。
+// 和 runServiceAction 一样,ok=false 不抛错,由调用方读 stderr
+export const switchRouterKernel = async (kernel: OpenboxRouterKernel): Promise<OpenboxServiceActionResult> => {
+  return requestJson<OpenboxServiceActionResult>('/api/openbox/kernel/switch', {
+    method: 'POST',
+    body: JSON.stringify({ kernel }),
+  })
 }
 
 // Mirrors server/api/penetration.mjs's PENETRATION_TARGET_PATTERN — used client-side purely so

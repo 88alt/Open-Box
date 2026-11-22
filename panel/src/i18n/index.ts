@@ -2,7 +2,10 @@ import { LANG } from '@/constant'
 import { language } from '@/store/settings'
 import { createI18n } from 'vue-i18n'
 
-const LOADERS: Record<LANG, () => Promise<{ default: Record<string, string> }>> = {
+// 语言包允许一层嵌套(如 routerKernelChecks.target,对齐上游),其余都是字符串
+type Messages = { [key: string]: string | { [key: string]: string } }
+
+const LOADERS: Record<LANG, () => Promise<{ default: Messages }>> = {
   [LANG.EN_US]: () => import('./en'),
   [LANG.ZH_CN]: () => import('./zh'),
   [LANG.ZH_TW]: () => import('./zh-tw'),

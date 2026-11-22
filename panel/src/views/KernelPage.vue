@@ -12,7 +12,15 @@
           :profile="profile"
           :patch-profile="patchProfile"
           @refresh="loadStatus"
-        />
+        >
+          <!-- 内核切换(sing-box / Mihomo):选另一个内核后先预检,通过才切换并重启 -->
+          <template #kernel-controls>
+            <RouterKernelSwitch
+              :kernel-version="kernelVersion"
+              @switched="loadStatus"
+            />
+          </template>
+        </KernelServiceCard>
 
         <!-- Docker 旁路由:容器自检和升级方法,只在容器里跑时出现 -->
         <ContainerCard
@@ -34,6 +42,12 @@
                 :patch-profile="patchProfile"
               />
               <BypassPortsCard
+                :profile="profile"
+                :patch-profile="patchProfile"
+              />
+              <!-- Mihomo 才有:额外 TLS 嗅探端口 -->
+              <MihomoTlsSniffPortsCard
+                v-if="kernelVersion?.kernel === 'mihomo'"
                 :profile="profile"
                 :patch-profile="patchProfile"
               />
@@ -93,6 +107,8 @@ import KernelServiceCard from '@/components/kernel/KernelServiceCard.vue'
 import DirectBypassCard from '@/components/kernel/DirectBypassCard.vue'
 import BlockQuicCard from '@/components/kernel/BlockQuicCard.vue'
 import BypassPortsCard from '@/components/kernel/BypassPortsCard.vue'
+import MihomoTlsSniffPortsCard from '@/components/kernel/MihomoTlsSniffPortsCard.vue'
+import RouterKernelSwitch from '@/components/kernel/RouterKernelSwitch.vue'
 import BackupCard from '@/components/kernel/BackupCard.vue'
 import BandwidthSettingsCard from '@/components/kernel/BandwidthSettingsCard.vue'
 import TrafficRetentionCard from '@/components/kernel/TrafficRetentionCard.vue'

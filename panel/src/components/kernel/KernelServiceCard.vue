@@ -106,6 +106,9 @@
         </a>
       </div>
 
+      <!-- 内核切换(sing-box / Mihomo),由内核页传进来 -->
+      <slot name="kernel-controls" />
+
       <!-- Geo 数据:份数、数据日期、数据来源 -->
       <div
         v-if="updateInfo?.geoCounts || updateInfo?.geoDate"
@@ -316,6 +319,13 @@ const openboxVersion = computed(() => {
 // 界面统一写成「sing-box-1.14.1-xxx」(对齐上游 v0.1.396)
 const kernelText = computed(() => {
   const raw = (props.kernelVersion?.ok === false ? '' : props.kernelVersion?.version) || updateInfo.value?.singboxVersion || ''
+  if (props.kernelVersion?.kernel === 'mihomo') {
+    // 「Mihomo Meta v1.19.0-openbox.2 …」界面写成「mihomo-1.19.0-openbox-2」(对齐上游 v0.1.477)
+    const mihomoRaw = (props.kernelVersion?.ok === false ? '' : props.kernelVersion?.version) || ''
+    const ver = mihomoRaw.match(/^Mihomo(?: Meta)?\s+v?(\d\S*)/i)?.[1]
+    if (ver) return `mihomo-${ver.replace(/-openbox\.(\d+)(?=$|[+-])/i, '-openbox-$1')}`
+    return mihomoRaw.trim() || t('kernelVersionUnknown')
+  }
   const bare = raw.trim().replace(/^sing-box(?:\s+version)?[\s-]*/i, '')
   return bare ? `sing-box-${bare}` : t('kernelVersionUnknown')
 })
