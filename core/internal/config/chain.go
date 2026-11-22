@@ -116,3 +116,8 @@ func resolveChainNodes(candidatesRaw any, nodes any, userGroups any) ([]any, err
 	}
 	return candidates, nil
 }
+
+// ResolveChainNodes 是 resolveChainNodes 的导出版,给 mihomo 包用(Mihomo 的组也要先把链式代理并进节点表)。
+func ResolveChainNodes(candidatesRaw any, nodes any, userGroups any) ([]any, error) {
+	return resolveChainNodes(candidatesRaw, nodes, userGroups)
+}
