@@ -4,6 +4,7 @@ import './assets/main.css'
 import './assets/theme.css'
 import { initializePersistentStorage } from './helper/persistentStorage'
 import { initializeServerAuthState } from './store/auth'
+import { vSegmented, vTabContent } from './directives/segmented'
 import tip from './directives/tip'
 
 const cleanupLegacyServiceWorkers = async () => {
@@ -47,6 +48,8 @@ const bootstrap = async () => {
   app.use(router.default)
   app.use(i18n)
   app.directive('tip', tip)
+  app.directive('segmented', vSegmented)
+  app.directive('tab-content', vTabContent)
   app.mount('#app')
 }
 

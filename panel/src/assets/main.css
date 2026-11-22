@@ -1030,3 +1030,130 @@ dialog .overflow-y-scroll,
   position: absolute;
   inset: 0;
 }
+
+/* ===== v-segmented 滑动高亮(对齐上游 v0.1.477,见 directives/segmented.ts)===== */
+#app-content .seg:not(.seg-dock) {
+  position: relative;
+}
+#app-content .seg {
+  isolation: isolate;
+  --seg-r: var(--tab-corner-radius, var(--app-radius-panel, 1.25rem));
+  --seg-fg: var(--color-primary-content);
+}
+#app-content .seg-highlight {
+  z-index: 2;
+  color: var(--seg-fg);
+  pointer-events: none;
+  visibility: hidden;
+  top: 0;
+  left: 0;
+  overflow: clip;
+  background: var(--seg-bg, var(--color-primary)) !important;
+  border: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+  position: absolute !important;
+}
+#app-content .seg.seg-animate > .seg-highlight {
+  transition: clip-path 0.25s var(--ease-drawer, cubic-bezier(0.32, 0.72, 0, 1));
+}
+#app-content .seg.seg-instant > .seg-highlight {
+  transition: none;
+}
+#app-content .seg-copy {
+  pointer-events: none;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  border: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  position: absolute !important;
+  overflow: visible !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+#app-content .seg-copy > *,
+#app-content .seg-copy-menu > li > * {
+  box-shadow: none !important;
+  color: var(--seg-fg) !important;
+  background: transparent !important;
+  transition: none !important;
+}
+#app-content .seg-clipped .seg-on {
+  box-shadow: none !important;
+  background: transparent !important;
+}
+#app-content .seg-clipped.seg-tabs > .tab-active,
+#app-content .seg-clipped.seg-menu > li:not(.seg-highlight) > .menu-active {
+  color: inherit !important;
+}
+#app-content .seg-clipped.seg-card > .seg-on .text-primary-content {
+  color: var(--color-base-content);
+}
+#app-content .seg-clipped.seg-card > .seg-on .fill-primary-content {
+  fill: var(--color-base-content);
+}
+#app-content
+  .seg-copy-card
+  :is(.text-base-content, .text-primary-content, [class*='text-base-content/']):not(
+    .latency-tag,
+    .latency-tag *
+  ) {
+  color: var(--seg-fg);
+}
+#app-content .seg-copy-card .fill-base-content,
+#app-content .seg-copy-card .fill-primary-content {
+  fill: var(--seg-fg);
+}
+#app-content .seg-dock::before {
+  content: '';
+  z-index: 0;
+  width: var(--seg-w, 0px);
+  height: var(--seg-h, 0px);
+  border-radius: var(--seg-r, var(--app-radius-panel, 1.25rem));
+  background-color: var(--seg-bg, var(--color-primary));
+  opacity: var(--seg-o, 0);
+  transform: translate(var(--seg-x, 0px), var(--seg-y, 0px));
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+#app-content .seg.seg-animate.seg-dock::before {
+  transition: transform 0.25s var(--ease-drawer, cubic-bezier(0.32, 0.72, 0, 1));
+}
+#app-content .seg.seg-instant.seg-dock::before {
+  transition: none;
+}
+#app-content .seg-tabs > :not(.seg-highlight),
+#app-content .seg-dock > *,
+#app-content .seg-menu > li:not(.seg-highlight) > * {
+  z-index: 1;
+  position: relative;
+}
+#app-content .seg-tabs > .tab,
+#app-content .seg-menu > li > * {
+  transition: none;
+}
+#app-content .seg-menu {
+  --seg-r: var(--app-radius-nav, 0.875rem);
+  --seg-bg: var(--color-neutral);
+  --seg-fg: var(--color-neutral-content);
+}
+#app-content .seg-card {
+  --seg-r: var(--app-radius-card, 1.25rem);
+}
+#app-content .seg-card .proxy-node-card > * {
+  z-index: 1;
+  position: relative;
+}
+@media (prefers-reduced-motion: reduce) {
+  #app-content .seg.seg-animate > .seg-highlight,
+  #app-content .seg.seg-animate.seg-dock::before {
+    transition-duration: 0.15s;
+  }
+}
