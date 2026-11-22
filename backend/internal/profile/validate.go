@@ -48,7 +48,7 @@ func Check(p map[string]any) error {
 	if err := wantRegion(p, "region", "region"); err != nil {
 		return err
 	}
-	for _, k := range []string{"bypassPorts", "bypassPortsWhitelist"} {
+	for _, k := range []string{"bypassPorts", "bypassPortsWhitelist", "mihomoTlsSniffPorts"} {
 		if err := checkPorts(p, k); err != nil {
 			return err
 		}

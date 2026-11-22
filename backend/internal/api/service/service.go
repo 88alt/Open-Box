@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"os/exec"
 	"runtime"
 	"time"
 
@@ -49,6 +50,8 @@ type Deps struct {
 	CoreService string // sing-box 的服务名
 	PanelName   string // 后端自己的服务名(只查开机自启)
 	SingBox     string // sing-box 可执行文件
+	Mihomo      string // Mihomo 可执行文件;空 = 不提供 Mihomo(mihomoAvailable 恒为 false)
+	KernelFile  string // 路由器内核选择文件(<ConfigDir>/router-kernel);空 = 一直是 sing-box
 	Arch        string // 空 = runtime.GOARCH
 }
 
@@ -64,15 +67,46 @@ func Register(mux *http.ServeMux, d Deps) {
 		http.MethodPost: d.action,
 	}))
 	mux.HandleFunc("/api/openbox/kernel/version", httpx.Methods(map[string]http.HandlerFunc{
-		http.MethodGet: func(w http.ResponseWriter, r *http.Request) {
-			httpx.NoStore(w)
-			httpx.JSON(w, http.StatusOK, singbox.ReadKernelVersion(r.Context(), d.SingBox))
-		},
+		http.MethodGet: d.kernelVersion,
 	}))
 }
 
+// kernelVersionResponse 是 GET /api/openbox/kernel/version:当前内核的版本加「安装包里有没有 Mihomo」。
+// 前端只在带了 kernel 字段时才显示内核切换框(KernelPage.vue),见 STATUS.md 双内核。
+type kernelVersionResponse struct {
+	Kernel string `json:"kernel"`
+	singbox.KernelVersion
+	MihomoAvailable bool `json:"mihomoAvailable"`
+}
+
+func (d Deps) kernelVersion(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	kernel, err := system.ReadRouterKernel(d.KernelFile)
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp := kernelVersionResponse{Kernel: kernel}
+	if kernel == system.KernelMihomo {
+		resp.KernelVersion = singbox.ReadMihomoVersion(r.Context(), d.Mihomo)
+	} else {
+		resp.KernelVersion = singbox.ReadKernelVersion(r.Context(), d.SingBox)
+	}
+	if d.Mihomo != "" {
+		_, lookErr := exec.LookPath(d.Mihomo)
+		resp.MihomoAvailable = lookErr == nil
+	}
+	httpx.JSON(w, http.StatusOK, resp)
+}
+
+// coreInfo 是服务状态里的内核项:服务信息加当前选中的内核(sing-box / mihomo;选择文件无效时不带)。
+type coreInfo struct {
+	system.ServiceInfo
+	Kernel string `json:"kernel,omitempty"`
+}
+
 type statusResponse struct {
-	Core      system.ServiceInfo `json:"core"`
+	Core      coreInfo           `json:"core"`
 	Panel     system.ServiceInfo `json:"panel"`
 	Conflicts []system.Conflict  `json:"conflicts"`
 	Platform  string             `json:"platform"`
@@ -99,7 +133,7 @@ func (d Deps) status(w http.ResponseWriter, r *http.Request) {
 	}
 	if d.Kind == system.InitNone || d.Services == nil {
 		// 没有服务管理器:不是错误,界面按「没在跑」显示,并在 raw 里说明
-		resp.Core = system.ServiceInfo{Raw: "unsupported"}
+		resp.Core = coreInfo{ServiceInfo: system.ServiceInfo{Raw: "unsupported"}, Kernel: d.selectedKernel()}
 		httpx.JSON(w, http.StatusOK, resp)
 		return
 	}
@@ -108,7 +142,7 @@ func (d Deps) status(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusInternalServerError, "查询 sing-box 服务状态失败: "+err.Error())
 		return
 	}
-	resp.Core = core
+	resp.Core = coreInfo{ServiceInfo: core, Kernel: d.selectedKernel()}
 	// 与其它代理服务冲突的检测:尽力而为,查不到就当没有,不让它拖垮状态接口
 	if d.Conflicts != nil {
 		if found, _ := d.Conflicts.Find(r.Context()); len(found) > 0 {
@@ -128,6 +162,16 @@ func (d Deps) status(w http.ResponseWriter, r *http.Request) {
 		resp.Panel.Autostart = p.Autostart
 	}
 	httpx.JSON(w, http.StatusOK, resp)
+}
+
+// selectedKernel 读选中的内核;选择文件读不了 / 无效就不带这个字段(不让它拖垮状态接口)。
+func (d Deps) selectedKernel() string {
+	k, err := system.ReadRouterKernel(d.KernelFile)
+	if err != nil {
+		slog.Warn("读取内核选择失败", "error", err)
+		return ""
+	}
+	return k
 }
 
 // actionResponse 是 ActionResult 加一句可选的 DNS 说明(前端按 ok / stderr 显示,多出的字段会被忽略)。

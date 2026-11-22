@@ -88,6 +88,7 @@ func Default() map[string]any {
 		"bypassPorts":          "",
 		"bypassPortsWhitelist": "",
 		"bypassPortsMode":      "blacklist",
+		"mihomoTlsSniffPorts":  "",
 		"tun":                  map[string]any{"autoRedirect": true, "stack": "mixed", "mtu": float64(0), "tcpMss": float64(0)},
 		"dns":                  DefaultDNS(RegionCN),
 		"routing":              DefaultRouting(),

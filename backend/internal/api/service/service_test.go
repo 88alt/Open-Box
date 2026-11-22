@@ -289,3 +289,113 @@ func TestStatusPendingRestartReasonsAreCopied(t *testing.T) {
 		t.Fatalf("%v", reasons)
 	}
 }
+
+func writeBin(t *testing.T, name, script string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(p, []byte("#!/bin/sh\n"+script+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func kernelVersionBody(t *testing.T, d Deps) (int, map[string]any) {
+	t.Helper()
+	d.Services = &fake{}
+	d.Kind = system.InitNone
+	mux := http.NewServeMux()
+	Register(mux, d)
+	rec := do(mux, http.MethodGet, "/api/openbox/kernel/version")
+	var got map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	return rec.Code, got
+}
+
+func TestKernelVersionSelection(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("假内核是 /bin/sh 脚本,Windows 上跑不了")
+	}
+	sb := writeBin(t, "sing-box", "echo 'sing-box version 1.14.4'")
+	mh := writeBin(t, "mihomo", "echo 'Mihomo Meta v1.19.0 linux arm64'")
+	sel := filepath.Join(t.TempDir(), "router-kernel")
+
+	// 没有选择文件:sing-box,Mihomo 在 PATH 里能找到 → mihomoAvailable
+	code, got := kernelVersionBody(t, Deps{SingBox: sb, Mihomo: mh, KernelFile: sel})
+	if code != 200 || got["kernel"] != "sing-box" || got["version"] != "1.14.4" || got["ok"] != true || got["mihomoAvailable"] != true {
+		t.Fatalf("%d %v", code, got)
+	}
+	// 选了 mihomo:版本取 mihomo -v 的第一行
+	if err := os.WriteFile(sel, []byte("mihomo\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, got = kernelVersionBody(t, Deps{SingBox: sb, Mihomo: mh, KernelFile: sel})
+	if code != 200 || got["kernel"] != "mihomo" || got["version"] != "Mihomo Meta v1.19.0 linux arm64" || got["ok"] != true {
+		t.Fatalf("%d %v", code, got)
+	}
+	// 安装包没带 Mihomo:mihomoAvailable=false(没配置路径、或路径找不到都一样)
+	for _, mihomo := range []string{"", "no-such-mihomo"} {
+		code, got = kernelVersionBody(t, Deps{SingBox: sb, Mihomo: mihomo})
+		if code != 200 || got["kernel"] != "sing-box" || got["mihomoAvailable"] != false {
+			t.Fatalf("%q: %d %v", mihomo, code, got)
+		}
+	}
+	// 选了 mihomo 但没有 Mihomo:仍是 200,ok=false,version 为空
+	code, got = kernelVersionBody(t, Deps{SingBox: sb, Mihomo: "no-such-mihomo", KernelFile: sel})
+	if code != 200 || got["kernel"] != "mihomo" || got["ok"] != false || got["version"] != "" || got["mihomoAvailable"] != false {
+		t.Fatalf("%d %v", code, got)
+	}
+	// 选择文件无效:500,不假装成 sing-box
+	if err := os.WriteFile(sel, []byte("clash"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code, got = kernelVersionBody(t, Deps{SingBox: sb, Mihomo: mh, KernelFile: sel}); code != 500 {
+		t.Fatalf("无效选择应 500: %d %v", code, got)
+	}
+}
+
+func TestStatusCoreKernel(t *testing.T) {
+	sel := filepath.Join(t.TempDir(), "router-kernel")
+	f := &fake{statuses: map[string]system.ServiceInfo{"sing-box": {Running: true, Raw: "running"}}}
+	status := func(d Deps) map[string]any {
+		t.Helper()
+		d.Services, d.Kind, d.CoreService, d.PanelName, d.Arch = f, system.InitOpenWrt, "sing-box", "openbox-backend", "arm64"
+		mux := http.NewServeMux()
+		Register(mux, d)
+		rec := do(mux, http.MethodGet, "/api/openbox/service/status")
+		if rec.Code != 200 {
+			t.Fatalf("%d %s", rec.Code, rec.Body.String())
+		}
+		var got map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		return got["core"].(map[string]any)
+	}
+	// 原有字段不变,多一个 kernel
+	if core := status(Deps{KernelFile: sel}); core["kernel"] != "sing-box" || core["running"] != true || core["raw"] != "running" {
+		t.Fatalf("%v", core)
+	}
+	if err := os.WriteFile(sel, []byte("mihomo"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if core := status(Deps{KernelFile: sel}); core["kernel"] != "mihomo" {
+		t.Fatalf("%v", core)
+	}
+	// 选择文件无效:状态接口照常返回,只是不带 kernel
+	if err := os.WriteFile(sel, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if core := status(Deps{KernelFile: sel}); core["running"] != true {
+		t.Fatalf("%v", core)
+	} else if _, has := core["kernel"]; has {
+		t.Fatalf("无效选择不该带 kernel: %v", core)
+	}
+	// 没有服务管理器:也带 kernel
+	d := Deps{Services: f, Kind: system.InitNone, KernelFile: filepath.Join(t.TempDir(), "none")}
+	mux := http.NewServeMux()
+	Register(mux, d)
+	rec := do(mux, http.MethodGet, "/api/openbox/service/status")
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"kernel":"sing-box"`) || !strings.Contains(rec.Body.String(), `"raw":"unsupported"`) {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+}

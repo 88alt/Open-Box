@@ -28,6 +28,7 @@ const (
 	EnvWebDir    = "OPENBOX_WEB_DIR"
 	EnvGeoDir    = "OPENBOX_GEO_DIR"
 	EnvSingBox   = "OPENBOX_SINGBOX"
+	EnvMihomo    = "OPENBOX_MIHOMO"
 	EnvCore      = "OPENBOX_CORE"
 	// EnvDNSQueryLog 是 dnsmasq 查询日志文件的路径,默认 DefaultDNSQueryLog;写 off 就既不让 dnsmasq 写、后端也不读
 	// (DNS 过滤的「查询记录」没有数据)。
@@ -57,6 +58,7 @@ type Paths struct {
 	WebDir    string // 前端构建产物(panel/dist)
 	GeoDir    string // 随包规则库(只读):<分类名>.srs,如 geosite-cn.srs、geoip-cn.srs
 	SingBox   string // sing-box 可执行文件(可以只写名字,从 PATH 找)
+	Mihomo    string // Mihomo 可执行文件(同上;找不到 = 安装包没带 Mihomo,内核切换框会提示)
 	Core      string // openbox-core 可执行文件
 	// DNSQueryLog 是 dnsmasq 查询日志(log-queries 的输出)的文件路径:DNS 接管时让 dnsmasq 写到这里(system.DNSTakeover.QueryLog),
 	// 后端跟读它;空表示不开、不读。
@@ -73,6 +75,7 @@ func DefaultPaths() Paths {
 		WebDir:      "/usr/share/openbox-backend/panel",
 		GeoDir:      "/usr/share/openbox-backend/geodata",
 		SingBox:     "sing-box",
+		Mihomo:      "mihomo",
 		Core:        "openbox-core",
 		DNSQueryLog: DefaultDNSQueryLog,
 	}
@@ -119,6 +122,7 @@ func LoadConfig(args []string, getenv func(string) string, out io.Writer) (Confi
 	webDir := fs.String("web-dir", env(EnvWebDir, def.WebDir), "前端文件目录,即 panel/dist(环境变量 "+EnvWebDir+")")
 	geoDir := fs.String("geo-dir", env(EnvGeoDir, def.GeoDir), "随包规则库目录,里面是 geosite-*.srs / geoip-*.srs(环境变量 "+EnvGeoDir+")")
 	singBox := fs.String("sing-box", env(EnvSingBox, def.SingBox), "sing-box 可执行文件(环境变量 "+EnvSingBox+")")
+	mihomo := fs.String("mihomo", env(EnvMihomo, def.Mihomo), "Mihomo 可执行文件(环境变量 "+EnvMihomo+")")
 	core := fs.String("core", env(EnvCore, def.Core), "openbox-core 可执行文件(环境变量 "+EnvCore+")")
 	dnsQueryLog := fs.String("dns-query-log", env(EnvDNSQueryLog, def.DNSQueryLog), "dnsmasq 查询日志文件:DNS 接管时让 dnsmasq 写到这里,后端跟读;off = 不开不读(环境变量 "+EnvDNSQueryLog+")")
 	updateMirror := fs.String("update-mirror", env(EnvUpdateMirror, ""), "在线更新的镜像加速前缀(空 = 只走 GitHub 直连)(环境变量 "+EnvUpdateMirror+")")
@@ -154,6 +158,7 @@ func LoadConfig(args []string, getenv func(string) string, out io.Writer) (Confi
 			WebDir:    filepath.Clean(strings.TrimSpace(*webDir)),
 			GeoDir:    filepath.Clean(strings.TrimSpace(*geoDir)),
 			SingBox:   strings.TrimSpace(*singBox),
+			Mihomo:    strings.TrimSpace(*mihomo),
 			Core:      strings.TrimSpace(*core),
 		},
 	}
@@ -166,7 +171,7 @@ func LoadConfig(args []string, getenv func(string) string, out io.Writer) (Confi
 	if v := strings.TrimSpace(*dnsQueryLog); v != "" && !strings.EqualFold(v, "off") {
 		cfg.DNSQueryLog = filepath.Clean(v)
 	}
-	for name, v := range map[string]string{"data-dir": *dataDir, "config-dir": *configDir, "web-dir": *webDir, "geo-dir": *geoDir, "sing-box": *singBox, "core": *core} {
+	for name, v := range map[string]string{"data-dir": *dataDir, "config-dir": *configDir, "web-dir": *webDir, "geo-dir": *geoDir, "sing-box": *singBox, "mihomo": *mihomo, "core": *core} {
 		if strings.TrimSpace(v) == "" {
 			return Config{}, errors.New("参数 " + name + " 不能为空")
 		}

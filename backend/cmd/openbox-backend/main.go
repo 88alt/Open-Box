@@ -250,6 +250,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		DNS:         dnsSync,
 		Kind:        initKind,
 		CoreService: cfg.CoreService, PanelName: cfg.PanelService, SingBox: cfg.SingBox,
+		Mihomo: cfg.Mihomo, KernelFile: cfg.RouterKernelFile(),
 	})
 	// 订阅保存 / 刷新后的 applied:与服务状态的 pendingRestart 同一个判断(内核在跑才算,判断不了当作没有)
 	subsapi.Register(srv.Mux(), subsapi.Deps{Subs: subsSvc, Pending: func(ctx context.Context) (bool, []string) {
