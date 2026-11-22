@@ -96,8 +96,9 @@ func TestGroupsShape(t *testing.T) {
 	if r.First["其他"] != "DIRECT" || r.First["Sel"] != "hk1" || r.First["Auto"] != "hk1" {
 		t.Errorf("first: %v", r.First)
 	}
-	if r.Targets["direct"] != "DIRECT" || r.Targets["block"] != "REJECT" || len(r.Builtins) != 0 {
-		t.Errorf("targets/builtins: %v %v", r.Targets, r.Builtins)
+	wantTargets := `{"Auto":"Auto","FO":"FO","LB":"LB","Sel":"Sel","block":"REJECT","direct":"DIRECT","hk1":"hk1","jp1":"jp1","其他":"其他","拒绝":"REJECT","直连":"DIRECT"}`
+	if jsonOf(r.Targets) != wantTargets || len(r.Builtins) != 0 {
+		t.Errorf("targets/builtins:\n got  %s %v\n want %s", jsonOf(r.Targets), r.Builtins, wantTargets)
 	}
 }
 
@@ -117,7 +118,7 @@ func TestGroupsBuiltinNameCollision(t *testing.T) {
 	// 节点叫 DIRECT:内置直连改别名,targets 跟着变
 	r := runGroups(t, `{"profile":{},"nodes":[{"type":"trojan","tag":"DIRECT","server":"a","server_port":1,"fields":{"password":"p"},"regionName":"HK"}],"groups":[]}`)
 	alias := "__openbox_builtin_DIRECT__"
-	if r.Builtins["DIRECT"] != alias || r.Targets["direct"] != alias || r.Targets["block"] != "REJECT" {
+	if r.Builtins["DIRECT"] != alias || r.Targets["direct"] != alias || r.Targets["block"] != "REJECT" || r.Targets["直连"] != alias || r.Targets["DIRECT"] != "DIRECT" {
 		t.Errorf("builtins=%v targets=%v", r.Builtins, r.Targets)
 	}
 }

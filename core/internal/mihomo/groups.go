@@ -88,8 +88,30 @@ func Groups(args any) (*GroupsResult, error) {
 		}
 		return n
 	}
-	out.Targets["direct"] = name("DIRECT")
-	out.Targets["block"] = name("REJECT")
+	// targets:档案里的出口名 → Mihomo 里的名字。上游 Node 用它判断一个出口名认不认识(终端分流、入口规则的出口),
+	// 并把认识的名字换成 Mihomo 侧的写法。键:节点、公开组、站点集、兜底(都原样),内置直连 / 拒绝的名字,
+	// 以及 "direct" / "block" 这两个关键字。
+	for _, p := range proxies {
+		n := jsx.ToString(p.(map[string]any)["name"])
+		out.Targets[n] = n
+	}
+	for _, t := range res.PublicTags {
+		out.Targets[t] = t
+	}
+	for _, p := range r.ActivePolicies {
+		out.Targets[p.Name] = p.Name
+	}
+	out.Targets[r.Fallback.Name] = r.Fallback.Name
+	for _, k := range []string{b.Direct(), "direct"} {
+		if k != "" {
+			out.Targets[k] = name("DIRECT")
+		}
+	}
+	for _, k := range []string{b.Block(), "block"} {
+		if k != "" {
+			out.Targets[k] = name("REJECT")
+		}
+	}
 	// 档案侧的名字 → Mihomo 侧的名字:内置直连 / 拒绝换成 DIRECT / REJECT。
 	mapName := func(tag string) string {
 		if b.Direct() != "" && tag == b.Direct() {
