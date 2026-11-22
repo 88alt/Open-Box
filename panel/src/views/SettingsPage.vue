@@ -10,45 +10,50 @@
          齿轮里的可见性弹窗中调整——这部分和改版前一致,只是它们从"顶部页签各占一格"
          变成了同一个页签里的若干张卡片。 -->
     <div
-      v-if="activeTab === SETTINGS_TAB.panel"
-      ref="scrollContainerRef"
-      class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+      v-tab-content="activeTab"
+      class="flex min-h-0 flex-1 flex-col"
     >
       <div
-        class="grid grid-cols-1 app-page-content app-card-gap"
-        :style="padding"
+        v-if="activeTab === SETTINGS_TAB.panel"
+        ref="scrollContainerRef"
+        class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
       >
-        <div class="flex flex-col app-card-gap">
-          <div
-            v-for="item in panelSections"
-            :key="item.key"
-            :id="`item-${item.key}`"
-            :data-key="item.key"
-            class="card"
-          >
-            <component :is="item.component" />
-          </div>
-          <!-- 测试站点:概览「站点延迟」测哪几个站,自成一张卡片,固定排在最后 -->
-          <div
-            id="item-testSites"
-            class="card"
-          >
-            <SiteLatencySettings />
+        <div
+          class="grid grid-cols-1 app-page-content app-card-gap"
+          :style="padding"
+        >
+          <div class="flex flex-col app-card-gap">
+            <div
+              v-for="item in panelSections"
+              :key="item.key"
+              :id="`item-${item.key}`"
+              :data-key="item.key"
+              class="card"
+            >
+              <component :is="item.component" />
+            </div>
+            <!-- 测试站点:概览「站点延迟」测哪几个站,自成一张卡片,固定排在最后 -->
+            <div
+              id="item-testSites"
+              class="card"
+            >
+              <SiteLatencySettings />
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 其余三个页签直接装载原来的整页组件。它们各自带着自己的滚动容器与工具栏,
-         塞进上面那种 .card 里会套出两层滚动条,所以这里让它们自己撑满剩余高度。 -->
-    <div
-      v-else
-      class="min-h-0 flex-1 overflow-hidden"
-    >
-      <component
-        :is="activeTabComponent"
-        v-bind="activeTabProps"
-      />
+      <!-- 其余三个页签直接装载原来的整页组件。它们各自带着自己的滚动容器与工具栏,
+           塞进上面那种 .card 里会套出两层滚动条,所以这里让它们自己撑满剩余高度。 -->
+      <div
+        v-else
+        class="min-h-0 flex-1 overflow-hidden"
+      >
+        <component
+          :is="activeTabComponent"
+          v-bind="activeTabProps"
+        />
+      </div>
     </div>
   </div>
 </template>

@@ -3,6 +3,7 @@
     <ProxiesCtrl />
     <div
       ref="proxiesRef"
+      v-tab-content="proxiesTabShow"
       class="max-md:scrollbar-hidden min-h-0 flex-1 overflow-x-hidden"
       :class="disableProxiesPageScroll ? 'overflow-y-hidden' : 'overflow-y-scroll'"
       :style="padding"
