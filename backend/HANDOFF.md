@@ -1,7 +1,7 @@
 自研后端交接笔记(第 2 版,只管 backend;core 另见 core/HANDOFF.md)
 
 写给下一位接手后端的 AI。读完这份,再按顺序读 backend/README.md、backend/docs/DESIGN.md、backend/STATUS.md、backend/docs/ENDPOINTS.md,
-就可以接着做,不用反复问维护者。进度要看两处并对账:backend/STATUS.md 和 main 下的提交记录(git log -- backend);本文的进度是 2026-10-26 的快照。
+就可以接着做,不用反复问维护者。进度要看两处并对账:backend/STATUS.md 和 main 下的提交记录(git log -- backend);本文第三节的进度是 2026-11-23 的快照(对齐到上游 v0.1.478)。
 
 
 # 零、先读这一节
@@ -26,7 +26,7 @@
 
 # 一、已定决策(详细见 docs/DESIGN.md 第二节)
 
-Go 1.25.12 静态编译;模块名 github.com/timeflysoon/Open-Box/backend;接口契约就是 ENDPOINTS.md 加前端 TypeScript 类型;
+Go 静态编译(backend/go.mod 现为 go 1.25.4,core/go.mod 是 1.25.12,统一版本由维护者定);模块名 github.com/timeflysoon/Open-Box/backend;接口契约就是 ENDPOINTS.md 加前端 TypeScript 类型;
 第一阶段用子进程方式调 core;不校验 hello 的 buildID;数据先用 JSON 文件加原子写;认证用密码哈希加会话 Cookie 加登录限速;
 前端静态文件由后端提供;订阅"登录"来源暂返回 501;教程视频返回空列表;默认监听 0.0.0.0:3036;只依赖标准库和少量成熟库,引入依赖要在提交说明里写理由。
 "变更安全"是最重要的一条:任何改 DNS、防火墙、路由、sing-box 启停的操作都要先校验再应用、可回滚,无法确认系统状态时返回错误而不是猜(DESIGN 第四节)。
@@ -36,33 +36,46 @@ Go 1.25.12 静态编译;模块名 github.com/timeflysoon/Open-Box/backend;接口
 
 - 自研只在 main;catch-up-upstream 纯拉取上游,是上游的备份。
 - main 的内容每次由维护者本机的 sync-main.sh 重新生成:除 panel/ 和 KEEP 目录外都被上游版本覆盖。backend/ 在 KEEP 里,不会被覆盖。
-  KEEP 的目标内容:core、backend、.github/workflows、scripts;实际以维护者本机的 sync-main.sh 为准。KEEP 只能写目录。
+  KEEP 的内容(2026-11-23 维护者贴出 sync-main.sh 核实):core、backend、.github/workflows、scripts,共这四项,只能写目录。
+  KEEP 只保留 main 里已有的目录:目录一旦从 main 消失(backend.yml 曾被同步删过三次),以后同步不会再补回来。所以 main 上的 .github/workflows/backend.yml 不要删,也不要改成别的位置。
+  openwrt/、debian/、docker/、docs/、templates/ 不在 KEEP 里,每次同步都被上游覆盖;自写的服务脚本、安装脚本不能放在那里(M6 的放法见 docs/M6.md)。
 - 自己的东西放进这些目录,放在别处会在下次同步时丢失。根目录的 .gitignore、README.md 等会被上游覆盖,忽略规则写在 backend/.gitignore 里。
 - 后端有独立的 Actions 工作流(vet、test、编译 amd64 / arm64),不动 release.yml(它是上游版本,会被同步覆盖)。
 - 过渡期的发布版本号规则 v0.1.<上游号>-main.<n>,正式发布前由维护者重定;main 上不要随便跑完整的 Release(会建标签并发布)。
 
 
-# 三、进度标记(2026-10-26 快照;细项以 STATUS.md 为准)
+# 三、进度标记(2026-11-23 快照;细项以 STATUS.md 为准)
 
-图例:[x] 完成  [~] 代码完成、待真机或待云端确认  [ ] 未做
+图例:[x] 完成  [~] 代码和单元测试完成、待真机或云端确认  [ ] 未做
 
-[x] M0 骨架:HTTP 服务、日志、原子写存储、静态文件、鉴权(auth/*)、storage 与 background-image、Actions 首次运行全绿
-[~] M1 配置流水线:已完成 core 客户端、profile 与 defaults、订阅(拉取 / 解析 / 增删改查 / 排序 / 刷新 / 预览 / 改名规则 / Clash 格式)、
-    groups、rulesets 的 preview 与 import、config/preview(配置生成)、节点测速(nodes/latency、chain-proxies/latency)。
-    配置生成与校验(internal/singbox)的 Check 只用假的 sing-box 脚本测过,需真机用真实内核验证。
-[ ] M1 未完成:policies/entries、rulesets entries 与 refresh、原子替换 → 健康检查 → 回滚、生成配置引用的本地规则集文件落盘、service、kernel、真机联调
-[ ] M2 DNS 与过滤;M3 观测;M4 自动化(订阅定时更新、failover);M5 系统运维(backup、deploy、factory-reset、update 等);M6 打包与发布
+[x] M0 骨架:HTTP 服务、日志、原子写存储、静态文件、鉴权(auth/*)、storage 与 background-image、Actions 工作流
+[~] M1 配置流水线:core 客户端、profile 与 defaults、订阅(含 Clash 格式、改名规则、定时更新)、groups、rulesets、policies/entries、config/preview、
+    节点测速、本地规则集落盘、原子替换 → 健康检查 → 回滚的 Deployer、service / kernel/version(conflicts、pendingRestart)。真机联调还没做。
+[~] M2 DNS 与过滤:dns*(wan、region-detect、flush-cache、upstream-test、接管与撤销)、dns-filter*、content-filter*(五种格式解析 + 随包默认)、
+    client-config / client-app(配对、token 子资源、分享码路径,对齐上游 v0.1.402 / v0.1.412)、servers/port-check、subscription-shares*、clients。
+[~] M3 观测:traffic*、latency-history*、site-latency、node-info/{tag}(含 entry-country、exit)、node-quality、nodes/latency/queue、route-test、
+    terminal-test(含 kernelDns、firstLayer)、penetration、system/resources、diagnostics。
+[~] M4 自动化:订阅定时更新、failover*、延迟历史采集、带宽择优(重写后的版本)。
+[~] M5 系统运维:deploy*、rollback、factory-reset、update 第一部分(status / check / notes)、时区、backup。
+[ ] 未做:
+    - 双内核(sing-box / Mihomo)与内核切换:第 1、2 步和 core 的 3a–3d 已做,后端 3e(Go 版 mihomo.yaml 装配)和第 4–7 步没做。
+    - 前后端对账缺口(STATUS 同名一节):node-info/sharing/{ip}、profile/target-routing、subscriptions/updates(面板也要做)、kernel/switch。
+    - 节点评分权重进内核配置:要维护者确认魔改内核的字段名,确认前不改 core。
+    - update 第二部分与 M6 打包发布:设计草案在 docs/M6.md,等维护者确认。
+    - 真机联调(维护者做):所有 [~] 条目。
+有意不做:激活 / 授权;例外 A、B、C(见 core/HANDOFF.md 与 STATUS「对齐口径」):教程、市场推广、AI 中转、业务优选整体、overview-links(上游概览顶栏的外链,改显示版本号)等。
 
 
 # 四、后续工作(按顺序)
 
-1. 先做 M1 的部署部分:本地规则集文件落盘、原子替换加健康检查加回滚、service、kernel。没有它们,生成的配置跑不起来。
-   落盘必须先于部署:没有规则集文件,sing-box check 会因文件不存在而失败。
-2. M1 真机联调:添加订阅 → 生成配置 → sing-box 启动成功(维护者做)。
-3. M2 到 M5 按 STATUS.md 的顺序。
-4. M6 打包与发布:编译 amd64 / arm64 的后端,打包 panel/dist、openbox-core、sing-box 内核、安装与卸载脚本;与 main 的发布流程对接。
-5. 清理旧文件 scripts/native-arm64/:真机联调通过之后,单独一个提交。
-6. 前端和 ENDPOINTS.md 对不上时,先改 ENDPOINTS.md 再改实现,同一个提交里完成。
+1. 先对账(第零节第 2 条),再做 STATUS「先做」小节(目前都已打勾,新增的会放在那里)。
+2. 「前后端对账缺口」里不依赖 core / 真机 / 维护者的条目:node-info/sharing、target-routing、subscriptions/updates;每条前后端分别对齐上游,ENDPOINTS.md 同一提交里补上。
+3. 双内核:3e 和第 4、5 步(kernel/switch/preflight 与 kernel/switch);第 6、7 步涉及同步覆盖的目录和打包,要维护者确认放哪。
+4. 上游出新版本时(catch-up-upstream 更新):按 core/HANDOFF.md 第四节第 7 条的方法对账,即面板文案键集对上游打包产物、面板和上游打包产物调用的接口对后端路由;
+   结果写进 STATUS「前后端对账缺口」。上游自 v0.1.463 起后端是闭源二进制,v0.1.462(bfd33a70)是最后一版明文 Node,只能对着前端行为和公开材料对齐。
+5. update 第二部分 + M6(docs/M6.md):维护者确认后做。
+6. 真机联调通过后,单独一个提交清理 scripts/native-arm64/。
+7. 前端和 ENDPOINTS.md 对不上时,先改 ENDPOINTS.md 再改实现,同一个提交里完成。
 
 
 # 五、跟随上游
@@ -113,9 +126,9 @@ Go 1.25.12 静态编译;模块名 github.com/timeflysoon/Open-Box/backend;接口
 - 所有改动 go vet ./... 和 go test ./... 全绿才交补丁。
 
 
-# 九、提交记录(backend,新的在最上面;完整以 git log -- backend 为准)
+# 九、提交记录(backend 相关,新的在最上面;完整以 git log -- backend 为准)
 
-5aa6e21 M1 节点测速;244daf3 M1 配置生成与 sing-box check;057fd18 M1 rulesets preview / import;05fda53 M1 groups;b68287c M1 订阅改名规则;
-40dcca8 M1 Clash 格式解析;9a27dff M1 订阅接口;a978177 M1 订阅拉取与解析;e325a79 M1 profile 与 defaults;0684316 M1 core 客户端;
-9b32137 M0 确认云端 Actions 首次全绿;1665127 M0 Actions 工作流;46d9571 M0 storage;775da48 M0 auth;292f024 M0 静态文件;73c7491 M0 存储;
-4542ff3 M0 HTTP 服务;8782bcc M0 go.mod 与入口;3ffa443 设计文档、接口清单、进度清单与交接规则
+dd05d672 前后端对账(v0.1.478);e8e1e40e 订阅节点分享;fef1ed3c 双内核第 1、2 步;0c24d1cf 对齐 v0.1.477 批次 1(订阅重启提示等);
+e7a7a4b0 订阅链接单条启停与直连;1378566e 节点评分权重;b1a207ca 修三处测试失败;856c86de rollback;a88e0692 nodes/latency/queue;
+7c150915 node-quality 对齐 v0.1.423;34046645 terminal-test kernelDns;1965a722 terminal-test firstLayer;
+更早的 M0 / M1(骨架、鉴权、订阅、配置生成、测速等)见 git log。

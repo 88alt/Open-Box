@@ -7,10 +7,10 @@
 ## 2. 已定的决定(接手者不用再问)
 | # | 决定 | 理由 |
 |---|---|---|
-| D1 | 语言:**Go**,`go.mod` 写 `go 1.25.12`(与 `core/go.mod` 一致),`CGO_ENABLED=0` 静态编译 | 与 `core/` 同语言;路由器上不需要 Node 运行时;单文件易部署 |
+| D1 | 语言:**Go**,`backend/go.mod` 现为 `go 1.25.4`(`core/go.mod` 是 1.25.12;统一版本要同时改 go.mod 和 CI,由维护者定),`CGO_ENABLED=0` 静态编译 | 与 `core/` 同语言;路由器上不需要 Node 运行时;单文件易部署 |
 | D2 | 模块:`backend/` 自带 `go.mod`,模块名 `github.com/timeflysoon/Open-Box/backend` | 与 `core/` 分开发布 |
 | D3 | 接口契约 = `docs/ENDPOINTS.md` + `panel/src/api/*.ts` 里的 TypeScript 类型;JSON,同源,不开 CORS | 前端就是规格 |
-| D4 | 与 `openbox-core` 的集成:**第一阶段用子进程**,走 `core/README.md` 描述的 stdin/stdout JSON 协议(`protocol:1`,15 个方法 + `hello`) | `core/` 的金标准测试保持有效、零改动;`core/internal` 不能被别的模块直接 import |
+| D4 | 与 `openbox-core` 的集成:**第一阶段用子进程**,走 `core/README.md` 描述的 stdin/stdout JSON 协议(`protocol:1`,19 个方法 + `hello`,其中 4 个是 Mihomo 方法,见 `core/README.md`) | `core/` 的金标准测试保持有效、零改动;`core/internal` 不能被别的模块直接 import |
 | D5 | 不校验 `hello` 返回的 `buildID`(那是为上游 Node 服务端写死的期望值);只要求 `implementation:"go-native"`、`protocol:1` | 自己的后端自己的核心 |
 | D6 | 持久化:**JSON 文件 + 原子写**(写临时文件 → fsync → rename),进程内用互斥锁串行化同一文件的读改写。流量 / 延迟历史等时序数据到 M5 再决定是否引入嵌入式数据库(优先纯 Go、无 CGO) | 路由器上依赖越少越好;配置数据量小 |
 | D7 | 认证:首次设置密码(`/api/auth/setup`)→ 登录得到会话 Cookie(`HttpOnly`、`SameSite=Strict`);密码存哈希;登录失败做限速。**实现(M0)**:哈希用标准库 `crypto/pbkdf2`(PBKDF2-HMAC-SHA256,60 万次,哈希串带算法名和迭代次数,可平滑升级),不用 scrypt / argon2id;会话是无状态签名 Cookie(30 天),改密换密钥使其它会话失效 | 面板在局域网,但仍要防暴力破解。沙盒拉不到 `golang.org/x/crypto`,无法验证带依赖的 `go.sum`;PBKDF2 零依赖,也比 scrypt / argon2id 省内存,适合路由器。以后要换算法,新增一种哈希前缀即可,不影响旧密码 |
@@ -19,7 +19,7 @@
 | D10 | 只依赖标准库和少量成熟的第三方库(例如 `golang.org/x/crypto`);每引入一个依赖要在提交说明里写理由 | 体积和供应链风险 |
 
 ## 3. 运行环境与路径
-- 目标系统:OpenWrt(procd)、Debian(systemd);仓库里的 `openwrt/`、`debian/`、`docker/` 是上游留下的安装与镜像脚本,**目前不是本后端的规格**。
+- 目标系统:OpenWrt(procd)、Debian(systemd);仓库里的 `openwrt/`、`debian/`、`docker/` 是上游留下的安装与镜像脚本,**目前不是本后端的规格**;它们不在 `sync-main.sh` 的 KEEP 里,每次同步都被上游覆盖,自写的服务脚本、安装脚本不能放在那里(放法见 `docs/M6.md`,双内核第 6 步同理,要维护者确认)。
 - 所有路径集中在 `internal/system/paths.go`(数据目录、配置目录、sing-box 可执行文件、`openbox-core`、前端 `dist`),全部可用命令行参数或环境变量覆盖;默认值先取通用位置,**M6 打包时**再与安装脚本对齐。
 - 配置文件、数据文件的权限:仅 root 可读写(含密码哈希、订阅地址、订阅账号)。
 
@@ -88,7 +88,7 @@
 | 内容过滤五种格式的计数与 `arguments` | 按段落逐行计数:`ruleCount` 规则行、`scriptCount` 脚本或带脚本的重写、`skipped` 认不出的行(不报错);`arguments` 只做 `{{{名字}}}` 的文本代入,没给值的保持原样;先做 surge / loon / shadowrocket,再 quantumultx 和 stash;抓取复用 `rulelist.Fetch`(http(s),8 MiB) |
 | 配对码封包(`client-config/file`、公开同步) | 对齐上游 v0.1.402:`format=open-box-client-sealed` / `version=1` / `router` / `kdf:{alg:pbkdf2-sha256,iterations:200000,salt}` / `data=base64url(iv\|\|ct\|\|tag)`;配对码 4 位 `A-Z0-9`,nonce 24 位十六进制;AES-256-GCM 无 AAD;同步开关关着回 403,按 IP 限速;**与上游 App 互通** |
 | 订阅分享的对外链接 `/sub/<token>` | 按 User-Agent 或 `?format=` 选格式,默认 base64 分享链接,先做 base64 + `singbox`、后做 `clash`;路由在 `/api/` 鉴权之外;存 token 的 SHA-256、先哈希再查表;失败一律同样的 404,按 IP 对失败限速、超限 429;内容按「分享 id + 节点池版本 + 订阅更新时间」缓存,`ETag` / 304,最多并发生成 2 份;`no-store`,带 `subscription-userinfo`,日志不打 token |
-| 带宽择优(3414adff) | 整体回退(`git revert`,不改写历史),按前端 `BandwidthSettingsCard` 和 sing-box 公开文档重写;core 层 e5f8d5ab 保留。回退期间 `GET /api/openbox/bandwidth` 返回 404 |
+| 带宽择优(3414adff) | 整体回退(`git revert`,不改写历史),按前端 `BandwidthSettingsCard` 和 sing-box 公开文档重写;core 层 e5f8d5ab 保留。重写已完成(见 STATUS 的带宽择优条目),`GET /api/openbox/bandwidth` 已恢复 |
 | `route-test` 的 `dns.stale` / `debug`、`penetration` 的 `firstLayer` / `preMatch` | 不做:前端没规定含义,或依据的是上游部署产物。`route-test` 的 `context` 留到 `terminal-test` 做探测时一起做 |
-| Docker 平台 | 不在范围(目标平台只有 OpenWrt 和 Debian) |
+| Docker 平台 | 不在范围(目标平台只有 OpenWrt 和 Debian);`docker/` 是上游同步目录,会被覆盖 |
 | M6 发布包设计 | 由后端起草,另出文档(`docs/M6.md`)交维护者过目;确认前不动 `update*` 第二部分和打包的代码。发布签名 v1 不做(只做 SHA256 加 HTTPS),需要签名时由维护者生成密钥并放进 Actions secrets |

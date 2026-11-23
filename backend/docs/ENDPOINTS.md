@@ -4,7 +4,7 @@
 这份清单是后端要实现的**接口契约**:路径、方法以这里为准;请求体 / 响应体的具体字段以对应的 TypeScript 类型(`api/openbox.ts` 里同名接口)为准。
 提取是脚本做的,可能漏掉动态拼接的路径、把同一路径的多个方法合并,或把「URL 常量」误记成 GET(`/api/auth/*`、`/api/storage`、`/api/background-image` 已人工校正);发现遗漏时直接在这里补上,并在 `backend/STATUS.md` 对应位置记一笔。
 
-共 103 个(方法, 路径)组合,89 个不同路径(`/api/auth/*`、`/api/storage`、`/api/background-image` 校正后组合数略有增加)。
+初次提取时共 103 个(方法, 路径)组合、89 个不同路径;之后前端陆续增加(双内核、节点分享等),总数不再维护,以各节为准。
 
 ## 鉴权与错误码约定(以 `store/auth.ts` 为准,已实现)
 
@@ -545,6 +545,20 @@
 | GET | `/api/storage` | `fetchRemoteSnapshot` (helper/persistentStorage.ts:85) | `{ entries: Record<string,string> }` | — |
 | PUT | `/api/storage` | `saveRemoteSnapshot` (helper/persistentStorage.ts:108) | `{ ok, count }`(前端不读响应体) | `{ entries }`,整体替换;只保留 `config/` 开头的字符串条目 |
 
+## 已知缺口(前端在调、后端还没有,2026-11-23 对账)
+
+做完一条就把它挪进对应分组的小节,并在 `STATUS.md`「前后端对账缺口」打勾。
+
+| 方法 | 路径 | 前端函数(文件) | 响应类型 | 参数 |
+|---|---|---|---|---|
+| GET | `/api/openbox/node-info/sharing/{ip}` | `fetchNodeSharing` (api/openbox.ts) | OpenboxNodeSharing | (ip: string, refresh = false → `?refresh=1`) |
+| GET / POST / DELETE | `/api/openbox/profile/target-routing` | `TARGET_ROUTING_URL` 的调用 (api/openbox.ts) | OpenboxTargetRouting* | 见同文件类型 |
+| GET | `/api/openbox/kernel/switch/preflight?kernel=` | `fetchKernelSwitchPreflight` (api/openbox.ts) | NDJSON 或 JSON,见 STATUS 双内核第 4 步 | (kernel: 'sing-box' \| 'mihomo') |
+| POST | `/api/openbox/kernel/switch` | `switchRouterKernel` (api/openbox.ts) | OpenboxServiceActionResult | (kernel) |
+| GET | `/api/openbox/subscriptions/updates?since=` | 上游订阅页在调,main 面板还没有 | 待对齐 | 前后端都要做;补之前 `subscriptions/{id}` 会把 `updates` 当订阅 id 接走 |
+
+不做:`/api/openbox/overview-links`(上游概览顶栏外链,例外 B)。
+
 ## 后端自带的接口(前端不调用)
 
 | 方法 | 路径 | 说明 |
@@ -575,3 +589,10 @@
 - `GET /client/v1/:routerId/share/:serverId/pair` → `{nonce}`(当前代数 gen)。
 - `POST .../pair` body `{nonce,proof}` → `{sealed}`(base64url,明文 `{link,gen}`);proof 用 `openbox-share:routerId:serverId` 派生密钥。
 - 与 `GET /client/v1/share?sid=&g=` 并存。router/服务器不存在 → `404 unpaired`。
+
+### App 公开路由(对齐上游 v0.1.412,已实现)
+
+- `GET /client/v1/home/:routerId` → `{ok:true}`。
+- `GET /client/v1/:routerId/regions` → `{groups, nodes, server, background, testSites}`。
+- `GET /client/v1/:routerId/background`:面板背景图(与 `config/:token/background` 同一张),只校验 routerId。
+- `GET /client/v1/:routerId/geodata/:tag`:规则库文件,只校验 routerId,不要求 token。

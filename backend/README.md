@@ -4,10 +4,11 @@
 目录名故意不用 `panel/server`:同步脚本会把 `panel/server` 从 main 里剔除,而 `backend/` 在 `sync-main.sh` 的 `KEEP` 里,不会被上游覆盖。
 
 ## 接手前先读(按顺序)
-1. 本文件:规则和工作方式。
+1. 本文件:规则和工作方式;再读 `HANDOFF.md`(交接笔记、协作约定、同步与 KEEP 规则)。
 2. `docs/DESIGN.md`:架构、已定的决定、分阶段计划、每阶段的验收标准。
 3. `STATUS.md`:进度清单。**从第一个没打勾的条目开始做**,不要跳阶段。
-4. `docs/ENDPOINTS.md`:前端调用的全部接口(方法、路径、前端函数、类型位置)。这是接口契约。
+4. `docs/ENDPOINTS.md`:前端调用的全部接口(方法、路径、前端函数、类型位置)。这是接口契约。改接口时再读。
+5. `docs/M6.md`:打包与发布的设计草案,只在做 update 第二部分 / M6 时读;确认前不动相关代码。
 
 ## 怎么接着做(不用再问维护者)
 1. **先对账,再动手**:`git fetch` 后把 `git log --oneline origin/main -- backend/`(必要时加 `--stat`)和 `STATUS.md` 对照着看。
@@ -36,20 +37,16 @@
 - 前端联调:在 `panel/` 下 `ZASHBOARD_DEV_PROXY_TARGET=http://<路由器IP>:<端口> npm run dev`,把前端的 `/api` 代理到真实后端。
 - 沟通用中文,简洁,先说结论。
 
-## 目录(目标结构,随进度创建)
+## 目录(以实际为准)
 ```
 backend/
-  README.md  STATUS.md  .gitignore
-  go.mod                      module github.com/timeflysoon/Open-Box/backend
-  cmd/openbox-backend/        入口
-  internal/
-    server/   HTTP 路由、中间件、静态文件、会话
-    api/      按接口分组的处理函数(与 docs/ENDPOINTS.md 的分组一一对应)
-    store/    持久化(原子写)
-    core/     openbox-core 子进程客户端(stdin/stdout JSON 协议)
-    singbox/  配置落盘、sing-box check / 启停 / 热重载
-    sub/      订阅拉取、解析、定时更新
-    system/   DNS 接管、防火墙、dnsmasq、服务控制、时区等
-    probe/    测速、站点延迟、流量采集
-  docs/       DESIGN.md  ENDPOINTS.md
+  README.md  HANDOFF.md  STATUS.md  .gitignore  go.mod
+  cmd/openbox-backend/        入口与接线(main.go)
+  internal/api/<分组>/        HTTP 处理函数,与 docs/ENDPOINTS.md 的分组一一对应
+  internal/<业务包>/          服务层:订阅(sub、subs)、节点组、规则集、配置与部署(singbox)、DNS(dnsfilter、dnsforward、dnssync ...)、
+                              观测(traffic、latencyhistory、sitelatency、nodeinfo、nodequality ...)、客户端 App(clientapp、subshare ...)、
+                              鉴权(auth)、存储(store,原子写)、core 子进程客户端(core)等
+  internal/system/            会改系统的代码(DNS 接管、服务控制、路径、虚拟终端等),通过接口抽象,测试用假实现
+  docs/       DESIGN.md  ENDPOINTS.md  M6.md
 ```
+包的完整列表看 `ls internal`;新增包时不用改这里,STATUS 的条目里写明包名即可。

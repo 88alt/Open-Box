@@ -24,9 +24,11 @@
 - **参考**:只读 catch-up-upstream 与随包默认、前端 `panel/src`、自研 `core/`(只读)、sing-box 等公开文档。实现全部写在 `backend/`,不把上游闭源程序当依赖。
 - **条目写法**:要对齐上游时写明「对齐上游 vX.Y.Z 的〈行为/默认〉」;日志写清对齐了什么、参考了哪类材料。
 - **边界**:任何授权/激活绕过相关的不做。
-- **有意不做**:激活码、会员、市场推广、授权校验等产品边界内的能力(与 panel 有意不引用的 i18n 键一致)。、业务优选(整体不做,见上面 M1 的对应条目)
+- **例外 B 的后端侧**:`overview-links`(上游概览顶栏的机场 / VPS / AI 中转外链)有意不做;面板顶栏改显示 Open-Box Latest 和魔改 sing-box 最新版本号,取值来源待维护者定(见「前后端对账缺口」最后一条)。
+- **有意不做**:激活码、会员、市场推广、授权校验等产品边界内的能力(与 panel 有意不引用的 i18n 键一致)。业务优选整体不做(例外 C:设置页卡、概览统计卡、内核按连接证据选路,以及对应的接口、档案字段、三语键都没有)。
 
-## 状态:M1 进行中
+## 状态(2026-11-23)
+M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云端确认;未做:双内核 3e 与第 4–7 步、「前后端对账缺口」几条、update 第二部分与 M6。总览见 `HANDOFF.md` 第三节。
 
 ## M0 骨架
 - [x] `go.mod`、`cmd/openbox-backend`、参数 / 环境变量 / 路径(`internal/system/paths.go`)
@@ -197,10 +199,13 @@
 - [ ] `GET /api/openbox/node-info/sharing/{ip}`(`?refresh=1`):main 与上游面板都在调,后端现在只有 `node-info/{tag}`、`/entry-country`、`/exit`
 - [ ] `GET /api/openbox/kernel/switch/preflight` 与内核切换接口:就是上面双内核的第 4 步,这里只是提醒面板已经在调
 - [ ] `GET /api/openbox/subscriptions/updates?since=`:上游订阅页在调(main 面板还没有这个调用,前后端都要做);在后端补之前,`subscriptions/{id}` 会把 `updates` 当订阅 id 接走
+- [x] `docs/ENDPOINTS.md` 补上上面几条缺口和 `/client/v1/{id}/regions|background|geodata/{tag}` 三条公开路由,去掉过时的总数(2026-11-23)
+- [~] 恢复 `.github/workflows/backend.yml`(原样取自 a0c31847;`sync-main.sh` 的 KEEP 含 `.github/workflows`,此后同步不再删)。**需维护者**推送后看 Actions 首次运行是否全绿
 - [ ] (面板的活,记在这里免得丢)侧边栏的 `OverviewCarousel`:上游有,main 没有;例外 B 要求的「Open-Box Latest」和魔改 sing-box 最新版本号也没做,取值来源待维护者定
 
 ## 日志(新的在最上面)
 
+- 2026-11-23 docs: 前后端对账第二轮(只读 + 文档订正)。方法:上游 v0.1.478 的 panel/dist 全部分块(92 个)提取接口路径、三语文案键,对 main 的 panel/src 和 backend 的 `HandleFunc` 路由。结果:三语键集与文案和上游一致(缺的 38 个键全是例外 C,文案只差例外 B 的 `chainProxyEmptyHint`);上游前端调用而后端无路由的仍是上面 5 条加 `overview-links`(例外 B 有意不做);只核了路径,响应字段没逐个核。订正 HANDOFF(第三、四、九节换成当前进度,KEEP 规则按 sync-main.sh)、README(阅读顺序、目录)、DESIGN(go 版本、core 方法数 19、带宽择优、Docker)、ENDPOINTS(补缺口)、M6(§12.1 已答);恢复 backend.yml。沙箱没有 Go,没跑测试(只改文档和 workflow)。
 - 2026-11-23 docs: 前后端对账(只读;面板文案三语 2213 / 2251 键,缺的 38 个全是例外 C 的业务优选,其余与上游 v0.1.478 一致;面板接口对后端路由找出上面 5 条缺口);勾掉 3d(core 侧 `mihomoCompatibility` 早已提交,这里漏勾);core/HANDOFF.md、core/README.md 同步订正(例外 A / B / C 整理、发布一节失效、build.sh 不再依赖 panel/server/index.mjs)。
 - 2026-11-22 backend: 订阅预览里单个节点「分享」(对齐上游 v0.1.478 的 SubscriptionsPage:节点行多一颗分享按钮,弹窗给链接和二维码;依据 panel/dist 里的请求 `POST /api/openbox/subscriptions/node-share`,请求体 = 预览同一套来源与改名规则 + `originalTag` / `occurrence` / `newTag`,响应 `{name, link}`)。`sub.EncodeLink` 是 `parseLink` 的反向(ss SIP002 / vmess v2rayN / vless / trojan / hysteria2 / tuic / anytls / socks5 / http(s);tls、reality、ws / grpc / h2 / httpupgrade、obfs、跳跃端口、ss 插件都写得回去),往返测试保证 `parseLink(EncodeLink(n))` 的字段与 n 一致;类型或字段不支持返回 `*sub.ErrNoShareLink`。接口在 `internal/api/subscriptions/nodeshare.go`:服务端按来源重新解析订阅(`PreviewNodes`),按 `originalTag` 加「第几个同名」(`occurrence`,从 0 数)取节点,名字用 `newTag`(空 = 规则算出的名字),所以含密码的节点配置不经浏览器往返;找不到 404、参数不合法 400、登录来源 501、拉取失败 502、节点生成不出链接 400(带原因)。同一条里补了 ENDPOINTS.md。注意:`nodes/latency` 目前仍不认 `occurrences`,同名节点测速取第一个(上游已带 occurrences),另记。
 - 2026-11-22 backend: 双内核第 1、2 步(对齐上游 v0.1.477 的面板批次 2;参考 v0.1.462 `bfd33a70` 的 `panel/server/index.mjs`:`$e` 读 `router-kernel`、`oc` 读版本、`/kernel/version`、`/service/status` 的 `core.kernel`)。一、`internal/system/kernel.go`:`KernelSingBox` / `KernelMihomo`、`ReadRouterKernel`(文件不存在或路径为空 = sing-box;内容去掉首尾空白后只认 `sing-box` / `mihomo`,否则 `ErrInvalidRouterKernel`;其它读错误原样返回,不当成没有选择)、`Paths` 的 `RouterKernelFile` / `MihomoConfigFile` / `MihomoEntryBypassFile` / `MihomoDnsmasqFile` / `MihomoInputsFile`(都在 `ConfigDir`)和 `MihomoHome`(`DataDir/mihomo`);`Paths.Mihomo` + `-mihomo` / `OPENBOX_MIHOMO`。二、`singbox.ReadMihomoVersion`:运行 `mihomo -v`,版本取标准输出第一行整行(上游同样读法,面板自己整理成 `mihomo-1.19.34`),退出码 0 且第一行非空才 OK,`Raw` 是标准输出加标准错误。**用真实 Mihomo v1.19.34 验证过**:`-v` 第一行是 `Mihomo Meta v1.19.34 linux amd64 with go1.26.11 …`(`TestReadMihomoVersionRealBinary`,PATH 里没有 mihomo 就跳过)。三、`GET /api/openbox/kernel/version` 回 `{kernel, version, raw, ok, mihomoAvailable}`:选了 mihomo 就读 Mihomo 的版本,否则读 sing-box 的(原有行为不变);`mihomoAvailable` = `Paths.Mihomo` 能在 PATH / 路径里找到;选择文件无效回 500。`GET /api/openbox/service/status` 的 `core` 多带 `kernel`(选择文件无效时不带,不拖垮状态接口)。四、`mihomoTlsSniffPorts`:档案默认 `""`,校验同 `bypassPorts`(`checkPorts`);改它暂不提示重启(`profileKeyIgnored`)。**注意**:前端只在 `kernel/version` 回了 `kernel` 时才显示内核切换框,所以这一批合并后内核页会出现切换框;`bin/mihomo` 找不到时框旁提示「当前安装包未包含 Mihomo」且不能切;**找得到时点切换会 404**(`POST /kernel/switch` 是第 5 步),在第 5 步做完之前不要在真机上放 Mihomo 可执行文件。**未做**:第 3 步 core 的 Mihomo 配置生成与兼容性(要维护者确认功能边界和 `mihomo-entry-bypass.nft` 的做法)、第 4 步预检、第 5 步切换、第 6 步服务脚本(要维护者确认放哪)、第 7 步打包。测试:`system/kernel_test.go`(选择文件各种内容、路径、`-mihomo` 的默认 / 环境变量 / 命令行 / 空值)、`singbox/version_test.go`(假 Mihomo 脚本 + 真实二进制)、`api/service`(选 sing-box / mihomo / 无 Mihomo / 选择文件无效;`status` 的 `core.kernel` 各情况)、`profile`(`mihomoTlsSniffPorts` 合法 / 空 / 越界 / 范围反 / 类型错);`gofmt -l` 无输出、`go vet ./...`、`go test ./...` 全绿。
