@@ -89,8 +89,21 @@ Go 静态编译(backend/go.mod 现为 go 1.25.4,core/go.mod 是 1.25.12,统一�
 - 实现与测试自己维护;上游安装包不必放进 backend/。
 
 产品边界(与对齐无关)
-- 不加激活机制;激活相关接口固定返回「无需激活」。
-- 有意不与上游一致的入口/文案,与 panel 侧约定一致(激活码、推广、教程等不引用;链式代理空状态、下载卡、概览顶栏等见 core/HANDOFF 与 panel 约定)。
+- 不加激活机制;授权三个方法固定返回「未限制」。
+- 有意不与上游一致、同步时不要改回、也不要补回的(2026-11-23 维护者给出的完整清单;除 A / B / C 外,main 里没有别的自有键,也没有别的有意缺失的键):
+  A. 键保留,main 有意不引用:
+    - 激活码类、comingSoon 的键;
+    - 教程类的键:后端设置页顶部的「使用教程」按钮(YouTube 图标,tutorialButton / tutorialHint / tutorialChecking / tutorialCheckFailed)。main 不放这个按钮,也不做教程视频列表相关的面板与后端;
+    - marketPromo、aiRelayLabel、aiRelaySubscription、aiRelayOnDemand(上游已不引用,main 也不引用)。
+  B. 键保留,但 main 的显示或代码有意不同:
+    - 链式代理空状态:不显示「安格超市」链接。ChainProxyManager.vue 若出现 chainProxyEmptyHintSuffix 或该链接,删除;
+    - 客户端下载卡:不要「极速下载用 DownMan」。ClientDownloadsCard.vue 若出现 DOWNMAN_URL 或 clientDownloadFastWith,删除;
+    - 概览页顶部文案:「机场、VPS 安格超市 | 原生住宅 IP TOPIP」改为 Open-Box Latest;「AI 中转站 · 订阅服务 SUPERDOOR | 按需付费 OPENDOOR」改为魔改 sing-box 最新版本号。
+  C. 整体不做:键、面板、后端、core 全部没有(覆盖核心原则第 1 条):
+    - 「业务优选」相关的一切都不要:设置页「业务优选」卡、概览页「业务优选」统计卡、内核按连接证据选路,以及对应的接口、档案字段和三语键;
+    - 键按前缀识别,上游以后新增同类的键也不补:businessOverview*、businessPreference*、businessSettingsHelp*、businessReliabilityHalfLife、businessPerformanceTtl、bandwidthHelpCurrentBusiness;
+    - 注意:ipTypeBusiness(商业宽带)与业务优选无关,照常按上游保留;
+    - 核对键集和引用时,把以上键从「缺失」中剔除。
 
 需要新功能时:STATUS.md 写清要对齐的行为或默认,实现、测试、打勾同一提交。STATUS 写明要维护者确认的,停等。
 
