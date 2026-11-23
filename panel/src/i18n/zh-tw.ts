@@ -1436,7 +1436,7 @@ const zhTW: LANG_MESSAGE = {
   dnsUpstreamProtocol: '協定',
   dnsUpstreamPort: '連接埠',
   dnsUpstreamEncryptedBootstrap: 'DoH/DoT 解析 DNS',
-  dnsUpstreamDotHost: 'DoT 網域或 IP 位址',
+  dnsUpstreamDotHost: 'DoT 網域、IP 或 tls:// 位址',
   dnsUpstreamTest: '測試',
   dnsUpstreamRestore: '恢復預設',
   dnsUpstreamRestoreConfirm:
@@ -1472,7 +1472,7 @@ const zhTW: LANG_MESSAGE = {
   dnsUpstreamSaveBlocked: '{side}沒有通過測試,沒有儲存:{message}',
   dnsUpstreamInvalid: '位址只填 IPv4 / IPv6。',
   dnsUpstreamInvalidPort: '連接埠填 1~65535。',
-  dnsUpstreamInvalidDotHost: '請填寫有效的 DoT 網域或 IP 位址',
+  dnsUpstreamInvalidDotHost: '請填寫有效的 DoT 網域、IP 或 tls:// 位址',
   dnsUpstreamDohHost: 'DoH 網域或 IP 位址',
   dnsUpstreamInvalidDohHost: '請填寫有效的 DoH 網域或 IP 位址',
   smartBlockConnection: '攔截連線',

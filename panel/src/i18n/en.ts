@@ -1506,7 +1506,7 @@ const en = {
   dnsUpstreamProtocol: 'Protocol',
   dnsUpstreamPort: 'Port',
   dnsUpstreamEncryptedBootstrap: 'DoH/DoT resolver DNS',
-  dnsUpstreamDotHost: 'DoT hostname or IP address',
+  dnsUpstreamDotHost: 'DoT hostname, IP, or tls:// address',
   dnsUpstreamTest: 'Test',
   dnsUpstreamRestore: 'Restore defaults',
   dnsUpstreamRestoreConfirm:
@@ -1547,7 +1547,7 @@ const en = {
   dnsUpstreamSaveBlocked: '{side} did not pass the test, nothing saved: {message}',
   dnsUpstreamInvalid: 'IPv4 / IPv6 addresses only.',
   dnsUpstreamInvalidPort: 'Port must be 1–65535.',
-  dnsUpstreamInvalidDotHost: 'Enter a valid DoT hostname or IP address',
+  dnsUpstreamInvalidDotHost: 'Enter a valid DoT hostname, IP, or tls:// address',
   dnsUpstreamDohHost: 'DoH hostname or IP address',
   dnsUpstreamInvalidDohHost: 'Enter a valid DoH hostname or IP address',
   smartBlockConnection: 'Block connection',

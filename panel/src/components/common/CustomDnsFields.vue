@@ -18,7 +18,7 @@
         "
         autocomplete="off"
         spellcheck="false"
-        @change="splitDohAddress"
+        @change="splitAddress"
         @paste="onPaste"
       />
       <input
@@ -52,7 +52,7 @@
 <script setup lang="ts">
 import DnsProtocolSelect from '@/components/common/DnsProtocolSelect.vue'
 import { dnsDraftError, dnsDraftNeedsBootstrap, type DnsDraft } from '@/helper/customDns'
-import { parseDohInput } from '@/helper/dohAddress'
+import { parseDohInput, parseDotInput, parseEndpointUrl } from '@/helper/dohAddress'
 import type { DnsProtocol } from '@/helper/dnsProtocol'
 import { computed } from 'vue'
 
@@ -72,17 +72,37 @@ const hostIsName = computed(() => protocol.value === 'https' || protocol.value =
 const needsBootstrap = computed(() => dnsDraftNeedsBootstrap(props.draft))
 const error = computed(() => dnsDraftError(props.draft))
 
-// DoH:框里敲 / 粘贴完整地址(或 host:port/path)时自动拆成域名、端口,路径原样保留
-const splitDohAddress = () => {
-  if (protocol.value !== 'https') return
-  const parsed = parseDohInput(endpoint.value.server, endpoint.value.port)
-  if (parsed) Object.assign(endpoint.value, parsed)
+// 框里敲 / 粘贴的是完整的 https:// 或 tls:// 地址时,按地址里的协议切换并拆成域名、端口(DoH 的路径原样保留);
+// 否则按当前协议认:DoH 认 host[:port][/path],DoT 认 host:port。认不出来就原样留着让用户继续改。
+// onApply 在确认要改草稿时先调用一次(粘贴时用来拦下浏览器默认的粘贴)。
+const applyAddress = (text: string, onApply?: () => void) => {
+  const url = parseEndpointUrl(text)
+  if (url) {
+    onApply?.()
+    // eslint-disable-next-line vue/no-mutating-props -- 草稿是调用方传进来让这里直接编辑的
+    props.draft.protocol = url.protocol
+    const address = url.protocol === 'tls' ? { server: url.address.server, port: url.address.port } : url.address
+    // eslint-disable-next-line vue/no-mutating-props -- 同上
+    Object.assign(props.draft.endpoints[url.protocol], address)
+    return
+  }
+  if (protocol.value === 'https') {
+    const parsed = parseDohInput(text, endpoint.value.port)
+    if (parsed) {
+      onApply?.()
+      Object.assign(endpoint.value, parsed)
+    }
+    return
+  }
+  if (protocol.value === 'tls') {
+    const parsed = parseDotInput(text, endpoint.value.port)
+    if (parsed) {
+      onApply?.()
+      Object.assign(endpoint.value, { server: parsed.server, port: parsed.port })
+    }
+  }
 }
-const onPaste = (event: ClipboardEvent) => {
-  if (protocol.value !== 'https') return
-  const parsed = parseDohInput(event.clipboardData?.getData('text') ?? '', endpoint.value.port)
-  if (!parsed) return
-  event.preventDefault()
-  Object.assign(endpoint.value, parsed)
-}
+const splitAddress = () => applyAddress(endpoint.value.server)
+const onPaste = (event: ClipboardEvent) =>
+  applyAddress(event.clipboardData?.getData('text') ?? '', () => event.preventDefault())
 </script>

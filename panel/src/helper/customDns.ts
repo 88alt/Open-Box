@@ -7,6 +7,7 @@ import {
   dohUrl,
   isValidPort,
   parseDohUrl,
+  parseTlsUrl,
   stripBrackets,
   type DohPath,
 } from './dohAddress'
@@ -51,10 +52,17 @@ export const createDnsDraft = (value?: Partial<DnsValue> | null): DnsDraft => {
     const protocol = DNS_PROTOCOLS.find((p) => url.protocol === `${p}:`)
     if (protocol) {
       draft.protocol = protocol
-      const parsed =
-        protocol === 'https'
-          ? (parseDohUrl(value.url) ?? { server: value.url, port: dnsDefaultPort('https') })
-          : { server: stripBrackets(url.hostname), port: Number(url.port) || dnsDefaultPort(protocol) }
+      let parsed: Omit<DnsEndpointDraft, 'bootstrap'>
+      if (protocol === 'https') {
+        parsed = parseDohUrl(value.url) ?? { server: value.url, port: dnsDefaultPort('https') }
+      } else if (protocol === 'tls') {
+        const dot = parseTlsUrl(value.url)
+        parsed = dot
+          ? { server: dot.server, port: dot.port }
+          : { server: stripBrackets(url.hostname), port: Number(url.port) || dnsDefaultPort('tls') }
+      } else {
+        parsed = { server: stripBrackets(url.hostname), port: Number(url.port) || dnsDefaultPort(protocol) }
+      }
       draft.endpoints[protocol] = { ...parsed, bootstrap: value.bootstrap || '' }
       return draft
     }
@@ -66,12 +74,22 @@ export const createDnsDraft = (value?: Partial<DnsValue> | null): DnsDraft => {
   return draft
 }
 
+// DoT 框里的内容 → 主机和端口:框里是完整的 tls:// 地址就拆开(端口以地址里写的为准,没写用框里的端口);
+// 否则是主机(不能是 wan,要是能用的 DNS 主机,不合法时主机为空串)
+const resolveDot = (endpoint: DnsEndpointDraft) => {
+  const text = endpoint.server.trim()
+  if (/^tls:\/\//i.test(text)) {
+    const parsed = parseTlsUrl(text, endpoint.port)
+    return parsed ? { server: parsed.server, port: parsed.port } : { server: '', port: endpoint.port }
+  }
+  const host = stripBrackets(text).toLowerCase()
+  return { server: host && host !== 'wan' && isDnsHost(host) ? host : '', port: endpoint.port }
+}
+
 // 当前协议下,主机是域名(不是 IP)时,要有引导 DNS 来解析它:DoH 和 DoT 才有这一项
 export const dnsDraftNeedsBootstrap = ({ protocol, endpoints }: DnsDraft) => {
   const endpoint = endpoints[protocol]
-  const host = stripBrackets(endpoint.server)
-  const target =
-    protocol === 'https' ? dohHost(endpoint) : protocol === 'tls' && isDnsHost(host) ? host : ''
+  const target = protocol === 'https' ? dohHost(endpoint) : protocol === 'tls' ? resolveDot(endpoint).server : ''
   return !!target && !isDnsIp(target)
 }
 
@@ -81,14 +99,17 @@ export const dnsDraftError = (draft: DnsDraft) => {
   const endpoint = draft.endpoints[protocol]
   const host = stripBrackets(endpoint.server)
   if (!host) return ''
+  let port = endpoint.port
   if (protocol === 'https') {
     if (!dohHost(draft.endpoints.https)) return 'dnsUpstreamInvalidDohHost'
   } else if (protocol === 'tls') {
-    if (!isDnsHost(host)) return 'dnsUpstreamInvalidDotHost'
+    const dot = resolveDot(endpoint)
+    if (!dot.server) return 'dnsUpstreamInvalidDotHost'
+    port = dot.port
   } else if (!isDnsIp(host)) {
     return 'subscriptionNodeDnsInvalidIp'
   }
-  if (!isValidPort(endpoint.port)) return 'dnsUpstreamInvalidPort'
+  if (!isValidPort(port)) return 'dnsUpstreamInvalidPort'
   if (!dnsDraftNeedsBootstrap(draft)) return ''
   const bootstrap = endpoint.bootstrap.trim()
   if (!bootstrap) return 'subscriptionNodeDnsNeedBootstrap'
@@ -101,9 +122,14 @@ export const dnsDraftValue = (draft: DnsDraft): DnsValue | null => {
   const endpoint = draft.endpoints[protocol]
   const host = stripBrackets(endpoint.server)
   if (!host || dnsDraftError(draft)) return null
-  const url =
-    protocol === 'https'
-      ? dohUrl(draft.endpoints.https)
-      : `${protocol}://${bracketHost(host)}${endpoint.port === dnsDefaultPort(protocol) ? '' : `:${endpoint.port}`}`
+  let url: string
+  if (protocol === 'https') {
+    url = dohUrl(draft.endpoints.https)
+  } else if (protocol === 'tls') {
+    const dot = resolveDot(endpoint)
+    url = `tls://${bracketHost(dot.server)}${dot.port === dnsDefaultPort('tls') ? '' : `:${dot.port}`}`
+  } else {
+    url = `${protocol}://${bracketHost(host)}${endpoint.port === dnsDefaultPort(protocol) ? '' : `:${endpoint.port}`}`
+  }
   return { url, ...(dnsDraftNeedsBootstrap(draft) ? { bootstrap: endpoint.bootstrap.trim() } : {}) }
 }

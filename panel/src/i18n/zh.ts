@@ -1435,7 +1435,7 @@ const zh: LANG_MESSAGE = {
   dnsUpstreamProtocol: '协议',
   dnsUpstreamPort: '端口',
   dnsUpstreamEncryptedBootstrap: 'DoH/DoT 解析 DNS',
-  dnsUpstreamDotHost: 'DoT 域名或 IP 地址',
+  dnsUpstreamDotHost: 'DoT 域名、IP 或 tls:// 地址',
   dnsUpstreamTest: '测试',
   dnsUpstreamRestore: '恢复默认',
   dnsUpstreamRestoreConfirm:
@@ -1471,7 +1471,7 @@ const zh: LANG_MESSAGE = {
   dnsUpstreamSaveBlocked: '{side}没有通过测试,没有保存:{message}',
   dnsUpstreamInvalid: '地址只填 IPv4 / IPv6。',
   dnsUpstreamInvalidPort: '端口填 1~65535。',
-  dnsUpstreamInvalidDotHost: '请填写有效的 DoT 域名或 IP 地址',
+  dnsUpstreamInvalidDotHost: '请填写有效的 DoT 域名、IP 或 tls:// 地址',
   dnsUpstreamDohHost: 'DoH 域名或 IP 地址',
   dnsUpstreamInvalidDohHost: '请填写有效的 DoH 域名或 IP 地址',
   smartBlockConnection: '拦截连接',

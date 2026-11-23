@@ -417,7 +417,17 @@ import {
   type OpenboxProfile,
 } from '@/api/openbox'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
-import { dohHost, dohUrl, parseDohInput, parseDohUrl, type DohPath } from '@/helper/dohAddress'
+import { isDnsHost } from '@/helper/dnsProtocol'
+import {
+  dohHost,
+  dohUrl,
+  parseDohInput,
+  parseDohUrl,
+  parseDotInput,
+  parseTlsUrl,
+  stripBrackets,
+  type DohPath,
+} from '@/helper/dohAddress'
 import { showNotification } from '@/helper/notification'
 import { ArrowUturnLeftIcon, BoltIcon, PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -482,22 +492,30 @@ const onProtocolChange = (d: Upstream, e: Event) => {
   if (d.port === DEFAULT_PORTS[d.protocol]) d.port = DEFAULT_PORTS[next]
   d.protocol = next
 }
-// 要不要解析 DNS(引导 DNS):DoH,和地址不是 IP 的 DoT(地址还没填也算)
-const needsBootstrap = (u: Upstream) => u.protocol === 'https' || (u.protocol === 'tls' && !isIp(u.server))
+// DoT 框里的主机:完整的 tls:// 地址取其中的主机,否则去掉 [] 的原文
+const dotHostOf = (server: string) => {
+  const text = server.trim()
+  return /^tls:\/\//i.test(text) ? (parseTlsUrl(text)?.server ?? '') : stripBrackets(text)
+}
+// 要不要解析 DNS(引导 DNS):DoH,和地址是域名(不是 IP)的 DoT
+const needsBootstrap = (u: Upstream) => {
+  if (u.protocol === 'https') return true
+  if (u.protocol !== 'tls') return false
+  const host = dotHostOf(u.server)
+  return !!host && host !== WAN && isDnsHost(host) && !isIp(host)
+}
 const defaultBootstrap = (b?: Partial<Bootstrap> | null): Bootstrap => ({
   server: b?.server ?? WAN,
   protocol: b?.protocol === 'tcp' ? 'tcp' : 'udp',
   port: b?.port ?? DEFAULT_PORT,
 })
-// 地址(和端口)填对了:DoH 看域名或 IP 加端口,DoT 看 IP 或域名加端口,UDP / TCP 看 IP 加端口
-const isDotHost = (s: string) => {
-  const h = s.trim()
-  if (!h || isIp(h) || h.length > 253 || !h.includes('.')) return false
-  return h.split('.').every((l) => l.length <= 63 && /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$/.test(l))
-}
+// 地址(和端口)填对了:DoH 看域名或 IP 加端口,DoT 看 tls:// 地址或 IP / 域名加端口,UDP / TCP 看 IP 加端口
 const isServerValid = (u: Upstream) => {
   if (u.protocol === 'https') return !!dohHost(u) && isPort(u.port)
-  if (u.protocol === 'tls') return (isIp(u.server) || isDotHost(u.server)) && isPort(u.port)
+  if (u.protocol === 'tls') {
+    const dot = /^tls:\/\//i.test(u.server.trim()) ? parseTlsUrl(u.server, u.port) : null
+    return (!!dot || (u.server !== WAN && isDnsHost(stripBrackets(u.server)))) && isPort(dot ? dot.port : u.port)
+  }
   return isIp(u.server) && isPort(u.port)
 }
 // 整条能不能保存 / 测试:上游 DNS 直接算;DoH 还要解析 DNS 填对(用上游 DNS,或 IP 加端口)
@@ -508,10 +526,27 @@ const isUpstreamValid = (u: Upstream) =>
 
 // 存档 / 列表里用的地址:DoH 是完整的 https:// 地址,其余就是填的主机
 const serverText = (u: Upstream) => (u.protocol === 'https' ? dohUrl(u) || u.server : u.server)
+// 保存 / 测试前整理:DoT 框里还是 tls:// 地址就拆成主机和端口(端口以地址里写的为准);其余去掉主机两侧的 []
+const normalizeUpstream = <T extends Upstream>(u: T): T => {
+  if (u.wan || u.protocol === 'https') return u
+  if (u.protocol === 'tls' && /^tls:\/\//i.test(u.server.trim())) {
+    const dot = parseTlsUrl(u.server, u.port)
+    return dot ? { ...u, server: dot.server, port: dot.port } : { ...u, server: u.server.trim() }
+  }
+  return { ...u, server: stripBrackets(u.server) }
+}
 // DoH 的「域名或 IP」框:敲完或粘贴完整地址时,拆成主机、端口、路径
+// DoT 的「域名或 IP」框:敲完或粘贴 tls://host:port / host:port 时,拆成主机和端口
 const applyDohInput = (text: string) => {
   const d = draft.value
-  if (!d || d.protocol !== 'https') return false
+  if (!d) return false
+  if (d.protocol === 'tls') {
+    const dot = parseDotInput(text, d.port)
+    if (!dot) return false
+    Object.assign(d, { server: dot.server, port: dot.port })
+    return true
+  }
+  if (d.protocol !== 'https') return false
   const parsed = parseDohInput(text, d.port)
   if (!parsed) return false
   Object.assign(d, parsed)
@@ -618,15 +653,29 @@ const readOne = (side: Side, server: unknown, protocol: unknown, port: unknown, 
     ? 'udp'
     : protocol === 'udp' || protocol === 'tcp' || protocol === 'https' || protocol === 'tls'
       ? protocol
-      : FALLBACK_PROTOCOL[side]
+      : !protocol && /^tls:\/\//i.test(host)
+        ? 'tls'
+        : FALLBACK_PROTOCOL[side]
   // DoH:存档里是完整地址,界面上拆成主机、端口、路径;认不出来就原样放进主机框让用户改
   const doh = kind === 'https' ? parseDohUrl(host) : null
+  // DoT:存档里若是 tls:// 地址,拆成主机和端口(没写端口用存档的端口,再没有用 853)
+  const dot = kind === 'tls' && /^tls:\/\//i.test(host) ? parseTlsUrl(host, isPort(port) ? (port as number) : DEFAULT_PORTS.tls) : null
   return {
     side,
     wan,
-    server: wan ? '' : doh ? doh.server : host,
+    server: wan ? '' : doh ? doh.server : dot ? dot.server : host,
     protocol: kind,
-    port: wan ? DEFAULT_PORT : doh ? doh.port : !isPort(port) ? (kind === 'https' ? DEFAULT_PORTS.https : DEFAULT_PORT) : (port as number),
+    port: wan
+      ? DEFAULT_PORT
+      : doh
+        ? doh.port
+        : dot
+          ? dot.port
+          : !isPort(port)
+            ? kind === 'https' || kind === 'tls'
+              ? DEFAULT_PORTS[kind]
+              : DEFAULT_PORT
+            : (port as number),
     bootstrap: defaultBootstrap(bootstrap as Partial<Bootstrap> | null),
     ...(doh ? { dohPath: doh.dohPath } : {}),
   }
@@ -650,8 +699,9 @@ const countOf = (side: Side) => rows.value.filter((r) => r.side === side).length
 const rowLabel = (r: Upstream) => (r.wan ? t('dnsUpstreamWan') : serverText(r))
 
 // DoH 的地址由主机、端口、路径拼回完整的 https:// 地址;DoH 和域名 DoT 才带 bootstrap
-const toUpstreamOut = (u: Upstream) =>
-  u.wan
+const toUpstreamOut = (raw: Upstream) => {
+  const u = normalizeUpstream(raw)
+  return u.wan
     ? { server: WAN, protocol: 'udp', port: DEFAULT_PORT }
     : {
         server: serverText(u),
@@ -659,6 +709,7 @@ const toUpstreamOut = (u: Upstream) =>
         port: u.port,
         ...(needsBootstrap(u) ? { bootstrap: u.bootstrap } : {}),
       }
+}
 // 把一整张列表写回档案:每侧第一条是主上游,后面是备用;一侧删光了就退回「上游 DNS」
 const toPatch = (list: Upstream[]) => {
   const out: Record<string, unknown> = {}
