@@ -2,7 +2,7 @@
 
 由 `panel/src` 里的调用点自动提取(主要在 `api/openbox.ts`、`api/clientApp.ts`、`store/auth.ts`)。
 这份清单是后端要实现的**接口契约**:路径、方法以这里为准;请求体 / 响应体的具体字段以对应的 TypeScript 类型(`api/openbox.ts` 里同名接口)为准。
-提取是脚本做的,可能漏掉动态拼接的路径、把同一路径的多个方法合并,或把「URL 常量」误记成 GET(`/api/auth/*`、`/api/storage`、`/api/background-image` 已人工校正);发现遗漏时直接在这里补上,并在 `backend/STATUS.md` 对应位置记一笔。
+函数引用只写文件名、不写行号(行号每次改前端都会漂,按函数名在 `panel/src` 里搜);提取是脚本做的,可能漏掉动态拼接的路径、把同一路径的多个方法合并,或把「URL 常量」误记成 GET(`/api/auth/*`、`/api/storage`、`/api/background-image` 已人工校正);发现遗漏时直接在这里补上,并在 `backend/STATUS.md` 对应位置记一笔。
 
 初次提取时共 103 个(方法, 路径)组合、89 个不同路径;之后前端陆续增加(双内核、节点分享等),总数不再维护,以各节为准。
 
@@ -18,31 +18,31 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/auth/change-password` | `changePassword` (store/auth.ts:341) | `{ ok, enabled, authenticated, passwordSet }` | `{ currentPassword, newPassword }` |
+| POST | `/api/auth/change-password` | `changePassword` (store/auth.ts) | `{ ok, enabled, authenticated, passwordSet }` | `{ currentPassword, newPassword }` |
 
 ## `/api/auth/login`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/auth/login` | `loginWithAccessPassword` (store/auth.ts:241) | `{ ok, enabled, authenticated, passwordSet }` | `{ password }` |
+| POST | `/api/auth/login` | `loginWithAccessPassword` (store/auth.ts) | `{ ok, enabled, authenticated, passwordSet }` | `{ password }` |
 
 ## `/api/auth/logout`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/auth/logout` | `logoutAccessPassword` (store/auth.ts:278) | `{ ok }` | — |
+| POST | `/api/auth/logout` | `logoutAccessPassword` (store/auth.ts) | `{ ok }` | — |
 
 ## `/api/auth/setup`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/auth/setup` | `setupPassword` (store/auth.ts:305) | `{ ok, enabled, authenticated, passwordSet }` | `{ password }` |
+| POST | `/api/auth/setup` | `setupPassword` (store/auth.ts) | `{ ok, enabled, authenticated, passwordSet }` | `{ password }` |
 
 ## `/api/auth/status`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/auth/status` | `fetchServerAuthStatus` (store/auth.ts:216) | `{ enabled, authenticated, passwordSet }` | — |
+| GET | `/api/auth/status` | `fetchServerAuthStatus` (store/auth.ts) | `{ enabled, authenticated, passwordSet }` | — |
 
 ## `/api/background-image`
 
@@ -56,10 +56,10 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/controller-ws/{x}` | `createWebSocket` (api/index.ts:257) | — | t |
+| GET | `/api/controller-ws/{x}` | `createWebSocket` (api/index.ts) | — | t |
 
 实现约定(M3):前端对内核控制接口的约定共两个前缀,**接口表只收字面路径,所以 REST 那一半没列在表里**:
-- `/api/controller/<路径>`:axios 的 `baseURL`(api/index.ts:13),代理、规则、连接、配置、提供者、延迟测试、重启 / 升级等几十个调用都走这里,后端原样转给内核的 Clash API(`GET /proxies`、`PUT /proxies/{组}`、`GET /proxies/{x}/delay`、`GET /connections`、`DELETE /connections/{id}`、`PATCH /configs`……),方法、路径(含转义)、查询、请求体和响应都不改;
+- `/api/controller/<路径>`:axios 的 `baseURL`(api/index.ts),代理、规则、连接、配置、提供者、延迟测试、重启 / 升级等几十个调用都走这里,后端原样转给内核的 Clash API(`GET /proxies`、`PUT /proxies/{组}`、`GET /proxies/{x}/delay`、`GET /connections`、`DELETE /connections/{id}`、`PATCH /configs`……),方法、路径(含转义)、查询、请求体和响应都不改;
 - `/api/controller-ws/<名字>`:`connections` / `logs` / `memory` / `traffic` 的 WebSocket,握手和帧原样转发,查询参数(如 `level`)保留。
 两个前缀都在登录保护之内;内核的 secret 由后端从正式配置里读出来加在发给内核的请求上,浏览器的 Cookie / Authorization / 自带的 `token` 参数不转;WebSocket 只接受同源;内核连不上返回 502 加 `{ message }`。
 
@@ -67,10 +67,10 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| DELETE | `/api/openbox/activation` | `deactivate` (api/clientApp.ts:344) | OpenboxActivation | () |
-| GET | `/api/openbox/activation` | `fetchActivation` (api/clientApp.ts:328) | OpenboxActivation | () |
-| POST | `/api/openbox/activation` | `activate` (api/clientApp.ts:331) | OpenboxActivation | (code: string, left: string, right: string) |
-| PUT | `/api/openbox/activation` | `updateActivationText` (api/clientApp.ts:338) | OpenboxActivation | (left: string, right: string) |
+| DELETE | `/api/openbox/activation` | `deactivate` (api/clientApp.ts) | OpenboxActivation | () |
+| GET | `/api/openbox/activation` | `fetchActivation` (api/clientApp.ts) | OpenboxActivation | () |
+| POST | `/api/openbox/activation` | `activate` (api/clientApp.ts) | OpenboxActivation | (code: string, left: string, right: string) |
+| PUT | `/api/openbox/activation` | `updateActivationText` (api/clientApp.ts) | OpenboxActivation | (left: string, right: string) |
 
 实现约定(M5,DESIGN D9):四个方法都回同一份固定状态 `{ activated: true, left: "", right: "", defaults: { left: "Open-Box <后端版本>", right: "sing-box <内核版本>" } }`,不保存任何东西(POST 的激活码随便给、PUT 的文字不存),不会出现「激活码不对」。内核版本读不到时右边只显示 `sing-box`。
 另有 `GET /api/openbox/tutorial-videos`(前端没有调用,DESIGN 第 8 节规定):固定回 `{ "videos": [], "updatedAt": 0, "staleAfterMs": 86400000 }`。
@@ -79,13 +79,13 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/openbox/backup/import?subscriptions={x}` | `importBackup` (api/openbox.ts:1563) | OpenboxBackupImportResult | (data: OpenboxBackup, subscriptionsMode: OpenboxBackupSubscriptionsMode = 'repla |
+| POST | `/api/openbox/backup/import?subscriptions={x}` | `importBackup` (api/openbox.ts) | OpenboxBackupImportResult | (data: OpenboxBackup, subscriptionsMode: OpenboxBackupSubscriptionsMode = 'repla |
 
 ## `/api/openbox/backup?subscriptions={x}&chainProxies={x}&clientRoutes={x}&servers={x}`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/backup?subscriptions={x}&chainProxies={x}&clientRoutes={x}&servers={x}` | `fetchBackup` (api/openbox.ts:1560) | OpenboxBackup | (opts: OpenboxBackupOptions) |
+| GET | `/api/openbox/backup?subscriptions={x}&chainProxies={x}&clientRoutes={x}&servers={x}` | `fetchBackup` (api/openbox.ts) | OpenboxBackup | (opts: OpenboxBackupOptions) |
 
 实现约定(M5,导出部分):文件格式 `{format:"open-box-backup", version:1, exportedAt, openboxVersion, includes, profile, groups, subscriptions?, nodes?, panelSettings, backgroundImage}`;没勾的可选部分整个键不在文件里(档案的 `chainProxies` / `clientRoutes` / `servers`,以及 `subscriptions` / `nodes`),「没有这个键」表示导入时保持现状;`nodes` 是各订阅的节点摊平成一个数组、每项带 `subscription`(订阅 id);面板设置只含 `config/` 开头且名字不带 password 的键。没传的参数:`chainProxies` 按 1,其它按 0。实现约定(M5,导入部分):`POST /backup/import?subscriptions=replace|append`(不传 = `replace`,别的值 400),请求体是备份文件原样(上限 32 MiB,超出 413)。**先把整份文件全部校验一遍,任何一项不过就一个字都不写**:格式必须是 `open-box-backup`、`version` 是 ≥1 且不超过后端能读的版本(更新的文件 400 并提示升级后端)、必须有 `profile` 和 `groups`、有 `subscriptions` 就必须有 `nodes`(没有节点写 `[]`)、有 `nodes` 就必须有 `subscriptions`;档案走和 `PUT /profile` 同一套规整与校验;订阅 id 只能是 1–64 位字母数字 `_` `-` 且不重复、名称 / 来源 / 自动更新 / 节点 DNS / 改名规则按订阅接口同样的规则、节点必须属于文件里的订阅且节点名不重复(端口 0–65535、类型非空);节点组按 `PUT /groups` 同样的规则(含不能与节点或启用的链式代理重名;这一步要 core,没有 core 回 503);面板设置只收 `config/` 开头、值是字符串、名字不带 password 的键(不合规的丢弃);背景图必须是 `data:image/` 开头且不超过 12 MiB。通过之后按 档案 → 订阅和节点 → 节点组 → 面板设置 → 背景图 的顺序写;写的中途失败(磁盘问题等)回 500,信息里写明「哪一步出错、此前已写入哪些」,已写的**不自动撤销**。同一时刻只做一次导入(第二个 409)。
 
@@ -97,7 +97,7 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/openbox/chain-proxies/latency` | `testChainLatency` (api/openbox.ts:1775) | OpenboxChainLatencyResult | (payload: OpenboxChainLatencyPayload) |
+| POST | `/api/openbox/chain-proxies/latency` | `testChainLatency` (api/openbox.ts) | OpenboxChainLatencyResult | (payload: OpenboxChainLatencyPayload) |
 
 > 实现约定(M1):`link` 解析不了、缺 `upstream`、上游不存在或成环返回 400。测速用 `internal/probe`(临时 sing-box + 本机 http 入站,后端自己计时);`testUrl` 不传用档案的 `testUrl`;`via` 是按配置静态推出的上游选中节点(selector 取 default,urltest 取第一个成员),内核接入后改读控制接口。找不到 sing-box 返回 503。`ipUrls`(可选,IP 地区):只认 https 的 `api.ip.sb`、`ipwho.is`、`api.ipapi.is` 三个主机(端口只能是 443、不能带账号),主机名转小写、去掉 `:443` 与片段后去重,最多 5 个;有不合规的地址返回 400,文案里带「ipUrls」(前端靠它丢掉 IP 信息后重测)。带了之后和测速同一次起内核、并行,按顺序请求到第一个答 2xx 的为止(3xx 不跟随、非 2xx、空正文都按失败),每次尝试各有一份超时(`timeoutMs`);响应多一个 `ip`:成功 `{ok:true,url,body}`(`url` 是答话的那一家,`body` 是正文原样、最多 16 KiB、已规整成合法 UTF-8),全部失败 `{ok:false,error}`(`error` 按「主机: 原因」逐家列出,用「;」隔开)。没带或带空数组则没有 `ip` 字段。线路不通时测速失败,`ip` 也如实失败,不会让整个请求报错。这一路和测速一样不校验对方证书(路由器上常常没有根证书包)。
 
@@ -105,10 +105,10 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/openbox/client-app/egress-country` | `detectEgressCountry` (api/clientApp.ts:156) | OpenboxEgressCountry | () |
-| GET | `/api/openbox/client-app/info` | `fetchClientAppInfo` (api/clientApp.ts:152) | OpenboxClientAppInfo | () |
-| POST | `/api/openbox/client-app/share-codes` | `fetchShareCodeSeals` (api/clientApp.ts:215) | Record<string, OpenboxShareCodeSeal> | (links: Record<string, string>) |
-| POST | `/api/openbox/client-app/share-codes/{x}/rotate` | `rotateShareCode` (api/clientApp.ts:232) | OpenboxShareCodeRotated | (id: string) |
+| POST | `/api/openbox/client-app/egress-country` | `detectEgressCountry` (api/clientApp.ts) | OpenboxEgressCountry | () |
+| GET | `/api/openbox/client-app/info` | `fetchClientAppInfo` (api/clientApp.ts) | OpenboxClientAppInfo | () |
+| POST | `/api/openbox/client-app/share-codes` | `fetchShareCodeSeals` (api/clientApp.ts) | Record<string, OpenboxShareCodeSeal> | (links: Record<string, string>) |
+| POST | `/api/openbox/client-app/share-codes/{x}/rotate` | `rotateShareCode` (api/clientApp.ts) | OpenboxShareCodeRotated | (id: string) |
 
 实现约定(M2,只列已做的 `info`):`GET /client-app/info` 返回 `OpenboxClientAppInfo` 全部字段。`routerId` 第一次读时生成(32 位小写十六进制)并保存,之后不变,不提供更换;`lanAddresses` / `lanSubnets` 只含私有地址(跳过回环 / 隧道 / 容器网桥),IPv4 在前、LAN 口在前,`lanSubnets` 只有 IPv4;`panelPort` 是本后端监听的端口;`shareRegions` 没存或存了空数组 = 默认三组且 `shareRegionsCustomized` 为 false,`defaultShareRegions` 恒为默认三组;`serverInfo` 原样,`routerName` = `serverInfo.name`(去首尾空白)或「Open-Box」;`egressCountry` 是上一次 `POST egress-country` 判出的 `{ip, country, at}`,没判过或缓存不合格时为 `null`。`share-codes`(POST)已做,见下面;`share-codes/{x}/rotate`(换这台服务器的配对码和密码并部署)已做,见下面;封包格式和密钥派生见下面 `client-config` 的 `file` 一段。
 
@@ -120,10 +120,10 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/client-config` | `fetchClientConfig` (api/clientApp.ts:182) | OpenboxClientConfigIssue | () |
-| PUT | `/api/openbox/client-config/enabled` | `setClientConfigEnabled` (api/clientApp.ts:189) | { enabled: boolean } | (enabled: boolean) |
-| POST | `/api/openbox/client-config/file` | `fetchClientConfigFile` (api/clientApp.ts:199) | OpenboxClientBundle | (lan: string, publicBase: string) |
-| POST | `/api/openbox/client-config/rotate` | `rotateClientConfig` (api/clientApp.ts:186) | OpenboxClientConfigIssue | () |
+| GET | `/api/openbox/client-config` | `fetchClientConfig` (api/clientApp.ts) | OpenboxClientConfigIssue | () |
+| PUT | `/api/openbox/client-config/enabled` | `setClientConfigEnabled` (api/clientApp.ts) | { enabled: boolean } | (enabled: boolean) |
+| POST | `/api/openbox/client-config/file` | `fetchClientConfigFile` (api/clientApp.ts) | OpenboxClientBundle | (lan: string, publicBase: string) |
+| POST | `/api/openbox/client-config/rotate` | `rotateClientConfig` (api/clientApp.ts) | OpenboxClientConfigIssue | () |
 
 实现约定(M2,前三条):状态存在 `client-app.json`(与路由器 ID 同一文件)。`GET` 第一次读时生成配对码(8 个字符,取自去掉 I / O / 0 / 1 的 32 字符表,大写)和 nonce(16 位小写十六进制)并保存,**同步开关默认关**;其余字段 `routerId` / `routerName` / `lanAddresses` / `panelPort` 与 `client-app/info` 同源。`PUT enabled` 请求体必须是 `{"enabled": true|false}`(其它一律 400,上限 1 KiB),返回 `{enabled}`,不动配对码。`POST rotate` 换配对码和 nonce、`lastSyncAt` 清零、开关保持,返回换完的整份。三条响应都带 `Cache-Control: no-store`,配对码不写日志、错误响应里不出现。`lastSyncAt` 要等 App 用的公开同步接口(未做)来更新,现在恒为 0。App 用的公开同步接口见下面 `/client/v1/config`。
 
@@ -151,7 +151,7 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/clients` | `fetchKnownClients` (api/openbox.ts:1709) | { clients: Array<{ ip: string; name: string; mac?: string }> } | () |
+| GET | `/api/openbox/clients` | `fetchKnownClients` (api/openbox.ts) | { clients: Array<{ ip: string; name: string; mac?: string }> } | () |
 
 ## `/api/openbox/config`
 
@@ -159,19 +159,19 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/config/preview` | `fetchConfigPreview` (api/openbox.ts:949) | { config: OpenboxConfigPreview } | () |
+| GET | `/api/openbox/config/preview` | `fetchConfigPreview` (api/openbox.ts) | { config: OpenboxConfigPreview } | () |
 
 ## `/api/openbox/content-filter`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/content-filter` | `fetchContentFilter` (api/clientApp.ts:275) | OpenboxContentFilterList | () |
-| POST | `/api/openbox/content-filter` | `saveContentFilter` (api/clientApp.ts:292) | OpenboxContentFilterList | (input: OpenboxContentFilterInput) |
-| POST | `/api/openbox/content-filter/preview` | `previewContentFilter` (api/clientApp.ts:286) | { text: string } | (input: { dialect: OpenboxContentFilterDialect sourceUrl: string arguments?: Rec |
-| POST | `/api/openbox/content-filter/restore-defaults` | `restoreContentFilterDefaults` (api/clientApp.ts:308) | OpenboxContentFilterList | () |
-| DELETE | `/api/openbox/content-filter/{x}` | `deleteContentFilter` (api/clientApp.ts:304) | OpenboxContentFilterList | (id: string) |
-| PATCH | `/api/openbox/content-filter/{x}` | `setContentFilterEnabled` (api/clientApp.ts:298) | OpenboxContentFilterList | (id: string, enabled: boolean) |
-| GET | `/api/openbox/content-filter/{x}/source` | `fetchContentFilterSource` (api/clientApp.ts:278) | { text: string } | (id: string) |
+| GET | `/api/openbox/content-filter` | `fetchContentFilter` (api/clientApp.ts) | OpenboxContentFilterList | () |
+| POST | `/api/openbox/content-filter` | `saveContentFilter` (api/clientApp.ts) | OpenboxContentFilterList | (input: OpenboxContentFilterInput) |
+| POST | `/api/openbox/content-filter/preview` | `previewContentFilter` (api/clientApp.ts) | { text: string } | (input: { dialect: OpenboxContentFilterDialect sourceUrl: string arguments?: Rec |
+| POST | `/api/openbox/content-filter/restore-defaults` | `restoreContentFilterDefaults` (api/clientApp.ts) | OpenboxContentFilterList | () |
+| DELETE | `/api/openbox/content-filter/{x}` | `deleteContentFilter` (api/clientApp.ts) | OpenboxContentFilterList | (id: string) |
+| PATCH | `/api/openbox/content-filter/{x}` | `setContentFilterEnabled` (api/clientApp.ts) | OpenboxContentFilterList | (id: string, enabled: boolean) |
+| GET | `/api/openbox/content-filter/{x}/source` | `fetchContentFilterSource` (api/clientApp.ts) | { text: string } | (id: string) |
 
 实现约定(M2,自己的设计,依据前端 `OpenboxContentFilter*` 类型和 `ContentFilterCard.vue`、Surge / Loon / Shadowrocket 的公开文档,没有参照上游;路由器只存快照,不执行规则):
 - 存储:记录在 `content-filter.json`,每份规则文本单独存 `<数据目录>/content-filter/<id>.txt`(存盘前规整:去 BOM、换行统一 `\n`、行尾去空白、结尾只留一个换行)。列表接口不读全部文本;`GET /content-filter/{id}/source` 取单份。上限:50 份、单份文本 512 KiB(与前端上传一致)、必须是 UTF-8。恢复出厂会连文本目录一起清。
@@ -191,8 +191,8 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/defaults/groups` | `fetchDefaultNodeGroups` (api/openbox.ts:1629) | { groups: OpenboxUserGroup[] } | () |
-| GET | `/api/openbox/defaults/routing` | `fetchDefaultRouting` (api/openbox.ts:1633) | { routing: OpenboxProfileRouting } | () |
+| GET | `/api/openbox/defaults/groups` | `fetchDefaultNodeGroups` (api/openbox.ts) | { groups: OpenboxUserGroup[] } | () |
+| GET | `/api/openbox/defaults/routing` | `fetchDefaultRouting` (api/openbox.ts) | { routing: OpenboxProfileRouting } | () |
 
 > 实现约定(M1):`defaults/groups` 由 openbox-core 的 `normalizeGroups` 补全,核心不可用时 `503`。默认值的取舍见 `docs/DESIGN.md` 第 8 节。
 
@@ -200,8 +200,8 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/openbox/deploy` | `deployNow` (api/openbox.ts:926) | — | () |
-| GET | `/api/openbox/deploy/state` | `fetchDeployState` (api/openbox.ts:942) | { state: OpenboxDeployState } | () |
+| POST | `/api/openbox/deploy` | `deployNow` (api/openbox.ts) | — | () |
+| GET | `/api/openbox/deploy/state` | `fetchDeployState` (api/openbox.ts) | { state: OpenboxDeployState } | () |
 
 实现约定(M5):`POST /deploy` 做一次完整部署(生成配置 → 落盘本地规则集 → `sing-box check` → 备份并原子替换 → 重启 / 启动 → 健康检查 → 失败回滚,详见 `internal/singbox/deploy.go`),同一时刻只允许一次。响应体恒为 `{ok, stage, message, badTags}`(回滚过另带 `rolledBack: true`),`stage` 取 `running` / `conflict` / `validate` / `start` / `verify` / `error`;状态码:成功 200,`conflict`(内核没在运行、而别的代理服务正在运行,所以没启动)和「已有部署在进行」409,`validate` 422,`start` / `verify` 502,其它 500——前端 `deployNow` 不看状态码,只读响应体。`GET /deploy/state` 回 `{state: {stage, message, at, badTags}}`,是最近一次部署的结果(毫秒时间戳 `at`),存在数据目录的 `deploy-state.json`、重启后仍在,从没部署过是 `stage:"idle"`、`at:0`;「已有部署在进行」的拒绝不记。面板的「部署」和 DNS 过滤的应用都会记。**DNS 接管**(档案 `dns.mode = dnsmasq` 时 dnsmasq 把查询转给内核,见 `internal/system/dnstakeover.go`):校验通过后、替换配置并重启内核**之前**先撤销接管(内核重启的几秒里 dnsmasq 不能还指着它),撤销不成功就不动手(`stage:"error"`,配置和内核都没碰);内核健康之后(含回滚后旧配置又健康)按 `dns.mode` 对齐,等内核的 DNS 入站应答最多 20 秒。对齐的结果附在 `message` 后面(例如「dnsmasq 已改为把查询转发给内核」),对齐失败**不改变** `ok`——内核是好的,接管那边出错时已自动恢复原状,`message` 里说明「DNS 保持原样」。校验没过的部署不会碰接管。
 
@@ -209,7 +209,7 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/diagnostics` | `fetchDiagnostics` (api/openbox.ts:1556) | Record<string, unknown> | () |
+| GET | `/api/openbox/diagnostics` | `fetchDiagnostics` (api/openbox.ts) | Record<string, unknown> | () |
 
 实现约定(M5):响应是一份自由格式的 JSON(前端只是把它存成文件),顶层有 `generatedAt`、`redacted`、`note`、`backend`、`firmware`、`kernel`、`services`、`config`、`profile`、`logs`。只读;每块独立,读不到只在那一块写 `error`。`config` 是正在使用的内核配置(脱敏后的 `content`),不是合法 JSON 就不放内容;`profile` 是脱敏后的档案;`logs.core` / `logs.panel` 是两个服务最近 200 行日志(数组,或 `{error}`)。凭据、节点地址、订阅链接、SNI、传输路径都会被抹掉,脱敏规则见 `internal/diagnostics/redact.go`;日志里可能留有访问过的域名,所以包里提醒用户发出去之前自己再看一遍。
 
@@ -217,11 +217,11 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/openbox/dns/flush-cache` | `flushDnsCache` (api/openbox.ts:1625) | OpenboxDnsFlushResult | () |
-| GET | `/api/openbox/dns/region-detect` | `fetchDnsRegionState` (api/openbox.ts:1581) | OpenboxDnsRegionState | () |
-| POST | `/api/openbox/dns/region-detect` | `detectDnsRegion` (api/openbox.ts:1589) | OpenboxDnsRegionDetect | () |
-| POST | `/api/openbox/dns/upstream-test` | `testDnsUpstream` (api/openbox.ts:1616) | OpenboxDnsUpstreamTestResult | (payload: OpenboxDnsUpstreamTestPayload) |
-| GET | `/api/openbox/dns/wan` | `fetchWanDns` (api/openbox.ts:1572) | { servers?: string[] } | () |
+| POST | `/api/openbox/dns/flush-cache` | `flushDnsCache` (api/openbox.ts) | OpenboxDnsFlushResult | () |
+| GET | `/api/openbox/dns/region-detect` | `fetchDnsRegionState` (api/openbox.ts) | OpenboxDnsRegionState | () |
+| POST | `/api/openbox/dns/region-detect` | `detectDnsRegion` (api/openbox.ts) | OpenboxDnsRegionDetect | () |
+| POST | `/api/openbox/dns/upstream-test` | `testDnsUpstream` (api/openbox.ts) | OpenboxDnsUpstreamTestResult | (payload: OpenboxDnsUpstreamTestPayload) |
+| GET | `/api/openbox/dns/wan` | `fetchWanDns` (api/openbox.ts) | { servers?: string[] } | () |
 
 > 实现约定(M2):`dns/wan` 只读,回 `{ "servers": string[] }`(读不到是空数组,不报错);服务器取自 netifd / systemd-resolved 记录的上游文件,不读指向本机的 `/etc/resolv.conf`(顺序见 `internal/system/wandns.go`)。
 
@@ -235,12 +235,12 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/dns-filter` | `fetchDnsFilter` (api/openbox.ts:168) | DnsFilterStatus | () |
-| PUT | `/api/openbox/dns-filter` | `saveDnsFilter` (api/openbox.ts:169) | — | (settings: DnsFilterSettings) |
-| POST | `/api/openbox/dns-filter/apply` | `applyDnsFilter` (api/openbox.ts:170) | DnsFilterStatus | (update = false, listId = '') |
-| GET | `/api/openbox/dns-filter/preview?{x})}` | `fetchDnsFilterPreview` (api/openbox.ts:173) | DnsFilterPreview | (url: string, search: string, page: number, pageSize = 20, action: DnsFilterPrev |
-| GET | `/api/openbox/dns-filter/records?{x})}` | `fetchDnsFilterRecords` (api/openbox.ts:172) | { rows: DnsFilterRecord[]; total: number; page: number; pageSize: number } | (search: string, result: string, page: number, pageSize = 20) |
-| GET | `/api/openbox/dns-filter/summary` | `fetchDnsFilterSummary` (api/openbox.ts:171) | DnsFilterSummary | () |
+| GET | `/api/openbox/dns-filter` | `fetchDnsFilter` (api/openbox.ts) | DnsFilterStatus | () |
+| PUT | `/api/openbox/dns-filter` | `saveDnsFilter` (api/openbox.ts) | — | (settings: DnsFilterSettings) |
+| POST | `/api/openbox/dns-filter/apply` | `applyDnsFilter` (api/openbox.ts) | DnsFilterStatus | (update = false, listId = '') |
+| GET | `/api/openbox/dns-filter/preview?{x})}` | `fetchDnsFilterPreview` (api/openbox.ts) | DnsFilterPreview | (url: string, search: string, page: number, pageSize = 20, action: DnsFilterPrev |
+| GET | `/api/openbox/dns-filter/records?{x})}` | `fetchDnsFilterRecords` (api/openbox.ts) | { rows: DnsFilterRecord[]; total: number; page: number; pageSize: number } | (search: string, result: string, page: number, pageSize = 20) |
+| GET | `/api/openbox/dns-filter/summary` | `fetchDnsFilterSummary` (api/openbox.ts) | DnsFilterSummary | () |
 
 实现约定(M2):`apply` 请求体可空,`{ update?: bool, listId?: string }`:`update` 为真重新下载启用的名单(带 `listId` 只重下那一份),否则只下载没有缓存的;之后编成规则集并走一次完整部署,成功返回新的状态。关闭过滤时也走 `apply`(把规则撤下来),不下载名单。错误码:409 = 已有应用在进行,或内核没在运行(名单已更新保存但没应用,不会替用户启动内核);400 = 没有这份名单 / 一份能用的名单都没有;500 = 部署失败(`error` 里写着回滚情况);503 = 没接应用服务。GET 返回的 `lists[id].error` 是上次下载 / 解析失败的原因(失败时沿用上次的缓存),`pending` 表示设置与已应用的不一致。
 
@@ -250,7 +250,7 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/openbox/factory-reset` | `factoryReset` (api/openbox.ts:1645) | OpenboxFactoryResetResult | () |
+| POST | `/api/openbox/factory-reset` | `factoryReset` (api/openbox.ts) | OpenboxFactoryResetResult | () |
 
 实现约定(M5,`internal/factoryreset`、`internal/api/factoryreset`):无请求体,需要登录。响应 `{ok, seeded, profileSeeded, kernelStopped}`:`seeded` 固定是 2(档案、节点组;它们没存过就按随包默认算,所以「重新播种」就是删掉存的文件,不写任何默认内容;前端不读这个字段),`profileSeeded` 恒为 true,`kernelStopped` 为真表示清完时内核服务确认不在运行(没有服务管理器、管不了内核时是 false)。
 顺序:一、同一时刻只做一次,并且和部署互斥(另一次在进行 / 部署在进行 → 409,什么都没动);二、**先停内核**:先撤销 DNS 接管,再停服务,再确认真的停了,任何一步不成功就**一份数据都不删**,回 500「为安全起见没有清除任何数据:…」,数据和密码原样,可以排查后重试(读不到服务管理器 = 没有 procd / systemd 时跳过这一步);三、逐项清:DNS 查询记录、每日流量、故障转移(检测管理器的计划和 `failover.json`)、生成的内核配置(`config.json`、`config.prev.json`)、规则集目录和 DNS 过滤名单缓存(目录本身留着)、内核缓存 `cache.db`、状态目录里全部 `.json`(订阅、节点、节点组、档案、面板设置、背景图、共享网络、客户端 App、延迟历史、部署记录……;新增的状态文件自动包含)。一项失败不拦后面的;四、**访问密码和登录会话放最后**:前面只要有一项失败就不清密码,回 500 并写明已清和失败的项(面板不能在旧数据还留着时变成没有密码,再点一次即可重试)。
@@ -291,9 +291,9 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/openbox/failover/recheck` | `recheckFailover` (api/openbox.ts:815) | { ok: boolean } | (id: string, signal?: AbortSignal) |
-| POST | `/api/openbox/failover/refresh` | `refreshFailover` (api/openbox.ts:811) | { ok: boolean } | () |
-| GET | `/api/openbox/failover/status` | `fetchFailoverStatus` (api/openbox.ts:809) | OpenboxFailoverStatus | (signal?: AbortSignal) |
+| POST | `/api/openbox/failover/recheck` | `recheckFailover` (api/openbox.ts) | { ok: boolean } | (id: string, signal?: AbortSignal) |
+| POST | `/api/openbox/failover/refresh` | `refreshFailover` (api/openbox.ts) | { ok: boolean } | () |
+| GET | `/api/openbox/failover/status` | `fetchFailoverStatus` (api/openbox.ts) | OpenboxFailoverStatus | (signal?: AbortSignal) |
 
 实现约定(M4):部署成功后后端把故障转移计划存成配置目录里的 `failover.json`(启动时也先载入它),并让检测管理器换上新计划(没变的组保留数据、变了的从头来,马上按新计划对齐内核当前的选择)。后台每秒让管理器看一遍各组,到时间的组开一轮检测(`internal/failover` 的 `Manager`,经内核控制接口测各页签、确认后才切换;内核没在运行就读不到、不测不切、稍后重试)。`GET /status` 用这份计划加这次读到的内核选择(`GET /proxies`)算出每个组的 `currentLaneId`、`kernelNow` 和各页签的 `kernelNow`(以这次读到的为准,读不到内核时退回管理器上一轮记的),再叠上管理器的运行数据:`status`(管理器的:`pending` 还没测过第一轮 / `ok` / `backup` / `failing` 当前页签在连续失败 / `reject` / `unknown`;管理器说 `unknown` 而这次读到了内核时用按内核选择算出的)、`lastError`、`currentSince`、`lastSwitch`、`lastRoundAt`、`nextRoundAt`、`inFlight`、`round`、`manualRecheck`、`recheckPending`,各页签的 `health` / `failStreak` / `upSince` / `confirmed`,以及每个节点的检测结果(`ok` / `delay` / `at` / `reason` / `kind` / `error`;还没测过的有效节点是 `null`);顶层 `running` 是管理器有没有组在管,`probes` 是 `{interactive, background, limit, throughputPerSec, demandPerSec}`:`background` 是此刻在测的节点数、`limit` 是全局名额(4),`demandPerSec` 是按各组间隔每秒要测几个(上限),`interactive` 恒为 0、`throughputPerSec` 没统计为 `null`。`paused` 恒为空串、`version` 为 `null`、`reorder` 为 `null`(没有暂停和「按新顺序重选」这两个功能)。`POST /refresh`:所有组马上重排一轮(进行中的一轮作废),回 `{"ok":true}`;`POST /recheck`(`{"id":"组 id"}`):这个组的节点强制全测一遍,回 `{"ok":true}`,组不存在 404、请求体不对 400。
 
@@ -303,23 +303,23 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/groups` | `fetchNodeGroups` (api/openbox.ts:844) | OpenboxGroupsPayload | () |
-| PUT | `/api/openbox/groups` | `saveNodeGroups` (api/openbox.ts:896) | — | ( groups: OpenboxUserGroup[], ) |
+| GET | `/api/openbox/groups` | `fetchNodeGroups` (api/openbox.ts) | OpenboxGroupsPayload | () |
+| PUT | `/api/openbox/groups` | `saveNodeGroups` (api/openbox.ts) | — | ( groups: OpenboxUserGroup[], ) |
 
 ## `/api/openbox/kernel`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/kernel/version` | `fetchKernelVersion` (api/openbox.ts:1034) | OpenboxKernelVersion | () |
+| GET | `/api/openbox/kernel/version` | `fetchKernelVersion` (api/openbox.ts) | OpenboxKernelVersion | () |
 
 ## `/api/openbox/latency-history`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/latency-history` | `fetchLatencyHistory` (api/openbox.ts:1404) | { history: OpenboxLatencyHistory; updatedAt: number } | () |
-| POST | `/api/openbox/latency-history/samples` | `postLatencySamples` (api/openbox.ts:1409) | { ok: boolean; history: OpenboxLatencyHistory } | (samples: Array<{ name: string; time: string; delay: number }>) |
-| POST | `/api/openbox/latency-history/sync` | `syncLatencyHistory` (api/openbox.ts:1411) | { history: OpenboxLatencyHistory } | () |
-| GET | `/api/openbox/latency-history/version` | `fetchLatencyHistoryVersion` (api/openbox.ts:1406) | { updatedAt: number } | () |
+| GET | `/api/openbox/latency-history` | `fetchLatencyHistory` (api/openbox.ts) | { history: OpenboxLatencyHistory; updatedAt: number } | () |
+| POST | `/api/openbox/latency-history/samples` | `postLatencySamples` (api/openbox.ts) | { ok: boolean; history: OpenboxLatencyHistory } | (samples: Array<{ name: string; time: string; delay: number }>) |
+| POST | `/api/openbox/latency-history/sync` | `syncLatencyHistory` (api/openbox.ts) | { history: OpenboxLatencyHistory } | () |
+| GET | `/api/openbox/latency-history/version` | `fetchLatencyHistoryVersion` (api/openbox.ts) | { updatedAt: number } | () |
 
 实现约定(M3):样本 `{time, delay, node?}` 的 `time` 是 RFC3339、`delay` 是毫秒(0 = 不通),节点组的样本带 `node`(当时选中的节点),节点自己的没有;每个名字只留最新 10 条(旧 → 新),同一时刻只留一条,最多记 5000 个名字。`samples` 一次最多 500 条,名字不能为空或超过 200 个字符、时间要合法、延迟 0 – 600000,**任何一条不合法整批 400、什么都不记**;请求体上限 256 KiB(413)。`sync` 读一次内核的 Clash API `GET /proxies`,把各代理的测速记录合进来(`delay` 为 0 的不记);内核读不到不是错误,照样回现有的历史。`updatedAt`(毫秒)只在内容真有变化时才更新,没变化也不写盘。
 
@@ -329,13 +329,13 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/node-info/{x}` | `fetchNodeInfo` (api/openbox.ts:1873) | OpenboxNodeInfo | (tag: string) |
+| GET | `/api/openbox/node-info/{x}` | `fetchNodeInfo` (api/openbox.ts) | OpenboxNodeInfo | (tag: string) |
 
 实现约定(M3,仅 `GET node-info/{x}`):`x` 是节点的 tag(需 URL 编码);先在已启用订阅的节点里找,再找档案里启用的链式代理(名字就是 tag),都没有 404。`protocol` 是从外到内的协议层(类型、传输类型、`tls`、`reality`),`port` 为 0 时是 null,链式代理带 `detour`(= 它的 `upstream`)。入口地址:服务器是 IP 就直接用,是域名就用系统解析器解析(超时 5 秒),v4 / v6 分开并排序,sing-box 的 fake-ip 段(198.18.0.0/15)不算真实地址;解析不了是 200 加 `resolveError`、地址为空数组。`entryCountry` 只带缓存里已有的(查过 entry-country 之后才有),没有就是空串。
 
 实现约定(M3,`GET node-info/{x}/entry-country`):取这个节点入口地址里第一个公网 IPv4(已排序,没有再取第一个公网 IPv6;内网、回环、链路本地、CGNAT、fake-ip 段都不查,也不会发给第三方),按顺序问 api.ip.sb、ipwho.is、api.ipapi.is 三家的「按 IP 查询」接口(只认答的是同一个 IP 的),回 `{ip, country}`,`country` 是两位大写国家代码。成功缓存一天,失败缓存一分钟(调用方取消不缓存),最多 512 个 IP。节点没有 404;没有可查的公网入口地址(解析不了、全是内网 / 假 IP)或三家都查不到是 502 加中文原因(前端遇到错误只是不显示国旗)。
-| GET | `/api/openbox/node-info/{x}/entry-country` | `fetchNodeEntryCountry` (api/openbox.ts:1874) | { ip: string; country: string } | (tag: string) |
-| POST | `/api/openbox/node-info/{x}/exit` | `fetchNodeExit` (api/openbox.ts:1877) | OpenboxNodeExit | (tag: string, refresh = false) |
+| GET | `/api/openbox/node-info/{x}/entry-country` | `fetchNodeEntryCountry` (api/openbox.ts) | { ip: string; country: string } | (tag: string) |
+| POST | `/api/openbox/node-info/{x}/exit` | `fetchNodeExit` (api/openbox.ts) | OpenboxNodeExit | (tag: string, refresh = false) |
 
 实现约定(M3,`POST node-info/{x}/exit`,**2026-11-10 起对齐上游 v0.1.423,来源全部改为 ip.net.coffee**,原 proxycheck.io / RDAP 已去掉):请求体可以没有,`{"refresh":true}` 跳过缓存重查,但 15 秒内刚查过的仍按缓存答;缓存 6 小时(按节点 tag,最多 256 个),响应带 `cached:true` 表示来自缓存。一、经这个节点(起临时 sing-box,和节点测速同一套)取 `https://ip.net.coffee/cdn-cgi/trace`(`key=value` 行,`h` 必须是 `ip.net.coffee`、`ip` 必须是公网地址,`loc` 是两位大写国家码),得到出口 IP 和国家;二、由本进程直接(不经节点)取 `ipv2/lookup/<ip>`(IP 必须对得上、不能有 `error` / `is_bogon`):`countryCode` → `country`,`country` / `region` / `city` 去重后用「 · 」连接 → `location`,`asn`(数字或 `AS…`)→ `asn`,`asOrganization` / `isp` / `company_name` → `asnOwner`,`is_mobile` / `isResidential` / `is_datacenter` / `company_type` / `asn_kind` → `ipType`(mobile / residential / hosting / business),`is_vpn` / `is_proxy` / `is_tor` → `proxyType`(「 · 」连接),`trust_score`(0 到 100)→ `trustScore`,`registered_country_code` → `registeredCountry`,`intelligence` 和顶层标志 → `riskAssessment`(`threats` 最多 20 条且每项要有 `label`、`abuseLevel`、`abuseScore`、`httpBlacklist`、`rpkiReported`、`vpn` / `proxy` / `tor` / `crawler`);三、再取 `ipv2/radar/<asn 数字>`,和 lookup 一起估出 `humanTraffic`(有近 28 天的 ASN 统计就用它,`basis` 为 `asn-28d`;否则按网络类型估,`basis` 为 `network-estimate`;Tor、VPN / 代理、爬虫、滥用者另有折扣,限制在 1 到 99,附带 `bot` 和 `stale`)。同一个出口 IP 的 lookup 和同一个 ASN 的 radar 各缓存 24 小时(各最多 512 个),`refresh` 跳过这层缓存;radar 失败按类型估,不算出错。`source` 固定 `ip.net.coffee`,`risk` / `devices` 固定 null(保留键),`native` = 登记国家和 `country` 一致,任何一边不知道是 null。lookup 没答时仍给出口 IP 和国家,`errors.netcoffee` 写原因,这样的结果不缓存;但这个节点已有缓存结果时改回 502「已保留上一次节点信息和风险评估」。`ipv6` 只在出口本身是 IPv6 时有值。节点在当前配置里没有可探测的出站(没启用、是节点组)404;openbox-core 或 sing-box 不可用 503;经节点连不上、trace 答的不是有效出口信息 502;其余 500。同时最多 2 个经节点的探测,同一个节点的并发请求合并成一次。**与上游的差别**:上游的 lookup / radar 按目标分流走(可能经节点),这里由路由器本机直连去取;答话字段按上游读取逻辑写,没有官方文档,真实答话要真机核对。
 
@@ -343,7 +343,7 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/node-quality` | `fetchNodeQuality` (api/openbox.ts:2046) | OpenboxNodeQuality | (query: { allSubscriptions?: boolean; search?: string; details?: string; nodePageSize?: number; allNodes?: boolean; node?: string };后端另认 page / pageSize / nodePage) |
+| GET | `/api/openbox/node-quality` | `fetchNodeQuality` (api/openbox.ts) | OpenboxNodeQuality | (query: { allSubscriptions?: boolean; search?: string; details?: string; nodePageSize?: number; allNodes?: boolean; node?: string };后端另认 page / pageSize / nodePage) |
 
 实现约定(M3,概览页「节点质量」卡,**2026-11-10 起对齐上游 v0.1.423**,原先依据 `zh.ts` 说明文字自己定的刻度和分档已换成上游的):
 - **参数**:`page`(默认 1)、`pageSize`(默认 20,1 – 100)、`allSubscriptions`(一页给全部订阅)、`search`(不分大小写,**只按订阅名**,不看节点)、`details`(要展开节点的订阅 id,只有它带 `nodes` / `nodePage` / `nodePageSize`)、`nodePage`(默认 1)、`nodePageSize`(默认 20,1 – 100)、`allNodes`(一页给全部节点)、`node`(要带 `charts` 的节点 tag,要和 `details` 一起给、且在这一页里)。数字参数不认得当没传,越界夹取(页码夹到 1 – 总页数),不报 400;布尔只认 `true` / `1`。订阅和节点都按可用率从高到低排(没有可用率排最后,同分保持原顺序)。
@@ -359,9 +359,9 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/openbox/nodes/latency` | `testNodeLatency` (api/openbox.ts:666) | { results: OpenboxLatencyResult[] } | (payload: { url?: string urls?: string[] content?: string userAgent?: string log |
-| POST | `/api/openbox/nodes/latency` | `testStoredLatency` (api/openbox.ts:1793) | OpenboxStoredLatencyResponse | (jobs: OpenboxStoredLatencyJob[], timeoutMs?: number) |
-| POST | `/api/openbox/nodes/latency` | `testStoredLatencyStream` (api/openbox.ts:1805) | — | ( jobs: OpenboxStoredLatencyJob[], onDone: (indices: number[]) |
+| POST | `/api/openbox/nodes/latency` | `testNodeLatency` (api/openbox.ts) | { results: OpenboxLatencyResult[] } | (payload: { url?: string urls?: string[] content?: string userAgent?: string log |
+| POST | `/api/openbox/nodes/latency` | `testStoredLatency` (api/openbox.ts) | OpenboxStoredLatencyResponse | (jobs: OpenboxStoredLatencyJob[], timeoutMs?: number) |
+| POST | `/api/openbox/nodes/latency` | `testStoredLatencyStream` (api/openbox.ts) | — | ( jobs: OpenboxStoredLatencyJob[], onDone: (indices: number[]) |
 
 实现约定(M3,延迟历史):已保存节点的测速(请求体带 `jobs`,含 `progress` 的 NDJSON)测完后按每个 job 的 `record`(不传按默认记,`false` 只测不记)写进延迟历史,响应(NDJSON 是最后一行)带回**整份** `history`;全都不记时不带 `history`。通了记耗时(至少 1),超时 / 被拒 / 失败记 0,`invalid` / `not-found`(根本没测)不记;预览(带 `url` / `urls` / `content` / `loginId`)和链式代理测速不记。记历史失败不影响测速本身。节点组经临时实例测出的样本不带 `node`。
 
@@ -374,7 +374,7 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/openbox/penetration` | `queryPenetration` (api/openbox.ts:1174) | OpenboxPenetrationResult | (target: string) |
+| POST | `/api/openbox/penetration` | `queryPenetration` (api/openbox.ts) | OpenboxPenetrationResult | (target: string) |
 
 > 实现约定(M3,第一部分):请求 `{"target":"域名或 IP"}`,目标不合法 400,读不到已部署配置 500。按已部署 `config.json` 的 `route.rules` 推算(`internal/routedecide`)。已给:`matched`(`index` / `rule` / `outbound` / `action`)、`owner`(只认得出的)、`assumed`(`needs` / `leaf` / `sameOutcome`)、`preResolve`、`dns`、`chain`(永远是数组,reject 时为空)、`finalOutbound`(拿不到为 null)、`chainError`、`matchError`(规则集没能检查:`matched` 为 null、不给线路)、`routingStale`。`matched.entries`(最多 20 条,来源是规则集名或 `custom`)/ `entriesTotal` 已做。`resolved` 和 `matched.viaIp` 已做:域名目标先经内核的 DNS 入站解析(档案开了 IPv6 才再问 AAAA),响应里 `resolved` 是 `{fakeIp?, addresses, error?}`(`addresses` 永远是数组;解析失败不算接口错误,原因写在 `error`;IP 目标不解析、没有这个字段)。推算时把「第一个真实 IPv4(没有就第一个 IPv6)」当终端会连的目的 IP:终端自己解析后按真实地址连进内核、内核再嗅探出域名,连接同时带域名和目的 IP,所以 `ip_is_private`、`ip_cidr`、`ip_version` 和规则集里的 IP 条目按这个地址判;core 给「看 IP 的规则」带了「连接没有域名」的前提(`domain_regex` 取反),有域名的连接不会被它们命中,这一点推算里照样成立。靠地址命中的规则,`matched.viaIp` 是那个地址,`entries` 也把规则集里命中它的 IP 条目列出来。解析到的是占位地址(`fakeIp: true`,连接进内核后按域名找回目标)或解析失败时没有目的 IP,IP 条件仍记成 `assumed` 的前提(与原来一致)。前置自定义分流的归属已做:命中的规则落在自定义分流那一段(core 生成顺序固定:bypass → sniff → DNS 劫持 → tun 防回环 → 前置自定义分流 → `ip_is_private` 私网直连,开头那串基础规则之后、第一条私网直连之前就是它)时,`owner` 是 `{kind:"custom", name}`,`matched.ownerName` 同名;名字取档案路由经 core `normalizeRouting` 规范化后的 `custom.name`,只在命中这一段时才取;位置优先于形状(自定义分流的 IP 段拒绝版带 `ip_cidr`,不会被认成内核占位段 `kernel`);取不到名字(核心不可用 / 名字为空)就不给 `owner`,不猜。没有启用前置自定义分流时这一段是空的,其它规则的认法不变。**不做**:`preMatch`、`firstLayer`(DESIGN 第 8 节已定)。
 
@@ -382,7 +382,7 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/policies/entries?{x}` | `fetchPolicyEntries` (api/openbox.ts:1214) | OpenboxPolicyEntries | (params: { name: string tab?: 'all' \| 'domain' \| 'ip' q?: string sort?: 'type' |
+| GET | `/api/openbox/policies/entries?{x}` | `fetchPolicyEntries` (api/openbox.ts) | OpenboxPolicyEntries | (params: { name: string tab?: 'all' \| 'domain' \| 'ip' q?: string sort?: 'type' |
 
 > 实现约定(M1):`name` 是站点集名(必填,缺少 400,没有这个站点集 404)。取自档案的路由,先交给核心 `normalizeRouting` 规范化。`name` 等于兜底站点集名时返回 `fallback:true` 和空条目(兜底命中其余所有目标);等于前置自定义分流名时展开它的每一行(含端口规则,`family:"other"`);否则展开该站点集的手写条件(来源 `custom`)和规则集链接(来源是链接的「主机 + 路径」,不带账号、查询串和片段)。条目 `type` 为 `domain` / `domain_suffix` / `domain_keyword` / `domain_regex` / `ip_cidr`(和 `rulesets/preview` 一致)或 `port`;同类型、同内容、同来源去重,总量最多 30 万条。`tab` 取 `all` / `domain` / `ip`(其它 400);`counts` 是各档总条数(不受 `tab` 和 `q` 影响,`other` 族只算进 `all`),`total` 是当前档的条数,`matched` 是当前档里命中 `q` 的条数;`q` 不区分大小写,匹配内容和来源;`sort` 取 `type` / `content` / `source`(其它 400,缺省保持原顺序),`dir` 取 `asc` / `desc`;`limit` 默认 50、最大 500。规则库分类(`geosite-*` / `geoip-*`,含前置自定义分流里的 `geosite` / `geoip` / `ruleset` 行)按 `rulesets/entries` 同一套随包规则库展开,条目来源写分类名(例如 `geosite-cn`),搜索词也能匹配来源;`missing` 列出展开不了的来源:规则库里没有的分类(或名字不合法、没有 `sing-box`、解码失败)、拉取失败的规则集链接(只写「主机 + 路径」)、没有链接可展开的 `list-*`、被截断的分类(带「条目太多,只统计了前 30 万条」的提示);单个来源失败不会让整个请求失败。没有 openbox-core 时返回 503。
 
@@ -390,10 +390,10 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/profile` | `fetchProfile` (api/openbox.ts:516) | { profile: OpenboxProfile } | () |
-| PUT | `/api/openbox/profile` | `saveProfile` (api/openbox.ts:534) | { profile: OpenboxProfile } | (patch: Record<string, unknown>) |
-| GET | `/api/openbox/profile/defaults?region=cn` | `fetchDnsRewriteDefaults` (api/openbox.ts:522) | { dnsRewriteDefaults?: OpenboxDnsRewriteRule[] } | () |
-| GET | `/api/openbox/profile/defaults?region={x}` | `fetchProfileDefaults` (api/openbox.ts:528) | { defaults: OpenboxProfileDefaults } | (region: string) |
+| GET | `/api/openbox/profile` | `fetchProfile` (api/openbox.ts) | { profile: OpenboxProfile } | () |
+| PUT | `/api/openbox/profile` | `saveProfile` (api/openbox.ts) | { profile: OpenboxProfile } | (patch: Record<string, unknown>) |
+| GET | `/api/openbox/profile/defaults?region=cn` | `fetchDnsRewriteDefaults` (api/openbox.ts) | { dnsRewriteDefaults?: OpenboxDnsRewriteRule[] } | () |
+| GET | `/api/openbox/profile/defaults?region={x}` | `fetchProfileDefaults` (api/openbox.ts) | { defaults: OpenboxProfileDefaults } | (region: string) |
 
 > 实现约定(M1):GET 返回「默认值 + 已保存内容」的完整档案。PUT 的请求体是**补丁**,深度合并(对象递归合并,数组和标量整体替换,`null` 删除该键,下次读取由默认值补上),合并后整体校验,失败 `400 { error }` 且不落盘;`rulesetDir` 由服务端决定,客户端传的忽略;`chainProxies[].node` 只读(link 没变沿用旧摘要)。请求体上限 1 MiB。未知键原样保留。
 >
@@ -417,7 +417,7 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/openbox/route-test` | `testRoute` (api/openbox.ts:1295) | OpenboxRouteTest | (target: string, port?: number, method: OpenboxProbeMethod = 'GET') |
+| POST | `/api/openbox/route-test` | `testRoute` (api/openbox.ts) | OpenboxRouteTest | (target: string, port?: number, method: OpenboxProbeMethod = 'GET') |
 
 实现约定(M3,`POST route-test` 的**真实访问部分**;`dns` 判定和还没做的字段见下面):请求体 `{target, port?, method?}`;`target` 只认字母 / 数字 / `. _ : -` 且不以 `-` 开头(与前端 `isValidPenetrationTarget` 一致,≤ 253 字符),`port` 缺省或 1–65535,`method` 缺省 `GET`,取 `GET` / `HEAD` / `TCP` / `TLS`(大小写不分);不合法回 400 + 中文原因。探测前先让内核丢掉 DNS 缓存(只是让缓存失效,清不掉也照常测),再经内核的面板入站(127.0.0.1:7891)向 `CONNECT` 建一条隧道,连接开着时读一次 `/connections`,按「来源 127.0.0.1 + 本地端口」认出自己那条。`exit.url`:没指定端口按 `https://<目标>/`,端口 80 用 `http`,其它端口一律 `https`(IPv6 字面量带方括号);`GET` / `HEAD` 不跟随跳转,拿到什么状态码报什么(`ok:true` + `status`;`cf-mitigated: challenge` 响应头标成 `challenge:"cloudflare"`,请求本身算通);`TLS` 是建隧道加握手(`ms` 含两者,没有 `status`;目标是 IP 时不校验证书,域名照常校验);失败时 `ok:false` + 中文 `error`(超时 / 证书校验失败 / 连接被中断 / 内核没在运行等,不带网址)。认出连接后给 `chains`(路由选中的站点集 / 组在前、实际出口在后,与 Clash API 的顺序相反)、`rule` / `rulePayload`(内核报的命中规则)、`destinationIP`、`viaProxy`(出口不是 direct 出站);连接表读不到只写 `connectionsError`、探测本身仍算成功,表里找不到自己那条写 `notSeen:true`。整次探测超时 8 秒。
 
@@ -433,16 +433,16 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/rulesets/entries?{x}` | `fetchRulesetEntries` (api/openbox.ts:882) | OpenboxRulesetEntries | ( tag: string, { q = '', offset = 0, limit = 50 }: { q?: string; offset?: number |
-| GET | `/api/openbox/rulesets/import?{x}` | `importRuleList` (api/openbox.ts:873) | OpenboxRulesetEntries | (url: string) |
-| GET | `/api/openbox/rulesets/preview?{x}` | `fetchRuleListPreview` (api/openbox.ts:867) | OpenboxRulesetEntries | ( url: string, { q = '', offset = 0, limit = 50 }: { q?: string; offset?: number |
-| POST | `/api/openbox/rulesets/refresh` | `refreshRuleList` (api/openbox.ts:1697) | OpenboxRulesetRefreshResult | (url: string) |
+| GET | `/api/openbox/rulesets/entries?{x}` | `fetchRulesetEntries` (api/openbox.ts) | OpenboxRulesetEntries | ( tag: string, { q = '', offset = 0, limit = 50 }: { q?: string; offset?: number |
+| GET | `/api/openbox/rulesets/import?{x}` | `importRuleList` (api/openbox.ts) | OpenboxRulesetEntries | (url: string) |
+| GET | `/api/openbox/rulesets/preview?{x}` | `fetchRuleListPreview` (api/openbox.ts) | OpenboxRulesetEntries | ( url: string, { q = '', offset = 0, limit = 50 }: { q?: string; offset?: number |
+| POST | `/api/openbox/rulesets/refresh` | `refreshRuleList` (api/openbox.ts) | OpenboxRulesetRefreshResult | (url: string) |
 
 ## `/api/openbox/servers`
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/servers/port-check?port={x}&id={x}` | `checkServerPort` (api/openbox.ts:1706) | OpenboxPortCheck | (port: number, id: string) |
+| GET | `/api/openbox/servers/port-check?port={x}&id={x}` | `checkServerPort` (api/openbox.ts) | OpenboxPortCheck | (port: number, id: string) |
 
 实现约定(M2):`port-check` 回 `{ ok, reason?, name? }`;端口不是 1–65535 的整数不是 400,而是 `{ ok: false, reason: "invalid" }`。`reason` 依次判 `invalid` → `reserved`(面板监听端口、内核固定端口 7853 / 7855 / 7891 / 9095、已部署配置里的控制接口和非 `share-*` 入站)→ `server`(档案里另一台服务器占着,`name` 是它的名字;`id` 是正在编辑的那台,自己不算)→ `listening`(读 `/proc/net`;因为不知道协议,TCP / UDP 任一被占都算)。读不到端口占用情况回 500。服务器本身存在档案的 `servers` 里,走 `/api/openbox/profile` 读写。
 
@@ -450,8 +450,8 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/openbox/service/core/{x}` | `runServiceAction` (api/openbox.ts:1030) | OpenboxServiceActionResult | (action: OpenboxServiceAction) |
-| GET | `/api/openbox/service/status` | `fetchServiceStatus` (api/openbox.ts:1022) | OpenboxServiceStatus | () |
+| POST | `/api/openbox/service/core/{x}` | `runServiceAction` (api/openbox.ts) | OpenboxServiceActionResult | (action: OpenboxServiceAction) |
+| GET | `/api/openbox/service/status` | `fetchServiceStatus` (api/openbox.ts) | OpenboxServiceStatus | () |
 
 实现约定(M1):`status` 的 `conflicts` 是正在运行的其它代理服务 `[{ id, label, running: true }]`,只读检测(OpenWrt 查 `/etc/init.d/<名> running`,systemd 用 `systemctl is-active`),名单见 `internal/system/conflicts.go` 的 `KnownConflicts`,自己的 sing-box 和后端服务名不算;检测失败当作没有,接口不报错。`pendingRestart` 是 `{pending, reasons}`:**内核在运行**、且生成配置用到的输入和**上次成功部署**时不一样才为真,`reasons` 取 `nodes` / `dns` / `route` / `inbounds` / `system`(按这个顺序,永远是数组)。做法见 `internal/singbox/pending.go`:每次部署成功(`POST /deploy`、DNS 过滤的应用)在生成配置之前取一份按原因分组的输入指纹存进数据目录的 `applied-config.json`,状态接口现算一份来比;只读已存的数据,不调 core、不联网。从没通过本后端部署成功过(没有记录)时不判断,恒为「没有」;内核没在运行、算不出指纹时也是「没有」,接口不报错。不进指纹的:订阅的用量 / 更新时间 / 节点数、档案里的 `updates` / `traffic` / `shareRegions` / `serverInfo`、`dns.filter` 里的名单名字和自动更新计划(过滤是否按当前设置应用过才算)、本机的 resolv.conf 和局域网网段、规则集链接的远端内容。清掉它要再**部署**一次;`POST /service/core/restart` 只是让内核重读磁盘上的旧配置,不会清。没有 `container` / `conflictAutoStopped`(后端不自动停别的服务)。 `POST /service/core/{x}` 与 DNS 接管的配合:`stop` / `restart` 之前先撤销接管,撤销不成功回 500 且不动内核;`start` / `restart` 命令成功后按 `dns.mode` 对齐(等内核的 DNS 入站应答最多 20 秒),响应在原有的 `{ok, code, stderr, durationMs}` 之外,有话要说时多一个 `dnsNote`(例如对齐失败、DNS 保持原样),前端不认识这个字段时忽略即可;命令本身失败时不去对齐。后端进程启动时会先清上次异常退出遗留的接管(内核正常就保留,内核不在了就撤销)。
 
@@ -459,8 +459,8 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/openbox/site-latency` | `testSiteLatency` (api/openbox.ts:1748) | OpenboxSiteLatencyRun | (sites: OpenboxSiteInput[]) |
-| GET | `/api/openbox/site-latency/history` | `fetchSiteLatencyHistory` (api/openbox.ts:1721) | Partial<OpenboxSiteLatencyHistory> | () |
+| POST | `/api/openbox/site-latency` | `testSiteLatency` (api/openbox.ts) | OpenboxSiteLatencyRun | (sites: OpenboxSiteInput[]) |
+| GET | `/api/openbox/site-latency/history` | `fetchSiteLatencyHistory` (api/openbox.ts) | Partial<OpenboxSiteLatencyHistory> | () |
 
 ## `/api/openbox/subscription-shares`
 
@@ -468,11 +468,11 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/subscription-shares` | `fetchSubscriptionShares` (api/openbox.ts:547) | { shares: OpenboxSubscriptionShare[] } | () |
-| POST | `/api/openbox/subscription-shares` | `createSubscriptionShare` (api/openbox.ts:552) | { share: OpenboxSubscriptionShare } | (payload: { name: string; host: string; protocol: 'http' \| 'https'; subscriptio |
-| DELETE | `/api/openbox/subscription-shares/{x}` | `deleteSubscriptionShare` (api/openbox.ts:573) | — | (id: string) |
-| PATCH | `/api/openbox/subscription-shares/{x}` | `updateSubscriptionShare` (api/openbox.ts:560) | { share: OpenboxSubscriptionShare } | (id: string, payload: { name: string; host: string; protocol: 'http' \| 'https'; |
-| POST | `/api/openbox/subscription-shares/{x}/regenerate` | `regenerateSubscriptionShare` (api/openbox.ts:568) | { share: OpenboxSubscriptionShare } | (id: string) |
+| GET | `/api/openbox/subscription-shares` | `fetchSubscriptionShares` (api/openbox.ts) | { shares: OpenboxSubscriptionShare[] } | () |
+| POST | `/api/openbox/subscription-shares` | `createSubscriptionShare` (api/openbox.ts) | { share: OpenboxSubscriptionShare } | (payload: { name: string; host: string; protocol: 'http' \| 'https'; subscriptio |
+| DELETE | `/api/openbox/subscription-shares/{x}` | `deleteSubscriptionShare` (api/openbox.ts) | — | (id: string) |
+| PATCH | `/api/openbox/subscription-shares/{x}` | `updateSubscriptionShare` (api/openbox.ts) | { share: OpenboxSubscriptionShare } | (id: string, payload: { name: string; host: string; protocol: 'http' \| 'https'; |
+| POST | `/api/openbox/subscription-shares/{x}/regenerate` | `regenerateSubscriptionShare` (api/openbox.ts) | { share: OpenboxSubscriptionShare } | (id: string) |
 
 ## `/api/openbox/subscriptions`
 
@@ -480,15 +480,15 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/subscriptions` | `fetchSubscriptions` (api/openbox.ts:542) | { subscriptions: OpenboxSubscription[] } | () |
-| POST | `/api/openbox/subscriptions` | `createSubscription` (api/openbox.ts:624) | — | (payload: { url?: string urls?: string[] content?: string userAgent?: string log |
-| POST | `/api/openbox/subscriptions/login` | `loginSubscription` (api/openbox.ts:607) | OpenboxSubscriptionLoginResult | (payload: { url: string userAgent?: string username: string password: string nam |
+| GET | `/api/openbox/subscriptions` | `fetchSubscriptions` (api/openbox.ts) | { subscriptions: OpenboxSubscription[] } | () |
+| POST | `/api/openbox/subscriptions` | `createSubscription` (api/openbox.ts) | — | (payload: { url?: string urls?: string[] content?: string userAgent?: string log |
+| POST | `/api/openbox/subscriptions/login` | `loginSubscription` (api/openbox.ts) | OpenboxSubscriptionLoginResult | (payload: { url: string userAgent?: string username: string password: string nam |
 | POST | `/api/openbox/subscriptions/node-share` | `shareSubscriptionNode` (api/openbox.ts) | { name: string; link: string } | (payload: 订阅预览同一套来源与改名规则 + { originalTag: string; occurrence?: number; newTag?: string }) |
-| PUT | `/api/openbox/subscriptions/order` | `reorderSubscriptions` (api/openbox.ts:900) | — | (ids: string[]) |
-| POST | `/api/openbox/subscriptions/preview` | `previewSubscription` (api/openbox.ts:589) | OpenboxSubscriptionPreview | (payload: { url?: string urls?: string[] content?: string userAgent?: string log |
-| DELETE | `/api/openbox/subscriptions/{x}` | `deleteSubscription` (api/openbox.ts:904) | — | (id: string) |
-| PATCH | `/api/openbox/subscriptions/{x}` | `updateSubscription` (api/openbox.ts:637) | — | ( id: string, payload: { name?: string; url?: string; urls?: string[]; content?: |
-| POST | `/api/openbox/subscriptions/{x}/refresh` | `refreshSubscription` (api/openbox.ts:915) | — | ( id: string, renameOptions?: OpenboxRenameOptions, ) |
+| PUT | `/api/openbox/subscriptions/order` | `reorderSubscriptions` (api/openbox.ts) | — | (ids: string[]) |
+| POST | `/api/openbox/subscriptions/preview` | `previewSubscription` (api/openbox.ts) | OpenboxSubscriptionPreview | (payload: { url?: string urls?: string[] content?: string userAgent?: string log |
+| DELETE | `/api/openbox/subscriptions/{x}` | `deleteSubscription` (api/openbox.ts) | — | (id: string) |
+| PATCH | `/api/openbox/subscriptions/{x}` | `updateSubscription` (api/openbox.ts) | — | ( id: string, payload: { name?: string; url?: string; urls?: string[]; content?: |
+| POST | `/api/openbox/subscriptions/{x}/refresh` | `refreshSubscription` (api/openbox.ts) | — | ( id: string, renameOptions?: OpenboxRenameOptions, ) |
 
 实现约定(M4,订阅定时更新):订阅的 `autoUpdate` 由后端调度器执行(没有对应的 HTTP 接口)。`mode` 为 `hours` 时是上次更新后每隔 `hours` 小时;否则是上次更新那天起每隔 `days` 天的 `hour` 点(进程本地时区)。只更新订阅里的节点,不自动部署、不重启内核;节点变了以后 `service/status` 的 `pendingRestart`(原因 `nodes`)会提示。停用的订阅、没开定时的订阅、只有粘贴内容没有地址的订阅不更新。失败后 10 分钟 / 30 分钟 / 1 小时退避重试。
 
@@ -496,9 +496,9 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/system/timezone` | `fetchTimezone` (api/openbox.ts:1680) | OpenboxTimezoneState | () |
-| PUT | `/api/openbox/system/timezone` | `saveTimezone` (api/openbox.ts:1683) | OpenboxTimezoneState | (zone: string) |
-| GET | `/api/openbox/system/resources` | `fetchSystemResources` (api/openbox.ts:2063) | SystemResources | (signal?: AbortSignal) |
+| GET | `/api/openbox/system/timezone` | `fetchTimezone` (api/openbox.ts) | OpenboxTimezoneState | () |
+| PUT | `/api/openbox/system/timezone` | `saveTimezone` (api/openbox.ts) | OpenboxTimezoneState | (zone: string) |
+| GET | `/api/openbox/system/resources` | `fetchSystemResources` (api/openbox.ts) | SystemResources | (signal?: AbortSignal) |
 
 `system/resources`(概览页「硬件负载」、侧边栏卡片、概览的「活跃终端」共用,前端每 2 秒取一次,取不到就当没有):响应 `{at, cpu:{usage, cores:[{id, usage}]}, memory?:{total, available, used, openbox?}, activeTerminals?}`,`at` 毫秒,CPU 单位 % 一位小数,内存单位字节。实现约定(`internal/sysres`,自己的设计,形状取自前端 `SystemResources` 和各组件的用法,没有参照上游):CPU 读 `/proc/stat`,用两次采样的差算(第一次调用隔 200ms 再采;距上一次采样不到 500ms 的调用直接用上一次的结果),`cores[].id` 形如 `cpu0`;内存读 `/proc/meminfo`,`used = total − available`(没有 `MemAvailable` 的老内核用 `MemFree + Buffers + Cached`),`openbox` = 后端自己 + comm 为 `sing-box` 的内核进程的 `VmRSS` 之和,读不到就不给;`activeTerminals` = 内核当前连接里出现的来源 IP 去掉本机地址 / 回环 / 未指定地址,已知 MAC 的(IPv4 读 `/proc/net/arp`,IPv6 读 `ip -6 neigh show`)合并成一个,没有邻居表项的各算一个;内核没在运行(读不到连接)就不给这个字段。读不到 `/proc/stat`(不是 Linux)回 503;内存 / 终端读不到只是少对应字段。**没做**:从终端里排除「真实路由测试」的虚拟终端地址(测试进行的几秒里它会多算一台)。需要在真机上核对:每核和总负载的读数、内存三项、`activeTerminals` 和路由器后台里的在线设备数是否合理。
 
@@ -508,8 +508,8 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/openbox/terminal-test` | `testTerminal` (api/openbox.ts:1398) | OpenboxTerminalTest | (target: string, port?: number, method: OpenboxProbeMethod = 'GET') |
-| GET | `/api/openbox/terminal-test/capability` | `fetchTerminalCapability` (api/openbox.ts:1396) | OpenboxTerminalCapability | () |
+| POST | `/api/openbox/terminal-test` | `testTerminal` (api/openbox.ts) | OpenboxTerminalTest | (target: string, port?: number, method: OpenboxProbeMethod = 'GET') |
+| GET | `/api/openbox/terminal-test/capability` | `fetchTerminalCapability` (api/openbox.ts) | OpenboxTerminalCapability | () |
 
 实现约定(`internal/system/terminalcap.go`、`internal/system/vterm.go`、`internal/api/terminaltest`):`GET /capability` 只读,逐项检查建虚拟终端要的前提,缺的按 `root` / `netns` / `veth` / `lan` / `conntrack` / `dhcp` 的顺序列在 `missing`(永远是数组),`ok` = 一样不缺,`lan` 是要接的 LAN 口 `{ device, address, mask }`(没有是 `null`)。判据:`root` 是进程有效用户为 0;`netns` 是有 `ip`、`/proc/self/ns/net` 在、`ip netns list` 退出码为 0(OpenWrt 默认的 busybox ip 不带 netns,要装 ip-full);`veth` 是有 `ip` 且内核有 veth 驱动(已加载 / 编进内核 / 模块文件在 `/lib/modules/<版本>/` 下);`lan` 是有私有 IPv4 的 LAN 口(`br-lan` / `lan*` 优先,跳过隧道和容器网桥);`conntrack` 是 `/proc/net/nf_conntrack` 在或有 `conntrack` 命令;`dhcp` 是有 `udhcpc` / `dhclient` / `dhcpcd` 之一。判断不了的当缺,不猜。`POST` 请求体和校验与 `route-test` 一样:缺前提时 200 回 `{ target, mode: "lan", capable: false, missing }`。**前提都满足时(2026-11-04 起)**:用能力检测挑出的 LAN 口建虚拟终端(独立命名空间 + veth 接 LAN 网桥,`system.VTermNet.Ensure`)并 DHCP 取址(`AcquireDHCP`),200 回 `{ target, mode: "lan", capable: true, source: { kind: "virtual", name(命名空间名), ip, mac, via: "dhcp", dns(永远是数组), gateway(没给是 ""), lanDevice, reused, dhcpMs }, timing: { totalMs } }`;建不起来或取不到地址回 200 加 `setupError`(原因原文,没有 `source`)。**取址之后:** 有探测器时响应还带 `dns` / `exit` / `probeStderr`(见 `internal/nsprobe`);域名目标且终端问的 DNS 服务器正是本机 LAN 口地址、`dns.mode = dnsmasq` 且接管生效时,再带 `dnsForward: { forward: "kernel", plan: "all", to: <内核 DNS 入站地址> }`,其它情况不带(不猜)。**conntrack 取证(只读,`internal/conntrack`)的 DNS 部分:** 探测进程记下问 DNS 用的 UDP 源端口,后端据此在连接跟踪表(`/proc/net/nf_conntrack`,打不开退 `conntrack -L`)里认出这次的查询,给 `dnsEvidence: { flows, hijacked, answeredBy, line }`(回复方的地址或端口与被问的服务器不一致才算 `hijacked`;`flows` 为 0 = 读得到表但没有这次的记录);读不到表、没拿到源端口时不带该字段。**入口取证(`kernel` / `entry`):** 探测进程出结果后先留着连接,后端趁这时读内核连接表(按终端地址 + 源端口认出这一条)、conntrack(回复方有没有被改写、mark)和系统路由(`ip route get ... iif <LAN 设备>`),给 `kernel: {seen, inbound?, rule, rulePayload, chains, destinationIP?, host?, viaProxy, noDomain?}` 和 `entry: {kind, via?, reason?, redirectPort?, rewrittenTo?, device?, gateway?, masquerade?, error?, evidence}`(旁路时还有 `exit.forward`);判法见 `internal/api/terminaltest/entry.go` 的注释。证据不足一律 `kind: "unknown"` 并给原因,不猜;nft 旁路集合和入口模式拿不到,`evidence` 里不带 `set` / `autoRedirect`。探测器不能留连接、或没接内核连接表时这两个字段不出现。**旁路由:** DHCP 给的网关不是本机 LAN 口地址时,虚拟终端的网关和 DNS 改指到本机再测,`source.gateway` / `source.dns` 是改指之后的值并带 `source.override: { gateway }`;改指失败回 `setupError`。**`firstLayer`(2026-11-10):** 取址成功后、探测之前给 `firstLayer: { bypassEnabled, bypassSets, dnsMode, dnsForward? }`,取自已部署的 `config.json` 和档案:`bypassSets` 是 tun 入站 `route_exclude_address_set`(热切换裁剪名 `obflip-byp-<集合名>` 还原成 `<集合名>`),`dnsMode` 是档案的 `dns.mode`,`dnsForward` 在模式不是 dnsmasq 时为 `none`、dnsmasq 且接管生效时为 `all`、dnsmasq 但接管没生效时不带;读不到已部署配置或档案模式时整个字段不带。建终端失败(`setupError`)时也不带。**内核 DNS 实录(`kernelDns`):** 域名目标时,发探测之前先订阅内核日志流(Clash API 的 `/logs`,WebSocket,只在测试的这一两秒开着),从订阅期间的日志里截这次查询:`kernelDns: {seen, source, ruleIndex(没命中规则为 null), ruleText, action, server{tag,type,server,port,detour}, viaProxy, rewrite, outbound, chain, result, rcode, ttl, answers, ms, error, fakeIp, fakeIpLocal, v6?}`;订阅不上 `seen:false, reason:"no-log"` 带原因,日志里没有这个域名的查询 `reason:"not-seen"`;目标是 IP 或没接线时不带。依赖内核日志的写法(已用 sing-box 1.13.14 核对),认不出时不猜。**还没做:** `kernelDns.chain` 只给 detour,没读内核此刻的运行时选择链。同一时刻只跑一次测试(后到的排队,等的时候取消就不跑);最后一次测试结束 5 分钟后自动拆掉虚拟终端(下次测试重建);进程启动清遗留、退出拆除见 `VTermNet.Guard`。没有接线(`Deps.Terminal` 为空)时回 501,不碰系统。
 
@@ -517,10 +517,10 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/traffic/month?${month ? ` | `fetchTrafficMonth` (api/openbox.ts:1487) | OpenboxTrafficMonth | (month?: string, countDirect = true) |
-| GET | `/api/openbox/traffic/day?day=&limit=&hour=&direct=` | `fetchTrafficDay` (api/openbox.ts:1489) | OpenboxTrafficDay | (day: string, limit = 500, hour?: number \| null, countDirect = true) |
-| GET | `/api/openbox/traffic/drill?day=&kind=&key=&by=&limit=&hour=&direct=` | `fetchTrafficDrill` (api/openbox.ts:1506) | OpenboxTrafficDrill | (day, kind, key, by, limit = 200, hour?, countDirect = true) |
-| GET | `/api/openbox/traffic/usage` | `fetchTrafficUsage` (api/openbox.ts:1482) | OpenboxTrafficUsage | () |
+| GET | `/api/openbox/traffic/month?${month ? ` | `fetchTrafficMonth` (api/openbox.ts) | OpenboxTrafficMonth | (month?: string, countDirect = true) |
+| GET | `/api/openbox/traffic/day?day=&limit=&hour=&direct=` | `fetchTrafficDay` (api/openbox.ts) | OpenboxTrafficDay | (day: string, limit = 500, hour?: number \| null, countDirect = true) |
+| GET | `/api/openbox/traffic/drill?day=&kind=&key=&by=&limit=&hour=&direct=` | `fetchTrafficDrill` (api/openbox.ts) | OpenboxTrafficDrill | (day, kind, key, by, limit = 200, hour?, countDirect = true) |
+| GET | `/api/openbox/traffic/usage` | `fetchTrafficUsage` (api/openbox.ts) | OpenboxTrafficUsage | () |
 
 > 实现约定(M3):四个接口都只接受 GET、响应 no-store。参数不合法回 400 加 `error`:`month` 要 `YYYY-MM`(缺省本月);`day` 必填 `YYYY-MM-DD`;`limit` 缺省 500(drill 前端传 200),范围 1 到 5000;`hour` 0 到 23(不给是整天);drill 的 `kind` / `by` 取 `client` / `node` / `host` 且不能相同,`key` 必填;`direct=0` 表示不统计直连,其余都统计。没有数据的日子 / 月份回空榜单和 0,不是 404。
 > 数据来源:后台每 10 秒读一次内核的 `/connections`(sing-box 官方 Clash API),总量取累计总量的增量(含已关闭的短连接),终端 / 节点 / 访问目标来自各连接的增量,所以 `other` = 总量 − 各节点之和 = 没采样到的短连接;节点取出站链第一项(实际出口),访问目标取域名、没有则取目的 IP。启动后第一次、以及内核断开重连后的第一次只建基线,不记数。「走直连」指走 `direct` 类型出站的连接,`direct.tag` 是配置里第一个 direct 出站的名字。终端的 `name` 取 DHCP 租约主机名,没有就不带;`self`(路由器自己的地址)暂不带。
@@ -530,11 +530,11 @@
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| POST | `/api/openbox/update/cancel` | `cancelUpdate` (api/openbox.ts:1243) | { result: string } | () |
-| GET | `/api/openbox/update/check` | `checkUpdate` (api/openbox.ts:1240) | { current: string; latest: string; via: string; hasUpdate: boolean } | () |
-| GET | `/api/openbox/update/notes${latest ? ` | `fetchUpdateNotes` (api/openbox.ts:1667) | OpenboxUpdateNotes | (latest = '') |
-| POST | `/api/openbox/update/run` | `runUpdate` (api/openbox.ts:1242) | { ok: boolean; output: string } | (channel: 'auto' \| 'direct' \| 'mirror') |
-| GET | `/api/openbox/update/status` | `fetchUpdateStatus` (api/openbox.ts:1238) | OpenboxUpdateStatus | () |
+| POST | `/api/openbox/update/cancel` | `cancelUpdate` (api/openbox.ts) | { result: string } | () |
+| GET | `/api/openbox/update/check` | `checkUpdate` (api/openbox.ts) | { current: string; latest: string; via: string; hasUpdate: boolean } | () |
+| GET | `/api/openbox/update/notes${latest ? ` | `fetchUpdateNotes` (api/openbox.ts) | OpenboxUpdateNotes | (latest = '') |
+| POST | `/api/openbox/update/run` | `runUpdate` (api/openbox.ts) | { ok: boolean; output: string } | (channel: 'auto' \| 'direct' \| 'mirror') |
+| GET | `/api/openbox/update/status` | `fetchUpdateStatus` (api/openbox.ts) | OpenboxUpdateStatus | () |
 
 实现约定(M5,第一部分):`status` 的 `version` 是本程序版本(编译时注入,开发构建是 `dev`),`builtAt` 是构建时间(没注入是空串),`singboxVersion` 读 sing-box 内核(读不到是空串),`channel` 是安装通道(`-update-mirror` / `OPENBOX_UPDATE_MIRROR` 配了前缀是 `{mode:"mirror",prefix}`,否则 `{mode:"direct",prefix:""}`),`status.stage` 没有在升级时是 `idle`;`geoVersion` / `geoDate` / `geoCounts` 暂不给(可选字段)。`check` 读仓库公开发布列表,`latest` 是版本号能认出来的最大的一个,`via` 是 `api`(直连 GitHub API)或镜像前缀,读不到回 502 `{error}`;`hasUpdate` 在本程序版本认不出来(开发构建)时恒为 `false`。`notes` 永远回 200,取不到时 `note:null`、`error` 写原因,`url` 是发布列表页,说明超过 2 万字截断,`latest` 要是 `vX.Y.Z` 或 `vX.Y.Z-main.N`,别的写法后端忽略、自己再探一次最新版。`run`:`channel` 不是 `auto` / `direct` / `mirror` 回 400,否则暂回 501(在线升级依赖 M6 定下的发布包格式);`cancel` 暂回 `{result:"not-running"}`。
 
