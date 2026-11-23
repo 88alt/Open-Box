@@ -710,6 +710,34 @@ export const testNodeLatency = async (payload: {
   return data.results
 }
 
+export interface OpenboxNodeShare {
+  // 分享链接里用的节点名(服务端按 newTag / 规则算出)
+  name: string
+  link: string
+}
+
+// 订阅预览里单个节点的分享链接。和测速一样把来源和原名交给服务端:含密码的节点配置不经浏览器往返。
+// occurrence:订阅里有重名节点时,是同名里的第几个(从 0 数);newTag 是面板里正显示的名字,空 = 用规则算出来的。
+export const shareSubscriptionNode = (payload: {
+  url?: string
+  urls?: string[]
+  urlEntries?: OpenboxSubscriptionUrlEntry[]
+  directSubscription?: boolean
+  content?: string
+  userAgent?: string
+  loginId?: string
+  name?: string
+  renameOptions?: OpenboxRenameOptions
+  nodeDns?: OpenboxSubscriptionNodeDns | null
+  originalTag: string
+  occurrence?: number
+  newTag?: string
+}) =>
+  requestJson<OpenboxNodeShare>('/api/openbox/subscriptions/node-share', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+
 // 用户自定义节点组(策略组)。内核只有 urltest / selector 两种——Clash 的 fallback 在 sing-box 里
 // 不存在(实测 1.13.14 报 unknown outbound type)。failover(故障转移)是应用层类型:内核里落成
 // 一个 selector(父组)+ 每个多节点页签一个私有 urltest 子组,主备切换由面板服务端后台做。

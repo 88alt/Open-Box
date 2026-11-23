@@ -203,6 +203,17 @@
                         :test-label="`${$t('subscriptionLatencyTestOne')}: ${entry.originalTag}`"
                         @click.stop="testOne(entry.originalTag)"
                       />
+                      <!-- 分享:链接由服务端按来源重新解析后生成(含密码的节点配置不经浏览器),弹窗给链接和二维码 -->
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-square btn-sm shrink-0"
+                        :disabled="!source"
+                        :aria-label="`${$t('subscriptionNodeShare')}: ${entry.originalTag}`"
+                        v-tip="$t('subscriptionNodeShare')"
+                        @click.stop="shareNode(entry, index)"
+                      >
+                        <ShareIcon class="h-4 w-4" />
+                      </button>
                       <button
                         type="button"
                         class="btn btn-ghost btn-square btn-sm shrink-0 hover:text-error"
@@ -221,13 +232,22 @@
         </div>
       </template>
     </template>
+
+    <SubscriptionNodeShareDialog
+      v-model="shareOpen"
+      :node-name="shareName"
+      :link="shareLink"
+      :loading="shareLoading"
+      :error="shareError"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import type { OpenboxLatencyResult, OpenboxRenameOptions, OpenboxSubscriptionNodeDns, OpenboxSubscriptionPreview, OpenboxSubscriptionUrlEntry, OpenboxSkippedNode } from '@/api/openbox'
-import { testNodeLatency } from '@/api/openbox'
+import { shareSubscriptionNode, testNodeLatency } from '@/api/openbox'
 import LatencyPill from '@/components/common/LatencyPill.vue'
+import SubscriptionNodeShareDialog from '@/components/subscription/SubscriptionNodeShareDialog.vue'
 import { latencyReasonText } from '@/helper/latencyReason'
 import { showNotification } from '@/helper/notification'
 import {
@@ -237,8 +257,9 @@ import {
   CheckCircleIcon,
   MagnifyingGlassIcon,
   NoSymbolIcon,
+  ShareIcon,
 } from '@heroicons/vue/24/outline'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
@@ -248,7 +269,7 @@ const props = defineProps<{
   preview: OpenboxSubscriptionPreview | null
   overrides?: Record<string, string>
   // 测速要重新解析订阅,所以要把来源和当前规则一并带上
-  source?: { url?: string; urls?: string[]; urlEntries?: OpenboxSubscriptionUrlEntry[]; content?: string; name?: string; loginId?: string; userAgent?: string } | null
+  source?: { url?: string; urls?: string[]; urlEntries?: OpenboxSubscriptionUrlEntry[]; directSubscription?: boolean; content?: string; name?: string; loginId?: string; userAgent?: string } | null
   renameOptions?: OpenboxRenameOptions
   // 这份订阅的节点域名专用解析;测速要按同样的解析重新拉订阅
   nodeDns?: OpenboxSubscriptionNodeDns | null
@@ -386,6 +407,51 @@ const draft = ref('')
 const startEdit = (entry: { originalTag: string; newTag: string }) => {
   editingTag.value = entry.originalTag
   draft.value = entry.newTag
+}
+
+// 节点分享。订阅里可能有重名节点,服务端按「原名 + 同名里的第几个」找到那一个;
+// 第几个按当前表里的顺序数(这张表和服务端解析出的节点顺序一致)。
+const shareOpen = ref(false)
+const shareName = ref('')
+const shareLink = ref('')
+const shareLoading = ref(false)
+const shareError = ref('')
+let shareSeq = 0 // 连点两个节点时,只认最后一次的返回
+let unmounted = false
+onBeforeUnmount(() => {
+  unmounted = true
+})
+
+const shareNode = async (entry: { originalTag: string; newTag: string }, index: number) => {
+  if (!props.source) return
+  const occurrence = rows.value.slice(0, index).filter((row) => row.originalTag === entry.originalTag).length
+  // 正在改名的那一行,分享的是还没提交的草稿(和输入框里看到的一致)
+  const shown = editingTag.value === entry.originalTag ? draft.value : entry.newTag
+  const label = shown.trim() || entry.newTag || entry.originalTag
+  const seq = ++shareSeq
+  shareName.value = label
+  shareLink.value = ''
+  shareError.value = ''
+  shareLoading.value = true
+  shareOpen.value = true
+  try {
+    const result = await shareSubscriptionNode({
+      ...props.source,
+      renameOptions: props.renameOptions,
+      nodeDns: props.nodeDns,
+      originalTag: entry.originalTag,
+      occurrence,
+      newTag: label,
+    })
+    if (unmounted || seq !== shareSeq) return
+    shareName.value = result.name || label
+    shareLink.value = result.link
+  } catch (error) {
+    if (unmounted || seq !== shareSeq) return
+    shareError.value = t('subscriptionNodeShareFailed', { message: error instanceof Error ? error.message : String(error) })
+  } finally {
+    if (!unmounted && seq === shareSeq) shareLoading.value = false
+  }
 }
 
 const statusText = computed(() => {
