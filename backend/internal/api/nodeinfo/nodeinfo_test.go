@@ -12,6 +12,7 @@ import (
 
 	"github.com/timeflysoon/Open-Box/backend/internal/nodeexit"
 	ni "github.com/timeflysoon/Open-Box/backend/internal/nodeinfo"
+	"github.com/timeflysoon/Open-Box/backend/internal/nodesharing"
 	"github.com/timeflysoon/Open-Box/backend/internal/probe"
 	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
 )
@@ -203,5 +204,81 @@ func TestExitMethodAndNotMounted(t *testing.T) {
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/openbox/node-info/x/exit", nil))
 	if rec.Code != 404 {
 		t.Errorf("没挂应 404: %d", rec.Code)
+	}
+}
+
+type fakeSharing struct {
+	rep     *nodesharing.Report
+	err     error
+	ip      string
+	refresh bool
+}
+
+func (f *fakeSharing) Query(_ context.Context, ip string, refresh bool) (*nodesharing.Report, error) {
+	f.ip, f.refresh = ip, refresh
+	return f.rep, f.err
+}
+
+func doFull(d Deps, method, path string) *httptest.ResponseRecorder {
+	mux := http.NewServeMux()
+	Register(mux, d)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(method, path, nil))
+	return rec
+}
+
+func TestSharingRoute(t *testing.T) {
+	rng := "1-10"
+	fs := &fakeSharing{rep: &nodesharing.Report{Range: &rng, IPTypes: []string{"机房 IP"}}}
+	rec := doFull(Deps{Service: &fake{}, Sharing: fs}, http.MethodGet, "/api/openbox/node-info/sharing/2001:db8::1?refresh=1")
+	if rec.Code != 200 || fs.ip != "2001:db8::1" || !fs.refresh {
+		t.Fatalf("%d ip=%q refresh=%v %s", rec.Code, fs.ip, fs.refresh, rec.Body)
+	}
+	var got map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	if got["range"] != "1-10" || got["risk"] != nil || len(got["ipTypes"].([]any)) != 1 {
+		t.Errorf("形状: %s", rec.Body)
+	}
+	if rec.Header().Get("Cache-Control") != "no-store" {
+		t.Errorf("应带 no-store")
+	}
+	rec = doFull(Deps{Service: &fake{}, Sharing: fs}, http.MethodGet, "/api/openbox/node-info/sharing/203.0.113.9")
+	if fs.refresh {
+		t.Errorf("没带 refresh=1 不该刷新")
+	}
+}
+
+func TestSharingErrorsAndMethods(t *testing.T) {
+	fs := &fakeSharing{err: nodesharing.ErrInvalidIP}
+	if rec := doFull(Deps{Service: &fake{}, Sharing: fs}, http.MethodGet, "/api/openbox/node-info/sharing/abc"); rec.Code != 400 || !strings.Contains(rec.Body.String(), "无效的 IP 地址") {
+		t.Errorf("非法 IP: %d %s", rec.Code, rec.Body)
+	}
+	fs.err = context.Canceled
+	if rec := doFull(Deps{Service: &fake{}, Sharing: fs}, http.MethodGet, "/api/openbox/node-info/sharing/203.0.113.9"); rec.Code != http.StatusGatewayTimeout {
+		t.Errorf("取消: %d", rec.Code)
+	}
+	if rec := doFull(Deps{Service: &fake{}, Sharing: &fakeSharing{}}, http.MethodPost, "/api/openbox/node-info/sharing/203.0.113.9"); rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("POST 应 405: %d", rec.Code)
+	}
+	if rec := doFull(Deps{Service: &fake{}}, http.MethodGet, "/api/openbox/node-info/sharing/203.0.113.9"); rec.Code != 404 {
+		t.Errorf("没接服务应 404: %d", rec.Code)
+	}
+}
+
+// 节点的子路径不能被 sharing 抢走,sharing 也不能被节点路径吃掉;名字叫 sharing 的节点照常能查。
+func TestSharingDoesNotShadowNodeRoutes(t *testing.T) {
+	f := &fake{info: &ni.Info{Tag: "sharing"}, entry: &ni.EntryResult{IP: "203.0.113.1", Country: "US"}}
+	d := Deps{Service: f, Sharing: &fakeSharing{rep: &nodesharing.Report{IPTypes: []string{}}}}
+	if rec := doFull(d, http.MethodGet, "/api/openbox/node-info/sharing"); rec.Code != 200 || f.tag != "sharing" {
+		t.Errorf("名叫 sharing 的节点: %d tag=%q", rec.Code, f.tag)
+	}
+	if rec := doFull(d, http.MethodGet, "/api/openbox/node-info/sharing/entry-country"); rec.Code != 200 || f.tag != "sharing" || !strings.Contains(rec.Body.String(), "US") {
+		t.Errorf("sharing 节点的 entry-country: %d %s", rec.Code, rec.Body)
+	}
+	if rec := doFull(d, http.MethodGet, "/api/openbox/node-info/HK%2001/entry-country"); rec.Code != 200 || f.tag != "HK 01" {
+		t.Errorf("普通节点 entry-country: %d tag=%q", rec.Code, f.tag)
+	}
+	if rec := doFull(d, http.MethodGet, "/api/openbox/node-info/HK/unknown"); rec.Code != 404 {
+		t.Errorf("未知子路径应 404: %d", rec.Code)
 	}
 }

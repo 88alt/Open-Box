@@ -81,6 +81,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodeinfo"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodequality"
+	"github.com/timeflysoon/Open-Box/backend/internal/nodesharing"
 	"github.com/timeflysoon/Open-Box/backend/internal/nsprobe"
 	"github.com/timeflysoon/Open-Box/backend/internal/penetration"
 	"github.com/timeflysoon/Open-Box/backend/internal/policyentries"
@@ -455,7 +456,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Profile:  profileSvc.Get,
 		Country:  entryDetector.LookupCountry,
 		IsPublic: regiondetect.Public,
-	}, Exit: &nodeexit.Service{Probe: nodeexit.ProbeVia(gen, probeRunner, 8*time.Second)}})
+	}, Exit: &nodeexit.Service{Probe: nodeexit.ProbeVia(gen, probeRunner, 8*time.Second)},
+		Sharing: &nodesharing.Service{IsPublic: regiondetect.Public}})
 
 	// 规则集链接服务共用一份(含 60 秒内存缓存):规则集预览和「域名穿透」都会拉同一批链接
 	lists := rulelist.NewService(nil)
