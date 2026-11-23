@@ -12,7 +12,7 @@ var nodeMethods = []string{
 	"classes", "forwardPlan", "entryPlan", "bypassPlan",
 	"normalizeGroups", "builtinTags", "emitGroups",
 	"configDetailed",
-	"mihomoProxies", "mihomoGroups", "mihomoTargetRules",
+	"mihomoProxies", "mihomoGroups", "mihomoTargetRules", "mihomoCompatibility",
 	"checkActivationCode", "activationState", "authorizationState",
 }
 
