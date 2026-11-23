@@ -12,17 +12,18 @@ import (
 
 // Outbound 是写进 sing-box 配置的出站。键顺序和旧实现一致。
 type Outbound struct {
-	Type                      string   `json:"type"`
-	Tag                       string   `json:"tag"`
-	Outbounds                 []string `json:"outbounds,omitempty"`
-	URL                       string   `json:"url,omitempty"`
-	Interval                  string   `json:"interval,omitempty"`
-	Tolerance                 *float64 `json:"tolerance,omitempty"`
-	IdleTimeout               string   `json:"idle_timeout,omitempty"`
-	Default                   string   `json:"default,omitempty"`
-	InterruptExistConnections bool     `json:"interrupt_exist_connections,omitempty"`
-	ExpectedStatus            string   `json:"expected_status,omitempty"` // 可接受状态码,放最后(JS 里是 { ...outbound, expected_status })
-	Bandwidth                 bool     `json:"bandwidth,omitempty"`       // 带宽择优:只在 urltest / loadbalance 上写,内核据此把实测带宽算进选择
+	Type                      string        `json:"type"`
+	Tag                       string        `json:"tag"`
+	Outbounds                 []string      `json:"outbounds,omitempty"`
+	URL                       string        `json:"url,omitempty"`
+	Interval                  string        `json:"interval,omitempty"`
+	Tolerance                 *float64      `json:"tolerance,omitempty"`
+	IdleTimeout               string        `json:"idle_timeout,omitempty"`
+	Default                   string        `json:"default,omitempty"`
+	InterruptExistConnections bool          `json:"interrupt_exist_connections,omitempty"`
+	ExpectedStatus            string        `json:"expected_status,omitempty"`    // 可接受状态码,放最后(JS 里是 { ...outbound, expected_status })
+	Bandwidth                 bool          `json:"bandwidth,omitempty"`          // 带宽择优:只在 urltest / loadbalance 上写,内核据此把实测带宽算进选择
+	NodeScoreWeights          *ScoreWeights `json:"node_score_weights,omitempty"` // 节点评分权重:只在带宽择优开着的 urltest / loadbalance 上写,来自档案的 nodeScoreWeights
 }
 
 // MarshalJSON:负载均衡的 outbounds 即使是空的也要写出来(与上游一致,不能被 omitempty 吞掉);其它类型照旧。
@@ -32,14 +33,15 @@ func (o Outbound) MarshalJSON() ([]byte, error) {
 			o.Outbounds = []string{}
 		}
 		return json.Marshal(struct {
-			Type           string   `json:"type"`
-			Tag            string   `json:"tag"`
-			Outbounds      []string `json:"outbounds"`
-			URL            string   `json:"url,omitempty"`
-			Interval       string   `json:"interval,omitempty"`
-			ExpectedStatus string   `json:"expected_status,omitempty"`
-			Bandwidth      bool     `json:"bandwidth,omitempty"`
-		}{o.Type, o.Tag, o.Outbounds, o.URL, o.Interval, o.ExpectedStatus, o.Bandwidth})
+			Type             string        `json:"type"`
+			Tag              string        `json:"tag"`
+			Outbounds        []string      `json:"outbounds"`
+			URL              string        `json:"url,omitempty"`
+			Interval         string        `json:"interval,omitempty"`
+			ExpectedStatus   string        `json:"expected_status,omitempty"`
+			Bandwidth        bool          `json:"bandwidth,omitempty"`
+			NodeScoreWeights *ScoreWeights `json:"node_score_weights,omitempty"`
+		}{o.Type, o.Tag, o.Outbounds, o.URL, o.Interval, o.ExpectedStatus, o.Bandwidth, o.NodeScoreWeights})
 	}
 	type plain Outbound
 	return json.Marshal(plain(o))
@@ -275,6 +277,14 @@ func EmitUserGroups(groupsRaw any, nodesRaw any, options any) (*EmitResult, erro
 	expectedOf := func(g *Group) string { return orStr(g.ExpectedStatus, expectedDefault) }
 	// 客户端配置不做带宽测试(档案里 disableBandwidth = true):组上开着也不往出站里写
 	bandwidthOf := func(g *Group) bool { return g.Bandwidth && !jsx.Truthy(jsx.Get(options, "disableBandwidth")) }
+	// 节点评分权重(档案 nodeScoreWeights):只跟着带宽择优写,不合法就不写(内核用固定的 40 / 30 / 30)
+	scoreWeights := ScoreWeightsOf(jsx.Get(options, "nodeScoreWeights"))
+	weightsOf := func(g *Group) *ScoreWeights {
+		if bandwidthOf(g) {
+			return scoreWeights
+		}
+		return nil
+	}
 	normalized := NormalizeGroups(groupsRaw)
 	nodes, err := parseNodes(nodesRaw)
 	if err != nil {
@@ -453,7 +463,7 @@ func EmitUserGroups(groupsRaw any, nodesRaw any, options any) (*EmitResult, erro
 					Type: "urltest", Tag: subTag, Outbounds: valid,
 					URL: orStr(g.TestURL, testURL), Interval: interval, Tolerance: &tol,
 					IdleTimeout: idleTimeoutFor(DefaultIdleTimeout, interval), ExpectedStatus: expectedOf(g),
-					Bandwidth: bandwidthOf(g),
+					Bandwidth: bandwidthOf(g), NodeScoreWeights: weightsOf(g),
 				})
 				st.Mode, st.Ref, st.SubTag = "urltest", &subTag, &subTag
 				refs = append(refs, subTag)
@@ -543,13 +553,13 @@ func EmitUserGroups(groupsRaw any, nodesRaw any, options any) (*EmitResult, erro
 			outbounds = append(outbounds, Outbound{
 				Type: "urltest", Tag: g.Name, Outbounds: members, URL: orStr(g.TestURL, testURL),
 				Interval: interval, Tolerance: &tol, IdleTimeout: idleTimeoutFor(g.IdleTimeout, interval), ExpectedStatus: expectedOf(g),
-				Bandwidth: bandwidthOf(g),
+				Bandwidth: bandwidthOf(g), NodeScoreWeights: weightsOf(g),
 			})
 		} else if g.Type == "loadbalance" {
 			outbounds = append(outbounds, Outbound{
 				Type: "loadbalance", Tag: g.Name, Outbounds: members, URL: orStr(g.TestURL, testURL),
 				Interval: orStr(g.Interval, DefaultLoadBalanceInterval), ExpectedStatus: expectedOf(g),
-				Bandwidth: bandwidthOf(g),
+				Bandwidth: bandwidthOf(g), NodeScoreWeights: weightsOf(g),
 			})
 		} else {
 			outbounds = append(outbounds, Outbound{Type: "selector", Tag: g.Name, Outbounds: members})

@@ -177,6 +177,8 @@ func BuildDetailed(args any) (map[string]any, error) {
 		"expectedStatus": jsx.Get(profile, "testExpectedStatus"),
 		// 客户端配置(档案里 disableBandwidth = true)不带带宽择优
 		"disableBandwidth": jsx.Get(profile, "disableBandwidth"),
+		// 节点评分权重(档案 nodeScoreWeights):写进开着带宽择优的 urltest / loadbalance
+		"nodeScoreWeights": jsx.Get(profile, "nodeScoreWeights"),
 	})
 	if err != nil {
 		return nil, err
