@@ -48,16 +48,17 @@ var reasonOrder = []string{ReasonNodes, ReasonDNS, ReasonRoute, ReasonInbounds, 
 // 显示为「系统设置」,这里保持一致,走默认的「系统」归类。
 var profileKeyReason = map[string]string{
 	"testUrl": ReasonNodes, "directTestUrl": ReasonNodes, "testExpectedStatus": ReasonNodes, "chainProxies": ReasonNodes,
-	"dns": ReasonDNS, "region": ReasonDNS, "ipv6": ReasonDNS, "ipv6Proxy": ReasonDNS,
+	"nodeScoreWeights": ReasonNodes, // core 把它写进开着带宽择优的 urltest / loadbalance 的 node_score_weights
+	"dns":              ReasonDNS, "region": ReasonDNS, "ipv6": ReasonDNS, "ipv6Proxy": ReasonDNS,
 	"routing": ReasonRoute, "clientRoutes": ReasonRoute, "directBypass": ReasonRoute, "directForNodes": ReasonRoute,
 	"rejectQuic": ReasonRoute,
 	"servers":    ReasonInbounds, "tun": ReasonInbounds,
 }
 
 // profileKeyIgnored:确定不会进 sing-box 配置的档案键。改它们不该提示重启。
-// updates 是自动更新计划,traffic 是流量保留月数,shareRegions / serverInfo 是给手机 App 的,clashApiSecret 是后端自己加的,bandwidth / nodeScoreWeights 是测速与评分参数(目前只在后端算分,未写进内核配置),mihomoTlsSniffPorts 只有 Mihomo 的配置会用(sing-box 配置不读它;core 生成 Mihomo 配置那一步做完后改成归「系统」,见 STATUS.md 双内核第 3 步)。
+// updates 是自动更新计划,traffic 是流量保留月数,shareRegions / serverInfo 是给手机 App 的,clashApiSecret 是后端自己加的,bandwidth 是测速参数(只在后端调度,不进配置;节点组自己的 bandwidth 开关在 userGroups 里,归「节点」),mihomoTlsSniffPorts 只有 Mihomo 的配置会用(sing-box 配置不读它;core 生成 Mihomo 配置那一步做完后改成归「系统」,见 STATUS.md 双内核第 3 步)。
 var profileKeyIgnored = map[string]bool{
-	"updates": true, "traffic": true, "shareRegions": true, "serverInfo": true, "clashApiSecret": true, "bandwidth": true, "nodeScoreWeights": true, "mihomoTlsSniffPorts": true,
+	"updates": true, "traffic": true, "shareRegions": true, "serverInfo": true, "clashApiSecret": true, "bandwidth": true, "mihomoTlsSniffPorts": true,
 }
 
 func profileReason(key string) (reason string, ignored bool) {

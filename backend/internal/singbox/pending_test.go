@@ -84,6 +84,9 @@ func TestFingerprintReasonsAreIsolated(t *testing.T) {
 			in.Profile["chainProxies"] = []any{map[string]any{"name": "c1", "link": "trojan://x@y:1#c", "upstream": "HK 01"}}
 		}, []string{ReasonNodes}},
 		{"测速地址", func(in *FingerprintInput) { in.Profile["testUrl"] = "https://example.com/204" }, []string{ReasonNodes}},
+		{"节点评分权重", func(in *FingerprintInput) {
+			in.Profile["nodeScoreWeights"] = map[string]any{"latency": float64(50), "download": float64(30), "jitter": float64(20)}
+		}, []string{ReasonNodes}},
 		{"多一个节点", func(in *FingerprintInput) {
 			in.Nodes = append(in.Nodes, subs.CatalogNode{SubscriptionID: "s1", Node: sub.Node{Tag: "JP 01", Type: "trojan"}})
 		}, []string{ReasonNodes}},

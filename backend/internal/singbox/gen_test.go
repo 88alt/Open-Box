@@ -255,6 +255,25 @@ func TestArgsPassedToCore(t *testing.T) {
 	}
 }
 
+// 档案里的节点评分权重原样交给 core(core 把它写成开着带宽择优的 urltest / loadbalance 的 node_score_weights);
+// 后端自己不再改写它。
+func TestNodeScoreWeightsReachCore(t *testing.T) {
+	st, _ := store.Open(filepath.Join(t.TempDir(), "state"))
+	fc := &fakeCaller{}
+	prof := profile.New(st, nil, nil)
+	gen := NewGenerator(fc, st, prof, fakeGroups{}, subs.New(st, nil), System{}, Options{Platform: "systemd"})
+	if _, err := prof.Patch(context.Background(), map[string]any{"nodeScoreWeights": map[string]any{"latency": 50, "download": 30, "jitter": 20}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gen.Build(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	w, _ := fc.args["profile"].(map[string]any)["nodeScoreWeights"].(map[string]any)
+	if w["latency"] != float64(50) || w["download"] != float64(30) || w["jitter"] != float64(20) {
+		t.Fatalf("profile.nodeScoreWeights=%v", w)
+	}
+}
+
 type fakeGroups struct{}
 
 func (fakeGroups) Groups(context.Context) ([]any, error) { return []any{}, nil }
