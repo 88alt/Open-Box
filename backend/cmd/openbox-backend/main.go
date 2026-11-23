@@ -50,6 +50,7 @@ import (
 	subsapi "github.com/timeflysoon/Open-Box/backend/internal/api/subscriptions"
 	subsharesapi "github.com/timeflysoon/Open-Box/backend/internal/api/subshares"
 	sysresapi "github.com/timeflysoon/Open-Box/backend/internal/api/sysres"
+	targetroutingapi "github.com/timeflysoon/Open-Box/backend/internal/api/targetrouting"
 	terminaltestapi "github.com/timeflysoon/Open-Box/backend/internal/api/terminaltest"
 	timezoneapi "github.com/timeflysoon/Open-Box/backend/internal/api/timezone"
 	trafficapi "github.com/timeflysoon/Open-Box/backend/internal/api/traffic"
@@ -102,6 +103,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/subshare"
 	"github.com/timeflysoon/Open-Box/backend/internal/sysres"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
+	"github.com/timeflysoon/Open-Box/backend/internal/targetrouting"
 	"github.com/timeflysoon/Open-Box/backend/internal/timezone"
 	"github.com/timeflysoon/Open-Box/backend/internal/traffic"
 	"github.com/timeflysoon/Open-Box/backend/internal/update"
@@ -254,7 +256,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Mihomo: cfg.Mihomo, KernelFile: cfg.RouterKernelFile(),
 	})
 	// 订阅保存 / 刷新后的 applied:与服务状态的 pendingRestart 同一个判断(内核在跑才算,判断不了当作没有)
-	subsapi.Register(srv.Mux(), subsapi.Deps{Subs: subsSvc, Pending: func(ctx context.Context) (bool, []string) {
+	pendingRestart := func(ctx context.Context) (bool, []string) {
 		if initKind == system.InitNone {
 			return false, nil
 		}
@@ -265,7 +267,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			return true, p.Reasons
 		}
 		return false, nil
-	}})
+	}
+	subsapi.Register(srv.Mux(), subsapi.Deps{Subs: subsSvc, Pending: pendingRestart})
 
 	// 节点测速和 DNS 上游测试共用的临时目录:临时配置放在数据目录下的 tmp(0700),用完即删
 	probeDir := filepath.Join(cfg.DataDir, "tmp")
@@ -475,7 +478,10 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	if core.Available(cfg.Core) {
 		peCore = policyentries.CoreAdapter{C: core.New(cfg.Core)}
 	}
-	policiesapi.Register(srv.Mux(), policiesapi.Deps{Entries: policyentries.New(profileSvc, peCore, lists).WithGeo(geoLib)})
+	peSvc := policyentries.New(profileSvc, peCore, lists).WithGeo(geoLib)
+	policiesapi.Register(srv.Mux(), policiesapi.Deps{Entries: peSvc})
+	// 连接页「改分流」:按目标查命中的目标分流、在站点集里增删手写规则。只改档案,不自动重启内核(applied 用同一个待重启判断)
+	targetroutingapi.Register(srv.Mux(), targetroutingapi.Deps{Service: targetrouting.New(peSvc, profileSvc), Pending: pendingRestart})
 
 	// DNS 域名过滤:设置读写、名单预览、下载名单并应用(应用 = 编规则集 + 走一次完整部署:校验 → 原子替换 → 重启 → 健康检查 → 失败回滚)。
 	// 内核没在运行时只更新名单、不部署,不会为了应用名单把代理启动起来。

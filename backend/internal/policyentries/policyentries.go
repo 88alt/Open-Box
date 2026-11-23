@@ -54,7 +54,10 @@ func (e *NotFoundError) Error() string { return "没有名为「" + e.Name + "�
 
 // Policy 是规范化后的站点集里本功能用得到的字段。
 type Policy struct {
+	ID            string   `json:"id"`
 	Name          string   `json:"name"`
+	Default       string   `json:"default"`
+	Enabled       bool     `json:"enabled"`
 	Rulesets      []string `json:"rulesets"`
 	RuleUrls      []string `json:"ruleUrls"`
 	Domain        []string `json:"domain"`
@@ -512,3 +515,26 @@ func isJSSpace(r rune) bool {
 	}
 	return r >= 0x2000 && r <= 0x200a
 }
+
+// Routing 返回规范化后的分流(档案里的 routing 交给核心 normalizeRouting)。没接核心返回 ErrCoreUnavailable。
+// 「改分流」用它拿到每个站点集的 id / 名字 / 默认出口 / 启停和各类规则。
+func (s *Service) Routing(ctx context.Context) (Routing, error) {
+	if s.core == nil {
+		return Routing{}, ErrCoreUnavailable
+	}
+	prof, err := s.profiles.Get(ctx)
+	if err != nil {
+		return Routing{}, err
+	}
+	routing, _ := prof["routing"].(map[string]any)
+	return s.core.NormalizeRouting(ctx, routing)
+}
+
+// ExpandPolicy 展开一个站点集命中的全部条目(手写的来源记为 "custom",其余是规则集链接 / 规则库分类),
+// 并返回展开不了的名字(missing)。和 Query 用同一套展开,只是不分页不过滤。
+func (s *Service) ExpandPolicy(ctx context.Context, p Policy) ([]Entry, []string, error) {
+	return s.fromPolicy(ctx, p)
+}
+
+// SourceCustom 是手写条目的来源标记(Entry.Source)。
+const SourceCustom = sourceCustom

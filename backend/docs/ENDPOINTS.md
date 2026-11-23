@@ -396,6 +396,10 @@
 | PUT | `/api/openbox/profile` | `saveProfile` (api/openbox.ts) | { profile: OpenboxProfile } | (patch: Record<string, unknown>) |
 | GET | `/api/openbox/profile/defaults?region=cn` | `fetchDnsRewriteDefaults` (api/openbox.ts) | { dnsRewriteDefaults?: OpenboxDnsRewriteRule[] } | () |
 | GET | `/api/openbox/profile/defaults?region={x}` | `fetchProfileDefaults` (api/openbox.ts) | { defaults: OpenboxProfileDefaults } | (region: string) |
+| GET | `/api/openbox/profile/target-routing?target={x}&type={x}&original={x}` | `fetchTargetRouting` (api/openbox.ts) | OpenboxTargetRoutingLookup | (target, type, original) |
+| GET | `/api/openbox/profile/target-routing?target={x}&first=1` | `fetchTargetRoutingFirst` (api/openbox.ts) | OpenboxTargetRoutingLookup(多一个 `first`) | (target) |
+| POST | `/api/openbox/profile/target-routing` | `addTargetRouting` (api/openbox.ts) | { applied } | (target, type, policyIds) |
+| DELETE | `/api/openbox/profile/target-routing` | `removeTargetRouting` (api/openbox.ts) | { applied } | (match: OpenboxTargetRoutingMatch) |
 
 > 实现约定(M1):GET 返回「默认值 + 已保存内容」的完整档案。PUT 的请求体是**补丁**,深度合并(对象递归合并,数组和标量整体替换,`null` 删除该键,下次读取由默认值补上),合并后整体校验,失败 `400 { error }` 且不落盘;`rulesetDir` 由服务端决定,客户端传的忽略;`chainProxies[].node` 只读(link 没变沿用旧摘要)。请求体上限 1 MiB。未知键原样保留。
 >
@@ -404,6 +408,12 @@
 > **`servers` 也是例外**(「共享网络」的服务器,规则见 `internal/shareservers`):补丁里带了才校验(没带不碰已存的旧数据),校验不过 `400 { error }`,**原因是中文**并指出第几台(例如 `第 2 台服务器「SS」: password 不能为空`),整个补丁作废、不落盘;`servers` 是整份数组,合并时整体替换(`[]` = 清空,`null` = 删键)。规则:最多 64 台;每台 `id` 为 1–64 位字母 / 数字 / `_` / `-` 且不重复,`name` 去空白后非空且 ≤ 80 字,`protocol` 取 `shadowsocks` / `vless` / `tuic` / `hysteria2` / `mixed`,`port` 是 1–65535 的整数且各台不重复(不论启用与否,与前端 `usedPorts` 一致),`enabled` 若给了必须是布尔;`address` 可选,只收单独的域名 / IP(IPv6 可带方括号,不带端口、路径、账号、空白),`outbound` 可选且 ≤ 128 字符,空串等同没给(去掉键);各协议:`shadowsocks` 的 `method` 取 `aes-128-gcm` / `aes-192-gcm` / `aes-256-gcm` / `chacha20-ietf-poly1305` / `xchacha20-ietf-poly1305` / `2022-blake3-aes-128-gcm` / `2022-blake3-aes-256-gcm` / `2022-blake3-chacha20-poly1305`、`password` 非空,2022 系列的密码必须是对应长度(16 / 32 字节)密钥的标准 base64;`vless` 与 `tuic` 的 `uuid` 必须是 8-4-4-4-12 或 32 位十六进制,`vless` 的 `tls` 若给了必须是布尔;`tuic` 与 `hysteria2` 的 `password` 非空,`hysteria2` 的 `obfs` 可选;`mixed` 的 `username` 与 `password` 要么都填要么都不填。字符串去首尾空白后保存,不认识的键原样保留;**不**检查 `outbound` 指的节点 / 组是否存在,也**不**检查端口是否被面板、内核或别的服务占用(那是 `servers/port-check` 的事,前端保存前会先调它)。
 >
 > 实现约定(M1):`region` 取 `cn` / `intl`(缺省 `cn`,其它 400)。响应同时带 `defaults` 和 `dnsRewriteDefaults`(两个前端函数共用同一路径)。
+
+> **`profile/target-routing`(连接页「改分流」,`internal/targetrouting`)**:「目标分流」= 档案 `routing.policies` 的站点集。
+> - `GET`:`type` 取 `domain` / `domain_suffix` / `ip` / `ip_cidr`(别的、目标不合法 `400`);域名只收 ASCII(punycode),纯 IP 不算域名。回 `{policies, matches, addition, incomplete?}`:`policies` 是启用的站点集 `{id,name}`(停用的不参与命中也不能选);`matches` 按站点集先后、同集内 domain → domain_suffix → domain_keyword → ip_cidr → 规则集排列,最多 200 条;手写的 `source:"policy"`、`removable:true`,规则集链接 / 规则库分类里的 `source:"ruleset"`、只读;`type` 一律下划线写法,`outbound` 是站点集的默认出口;域名按精确 / 后缀(整段)/ 关键字 / 正则匹配,IP 要条目的网络把整个目标(IP 或 IP 段)包住才算命中;`addition` 是按当前输入添加时写进去的那一条(域名小写去尾点、后缀去前导点和 `*.`、IP 写成 `/32` `/128`、IP 段取网络地址);有规则集展开不了(规则库没有、链接拉不下来)或命中超过 200 条时 `incomplete:true`。`first=1`:忽略 `type`、按文本自动判断,只回第一个命中,不带 `addition`,响应多 `first`(没命中是 `null`,键始终在)。`original` 目前只接收、不参与匹配。
+> - `POST {target,type,policyIds}`:把规整后的那条加进每个选中站点集(`domain` / `domainSuffix` / `ipCidr` 键);已有的跳过(IP 段按规整后比较)。站点集不存在、已停用、没选、超过 64 个都 `400` 且一份都不写。
+> - `DELETE`(请求体是前端发来的整条 match,只认 `source` / `policyId` / `type` / `value`):`source` 必须是 `policy`;`type` 下划线和驼峰写法都认;条目已不在时不算错(幂等);删除时一并清掉档案 `notes` 里 `类型:值` 那条备注。
+> - 响应 `{applied:{ok, skipped?, pendingRestart:{pending, reasons}}}`:只改档案,**不自动重启内核**(重启会断开连接),内核在跑且配置待重启时 `ok:false`、`pending:true`(面板提示「内核尚未应用」);档案没变 `skipped:"unchanged"`。**不用 404**:前端把 404 当成「后端不支持此操作」,所以站点集不存在等都回 `400`;核心不可用 `503`。
 
 ## `/api/openbox/rollback`
 
@@ -553,7 +563,6 @@
 
 | 方法 | 路径 | 前端函数(文件) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET / POST / DELETE | `/api/openbox/profile/target-routing` | `TARGET_ROUTING_URL` 的调用 (api/openbox.ts) | OpenboxTargetRouting* | 见同文件类型 |
 | GET | `/api/openbox/kernel/switch/preflight?kernel=` | `fetchKernelSwitchPreflight` (api/openbox.ts) | NDJSON 或 JSON,见 STATUS 双内核第 4 步 | (kernel: 'sing-box' \| 'mihomo') |
 | POST | `/api/openbox/kernel/switch` | `switchRouterKernel` (api/openbox.ts) | OpenboxServiceActionResult | (kernel) |
 | GET | `/api/openbox/subscriptions/updates?since=` | 上游订阅页在调,main 面板还没有 | 待对齐 | 前后端都要做;补之前 `subscriptions/{id}` 会把 `updates` 当订阅 id 接走 |

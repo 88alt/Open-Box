@@ -187,6 +187,41 @@ func (s *Service) UpdateServer(ctx context.Context, id string, change func(serve
 	return out, nil
 }
 
+// UpdatePolicies 在存储锁里读出 routing.policies(深拷贝),交给 change 改,把返回的新列表按 Patch 的同一套校验写回
+// (只换 policies,routing 其它部分不动)。change 返回错误就什么都不写;写回的内容不合格回 *ValidationError、不落盘。
+// 返回写回后的 policies。读、改、写在同一把锁里,不会和别处对档案的保存互相覆盖。
+func (s *Service) UpdatePolicies(ctx context.Context, change func(list []any) ([]any, error)) ([]any, error) {
+	var out []any
+	stored := map[string]any{}
+	err := s.st.Update(storeName, &stored, func() error {
+		cur := effective(stored)
+		s.migrate(ctx, cur)
+		routing, _ := cur["routing"].(map[string]any)
+		list, _ := routing["policies"].([]any)
+		next, err := change(Clone(list).([]any))
+		if err != nil {
+			return err
+		}
+		if next == nil {
+			next = []any{}
+		}
+		clean := prepare(cur, map[string]any{"routing": map[string]any{"policies": next}})
+		merged := Merge(cur, clean)
+		s.migrate(ctx, merged)
+		if err := Check(merged); err != nil {
+			return &ValidationError{Msg: err.Error()}
+		}
+		stored = merged
+		r, _ := merged["routing"].(map[string]any)
+		out, _ = r["policies"].([]any)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // normalizeClientApp 校验并规整补丁里的 shareRegions / serverInfo(规则见 clientapp.NormalizeShareRegions /
 // NormalizeServerInfo)。只在补丁带了这两个键时做:档案里已有的旧数据不会拦住不相关的保存。
 // serverInfo 是整份覆盖(传 {} = 全用默认),所以先把 cur 里的旧值摘掉,免得被深度合并留下旧字段。
