@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
 	"github.com/timeflysoon/Open-Box/backend/internal/sub"
@@ -21,11 +22,14 @@ type PendingFunc func(ctx context.Context) (pending bool, reasons []string)
 type Deps struct {
 	Subs    *subs.Service
 	Pending PendingFunc // 为空 = 保存 / 刷新的返回里不带 applied
+	// UpdatesWait 是 updates 长轮询最长挂多久,0 = 20 秒(面板那边 25 秒没回就掐掉重来)。
+	UpdatesWait time.Duration
 }
 
 type handlers struct {
 	s       *subs.Service
 	pending PendingFunc
+	wait    time.Duration
 }
 
 // applied 是保存 / 刷新之后「内核用上没有」:订阅的动作从不自动重启内核(重启会断开连接,什么时候重启由
@@ -60,13 +64,17 @@ func (h *handlers) withApplied(ctx context.Context, res *subs.SaveResult) any {
 
 // Register 把本分组的接口挂到 mux 上。字面路径(preview / login / node-share / order)比 {id} 优先。
 func Register(mux *http.ServeMux, d Deps) {
-	h := &handlers{s: d.Subs, pending: d.Pending}
+	h := &handlers{s: d.Subs, pending: d.Pending, wait: d.UpdatesWait}
+	if h.wait <= 0 {
+		h.wait = 20 * time.Second
+	}
 	mux.HandleFunc("/api/openbox/subscriptions", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodGet: h.list, http.MethodPost: h.create,
 	}))
 	mux.HandleFunc("/api/openbox/subscriptions/preview", httpx.Methods(map[string]http.HandlerFunc{http.MethodPost: h.preview}))
 	mux.HandleFunc("/api/openbox/subscriptions/login", httpx.Methods(map[string]http.HandlerFunc{http.MethodPost: h.login}))
 	mux.HandleFunc("/api/openbox/subscriptions/node-share", httpx.Methods(map[string]http.HandlerFunc{http.MethodPost: h.nodeShare}))
+	mux.HandleFunc("/api/openbox/subscriptions/updates", httpx.Methods(map[string]http.HandlerFunc{http.MethodGet: h.updates}))
 	mux.HandleFunc("/api/openbox/subscriptions/order", httpx.Methods(map[string]http.HandlerFunc{http.MethodPut: h.order}))
 	mux.HandleFunc("/api/openbox/subscriptions/{id}", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodPatch: h.patch, http.MethodDelete: h.delete,
@@ -360,4 +368,20 @@ func (h *handlers) refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, h.withApplied(r.Context(), res))
+}
+
+// updates 是订阅页的长轮询:?since=<上次拿到的 revision>。版本和 since 不同(或 since 为空)就立刻返回
+// {revision, nodesRevision};相同就挂住,等订阅 / 节点变了或挂满 UpdatesWait 再返回(没变时 revision 原样)。
+// 面板拿到 nodesRevision 变了才重新拉节点和服务状态,只有 revision 变了就只刷新订阅列表。
+func (h *handlers) updates(w http.ResponseWriter, r *http.Request) {
+	httpx.NoStore(w)
+	rev, err := h.s.WaitRevision(r.Context(), r.URL.Query().Get("since"), h.wait)
+	if err != nil {
+		if r.Context().Err() != nil {
+			return // 客户端断开(切页 / 隐藏标签页 / 超时重来),不用回
+		}
+		httpx.Error(w, http.StatusInternalServerError, "读取订阅版本失败: "+err.Error())
+		return
+	}
+	httpx.JSON(w, http.StatusOK, rev)
 }

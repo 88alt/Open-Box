@@ -59,7 +59,7 @@ Go 静态编译(backend/go.mod 现为 go 1.25.4,core/go.mod 是 1.25.12,统一�
 [~] M5 系统运维:deploy*、rollback、factory-reset、update 第一部分(status / check / notes)、时区、backup。
 [ ] 未做:
     - 双内核(sing-box / Mihomo)与内核切换:第 1、2 步和 core 的 3a–3d 已做,后端 3e(Go 版 mihomo.yaml 装配)和第 4–7 步没做。
-    - 前后端对账缺口(STATUS 同名一节):subscriptions/updates(面板也要做)、kernel/switch(profile/target-routing 已做)。
+    - 前后端对账缺口(STATUS 同名一节):kernel/switch(profile/target-routing、subscriptions/updates 已做)。
     - update 第二部分与 M6 打包发布:设计草案在 docs/M6.md,等维护者确认。
     - 真机联调(维护者做):所有 [~] 条目。
 有意不做:激活 / 授权;例外 A、B、C(见 core/HANDOFF.md 与 STATUS「对齐口径」):教程、市场推广、AI 中转、业务优选整体、overview-links(上游概览顶栏的外链,改显示版本号)等。
@@ -68,7 +68,7 @@ Go 静态编译(backend/go.mod 现为 go 1.25.4,core/go.mod 是 1.25.12,统一�
 # 四、后续工作(按顺序)
 
 1. 先对账(第零节第 2 条),再做 STATUS「先做」小节(目前都已打勾,新增的会放在那里)。
-2. 「前后端对账缺口」里不依赖 core / 真机 / 维护者的条目:subscriptions/updates(target-routing 已做);每条前后端分别对齐上游,ENDPOINTS.md 同一提交里补上。
+2. 「前后端对账缺口」里不依赖 core / 真机 / 维护者的条目:target-routing、subscriptions/updates 都已做,剩下的 kernel/switch 属双内核(见第 3 条);每条前后端分别对齐上游,ENDPOINTS.md 同一提交里补上。
 3. 双内核:3e 和第 4、5 步(kernel/switch/preflight 与 kernel/switch);第 6、7 步涉及同步覆盖的目录和打包,要维护者确认放哪。
 4. 上游出新版本时(catch-up-upstream 更新):按 core/HANDOFF.md 第四节第 7 条的方法对账,即面板文案键集对上游打包产物、面板和上游打包产物调用的接口对后端路由;
    结果写进 STATUS「前后端对账缺口」。上游自 v0.1.463 起后端是闭源二进制,v0.1.462(bfd33a70)是最后一版明文 Node,只能对着前端行为和公开材料对齐。

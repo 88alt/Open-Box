@@ -132,6 +132,8 @@ import {
   loadOpenboxSubscriptions,
   notifySubscriptionSaved,
   openboxSubscriptions,
+  openboxSubscriptionsError,
+  useSubscriptionUpdates,
 } from '@/store/openboxSubscriptions'
 import { isMiddleScreen } from '@/helper/utils'
 import {
@@ -157,6 +159,18 @@ onMounted(async () => {
   // 节点管理的数据要先到,fetchProxies 才能给条目配上图标;顺序反了图标就等下一次刷新
   await Promise.all([loadOpenboxSiteSets(), loadOpenboxNodeGroups()])
   void fetchProxies()
+})
+
+// 订阅 / 节点在别处变了(别的标签页、后台自动更新)自动同步:订阅列表静默刷新,节点变了再重拉节点数据
+useSubscriptionUpdates({
+  reloadSubscriptions: async () => {
+    await loadOpenboxSubscriptions(true)
+    return !openboxSubscriptionsError.value
+  },
+  reloadNodes: async () => {
+    await Promise.all([loadOpenboxSiteSets(), loadOpenboxNodeGroups()])
+    await fetchProxies()
+  },
 })
 
 // 内核没在跑时 proxyMap 是空的。空的时候问一次内核状态,把"没在跑"和"在跑但没数据"

@@ -577,6 +577,18 @@ export const fetchSubscriptions = async (): Promise<OpenboxSubscription[]> => {
   return data.subscriptions
 }
 
+// 订阅页的长轮询:带上上次拿到的 revision,服务端在订阅 / 节点变了(或挂满约 20 秒)时才返回。
+// revision 随订阅列表任何变化而变;nodesRevision 只随节点变(变了才需要重拉节点和服务状态)。
+export interface OpenboxSubscriptionUpdates {
+  revision: string
+  nodesRevision: string
+}
+
+export const fetchSubscriptionUpdates = (since: string, signal?: AbortSignal) =>
+  requestJson<OpenboxSubscriptionUpdates>(`/api/openbox/subscriptions/updates?${new URLSearchParams({ since })}`, {
+    signal,
+  })
+
 export const fetchSubscriptionShares = async (): Promise<OpenboxSubscriptionShare[]> => {
   const data = await requestJson<{ shares: OpenboxSubscriptionShare[] }>('/api/openbox/subscription-shares')
   return Array.isArray(data.shares) ? data.shares : []

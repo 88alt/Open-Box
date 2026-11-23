@@ -96,6 +96,9 @@ type Service struct {
 	fetch Fetcher
 	now   func() time.Time
 	mu    sync.Mutex
+
+	wmu  sync.Mutex    // 护 wake
+	wake chan struct{} // 下一次写盘时关闭(见 revision.go)
 }
 
 // New 创建服务。fetch 为 nil 时用 sub.Fetch + 默认 HTTP 客户端。
@@ -620,6 +623,7 @@ func (rec *Record) source() *resolved {
 
 // persist 先写节点再写元数据:中途失败最多留下没人引用的节点,不会出现「有订阅没节点」。
 func (s *Service) persist(recs []Record, nodes map[string][]sub.Node) error {
+	defer s.notify()
 	live := map[string][]sub.Node{}
 	for _, r := range recs {
 		live[r.ID] = nodes[r.ID]
@@ -835,6 +839,7 @@ func (s *Service) Delete(ctx context.Context, id string) (changed bool, err erro
 	}
 	changed = recs[i].Enabled && len(nodes[id]) > 0
 	recs = append(recs[:i:i], recs[i+1:]...)
+	defer s.notify()
 	// 先写元数据再写节点:中途失败留下的是没人引用的节点
 	if err := s.st.Save(fileSubs, subsFile{Subscriptions: recs}); err != nil {
 		return false, fmt.Errorf("保存订阅失败: %w", err)

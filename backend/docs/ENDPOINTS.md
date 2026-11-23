@@ -501,8 +501,11 @@
 | DELETE | `/api/openbox/subscriptions/{x}` | `deleteSubscription` (api/openbox.ts) | — | (id: string) |
 | PATCH | `/api/openbox/subscriptions/{x}` | `updateSubscription` (api/openbox.ts) | — | ( id: string, payload: { name?: string; url?: string; urls?: string[]; content?: |
 | POST | `/api/openbox/subscriptions/{x}/refresh` | `refreshSubscription` (api/openbox.ts) | — | ( id: string, renameOptions?: OpenboxRenameOptions, ) |
+| GET | `/api/openbox/subscriptions/updates?since={x}` | `fetchSubscriptionUpdates` (api/openbox.ts) | OpenboxSubscriptionUpdates { revision, nodesRevision } | (since: string, signal?) |
 
 实现约定(M4,订阅定时更新):订阅的 `autoUpdate` 由后端调度器执行(没有对应的 HTTP 接口)。`mode` 为 `hours` 时是上次更新后每隔 `hours` 小时;否则是上次更新那天起每隔 `days` 天的 `hour` 点(进程本地时区)。只更新订阅里的节点,不自动部署、不重启内核;节点变了以后 `service/status` 的 `pendingRestart`(原因 `nodes`)会提示。停用的订阅、没开定时的订阅、只有粘贴内容没有地址的订阅不更新。失败后 10 分钟 / 30 分钟 / 1 小时退避重试。
+
+> **`subscriptions/updates`(订阅页长轮询,`subs.WaitRevision`)**:`?since=` 是上次拿到的 `revision`(第一次传空)。版本和 `since` 不同(含空)就立刻返回 `{revision, nodesRevision}`;相同就挂住,等订阅 / 节点写盘(`persist` 和 `Delete` 之后唤醒)或挂满 20 秒(面板 25 秒没回就掐掉重来)再返回,没变时 `revision` 原样。两个版本都是内容摘要(不是计数器,后端重启后同样的数据版本不变):`revision` 随订阅列表任何变化(含刷新时的用量 / 更新时间)而变,`nodesRevision` 只随还有订阅引用的节点而变——面板据此决定只刷新订阅列表,还是连节点数据和服务状态(待重启提示)一起刷新。客户端断开不回响应;路由是字面路径,比 `{id}` 优先。面板侧:`useSubscriptionUpdates`(store/openboxSubscriptions.ts)在代理页和订阅页可见时挂着问;404 或响应里没有版本号(老后端)就不再轮询。
 
 ## `/api/openbox/system`
 
@@ -565,7 +568,6 @@
 |---|---|---|---|---|
 | GET | `/api/openbox/kernel/switch/preflight?kernel=` | `fetchKernelSwitchPreflight` (api/openbox.ts) | NDJSON 或 JSON,见 STATUS 双内核第 4 步 | (kernel: 'sing-box' \| 'mihomo') |
 | POST | `/api/openbox/kernel/switch` | `switchRouterKernel` (api/openbox.ts) | OpenboxServiceActionResult | (kernel) |
-| GET | `/api/openbox/subscriptions/updates?since=` | 上游订阅页在调,main 面板还没有 | 待对齐 | 前后端都要做;补之前 `subscriptions/{id}` 会把 `updates` 当订阅 id 接走 |
 
 不做:`/api/openbox/overview-links`(上游概览顶栏外链,例外 B)。
 

@@ -1,9 +1,10 @@
 import type { OpenboxSkippedNode, OpenboxSubscription, OpenboxSubscriptionSaveResult } from '@/api/openbox'
-import { fetchSubscriptions, refreshSubscription } from '@/api/openbox'
+import { fetchSubscriptions, fetchSubscriptionUpdates, refreshSubscription } from '@/api/openbox'
 import { refreshServiceStatus } from '@/composables/kernelService'
 import { showNotification } from '@/helper/notification'
 import { i18n } from '@/i18n'
-import { ref } from 'vue'
+import { useDocumentVisibility } from '@vueuse/core'
+import { ref, watch } from 'vue'
 
 // 保存 / 刷新订阅的返回里带着被跳过的节点(skipped)。其中 reason 为 invalid 的是字段写坏了
 // 或内核不认、被直接丢掉的,要告诉用户;其余原因(类型不认识、插件不支持等)只在预览里看。
@@ -63,15 +64,16 @@ export const openboxSubscriptions = ref<OpenboxSubscription[]>([])
 export const openboxSubscriptionsLoading = ref(false)
 export const openboxSubscriptionsError = ref('')
 
-export const loadOpenboxSubscriptions = async () => {
-  openboxSubscriptionsLoading.value = true
+// silent:后台同步(长轮询触发)用,不动「加载中」状态,免得列表闪一下。
+export const loadOpenboxSubscriptions = async (silent = false) => {
+  if (!silent) openboxSubscriptionsLoading.value = true
   openboxSubscriptionsError.value = ''
   try {
     openboxSubscriptions.value = await fetchSubscriptions()
   } catch (error) {
     openboxSubscriptionsError.value = error instanceof Error ? error.message : String(error)
   } finally {
-    openboxSubscriptionsLoading.value = false
+    if (!silent) openboxSubscriptionsLoading.value = false
   }
 }
 
@@ -93,4 +95,105 @@ export const refreshAllOpenboxSubscriptions = async () => {
   // 几条里只要有一条的节点变了,就提醒一次;有一条需要重启内核才生效就按"需重启"提示
   await notifySubscriptionSaved(changed, 'refreshed', undefined, applied)
   await loadOpenboxSubscriptions()
+}
+
+// ---- 订阅变化的长轮询 ----
+// 订阅 / 节点在别处变了(别的标签页、后台的自动更新、另一台设备)时,页面不用手动刷新:
+// 页面可见时一直挂着问服务端 /subscriptions/updates,服务端在版本变了才回(没变挂约 20 秒后原样回)。
+// revision 变了刷新订阅列表;nodesRevision 也变了再重拉节点和服务状态(待重启提示)。
+// 页面刚挂上那次的数据由页面自己加载,第一次拿到版本号只记下来、不重复加载;
+// 标签页从隐藏回到可见时期间可能错过变化,那一次拿到版本号后补一次完整刷新。
+const POLL_FIRST_TIMEOUT_MS = 5_000 // 没带版本号的那次服务端立刻就回
+const POLL_HOLD_TIMEOUT_MS = 25_000 // 比服务端挂住的时间长,到点还没回就掐掉重来
+const POLL_RETRY_DELAY_MS = 3_000
+const POLL_MIN_HOLD_MS = 1_000 // 「没变」的回复至少该挂这么久,更快就当服务端不对劲
+
+const withTimeout = (ms: number, parent: AbortSignal) => {
+  const controller = new AbortController()
+  const abort = () => controller.abort()
+  const timer = setTimeout(abort, ms)
+  if (parent.aborted) abort()
+  else parent.addEventListener('abort', abort, { once: true })
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer)
+      parent.removeEventListener('abort', abort)
+    },
+  }
+}
+
+const sleep = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const done = () => {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', done)
+      resolve()
+    }
+    const timer = setTimeout(done, ms)
+    signal.addEventListener('abort', done, { once: true })
+  })
+
+export interface SubscriptionUpdatesOptions {
+  // 刷新订阅列表(静默,别弹通知);返回是否成功
+  reloadSubscriptions: () => Promise<boolean>
+  // 节点变了要重拉的东西(节点数据、归属表等)
+  reloadNodes: () => Promise<unknown>
+}
+
+export const useSubscriptionUpdates = (options: SubscriptionUpdatesOptions) => {
+  const visibility = useDocumentVisibility()
+  let started = false
+
+  const reload = async (nodesChanged: boolean) => {
+    const [ok] = await Promise.all([options.reloadSubscriptions(), nodesChanged ? options.reloadNodes() : undefined])
+    if (nodesChanged) await refreshServiceStatus().catch(() => {})
+    return ok
+  }
+
+  const run = async (signal: AbortSignal, resumed: boolean) => {
+    let last: { revision: string; nodesRevision: string } | undefined
+    while (!signal.aborted) {
+      const request = withTimeout(last ? POLL_HOLD_TIMEOUT_MS : POLL_FIRST_TIMEOUT_MS, signal)
+      const asked = Date.now()
+      try {
+        const res = await fetchSubscriptionUpdates(last?.revision ?? '', request.signal)
+        if (signal.aborted) return
+        // 服务端不带版本号(老后端):没法轮询,不再问
+        if (typeof res?.revision !== 'string' || typeof res?.nodesRevision !== 'string') return
+        if (last && res.revision === last.revision) {
+          // 正常是挂住很久才回;没变却马上回(服务端 / 代理不对劲)就歇一下,别把请求打成死循环
+          if (Date.now() - asked < POLL_MIN_HOLD_MS) await sleep(POLL_RETRY_DELAY_MS, signal)
+          continue
+        }
+        if (last || resumed) {
+          if (!(await reload(res.nodesRevision !== last?.nodesRevision))) {
+            await sleep(POLL_RETRY_DELAY_MS, signal)
+            continue
+          }
+        }
+        last = res
+      } catch (error) {
+        if (signal.aborted) return
+        if ((error as { status?: number } | null)?.status === 404) return // 后端没有这个接口
+        if (request.signal.aborted) continue // 挂满没回被掐掉,不是出错,直接再问
+        await sleep(POLL_RETRY_DELAY_MS, signal)
+      } finally {
+        request.cleanup()
+      }
+    }
+  }
+
+  watch(
+    visibility,
+    (state, _old, onCleanup) => {
+      if (state !== 'visible') return
+      const controller = new AbortController()
+      onCleanup(() => controller.abort())
+      const resumed = started
+      started = true
+      void run(controller.signal, resumed)
+    },
+    { immediate: true },
+  )
 }

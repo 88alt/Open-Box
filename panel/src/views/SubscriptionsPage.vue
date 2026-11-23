@@ -176,7 +176,7 @@
 
 <script setup lang="ts">
 import MarketLink from '@/components/common/MarketLink.vue'
-import { notifySubscriptionSaved } from '@/store/openboxSubscriptions'
+import { notifySubscriptionSaved, useSubscriptionUpdates } from '@/store/openboxSubscriptions'
 import type { OpenboxSubscription, OpenboxSubscriptionShare } from '@/api/openbox'
 import { deleteSubscription, fetchSubscriptions, fetchSubscriptionShares, refreshSubscription, reorderSubscriptions, updateSubscription } from '@/api/openbox'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
@@ -250,6 +250,22 @@ onMounted(() => {
   void loadShares()
   void loadOpenboxNodeGroups()
   void fetchProxies()
+})
+
+// 订阅 / 节点在别处变了(别的标签页、后台自动更新)自动同步:列表静默刷新(失败不弹通知,下一轮再试),
+// 节点变了再重拉节点归属和内核数据
+useSubscriptionUpdates({
+  reloadSubscriptions: async () => {
+    try {
+      subscriptions.value = await fetchSubscriptions()
+      return true
+    } catch {
+      return false
+    }
+  },
+  reloadNodes: async () => {
+    await Promise.all([loadOpenboxNodeGroups(), fetchProxies()])
+  },
 })
 
 // 「添加分组」按钮挪到了页签那一行(和「添加订阅」同一个位置),按钮在父组件、
