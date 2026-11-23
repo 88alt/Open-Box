@@ -612,3 +612,100 @@ func TestAppliedInSaveAndRefresh(t *testing.T) {
 		t.Fatal(code, m)
 	}
 }
+
+// ---- node-share:订阅预览里单个节点的分享链接 ----
+
+func TestNodeShare(t *testing.T) {
+	e := newEnv(t)
+	// 两个重名节点(密码不同),再加一个 vless
+	e.pages["https://a"] = "trojan://pw1@a.example.com:443?sni=a.example.com#Dup\n" +
+		"trojan://pw2@b.example.com:443?sni=b.example.com#Dup\n" +
+		"vless://11111111-2222-3333-4444-555555555555@c.example.com:443?security=tls&type=ws&path=%2Fws#Other\n"
+	base := func(extra map[string]any) map[string]any {
+		m := map[string]any{"url": "https://a", "name": "S", "renameOptions": map[string]any{"enabled": false}}
+		for k, v := range extra {
+			m[k] = v
+		}
+		return m
+	}
+	const path = "/api/openbox/subscriptions/node-share"
+
+	// 不带 occurrence = 第一个重名节点;名字用 newTag
+	code, m := e.do("POST", path, base(map[string]any{"originalTag": "Dup", "newTag": "我的 节点"}))
+	if code != 200 || m["name"] != "我的 节点" {
+		t.Fatalf("%d %v", code, m)
+	}
+	link, _ := m["link"].(string)
+	if !strings.HasPrefix(link, "trojan://pw1@a.example.com:443?") || !strings.HasSuffix(link, "#%E6%88%91%E7%9A%84%20%E8%8A%82%E7%82%B9") {
+		t.Fatalf("link = %s", link)
+	}
+
+	// occurrence = 1 取第二个
+	code, m = e.do("POST", path, base(map[string]any{"originalTag": "Dup", "occurrence": 1}))
+	link, _ = m["link"].(string)
+	if code != 200 || !strings.HasPrefix(link, "trojan://pw2@b.example.com:443?") {
+		t.Fatalf("%d %v", code, m)
+	}
+
+	// newTag 空:用服务端算出来的名字(关了改名规则时是原名,重名的第二个会被去重成「Dup 2」)
+	if m["name"] != "Dup 2" {
+		t.Fatalf("name = %v", m["name"])
+	}
+	code, m = e.do("POST", path, base(map[string]any{"originalTag": "Other", "renameOptions": map[string]any{"enabled": false, "usePrefix": true}}))
+	if code != 200 || m["name"] != "S | Other" || !strings.HasSuffix(m["link"].(string), "#S%20%7C%20Other") {
+		t.Fatalf("%d %v", code, m)
+	}
+
+	// 找不到 / occurrence 越界 → 404;被停用的节点不在预览里,同样 404
+	if code, _ = e.do("POST", path, base(map[string]any{"originalTag": "Nope"})); code != 404 {
+		t.Errorf("找不到节点应 404,得到 %d", code)
+	}
+	if code, _ = e.do("POST", path, base(map[string]any{"originalTag": "Dup", "occurrence": 2})); code != 404 {
+		t.Errorf("occurrence 越界应 404,得到 %d", code)
+	}
+	if code, _ = e.do("POST", path, base(map[string]any{"originalTag": "Other", "renameOptions": map[string]any{"enabled": false, "disabled": []string{"Other"}}})); code != 404 {
+		t.Errorf("停用的节点应 404,得到 %d", code)
+	}
+}
+
+func TestNodeShareBadInput(t *testing.T) {
+	e := newEnv(t)
+	e.pages["https://a"] = links("A")
+	const path = "/api/openbox/subscriptions/node-share"
+	for name, body := range map[string]map[string]any{
+		"no-source":       {"originalTag": "A"},
+		"no-tag":          {"url": "https://a"},
+		"empty-tag":       {"url": "https://a", "originalTag": "  "},
+		"tag-not-string":  {"url": "https://a", "originalTag": 1},
+		"newtag-not-str":  {"url": "https://a", "originalTag": "A", "newTag": 1},
+		"occurrence-neg":  {"url": "https://a", "originalTag": "A", "occurrence": -1},
+		"occurrence-frac": {"url": "https://a", "originalTag": "A", "occurrence": 0.5},
+		"occurrence-str":  {"url": "https://a", "originalTag": "A", "occurrence": "0"},
+	} {
+		if code, m := e.do("POST", path, body); code != 400 || m["error"] == nil {
+			t.Errorf("%s: %d %v", name, code, m)
+		}
+	}
+	// 登录来源与预览一致:501
+	if code, _ := e.do("POST", path, map[string]any{"loginId": "x", "originalTag": "A"}); code != 501 {
+		t.Errorf("登录来源应 501,得到 %d", code)
+	}
+	if code, _ := e.do("GET", path, nil); code != 405 {
+		t.Errorf("GET 应 405,得到 %d", code)
+	}
+	// 订阅拉取失败 → 502
+	e.fail = &sub.FetchError{Msg: "连不上"}
+	if code, _ := e.do("POST", path, map[string]any{"url": "https://a", "originalTag": "A"}); code != 502 {
+		t.Errorf("拉取失败应 502,得到 %d", code)
+	}
+}
+
+// 能解析成节点、但生成不出分享链接(sing-box 订阅里的 vless 出站没写 uuid):应是 400 并带原因,不是 500。
+func TestNodeShareUnencodableIs400(t *testing.T) {
+	e := newEnv(t)
+	e.pages["https://a"] = `{"outbounds":[{"type":"vless","tag":"NoID","server":"v.example.com","server_port":443}]}`
+	code, m := e.do("POST", "/api/openbox/subscriptions/node-share", map[string]any{"url": "https://a", "originalTag": "NoID", "renameOptions": map[string]any{"enabled": false}})
+	if code != 400 || m["error"] == nil || !strings.Contains(m["error"].(string), "uuid") {
+		t.Fatalf("%d %v", code, m)
+	}
+}

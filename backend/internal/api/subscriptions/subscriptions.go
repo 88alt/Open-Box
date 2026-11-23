@@ -1,4 +1,4 @@
-// Package subscriptions 实现 /api/openbox/subscriptions*(订阅 CRUD、排序、刷新、预览;login 暂不支持)。
+// Package subscriptions 实现 /api/openbox/subscriptions*(订阅 CRUD、排序、刷新、预览、节点分享;login 暂不支持)。
 package subscriptions
 
 import (
@@ -58,7 +58,7 @@ func (h *handlers) withApplied(ctx context.Context, res *subs.SaveResult) any {
 	return saved{SaveResult: *res, Applied: &applied{OK: !pending, PendingRestart: pendingRestart{Pending: pending, Reasons: reasons}}}
 }
 
-// Register 把本分组的接口挂到 mux 上。字面路径(preview / login / order)比 {id} 优先。
+// Register 把本分组的接口挂到 mux 上。字面路径(preview / login / node-share / order)比 {id} 优先。
 func Register(mux *http.ServeMux, d Deps) {
 	h := &handlers{s: d.Subs, pending: d.Pending}
 	mux.HandleFunc("/api/openbox/subscriptions", httpx.Methods(map[string]http.HandlerFunc{
@@ -66,6 +66,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	}))
 	mux.HandleFunc("/api/openbox/subscriptions/preview", httpx.Methods(map[string]http.HandlerFunc{http.MethodPost: h.preview}))
 	mux.HandleFunc("/api/openbox/subscriptions/login", httpx.Methods(map[string]http.HandlerFunc{http.MethodPost: h.login}))
+	mux.HandleFunc("/api/openbox/subscriptions/node-share", httpx.Methods(map[string]http.HandlerFunc{http.MethodPost: h.nodeShare}))
 	mux.HandleFunc("/api/openbox/subscriptions/order", httpx.Methods(map[string]http.HandlerFunc{http.MethodPut: h.order}))
 	mux.HandleFunc("/api/openbox/subscriptions/{id}", httpx.Methods(map[string]http.HandlerFunc{
 		http.MethodPatch: h.patch, http.MethodDelete: h.delete,

@@ -483,6 +483,7 @@
 | GET | `/api/openbox/subscriptions` | `fetchSubscriptions` (api/openbox.ts:542) | { subscriptions: OpenboxSubscription[] } | () |
 | POST | `/api/openbox/subscriptions` | `createSubscription` (api/openbox.ts:624) | — | (payload: { url?: string urls?: string[] content?: string userAgent?: string log |
 | POST | `/api/openbox/subscriptions/login` | `loginSubscription` (api/openbox.ts:607) | OpenboxSubscriptionLoginResult | (payload: { url: string userAgent?: string username: string password: string nam |
+| POST | `/api/openbox/subscriptions/node-share` | `shareSubscriptionNode` (api/openbox.ts) | { name: string; link: string } | (payload: 订阅预览同一套来源与改名规则 + { originalTag: string; occurrence?: number; newTag?: string }) |
 | PUT | `/api/openbox/subscriptions/order` | `reorderSubscriptions` (api/openbox.ts:900) | — | (ids: string[]) |
 | POST | `/api/openbox/subscriptions/preview` | `previewSubscription` (api/openbox.ts:589) | OpenboxSubscriptionPreview | (payload: { url?: string urls?: string[] content?: string userAgent?: string log |
 | DELETE | `/api/openbox/subscriptions/{x}` | `deleteSubscription` (api/openbox.ts:904) | — | (id: string) |
