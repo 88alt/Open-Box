@@ -3,8 +3,9 @@
 #
 # 用法: sh core/scripts/build.sh <amd64|arm64> <outdir> [index.mjs 路径]
 #
-# buildID:Node 端(panel/server/index.mjs)里写死了期望值,hello 返回的必须与它相同。
-# 默认从 panel/server/index.mjs 里读出来;也可以用环境变量 OPENBOX_CORE_BUILD_ID 指定。
+# buildID:自研后端不校验(只要求 implementation=go-native、protocol=1),它只是个构建标识。
+# 取法按顺序:环境变量 OPENBOX_CORE_BUILD_ID(64 位十六进制);第三个参数或 ../panel/server/index.mjs
+# 存在时从里面读(上游 Node 的写法,仅给还要接上游 Node 的场合);都没有就用 core 源码(不含测试)的 sha256。
 #
 # 产出:
 #   <outdir>/openbox-core      静态链接、去符号的 linux 二进制
@@ -27,8 +28,16 @@ OUT=$(CDPATH= cd -- "$2" && pwd)
 INDEX="${3:-$CORE/../panel/server/index.mjs}"
 
 ID="${OPENBOX_CORE_BUILD_ID:-}"
-if [ -z "$ID" ]; then
-  [ -f "$INDEX" ] || die "找不到 $INDEX,也没有设置 OPENBOX_CORE_BUILD_ID"
+if [ -z "$ID" ] && [ ! -f "$INDEX" ]; then
+  # main 上没有 panel/server:按源码内容生成,同一份源码得到同一个值
+  ID=$(cd "$CORE" && find cmd internal go.mod -type f \( -name '*.go' -o -name go.mod \) ! -name '*_test.go' | LC_ALL=C sort | python3 -c '
+import hashlib, sys
+h = hashlib.sha256()
+for name in sys.stdin.read().split():
+    h.update(name.encode() + b"\0" + open(name, "rb").read() + b"\0")
+print(h.hexdigest())
+')
+elif [ -z "$ID" ]; then
   ID=$(python3 - "$INDEX" <<'PY'
 import re, sys
 t = open(sys.argv[1], encoding='utf-8', errors='replace').read()

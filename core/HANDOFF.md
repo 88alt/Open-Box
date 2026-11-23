@@ -1,7 +1,7 @@
-openbox-core 交接笔记(第 6 版,只管 core;后端另见 backend/HANDOFF.md)
+openbox-core 交接笔记(第 7 版,只管 core;后端另见 backend/HANDOFF.md)
 
 写给下一位接手 core 的 AI。读完这份和 core/README.md,就可以接着做,不用反复问维护者。
-进度要对账:main 下的提交记录(git log -- core)是实时来源,本文第三节已按 2026-11-08 对账更新;第五节于 2026-11-09 改为「对齐就是看行为」;两者冲突时以提交记录为准,并在补丁里顺手更新第三节。
+进度要对账:main 下的提交记录(git log -- core)是实时来源,本文第三节已按 2026-11-23 对账更新;第五节于 2026-11-09 改为「对齐就是看行为」,2026-11-23 把有意例外整理成 A / B / C 三类;两者冲突时以提交记录为准,并在补丁里顺手更新第三节。
 
 
 # 零、先读这一节
@@ -44,7 +44,7 @@ openbox-core 交接笔记(第 6 版,只管 core;后端另见 backend/HANDOFF.md)
   不要依赖 release.yml(它是上游版本,会被同步覆盖)。
 
 
-# 三、进度标记(2026-11-22 对账:提交记录里 3a / 3b / 3c 都已落地,本次补上 3d;2026-11-10 对账更新;nativeBypass 已落地;2026-11-08 的 ipCidr 决定已落地)
+# 三、进度标记(2026-11-23 对账:main 提交记录与本节一致,前后端对账结果见下面最后一条和第四节 7;2026-11-22 对账:提交记录里 3a / 3b / 3c 都已落地,本次补上 3d;2026-11-10 对账更新;nativeBypass 已落地;2026-11-08 的 ipCidr 决定已落地)
 
 图例:[x] 完成  [~] 代码完成、待真机或待云端确认  [ ] 未做
 
@@ -68,6 +68,11 @@ openbox-core 交接笔记(第 6 版,只管 core;后端另见 backend/HANDOFF.md)
 [~] 真机验证:真实路由器上经后端调用 core、sing-box 启动成功(由维护者做,记录在 backend/STATUS.md 的真机条目)
 [x] clientBindings：按 IPv6 绑定扩展终端分流来源（NormalizeClientRoutes + ExpandSourcesWithBindings）
 [~] 整理测试数据来源(全部叶子模块已换自写向量:ipx、dnsrewrite、servers、directhosts、dnsfilter、clientroutes;routing 里 dnsupstream、flip、rulesets、urlhost、dnsnames、geo、outbound(含 export 的出口)、fingerprint、dns 的辅助函数与 BuildDNS 的错误路径 / 分流关短路径 / 分流开着的骨架(没有站点集、自定义分流、终端分流)、站点集成对规则、前置自定义分流块、订阅 / 节点站点直连块与终端分流块(含名单外终端)已换,BuildDNS 到此全部换完,route(BuildRoute 与 PreMatchBypassRules)已换,plans 的 classes 与 forwardPlan 已换,entryPlan 已换,bypassPlan(含 planOpts 解析)已换,migrate(含地区层迁移与 policyToAny)已换,jsval 已换,routing(model)已换,groups 的 match(normalizeForMatch / keywordMatches / parseDuration)与 NormalizeExpectedStatus 已换,groups 的 NormalizeGroups / builtinTags / EmitUserGroups 已换,groups 整包完成,config 的 tunoptions、consts、nodedns 与 chain 已换,config 的 build 第一段(入参缺省 / 站点直连 / 链式并表 / 节点组 / 站点集 selector / 节点出站与 endpoint / 重名检查)与第二段(出口类别 / 阻断 IPv6 与 QUIC 的接线 / 域名过滤 / systemDns 接线)、tun 入站与入站一段已换,build 后半(终端分流的 MAC 黑白名单与 dns-in-direct / dns 与 route 接线其余部分 / 入口原生旁路与 route_address_set / 装配与 FakeIP)也已换,至此 config/build 整份完成;所有模块的自写向量都已就位(前置自定义分流 ipCidr 行的网段校验 2026-11-08 已定并做完,见第四节 1),config_golden 等基线金标准仅作回归保留,其去留由维护者定;自写向量的产出已用官方 sing-box 1.13.14 跑过 check,见第四节 2 的最后一条)
+[x] 2026-11-23 对账(基于 origin/main 117c9ae9 与 catch-up-upstream v0.1.478,只读):
+    一、core 自身:`go vet ./...`、`go test ./...` 在 main 上全绿;注册方法 routing 8 + groups 3 + config 1 + mihomo 4 + authz 3 = 19 个加 hello,与第零节一致;git log -- core 里没有第三节漏标的已完成项。
+    二、面板文案:从上游 v0.1.478 的 panel/dist(en / zh / zh-tw 三个语言包)取键,与 main 的 panel/src/i18n 逐键比:上游每种语言 2251 键,main 2213 键,缺的 38 键全部属于例外 C(业务优选),剔除后缺失 0、main 多出 0;值不同的只有 chainProxyEmptyHint(例外 B,有意)。两个对象型键 routerKernelChecks / routerKernelCheckStatus 的子键与上游一致。例外 B 的残留检查:ChainProxyManager.vue、ClientDownloadsCard.vue 里没有 chainProxyEmptyHintSuffix / DOWNMAN_URL 的引用(只剩键和注释);但「概览顶部文案」那条没有落地,见第四节 7。
+    三、面板调用的接口对后端路由:见第四节 7(有 4 个缺口)。
+    四、构建脚本:core/scripts/build.sh 原来必须读 panel/server/index.mjs,而 main 上没有 panel/server,README 里写的构建命令会直接报错;已改成读不到就按 core 源码哈希生成 buildID(后端不校验 buildID,第一节 5)。
 [ ] 第四节里其余后续工作
 
 
@@ -126,6 +131,16 @@ openbox-core 交接笔记(第 6 版,只管 core;后端另见 backend/HANDOFF.md)
 5. core/UPSTREAM_VERSION(现为 v0.1.354):原本记录"最后对齐的上游版本"。按第五节的规则不再按上游版本推进,默认不再改动,处理方式由维护者定。
 6. 真机联调反馈:维护者在真机上发现的 core 输出问题,按第三节的方式补测试再修。
 
+7. 前后端对齐的核对结论(2026-11-23,只读;方法:取 main 的 panel/src 和上游 v0.1.478 panel/dist 里所有 `/api/...` 字面量,按后端 `HandleFunc` 注册的路径逐个匹配,`{x}` 当通配,不含兜底路由;不看上游 index.mjs):
+   - 面板文案与 core 都已对齐,见第三节最后一条。
+   - 后端缺的接口(面板已经在调,调到会得到 404 或被别的通配路由接走;**这些是 backend 的活,已记进 backend/STATUS.md,core 这边不做**,等 backend 设计时若需要 core 方法再按第零节的约定在 STATUS 里记「需要 core 配合」):
+     a. `GET/POST/DELETE /api/openbox/profile/target-routing`(连接页「改分流」,main 的 ConnectionTargetRoutingDialog 和 api/openbox.ts 在用;上游 v0.1.423 起有);
+     b. `GET /api/openbox/node-info/sharing/{ip}`(`?refresh=1`;main 与上游面板都在调,后端只有 node-info/{tag}、entry-country、exit);
+     c. `GET /api/openbox/kernel/switch/preflight` 和内核切换接口(上游 v0.1.477 双内核第 4 步,STATUS 早有记录,未做);
+     d. `GET /api/openbox/subscriptions/updates?since=`(上游订阅页在调;main 面板还没有这个调用,**前、后端都没做**;注意后端的 `subscriptions/{id}` 会把 `updates` 当成订阅 id 接走)。
+   - 面板缺的:上游侧边栏有个 `OverviewCarousel`(非概览页时显示,轮播两条外链,数据来自 `GET /api/openbox/overview-links`,失败时用写死的「机场、VPS 安格超市 | 原生住宅 IP TOPIP」「AI 中转站 · 订阅服务 SUPERDOOR | 按需付费 OPENDOOR」)。例外 B 要求把它们换成「Open-Box Latest」和魔改 sing-box 最新版本号,但 main 的 panel/src 里**没有这个组件也没有替换文案**(grep 不到 Open-Box Latest / overview-links),所以例外 B 这一条还没落地。这是面板的活,不是 core 的;「魔改 sing-box 最新版本号」取自哪里(后端 update/check 还是上游 Release)需要维护者定,所以没有动手。
+   - 没覆盖到的范围:上游面板里不以 `/api/` 开头拼出来的请求(核对时没发现,但字面量法本来就看不到拼接);运行时行为(真机)不在这次核对里。
+
 
 # 五、跟随上游
 
@@ -135,13 +150,23 @@ openbox-core 交接笔记(第 6 版,只管 core;后端另见 backend/HANDOFF.md)
 
 产品边界(与对齐无关)
 - 不加激活机制;授权三个方法固定返回「未限制」。
-- 有意不与上游一致、同步时不要改回的:
-  - 激活码 / 市场推广 / AI 中转 / comingSoon / 教程等键不引用;
-  - 链式代理空状态不带安格超市链接(chainProxyEmptyHint 保持 main 现状);
-  - 客户端下载卡不要「极速下载用 DownMan」;
-  - 概览顶栏改为「Open-Box Latest」与魔改 sing-box 版本号。
+- 有意不与上游一致、同步时不要改回、也不要补回的(2026-11-23 维护者给出的完整清单;除 A / B / C 外,main 里没有别的自有键,也没有别的有意缺失的键):
+  A. 键保留,main 有意不引用:
+    - 激活码类、comingSoon 的键;
+    - 教程类的键:后端设置页顶部的「使用教程」按钮(YouTube 图标,tutorialButton / tutorialHint / tutorialChecking / tutorialCheckFailed)。main 不放这个按钮,也不做教程视频列表相关的面板与后端;
+    - marketPromo、aiRelayLabel、aiRelaySubscription、aiRelayOnDemand(上游已不引用,main 也不引用)。
+  B. 键保留,但 main 的显示或代码有意不同:
+    - 链式代理空状态:不显示「安格超市」链接。ChainProxyManager.vue 若出现 chainProxyEmptyHintSuffix 或该链接,删除;
+    - 客户端下载卡:不要「极速下载用 DownMan」。ClientDownloadsCard.vue 若出现 DOWNMAN_URL 或 clientDownloadFastWith,删除;
+    - 概览页顶部文案:「机场、VPS 安格超市 | 原生住宅 IP TOPIP」改为 Open-Box Latest;「AI 中转站 · 订阅服务 SUPERDOOR | 按需付费 OPENDOOR」改为魔改 sing-box 最新版本号。
+  C. 整体不做:键、面板、后端、core 全部没有(覆盖核心原则第 1 条):
+    - 「业务优选」相关的一切都不要:设置页「业务优选」卡、概览页「业务优选」统计卡、内核按连接证据选路,以及对应的接口、档案字段和三语键;
+    - 键按前缀识别,上游以后新增同类的键也不补:businessOverview*、businessPreference*、businessSettingsHelp*、businessReliabilityHalfLife、businessPerformanceTtl、bandwidthHelpCurrentBusiness;
+    - 注意:ipTypeBusiness(商业宽带)与业务优选无关,照常按上游保留;
+    - 核对键集和引用时,把以上键从「缺失」中剔除。
 
 维护者记录
+- (2026-11-23)有意例外整理成 A / B / C 三类(见上),其中 C「业务优选整体不做」此前只在提交说明和第三节里提到,第五节没写;跟随上游同步面板、后端、core 时一律按这份清单取舍,不用再问。
 - (2026-11-08)DNS 上游(直连 / 代理 / 备用)与订阅的节点专用解析(nodeDns)支持 DoT:协议加 tls,默认端口 853,地址是域名时生成 domain_resolver 加 udp bootstrap;nodeDns 的 protocol 取 https 或 tls。对齐上游 v0.1.422 的公开能力,按 sing-box 1.12+ DNS server 文档(type:tls / type:https)自写。dns_golden 里档案带 tls 协议的 buildDns 旧用例(基线把 tls 当非法协议退回默认)按有意差异跳过,新行为由 dnsupstream_test.go、builddns_dot_test.go、nodedns_dot_test.go 覆盖。
 - (2026-11-08)对齐限制尽量放开:闭源对齐靠看行为,不必在文档里给自己加禁止条款。
 - (2026-11-02)loadbalance 按上游 v0.1.387 行为对齐(字段、默认 120s、成员只收节点、上限 64、空 outbounds 照写);自研实现与测试。
@@ -193,7 +218,7 @@ openbox-core 交接笔记(第 6 版,只管 core;后端另见 backend/HANDOFF.md)
    Go 的 map 序列化按字母序排键;切片一律非 nil,保证序列化成 [] 而不是 null。
 
 
-# 九、提交记录(core,新的在最上面;完整以 git log -- core 为准)
+# 九、提交记录(core,新的在最上面;完整以 git log -- core 为准;下面只列到 d5fb0a0,2026-10 之后的提交不再逐条补,看 git log -- core)
 
 d5fb0a0 go.mod 对齐 Go 1.25.12;3bb9345 去掉 allow_unaligned 与对齐检查;18f5684 groups;cbc9db1 UPSTREAM_VERSION=v0.1.354;235a10b 对齐 v0.1.354;
 b91e295 对齐 v0.1.353;8ff1319 configDetailed 装配;b1e7fcf config 零件;61e9f57 / f9b6ed9 urlx 与叶子模块;7722ae8 route;dea84db dns;1eb1817 routing;

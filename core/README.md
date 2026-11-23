@@ -1,14 +1,14 @@
 # core/ — 自己维护的 openbox-core(开源 Go 实现)
 
 替换上游闭源的 `panel/server/native/openbox-core`。它是一个**无状态**的 stdin/stdout JSON 程序,
-由面板的 Node 服务端每次调用时拉起,**不是服务**:HTTP API、订阅解析、部署回滚、服务控制都仍在 Node。
+由自研后端(`backend/`,Go)以子进程方式每次调用时拉起,**不是服务**:HTTP API、订阅解析、部署回滚、服务控制都在后端。
 
 ## 协议
 - stdin:`{"protocol":1,"method":"...","args":[...],"license":"...","geoTags":[...]}`
 - stdout:`{"protocol":1,"ok":true,"value":...}` 或 `{"protocol":1,"ok":false,"error":"..."}`
 - 退出码恒为 0;输入上限 32 MiB,输出上限 64 MiB;`license` 字段忽略(没有激活机制)
 - 第一次调用先发 `hello`,返回 `implementation:"go-native"`、`protocol:1`、`buildID`;
-  `buildID` 必须等于 Node 里写死的期望值(构建脚本从 `panel/server/index.mjs` 读出并注入)
+  自研后端只要求 implementation 为 go-native、protocol 为 1,**不校验 buildID**(只是个构建标识,见 `scripts/build.sh`)
 
 ## 方法(共 19 个 + hello)
 | 包 | 方法 | 状态 |
@@ -37,8 +37,8 @@
 - `singbox/` 预留
 
 ## 对照基准(基线)
-以 catch-up-upstream 分支 `panel/server/engine/` 里的明文源码为准(v0.1.318 快照,提交 0c9d530;它不随同步更新,
-`index.mjs` 里压缩的 v0.1.342 只做增量核对)。
+以 tag `engine-snapshot`(上游 v0.1.318 快照,提交 0c9d530)里 `panel/server/engine/` 的明文源码为准;它已不在 catch-up-upstream 也不在 main,不随同步更新。
+这是历史基线:HANDOFF 第五节起,对齐上游靠看行为,不再用压缩的 `index.mjs` 或官方二进制重新生成金标准(HANDOFF 第六节)。
 已按新基线对齐:clientroutes(终端分流的 match / admit,以及 dns 用的 SourceMatch / TerminalDNSRedirected)、emit(http 出站、hysteria2 端口跳跃、detour、ws 的 alpn 限制)、groups(手动页签、可接受状态码、链式节点不进动态组、静态组可选内置直连/拒绝)。routing 的模型、迁移、指纹和 plans(classes、forwardPlan、bypassPlan、entryPlan 含 whitelist;备注、随包规则库缺失规则集的过滤、LEGACY 字段、指纹排除 default / notes)。
 **dns**(`routing/dns.go`,对应 dns.mjs 的 buildDnsWithResolvers)及它的两个叶子模块 `routing/dnsupstream.go`(对应 dns-upstream.mjs:上游 DNS 记号 wan、直连 / 代理上游与备用上游、端口协议、`dnsServerEntry`)、
 `routing/flip.go`(对应 flip.mjs:热切换开关 tag、`andRule`、`flipFlagMap`、占位规则集):备用上游并发竞速、站点集 / 兜底的热切换成对规则、按终端答解析(dns-terminal-direct)、
@@ -86,6 +86,7 @@ rulesetDir:路由里 `.srs` 的路径先去掉末尾所有的 `/`、null 当空�
 
 ## 构建
     sh core/scripts/build.sh amd64 out    # 或 arm64;产出 out/openbox-core 和 out/core-build.json
+    # buildID 取法:环境变量 OPENBOX_CORE_BUILD_ID > 第三个参数 / ../panel/server/index.mjs(main 上没有)> core 源码(不含测试)的 sha256;后端不校验它
 
 ## configDetailed 拆解进度
 Node 传入 `{platform, cacheFilePath, rulesetDir, selections, tlsCert?, nodes, userGroups, subscriptions, profile, systemDns,
@@ -114,12 +115,10 @@ chainNodes / dnsRuleOwners,这几项没有旧代码可对照)。
 - 阶段 C:buildConfig 装配(阶段 B 的零件基本已齐,见上),以及新增字段和 dnsRuleOwners
 - 阶段 D:旧 JS 金标准 + 真实 sing-box 1.13.14 `check` + 对照 templates/reference-1.13.14.json
 
-## 发布(Release 流水线怎么用到这个核心)
-core/ 在 main,发布所在的 catch-up-upstream 有 panel/server 但没有 core/。`.github/workflows/release.yml` 的 `core` 任务(amd64、arm64 各一份)因此另取一份 `OPENBOX_CORE_REF`(仓库变量,默认 `main`)的 core/ 源码:
-1. 不再做对齐检查(原来的 `allow_unaligned` 复选框已去掉):catch-up-upstream 的发布本来就是上游备份,不该被自研核心卡住。`core/UPSTREAM_VERSION` 仍记录核心最后对齐到的上游版本,只作记录,每个「core 对齐官方 vX」的补丁顺手改成 vX。
-2. `go vet ./...`、`go test ./...`(金标准测试),任何一步失败都不发布。
-3. `core/scripts/build.sh <arch> core-build panel/server/index.mjs` 编出 `openbox-core` + `core-build.json`(buildID 从发布分支的 `panel/server/index.mjs` 读,和 Node 端写死的期望值一致)。
-4. `build` 任务把它设为 `OPENBOX_CORE_BUILD_DIR`,`scripts/build-release.sh` 把发布包 `panel/server/native/` 里的核心换成这一份(x64、arm64 都换),并重算 `hardening-manifest.json` 里的 `core` 和 `native/*` 两个文件的哈希。`core-build.json` 不写 `bindingSha256`,Node 端的 `component-update.mjs` 因此只做哈希 / 架构 / ELF 校验,不跑内部完整性自检(运行时 `hello` 仍会核对 buildID)。
-- 仓库变量 `OPENBOX_CORE_SOURCE=upstream` 退回上游原生核心(x64 取仓库里的 `panel/server/native`,arm64 取 `scripts/native-arm64`);默认 `go`。
-- `sync-upstream.yml` 在 `go` 时不再覆盖 `panel/server/native`、不再取上游 arm64 的原生核心。仓库里已有的 `panel/server/native/*` 和 `scripts/native-arm64/*` 是旧的上游文件,发布时会被换掉,不影响结果,确认不再退回 `upstream` 后可以自己删。
-- 本地验证过的部分:`build.sh` 编 amd64 / arm64,按 `build-release.sh` 的换入逻辑处理一份 panel/server,再用 `component-update.mjs` 里 Node 自己的校验函数检查,x64 / arm64 都通过,篡改文件、架构放错会被拒。GitHub Actions 本身没在本地跑过,第一次发布要看一遍各任务的日志。
+## 发布(2026-11-23 对账:旧的流水线接线已不存在)
+- main 上现在没有任何工作流(`.github/` 下只有 issue 模板);catch-up-upstream 的 `release.yml` 里也没有 `core` 任务、`OPENBOX_CORE_REF`、`OPENBOX_CORE_BUILD_DIR`、`OPENBOX_CORE_SOURCE` 这些东西。
+  以前写在这里的「release.yml 的 core 任务取 main 的 core/ 编出来、build-release.sh 换进发布包、sync-upstream.yml 不覆盖 native」是旧方案,已被「Replace with upstream」同步覆盖掉,**不要再按它操作**。
+- 现在云端的 `go vet ./...` / `go test ./...` 没有在跑,要自己在本地跑(HANDOFF 第七节第 5 条讲沙箱里 Go 版本低于 go.mod 时的办法)。
+- 发布包里的 core 怎么编、怎么装:由后端的 M6(打包与发布)定,设计见 `backend/docs/M6.md`(那里的结论是不调用 `core/scripts/build.sh`,另写 `backend/packaging/build-core.sh` 直接 `go build`;目前 `backend/packaging/` 还没有)。
+- `core/UPSTREAM_VERSION`(v0.1.354)是旧流程留下的「最后对齐的上游版本」记录,按 HANDOFF 第四节 5 不再推进,也不随每次对齐修改;core 对齐到哪一版,看 HANDOFF 第三节和 `git log -- core`。
+- 旧流水线的做法(取 core 源码、vet / test、`build.sh` 编译、换入 `panel/server/native/`、重算 `hardening-manifest.json` 的哈希)可以从历史里的旧版 `release.yml`(HANDOFF 第二节提到的提交 f4d044e)取回参考,但那是给上游 Node 面板用的,后端不需要 hardening-manifest。
