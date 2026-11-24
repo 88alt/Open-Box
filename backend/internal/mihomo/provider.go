@@ -403,6 +403,16 @@ func (OSFS) MkdirAll(path string) error { return os.MkdirAll(path, 0o700) }
 
 func (OSFS) Remove(path string) error { return os.Remove(path) }
 
+// FileRevision 给文件一个修订号(大小加修改时间的纳秒数):内容被换掉时它会变。
+// 上游还带 dev / inode / ctime,这里只用大小和 mtime,规则库文件是原子替换(改名),够用。
+func (OSFS) FileRevision(path string) (string, error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%d:%d", fi.Size(), fi.ModTime().UnixNano()), nil
+}
+
 func (OSFS) WriteFile(path string, data []byte, mode os.FileMode) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
 	if err != nil {
