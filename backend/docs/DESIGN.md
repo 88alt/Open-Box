@@ -10,7 +10,7 @@
 | D1 | 语言:**Go**,`backend/go.mod` 现为 `go 1.25.4`(`core/go.mod` 是 1.25.12;统一版本要同时改 go.mod 和 CI,由维护者定),`CGO_ENABLED=0` 静态编译 | 与 `core/` 同语言;路由器上不需要 Node 运行时;单文件易部署 |
 | D2 | 模块:`backend/` 自带 `go.mod`,模块名 `github.com/timeflysoon/Open-Box/backend` | 与 `core/` 分开发布 |
 | D3 | 接口契约 = `docs/ENDPOINTS.md` + `panel/src/api/*.ts` 里的 TypeScript 类型;JSON,同源,不开 CORS | 前端就是规格 |
-| D4 | 与 `openbox-core` 的集成:**第一阶段用子进程**,走 `core/README.md` 描述的 stdin/stdout JSON 协议(`protocol:1`,19 个方法 + `hello`,其中 4 个是 Mihomo 方法,见 `core/README.md`) | `core/` 的金标准测试保持有效、零改动;`core/internal` 不能被别的模块直接 import |
+| D4 | 与 `openbox-core` 的集成:**第一阶段用子进程**,走 `core/README.md` 描述的 stdin/stdout JSON 协议(`protocol:1`,20 个方法 + `hello`,其中 4 个是 Mihomo 方法,见 `core/README.md`) | `core/` 的金标准测试保持有效、零改动;`core/internal` 不能被别的模块直接 import |
 | D5 | 不校验 `hello` 返回的 `buildID`(那是为上游 Node 服务端写死的期望值);只要求 `implementation:"go-native"`、`protocol:1` | 自己的后端自己的核心 |
 | D6 | 持久化:**JSON 文件 + 原子写**(写临时文件 → fsync → rename),进程内用互斥锁串行化同一文件的读改写。流量 / 延迟历史等时序数据到 M5 再决定是否引入嵌入式数据库(优先纯 Go、无 CGO) | 路由器上依赖越少越好;配置数据量小 |
 | D7 | 认证:首次设置密码(`/api/auth/setup`)→ 登录得到会话 Cookie(`HttpOnly`、`SameSite=Strict`);密码存哈希;登录失败做限速。**实现(M0)**:哈希用标准库 `crypto/pbkdf2`(PBKDF2-HMAC-SHA256,60 万次,哈希串带算法名和迭代次数,可平滑升级),不用 scrypt / argon2id;会话是无状态签名 Cookie(30 天),改密换密钥使其它会话失效 | 面板在局域网,但仍要防暴力破解。沙盒拉不到 `golang.org/x/crypto`,无法验证带依赖的 `go.sum`;PBKDF2 零依赖,也比 scrypt / argon2id 省内存,适合路由器。以后要换算法,新增一种哈希前缀即可,不影响旧密码 |
@@ -19,7 +19,7 @@
 | D10 | 只依赖标准库和少量成熟的第三方库(例如 `golang.org/x/crypto`);每引入一个依赖要在提交说明里写理由 | 体积和供应链风险 |
 
 ## 3. 运行环境与路径
-- 目标系统:OpenWrt(procd)、Debian(systemd);仓库里的 `openwrt/`、`debian/`、`docker/` 是上游留下的安装与镜像脚本,**目前不是本后端的规格**;它们不在 `sync-main.sh` 的 KEEP 里,每次同步都被上游覆盖,自写的服务脚本、安装脚本不能放在那里(放法见 `docs/M6.md`,双内核第 6 步同理,要维护者确认)。
+- 目标系统:OpenWrt(procd)、Debian(systemd);仓库里的 `openwrt/`、`debian/`、`docker/` 是上游留下的安装与镜像脚本,**目前不是本后端的规格**;它们不在 `sync-main.sh` 的 KEEP 里,每次同步都被上游覆盖,自写的服务脚本、安装脚本不能放在那里(放法见 `docs/M6.md`)。双内核的服务脚本上游已经支持(见第 9.6 节),main 没有另做 overlay。
 - 所有路径集中在 `internal/system/paths.go`(数据目录、配置目录、sing-box 可执行文件、`openbox-core`、前端 `dist`),全部可用命令行参数或环境变量覆盖;默认值先取通用位置,**M6 打包时**再与安装脚本对齐。
 - 配置文件、数据文件的权限:仅 root 可读写(含密码哈希、订阅地址、订阅账号)。
 
@@ -92,3 +92,36 @@
 | `route-test` 的 `dns.stale` / `debug`、`penetration` 的 `firstLayer` / `preMatch` | 不做:前端没规定含义,或依据的是上游部署产物。`route-test` 的 `context` 留到 `terminal-test` 做探测时一起做 |
 | Docker 平台 | 不在范围(目标平台只有 OpenWrt 和 Debian);`docker/` 是上游同步目录,会被覆盖 |
 | M6 发布包设计 | 由后端起草,另出文档(`docs/M6.md`)交维护者过目;确认前不动 `update*` 第二部分和打包的代码。发布签名 v1 不做(只做 SHA256 加 HTTPS),需要签名时由维护者生成密钥并放进 Actions secrets |
+
+## 9. 双内核(sing-box / Mihomo)与内核切换
+
+上游 v0.1.477 起面板可以在两个内核之间切换(`panel/src/components/kernel/RouterKernelSwitch.vue`)。main 按「无脑对齐上游」的原则做完整套,细项勾选见 `STATUS.md` 的双内核条目。
+
+### 9.1 路径与选择
+- 选择文件 `<root>/etc/router-kernel`,内容 `sing-box` / `mihomo`,没有或认不出 = sing-box。
+- Mihomo 的可执行文件在 `<root>/bin/mihomo`,配置在 `<root>/etc/mihomo.yaml`,`-d` 目录 `<root>/data/mihomo`;入口旁路规则 `<root>/etc/mihomo-entry-bypass.nft`(存在时服务脚本导出 `OPENBOX_MIHOMO_ENTRY_BYPASS=1`);dnsmasq 模式的判断看 `etc/mihomo-dnsmasq`;装配用的输入快照在 `etc/mihomo.inputs`。
+- `GET /api/openbox/kernel/version` 回 `{kernel, version, raw, ok, mihomoAvailable}`:`mihomoAvailable` 只看 `bin/mihomo` 在不在,Mihomo 的版本取 `mihomo -v` 首行(`Mihomo Meta v1.x.y …`),`service/status` 的 `core.kernel` 同源。
+
+### 9.2 生成分层:core 4 个方法 + 后端装配
+闭源 core 只做四件事——`mihomoProxies`、`mihomoGroups`、`mihomoTargetRules`、`mihomoCompatibility`;整份 `mihomo.yaml`(mixed-port / tun / sniffer / dns 与 nameserver-policy / listeners / rule-providers / 入口 nft / `openbox-*` 补丁键)由后端装配(上游 v0.1.462 的 Node 服务端 `di` 也是这么分的)。代码在 `internal/mihomo`(装配 `buildconfig.go`、DNS 段 `dnsconfig.go`、入口旁路 `entrybypass.go` / `entrynft.go`、规则集转 provider、路由计划 `routeplan.go`),生成层的两内核共用部分在 `internal/kernelgen`。
+**边界**:Mihomo 表达不了的配置整体报错,逐个列出翻不了的节点(`mihomoCompatibility`),不做「静默降级」;`openbox-*` 补丁键依赖随包的补丁版 Mihomo(`-openbox.N`),原版会忽略这些键。
+
+### 9.3 预检(`GET /api/openbox/kernel/switch/preflight?kernel=`)
+固定 8 项、固定顺序:`target` → `system` → `conflicts` → `compatibility` → `rulesets` → `config` → `firewall` → `dnsGuard`;每项四态 `passed` / `failed` / `blocked` / `notApplicable`。前面有 `failed` 时后面的项记 `blocked`(不再实际去查),`blocked` 的判定要求前置项真的过了。
+带 `Accept: application/x-ndjson` 时每查完一项写一行 `{"check":{…}}`,最后 `{"done":true,"kernel"}`——`config` 项要生成一份配置,慢,逐行返回是为了面板能边查边显示。
+
+### 9.4 切换(`POST /api/openbox/kernel/switch`)与回滚
+顺序:预检全过 → 生成目标配置(失败则一个文件都没动)→ 把要改的文件读进内存做备份 → DNS 防泄露规则挂上(`dnsync.BeforeKernelStop`)→ 写目标配置 → 停旧内核 → 写 `router-kernel` → 起新内核 → 用 `service/status` 确认在跑 → DNS 对齐(`AfterKernelStart`)。
+任一步失败:把备份写回磁盘、重启原来那个内核,响应 `{ok:false, code, stderr}`,一律 200(失败原因在 `ok` / `stderr` 里)。`warning` 只放「切换成功但收尾没做完」的情况,例如选中项快照没存上。
+`service/core/start|restart` 由服务脚本按 `router-kernel` 自己选二进制与配置,后端不重复判断。
+
+### 9.5 选中项与局域网口
+- 选中项(哪个组此刻选哪个节点):装配时优先级是「正在运行的 Mihomo 的实时选择(`GET /proxies` 的 `now`)→ 上次切换成功后存的快照 `selections.json` → 配置默认的第一项」。切换成功后把这份选择存快照;存不上只进 `warning`。
+- 入口 nft 的 `iifname`:OpenWrt 上问 netifd(`ubus call network.interface dump`)把网卡对到逻辑网络,名字以 lan 开头才算 LAN、wan / wwan 开头整个排除(`internal/system/ifacekind.go`);没有 ubus 时按私有地址判断。这一点对齐上游 `$t` / `AP`。
+
+### 9.6 服务脚本与打包
+`openwrt/bin/openbox-kernel`、`initd/openbox`、`debian/systemd/openbox.service`、`docker/bin/openbox-ctl` 都随上游同步,已经支持双内核,**main 没有另做 overlay**(如果以后要改,按 `docs/M6.md` 的放法另放。`openwrt/`、`debian/`、`docker/` 不在 `sync-main.sh` 的 KEEP 里,改了会被覆盖)。
+发布包里要带 `bin/mihomo`(没带时 `mihomoAvailable=false`,面板提示「当前安装包未包含 Mihomo」),以及组件更新里的 Mihomo 版本检查;这两项要动打包流程,见 `STATUS.md` 第 7 步。
+
+### 9.7 与上游的已知差异
+逐条列在 `STATUS.md` 的「最终差异清单」第 7、8 条(选中项不 `PUT /proxies` 回内核、guest / iot 类接口仍按地址收)。**双内核的预检、切换、回滚都需要真机验证**(两个方向、故意让某一步失败看回滚、NDJSON 逐项到达),见 `STATUS.md` 对应条目的「需真机」。
