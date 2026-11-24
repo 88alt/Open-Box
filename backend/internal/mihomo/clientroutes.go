@@ -36,6 +36,9 @@ type ClientRoute struct {
 	DNS      *RouteDNS `json:"dns,omitempty"`
 	Sources  []string  `json:"sources"` // match=ip 时的 CIDR 名单(空数组,不是 null)
 	Macs     []string  `json:"macs,omitempty"`
+	// IPv6Only 是上游从 ipv6Bindings 映射出来的 MAC 行(只对 IPv6 生效)。这里不产出,
+	// 留字段是为了入口旁路的名单(sl)与上游同形。
+	IPv6Only bool `json:"ipv6Only,omitempty"`
 }
 
 var (
