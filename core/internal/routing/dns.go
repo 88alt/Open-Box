@@ -97,6 +97,10 @@ type DNSOptions struct {
 	KnownOutbounds map[string]bool      // nil = 没传(不检查)
 	FilterRules    []any                // 域名过滤产生的 DNS 规则
 	Terminal       TerminalDNS
+	// SkipRuleSetRows 按行下标标记「引用了规则集、出口又不在已知出站表里」的前置自定义行:
+	// 这些行不写 DNS 规则(否则会引用路由里没声明的规则集,sing-box 1.14 起判整份配置非法)。
+	// 行本身不删,下标仍与档案一致,Resolvers.Custom 也照样占位。nil = 不跳(直接调 BuildDNS 的测试不受影响)。
+	SkipRuleSetRows []bool
 }
 
 // Resolvers 是「谁用哪台解析器」:站点集名 → 解析器 tag、前置自定义分流每一行 → tag(拒绝行 / 纯 IP 行为 null)、
@@ -548,6 +552,12 @@ func BuildDNS(profile any, o DNSOptions) (DNSResult, error) {
 		for customIndex, rule := range conf.Custom.Rules {
 			customIndex, rule := customIndex, rule
 			own("custom", customIndex, "", func() {
+				// 出口不在已知出站表里、又引用了规则集的行:不写规则(见 DNSOptions.SkipRuleSetRows),
+				// 否则 DNS 会引用路由里没声明的规则集,sing-box 1.14 起拒绝整份配置。
+				if customIndex < len(o.SkipRuleSetRows) && o.SkipRuleSetRows[customIndex] {
+					resolvers.Custom = append(resolvers.Custom, nil)
+					return
+				}
 				match := customDnsMatch(rule, o.RuleLists)
 				if match == nil {
 					resolvers.Custom = append(resolvers.Custom, nil)

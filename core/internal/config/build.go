@@ -243,6 +243,10 @@ func BuildDetailed(args any) (map[string]any, error) {
 			knownOutbounds[t] = true
 		}
 	}
+	// 前置自定义分流里「引用了规则集、出口又不在已知出站表里」的行(节点组被删 / 停用):连接侧本来就跳过
+	// 这种行,但 DNS 侧原先会照写引用 `geosite-xxx` 的解析规则,而这份规则集在路由里没声明,sing-box 1.14
+	// 起会拒绝整份配置(内核起不来)。这里只算出「哪几行要跳」交给 DNS,行本身不删,下标仍与档案一致。
+	skipRuleSetRows := routing.DanglingRuleSetRows(routingConf.Custom.Rules, knownOutbounds, b)
 	classes := routing.PolicyClasses(jsx.Get(profile, "routing"), policyMemberTags, b, selections)
 	isProxyOutbound := func(tag string) bool {
 		if tag == b.Direct() || tag == b.Block() {
@@ -279,7 +283,7 @@ func BuildDetailed(args any) (map[string]any, error) {
 	dnsOpts := routing.DNSOptions{
 		SystemDNS: asList(get("systemDns")), GroupTags: groupTags, Builtin: b, Selections: selections,
 		DirectHostSets: directHostSets, RuleLists: routing.ParseRuleLists(get("ruleLists")), ClientRoutes: clientRoutes,
-		KnownOutbounds: knownOutbounds, FilterRules: filtering.Rules,
+		KnownOutbounds: knownOutbounds, FilterRules: filtering.Rules, SkipRuleSetRows: skipRuleSetRows,
 		Terminal: routing.TerminalDNS{AutoRedirect: autoRedirect, DirectBypassOff: !directBypass, AdmitDirect: admitTag},
 	}
 	if inlineHosts != nil {
