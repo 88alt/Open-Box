@@ -9,10 +9,12 @@
 package kernelgen
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -113,16 +115,19 @@ func New(d Deps) *Generator {
 
 // ---- sing-box 一侧 ----
 
-// SingboxCheck 生成 sing-box 配置,核对引用的本地规则集是否就位,再跑 `sing-box check`。
-// 不写规则集文件(部署时才写):node-direct / flip-* 这类部署时生成的文件按「稍后会写」算通过,
-// 其余(geoip-* / geosite-* / 用户名单)不存在就如实报缺。
-func (g *Generator) SingboxCheck(ctx context.Context, gen *singbox.Generator) ([]string, error) {
+// SingboxBuild 生成一份 sing-box 配置(不落盘)。
+func (g *Generator) SingboxBuild(ctx context.Context, gen *singbox.Generator) (*singbox.Built, error) {
 	if gen == nil {
 		return nil, fmt.Errorf("没有 sing-box 配置生成器")
 	}
-	built, err := gen.Build(ctx)
-	if err != nil {
-		return nil, err
+	return gen.Build(ctx)
+}
+
+// SingboxRulesets 核对配置引用的本地规则集是否就位。不写文件(部署时才写):
+// node-direct / flip-* 这类部署时生成的文件按「稍后会写」算通过,其余不存在就报缺。
+func (g *Generator) SingboxRulesets(built *singbox.Built) ([]string, error) {
+	if built == nil {
+		return nil, fmt.Errorf("没有配置可核对")
 	}
 	details := []string{}
 	var missing []string
@@ -139,6 +144,14 @@ func (g *Generator) SingboxCheck(ctx context.Context, gen *singbox.Generator) ([
 	if len(missing) > 0 {
 		return details, fmt.Errorf("配置引用的规则集还没准备好:%s", strings.Join(missing, "、"))
 	}
+	return details, nil
+}
+
+// SingboxValidate 跑 `sing-box check`。
+func (g *Generator) SingboxValidate(ctx context.Context, built *singbox.Built) ([]string, error) {
+	if built == nil {
+		return nil, fmt.Errorf("没有配置可校验")
+	}
 	data, err := built.JSON()
 	if err != nil {
 		return nil, fmt.Errorf("序列化配置失败: %w", err)
@@ -148,9 +161,9 @@ func (g *Generator) SingboxCheck(ctx context.Context, gen *singbox.Generator) ([
 		dir = os.TempDir()
 	}
 	if err := singbox.Check(ctx, g.d.SingBox, dir, data); err != nil {
-		return details, err
+		return nil, err
 	}
-	return details, nil
+	return []string{"sing-box 配置已通过自检"}, nil
 }
 
 // ---- Mihomo 一侧 ----
@@ -199,9 +212,18 @@ func (g *Generator) MihomoBuild(ctx context.Context) (*mihomo.BuildResult, error
 		subsList = append(subsList, m)
 	}
 
-	ruleLists, err := g.syncLists(ctx, prof)
+	rep, err := g.syncLists(ctx, prof)
 	if err != nil {
 		return nil, err
+	}
+	ruleLists := map[string]any{}
+	for _, u := range singbox.CollectRuleURLs(prof["routing"]) {
+		tag := listTag(u)
+		if tag == "" {
+			continue
+		}
+		shape := rep.Shapes[tag]
+		ruleLists[tag] = map[string]any{"url": u, "domain": shape.Domain, "ip": shape.IP}
 	}
 
 	var resolvers []any
@@ -262,11 +284,67 @@ func (g *Generator) MihomoBuild(ctx context.Context) (*mihomo.BuildResult, error
 	return mihomo.BuildConfig(ctx, in, deps)
 }
 
-// MihomoCheck 装配并跑 `mihomo -t`。返回的细节是配置里的版本与要用的规则集数量,报错时是给人看的原因。
-func (g *Generator) MihomoCheck(ctx context.Context) ([]string, error) {
-	res, err := g.MihomoBuild(ctx)
+// MihomoCompat 问 core:Mihomo 表达不了的配置有哪些(空 = 没有)。
+// profile 里没登记的规则集由 rulesets 一项单独检查,这里不重复。
+func (g *Generator) MihomoCompat(ctx context.Context) ([]string, error) {
+	if g.d.Compiler == nil {
+		return nil, fmt.Errorf("mihomo 兼容性检查没有 core 编译")
+	}
+	prof, err := g.d.Profiles.Get(ctx)
 	if err != nil {
 		return nil, err
+	}
+	groups, err := g.d.Groups.Groups(ctx)
+	if err != nil {
+		return nil, err
+	}
+	recs, cnodes, err := g.d.Catalog.Catalog(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nodes := make([]map[string]any, 0, len(cnodes))
+	for _, cn := range cnodes {
+		m, err := toMap(cn.Node)
+		if err != nil {
+			return nil, err
+		}
+		m["subscriptionId"] = cn.SubscriptionID
+		nodes = append(nodes, m)
+	}
+	_ = recs
+	var selections any
+	if g.d.Selections != nil {
+		selections = g.d.Selections()
+	}
+	return g.d.Compiler.Compatibility(ctx, mihomo.CompatInput{
+		Profile: prof, Nodes: nodes, Groups: groups, ChainNodes: chainNodes(prof), Selections: selections,
+	})
+}
+
+// MihomoRulesets 同步规则集链接(.srs)并报告没处理好的链接(有旧文件可沿用的不算失败)。
+func (g *Generator) MihomoRulesets(ctx context.Context) ([]string, error) {
+	prof, err := g.d.Profiles.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rep, err := g.syncLists(ctx, prof)
+	if err != nil {
+		return nil, err
+	}
+	details := []string{}
+	for _, is := range rep.Issues {
+		if is.UsedOld {
+			details = append(details, fmt.Sprintf("%s 沿用了上次的文件(%s)", is.Tag, is.Reason))
+		}
+	}
+	details = append(details, fmt.Sprintf("%d 个规则集链接已就绪", len(rep.Shapes)))
+	return details, nil
+}
+
+// MihomoValidate 把装配结果写成临时配置并跑 `mihomo -t`。
+func (g *Generator) MihomoValidate(ctx context.Context, res *mihomo.BuildResult) ([]string, error) {
+	if res == nil {
+		return nil, fmt.Errorf("没有装配结果可校验")
 	}
 	text, err := mihomo.MarshalYAML(res.Config)
 	if err != nil {
@@ -287,9 +365,43 @@ func (g *Generator) MihomoCheck(ctx context.Context) ([]string, error) {
 	return []string{fmt.Sprintf("mihomo 配置已通过自检(%d 字节)", len(text))}, nil
 }
 
+// MihomoFirewall 校验入口防火墙规则(`nft -c -f`)。没有入口 nft 就不适用。
+// 返回 applicable=false 表示这次切换不涉及入口防火墙。
+func (g *Generator) MihomoFirewall(ctx context.Context, res *mihomo.BuildResult) ([]string, bool, error) {
+	if res == nil || strings.TrimSpace(res.Entry) == "" {
+		return nil, false, nil
+	}
+	if _, err := exec.LookPath("nft"); err != nil {
+		return nil, false, nil // 没有 nft 的环境(容器 / 桌面)不适用,与上游一致
+	}
+	dir := filepath.Join(g.d.DataDir, "mihomo")
+	if err := g.d.FS.MkdirAll(dir); err != nil {
+		return nil, true, err
+	}
+	path := filepath.Join(dir, "preflight-entry.nft")
+	if err := g.d.FS.WriteFile(path, []byte(res.Entry+"\n"), 0o600); err != nil {
+		return nil, true, err
+	}
+	defer os.Remove(path)
+	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(cctx, "nft", "-c", "-f", path)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.WaitDelay = 2 * time.Second
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		return nil, true, fmt.Errorf("入口防火墙规则没通过校验:%s", msg)
+	}
+	return []string{"入口防火墙规则已通过 nft 校验"}, true, nil
+}
+
 // syncLists 把档案里引用的规则集链接同步成 .srs,并给出 BuildInput.RuleLists 要的形状。
 // 链接没处理好但没有旧文件可沿用时报错(原因与 sing-box 一侧同一句文案)。
-func (g *Generator) syncLists(ctx context.Context, prof map[string]any) (map[string]any, error) {
+func (g *Generator) syncLists(ctx context.Context, prof map[string]any) (*singbox.ListReport, error) {
 	urls := singbox.CollectRuleURLs(prof["routing"])
 	files := singbox.ListFiles{Rules: g.d.Lists, SingBox: g.d.SingBox, Dir: g.d.RulesetDir}
 	rep, err := files.Sync(ctx, urls)
@@ -305,16 +417,7 @@ func (g *Generator) syncLists(ctx context.Context, prof map[string]any) (map[str
 	if len(bad) > 0 {
 		return nil, fmt.Errorf("规则集链接还没准备好:%s", strings.Join(bad, "、"))
 	}
-	out := map[string]any{}
-	for _, u := range urls {
-		tag := listTag(u)
-		if tag == "" {
-			continue
-		}
-		shape := rep.Shapes[tag]
-		out[tag] = map[string]any{"url": u, "domain": shape.Domain, "ip": shape.IP}
-	}
-	return out, nil
+	return rep, nil
 }
 
 // listTag 与 core / sing-box 用的名字一致:list-<fnv1a 8 位>。

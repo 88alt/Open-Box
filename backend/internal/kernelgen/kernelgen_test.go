@@ -200,8 +200,22 @@ func TestMihomoBuildRuleListShape(t *testing.T) {
 
 func TestSingboxCheckNeedsGenerator(t *testing.T) {
 	g := New(Deps{FS: newMemFS(), DataDir: t.TempDir()})
-	if _, err := g.SingboxCheck(context.Background(), nil); err == nil {
+	if _, err := g.SingboxBuild(context.Background(), nil); err == nil {
 		t.Fatal("没有生成器时应当报错")
+	}
+	if _, err := g.SingboxRulesets(nil); err == nil {
+		t.Fatal("没有配置时应当报错")
+	}
+	if _, err := g.SingboxValidate(context.Background(), nil); err == nil {
+		t.Fatal("没有配置时应当报错")
+	}
+}
+
+// 入口 nft 为空时防火墙一项不适用(容器 / 纯 TUN 场景)。
+func TestMihomoFirewallNotApplicable(t *testing.T) {
+	g := New(Deps{FS: newMemFS(), DataDir: t.TempDir()})
+	if _, ok, err := g.MihomoFirewall(context.Background(), &mihomo.BuildResult{}); ok || err != nil {
+		t.Fatalf("ok=%v err=%v,想要不适用", ok, err)
 	}
 }
 

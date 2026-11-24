@@ -32,6 +32,7 @@ import (
 	factoryresetapi "github.com/timeflysoon/Open-Box/backend/internal/api/factoryreset"
 	failoverapi "github.com/timeflysoon/Open-Box/backend/internal/api/failover"
 	groupsapi "github.com/timeflysoon/Open-Box/backend/internal/api/groups"
+	kernelapi "github.com/timeflysoon/Open-Box/backend/internal/api/kernel"
 	latencyapi "github.com/timeflysoon/Open-Box/backend/internal/api/latency"
 	latencyhistoryapi "github.com/timeflysoon/Open-Box/backend/internal/api/latencyhistory"
 	nodeinfoapi "github.com/timeflysoon/Open-Box/backend/internal/api/nodeinfo"
@@ -77,7 +78,10 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/failover"
 	"github.com/timeflysoon/Open-Box/backend/internal/geodata"
 	"github.com/timeflysoon/Open-Box/backend/internal/kerneldns"
+	"github.com/timeflysoon/Open-Box/backend/internal/kernelgen"
+	"github.com/timeflysoon/Open-Box/backend/internal/kernelswitch"
 	"github.com/timeflysoon/Open-Box/backend/internal/latencyhistory"
+	"github.com/timeflysoon/Open-Box/backend/internal/mihomo"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodeexit"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodegroups"
 	"github.com/timeflysoon/Open-Box/backend/internal/nodeinfo"
@@ -472,6 +476,66 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Fetch: lists, URLs: gen,
 	}
 	rulesetsapi.Register(srv.Mux(), rulesetsapi.Deps{Lists: lists, Geo: geoLib, Refresh: refresher})
+
+	// 双内核切换(第 4、5 步):预检 + 目标内核配置的生成与自检。生成层与切换共用同一套依赖。
+	var mihomoCall mihomo.Call
+	if core.Available(cfg.Core) {
+		mc := core.New(cfg.Core)
+		mihomoCall = func(ctx context.Context, method string, args ...any) (json.RawMessage, error) {
+			return mc.Call(ctx, method, args)
+		}
+	}
+	var mihomoCompiler *mihomo.Compiler
+	if mihomoCall != nil {
+		mihomoCompiler = mihomo.NewCompiler(mihomoCall)
+	}
+	kg := kernelgen.New(kernelgen.Deps{
+		Profiles: profileSvc, Groups: groupsSvc, Catalog: subsSvc, Lists: lists,
+		Secret:   gen.ClashSecret,
+		Compiler: mihomoCompiler,
+		Platform: platformName(initKind), DataDir: cfg.DataDir, GeoDir: cfg.GeoDir,
+		RulesetDir: filepath.Join(cfg.DataDir, "rules"), SingBox: cfg.SingBox, Mihomo: cfg.Mihomo, ConfigDir: cfg.ConfigDir,
+		SystemDNS: func() []string { return system.ReadResolvers("/etc/resolv.conf") },
+	})
+	kernelSwitch := kernelswitch.New(kernelswitch.Deps{
+		KernelFile: cfg.RouterKernelFile(), SingBox: cfg.SingBox, Mihomo: cfg.Mihomo,
+		InitdCore: initdPath(initKind, cfg.CoreService), DataDir: cfg.DataDir,
+		Platform: platformName(initKind), Gen: kg, Sbx: gen,
+		Conflicts: func(ctx context.Context) ([]string, error) {
+			found, err := conflictDetector.Find(ctx)
+			if err != nil {
+				return nil, err
+			}
+			names := make([]string, 0, len(found))
+			for _, c := range found {
+				names = append(names, c.Label)
+			}
+			return names, nil
+		},
+		Compat: func(ctx context.Context) ([]string, error) { return kg.MihomoCompat(ctx) },
+		DNSGuard: func(ctx context.Context) (bool, []string, error) {
+			prof, err := profileSvc.Get(ctx)
+			if err != nil {
+				return false, nil, err
+			}
+			dns, _ := prof["dns"].(map[string]any)
+			mode, _ := dns["mode"].(string)
+			if mode != "dnsmasq" {
+				return false, nil, nil
+			}
+			return true, []string{"切换时先撤销 dnsmasq 接管,新内核起来后按 dns.mode 重新对齐"}, nil
+		},
+	})
+	kernelapi.Register(srv.Mux(), kernelapi.Deps{
+		Engine: kernelSwitch,
+		Compatible: func(ctx context.Context) []string {
+			problems, err := kg.MihomoCompat(ctx)
+			if err != nil {
+				return []string{err.Error()}
+			}
+			return problems
+		},
+	})
 
 	// 域名穿透:站点集命中哪些域名 / IP。核心不可用时接口返回 503,其它接口不受影响
 	var peCore policyentries.Core
@@ -1090,4 +1154,26 @@ func checkCore(path string, log *slog.Logger) {
 		return
 	}
 	log.Info("openbox-core 可用", "path", path, "implementation", info.Implementation, "protocol", info.Protocol, "build", info.BuildID)
+}
+
+// platformName 把服务管理器类型换成内核装配用的平台名(上游 platform 的取值只有 openwrt / systemd / container)。
+func platformName(kind system.InitKind) string {
+	if kind == system.InitOpenWrt {
+		return "openwrt"
+	}
+	if kind == system.InitSystemd {
+		return "systemd"
+	}
+	return "linux"
+}
+
+// initdPath 给出内核服务脚本的路径,只用来确认它存在(第 4 步的 system 一项)。
+func initdPath(kind system.InitKind, service string) string {
+	switch kind {
+	case system.InitOpenWrt:
+		return filepath.Join("/etc/init.d", service)
+	case system.InitSystemd:
+		return filepath.Join("/etc/systemd/system", service+".service")
+	}
+	return ""
 }

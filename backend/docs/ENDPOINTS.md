@@ -311,6 +311,10 @@
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
 | GET | `/api/openbox/kernel/version` | `fetchKernelVersion` (api/openbox.ts) | OpenboxKernelVersion | () |
+| GET | `/api/openbox/kernel/switch/preflight?kernel=sing-box\|mihomo` | `fetchKernelSwitchPreflight` (api/openbox.ts) | `{kernel, checks}` 或 NDJSON | (`Accept: application/x-ndjson` 时流式) |
+| GET | `/api/openbox/kernel/mihomo/compatibility` | `fetchMihomoCompatibility` (api/openbox.ts) | `{blockers: string[], problems: string[]}` | () |
+
+预检固定 8 项、固定顺序:`target`(目标内核可执行,且不是当前内核)→ `system`(TUN 设备与内核服务脚本)→ `conflicts`(其它代理工具在跑)→ `compatibility`(切到 Mihomo 时问 core;切到 sing-box 回 `notApplicable`)→ `rulesets`(配置引用的规则集就位)→ `config`(生成目标内核配置并跑内核自检)→ `firewall`(入口 nft;sing-box 一侧没有,回 `notApplicable`)→ `dnsGuard`(切换期间的 DNS 接管;`dns.mode` 不是 dnsmasq 时回 `notApplicable`)。状态只有 `passed` / `failed` / `blocked` / `notApplicable`,前面有一项 `failed` 时 `rulesets` / `config` / `firewall` / `dnsGuard` 回 `blocked`。NDJSON:每查完一项一行 `{"check":{"id","status","details"?}}`,最后一行 `{"done":true,"kernel":"…"}`;`kernel` 不合法回 400。
 
 ## `/api/openbox/latency-history`
 
@@ -566,7 +570,6 @@
 
 | 方法 | 路径 | 前端函数(文件) | 响应类型 | 参数 |
 |---|---|---|---|---|
-| GET | `/api/openbox/kernel/switch/preflight?kernel=` | `fetchKernelSwitchPreflight` (api/openbox.ts) | NDJSON 或 JSON,见 STATUS 双内核第 4 步 | (kernel: 'sing-box' \| 'mihomo') |
 | POST | `/api/openbox/kernel/switch` | `switchRouterKernel` (api/openbox.ts) | OpenboxServiceActionResult | (kernel) |
 
 不做:`/api/openbox/overview-links`(上游概览顶栏外链,例外 B)。

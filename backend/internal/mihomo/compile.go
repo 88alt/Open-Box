@@ -255,6 +255,31 @@ type RulesModel struct {
 	FirstPolicy    int      `json:"firstPolicy"`
 }
 
+// CompatInput 是 mihomoCompatibility 的入参。
+type CompatInput struct {
+	Profile    any
+	Nodes      any
+	Groups     any
+	ChainNodes any
+	Selections any
+}
+
+// Compatibility 对应上游 `i("mihomoCompatibility", …)`:返回 Mihomo 表达不了的问题(空 = 没有)。
+func (c *Compiler) Compatibility(ctx context.Context, in CompatInput) ([]string, error) {
+	raw, err := c.call(ctx, "mihomoCompatibility", map[string]any{
+		"profile": in.Profile, "nodes": in.Nodes, "groups": in.Groups,
+		"chainNodes": in.ChainNodes, "selections": in.Selections,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var problems []string
+	if err := json.Unmarshal(raw, &problems); err != nil {
+		return nil, fmt.Errorf("core: 解析 mihomoCompatibility 的返回值失败: %w", err)
+	}
+	return problems, nil
+}
+
 // BuiltinNames 是内置出站的名字与启用开关(上游 Dn / core builtinTags 的返回)。
 // 零值 = 默认的 direct / block,且两个都算启用(DirectEnabled / BlockEnabled 为 nil 时按启用算)。
 type BuiltinNames struct {
