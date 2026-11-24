@@ -185,8 +185,11 @@ func TestPickMemberAndFollowSelection(t *testing.T) {
 func TestCompilerDirectIPPlan(t *testing.T) {
 	var gotMethod string
 	var gotInput any
-	call := func(_ context.Context, method string, input any) (json.RawMessage, error) {
-		gotMethod, gotInput = method, input
+	call := func(_ context.Context, method string, args ...any) (json.RawMessage, error) {
+		gotMethod = method
+		if len(args) > 0 {
+			gotInput = args[0]
+		}
 		return json.RawMessage(`{"custom":{"name":"前置自定义分流","enabled":true,"rules":[{"type":"ipCidr","value":"9.9.9.0/24","outbound":"direct"}]},` +
 			`"policies":[],"activePolicies":[{"id":"p0","name":"国内","default":"direct","enabled":true,"ipCidr":["10.0.0.0/8"],"rulesets":["geosite-cn"]}],` +
 			`"fallback":{"name":"其他","icon":"x","default":""}}`), nil
@@ -205,11 +208,11 @@ func TestCompilerDirectIPPlan(t *testing.T) {
 	}
 
 	boom := errors.New("core 挂了")
-	if _, err := NewCompiler(func(context.Context, string, any) (json.RawMessage, error) { return nil, boom }).
+	if _, err := NewCompiler(func(context.Context, string, ...any) (json.RawMessage, error) { return nil, boom }).
 		DirectIPPlan(context.Background(), nil, DirectIPOptions{}); !errors.Is(err, boom) {
 		t.Fatalf("错误要原样传出来: %v", err)
 	}
-	if _, err := NewCompiler(func(context.Context, string, any) (json.RawMessage, error) { return json.RawMessage(`[1]`), nil }).
+	if _, err := NewCompiler(func(context.Context, string, ...any) (json.RawMessage, error) { return json.RawMessage(`[1]`), nil }).
 		DirectIPPlan(context.Background(), nil, DirectIPOptions{}); err == nil || !strings.Contains(err.Error(), "normalizeRouting") {
 		t.Fatalf("返回值不对要报错: %v", err)
 	}

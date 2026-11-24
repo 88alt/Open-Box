@@ -14,16 +14,20 @@ import (
 type fakeCore struct {
 	calls  atomic.Int32
 	last   map[string]any
+	lastAt []any
 	groups string
 	rules  string
 	err    error
 }
 
-func (f *fakeCore) call(_ context.Context, method string, input any) (json.RawMessage, error) {
+func (f *fakeCore) call(_ context.Context, method string, args ...any) (json.RawMessage, error) {
 	f.calls.Add(1)
-	b, _ := json.Marshal(input)
+	f.lastAt = append([]any{}, args...)
 	f.last = map[string]any{}
-	_ = json.Unmarshal(b, &f.last)
+	if len(args) > 0 {
+		b, _ := json.Marshal(args[0])
+		_ = json.Unmarshal(b, &f.last)
+	}
 	f.last["_method"] = method
 	if f.err != nil {
 		return nil, f.err

@@ -17,7 +17,8 @@ import (
 // 把「某个组最终落到哪里」归成 direct / reject / proxy(AC,DNS 与入口旁路按它决定要不要走代理)。
 
 // Call 调 core 的一个方法,返回 value 的原始 JSON(接线处把 *core.Client 的 Call 包一下就行)。
-type Call func(ctx context.Context, method string, input any) (json.RawMessage, error)
+// args 按顺序对应 core 方法的参数:多数方法只有一个,bypassPlan / entryPlan 是 (routing, opts) 两个。
+type Call func(ctx context.Context, method string, args ...any) (json.RawMessage, error)
 
 // 缓存容量:与上游一致(组 4 份、规则 16 份)。
 const (

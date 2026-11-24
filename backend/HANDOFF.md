@@ -58,7 +58,7 @@ Go 静态编译(backend/go.mod 现为 go 1.25.4,core/go.mod 是 1.25.12,统一�
 [~] M4 自动化:订阅定时更新、failover*、延迟历史采集、带宽择优(重写后的版本;节点评分权重 2026-11-23 起写进内核配置,core 的 `node_score_weights`,后端改权重提示重启,待真机)。
 [~] M5 系统运维:deploy*、rollback、factory-reset、update 第一部分(status / check / notes)、时区、backup。
 [ ] 未做:
-    - 双内核(sing-box / Mihomo)与内核切换:第 1、2 步和 core 的 3a–3d 已做,后端 3e(Go 版 mihomo.yaml 装配,拆成 3e-1~5)做了 3e-1(`internal/mihomo` 的输入与小工具)、3e-3(规则集转 provider、调 core 的组 / 规则并缓存、组分类)、3e-4a(网段小工具 `cidr.go`、读回已部署 geoip provider `deployed.go`)、3e-4b-1(规则集形状 `shape.go`、入口旁路的网段扣减 `entrybypass.go`)和 3e-4b-2(直连 IP 计划 `directip.go`),3e-2 卡在 core 新方法 `mihomo/mihomoDnsUpstreams`(STATUS「需要 core 配合」里),3e-4b-3(路由计划输入 `DE` / `ug` / `si`)、3e-4c~d(`mu` 的 nft 生成、`SC`)、3e-5 和第 4–7 步没做。
+    - 双内核(sing-box / Mihomo)与内核切换:第 1、2 步和 core 的 3a–3d 已做,后端 3e(Go 版 mihomo.yaml 装配,拆成 3e-1~5)做了 3e-1(`internal/mihomo` 的输入与小工具)、3e-3(规则集转 provider、调 core 的组 / 规则并缓存、组分类)、3e-4a(网段小工具 `cidr.go`、读回已部署 geoip provider `deployed.go`)、3e-4b-1(规则集形状 `shape.go`、入口旁路的网段扣减 `entrybypass.go`)、3e-4b-2(直连 IP 计划 `directip.go`)和 3e-4b-3(路由计划 `routeplan.go` 的 `DE` / `ug` / `si`、终端分流规整 `clientroutes.go`、稳定 JSON `stablejson.go`),3e-2 卡在 core 新方法 `mihomo/mihomoDnsUpstreams`(STATUS「需要 core 配合」里),3e-4c~d(`mu` 的 nft 生成、`SC`)、3e-5 和第 4–7 步没做。
     - 前后端对账缺口(STATUS 同名一节):kernel/switch(profile/target-routing、subscriptions/updates 已做)。
     - 上游 v0.1.481 新增两项:带宽「按天测试指定开始时刻」(`bandwidth.startHour`)已做;DNS 页「FakeIP 网段」(`dns.fakeIpRange`)卡在 core(STATUS「需要 core 配合」同名条目)。
     - update 第二部分与 M6 打包发布:设计草案在 docs/M6.md,等维护者确认。

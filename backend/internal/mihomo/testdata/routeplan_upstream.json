@@ -1,0 +1,184 @@
+{
+ "directTag": "DIRECT",
+ "routes": [
+  {
+   "id": "r1",
+   "name": "手机",
+   "match": "ip",
+   "outbound": "节点选择",
+   "sources": [
+    "192.168.1.5/32",
+    "192.168.1.0/24"
+   ]
+  },
+  {
+   "id": "r4",
+   "name": "绕开",
+   "match": "ip",
+   "outbound": "DIRECT",
+   "bypass": true,
+   "sources": [
+    "10.0.0.4/32"
+   ]
+  },
+  {
+   "id": "r5",
+   "name": "绕开2",
+   "match": "ip",
+   "outbound": "DIRECT",
+   "bypass": true,
+   "sources": [
+    "10.0.0.5/24"
+   ]
+  },
+  {
+   "id": "r9",
+   "name": "按 MAC",
+   "match": "mac",
+   "outbound": "节点选择",
+   "sources": [],
+   "macs": [
+    "aa:bb:cc:dd:ee:01"
+   ]
+  },
+  {
+   "id": "r10",
+   "name": "MAC 绕开",
+   "match": "mac",
+   "outbound": "DIRECT",
+   "bypass": true,
+   "sources": [],
+   "macs": [
+    "aa:bb:cc:dd:ee:02"
+   ]
+  },
+  {
+   "id": "r12",
+   "name": "MAC 不算",
+   "match": "ip",
+   "outbound": "节点选择",
+   "sources": [
+    "10.0.0.12/32"
+   ]
+  },
+  {
+   "id": "r13",
+   "name": "v6",
+   "match": "ip",
+   "outbound": "direct",
+   "sources": [
+    "fd00::5/128",
+    "fd00::5/64",
+    "FD00::5/128"
+   ]
+  },
+  {
+   "id": "14",
+   "name": "15",
+   "match": "ip",
+   "outbound": "节点选择",
+   "sources": [
+    "10.0.0.14/32"
+   ]
+  }
+ ],
+ "routesNoTag": [
+  {
+   "id": "r1",
+   "name": "手机",
+   "match": "ip",
+   "outbound": "节点选择",
+   "sources": [
+    "192.168.1.5/32",
+    "192.168.1.0/24"
+   ]
+  },
+  {
+   "id": "r4",
+   "name": "绕开",
+   "match": "ip",
+   "outbound": "direct",
+   "bypass": true,
+   "sources": [
+    "10.0.0.4/32"
+   ]
+  },
+  {
+   "id": "r5",
+   "name": "绕开2",
+   "match": "ip",
+   "outbound": "节点选择",
+   "bypass": true,
+   "sources": [
+    "10.0.0.5/24"
+   ]
+  },
+  {
+   "id": "r9",
+   "name": "按 MAC",
+   "match": "mac",
+   "outbound": "节点选择",
+   "sources": [],
+   "macs": [
+    "aa:bb:cc:dd:ee:01"
+   ]
+  },
+  {
+   "id": "r10",
+   "name": "MAC 绕开",
+   "match": "mac",
+   "outbound": "direct",
+   "bypass": true,
+   "sources": [],
+   "macs": [
+    "aa:bb:cc:dd:ee:02"
+   ]
+  },
+  {
+   "id": "r12",
+   "name": "MAC 不算",
+   "match": "ip",
+   "outbound": "节点选择",
+   "sources": [
+    "10.0.0.12/32"
+   ]
+  },
+  {
+   "id": "r13",
+   "name": "v6",
+   "match": "ip",
+   "outbound": "direct",
+   "sources": [
+    "fd00::5/128",
+    "fd00::5/64",
+    "FD00::5/128"
+   ]
+  },
+  {
+   "id": "14",
+   "name": "15",
+   "match": "ip",
+   "outbound": "节点选择",
+   "sources": [
+    "10.0.0.14/32"
+   ]
+  }
+ ],
+ "notArray": [],
+ "stable": [
+  "{\"a\":[1,2],\"b\":1}",
+  "[true,\"x\",[],null]",
+  "\"a<b&c>\""
+ ],
+ "planKey": "{\"sets\":[\"a\",\"b\"],\"pending\":[{\"policy\":\"p1\",\"sets\":[\"m\"],\"against\":[]},{\"policy\":\"p2\",\"sets\":[\"a\",\"z\"],\"against\":[{\"name\":\"n1\",\"geoip\":[\"g1\",\"g2\"],\"cidrs\":[\"1/24\",\"2/24\"],\"lists\":[\"l1\"]}]}],\"fakeIp\":true}",
+ "planKeyEmpty": "{\"sets\":[],\"pending\":[],\"fakeIp\":false}",
+ "planKeyNull": "",
+ "ug": "[true,\"{\\\"sets\\\":[\\\"a\\\"],\\\"pending\\\":[],\\\"fakeIp\\\":true}\",[\"1.1.1.0/24\",\"2.2.2.0/24\"],[[\"s2\",\"s1\"],[\"c\"]]]",
+ "ugNoFallback": "[false,\"{\\\"sets\\\":[],\\\"pending\\\":[],\\\"fakeIp\\\":false}\",[],null]",
+ "yt": [
+  true,
+  false,
+  false,
+  false
+ ]
+}

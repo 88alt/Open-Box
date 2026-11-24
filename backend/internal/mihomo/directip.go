@@ -20,8 +20,8 @@ import (
 
 // BuiltinNames 是内置出站的名字(上游 Dn 的 direct / block)。零值 = 默认的 direct / block。
 type BuiltinNames struct {
-	Direct string
-	Block  string
+	Direct string `json:"direct"`
+	Block  string `json:"block"`
 }
 
 // CustomRule 是前置自定义分流的一行(core normalizeRouting 的 custom.rules[])。
