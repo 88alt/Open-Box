@@ -35,13 +35,23 @@ func (c *CustomPolicy) active() bool {
 	return c != nil && (c.Enabled == nil || *c.Enabled) && len(c.Rules) > 0
 }
 
-// RoutingPolicy 是启用的站点集(activePolicies[])里直连 IP 计划用得到的字段。
+// RoutingPolicy 是启用的站点集(activePolicies[])。直连 IP 计划用不到 Domain / DomainSuffix / DomainKeyword,
+// 但 route-test 判断「DNS 规则是不是旧的」要按这些条件认归属,所以一起收进来。
 type RoutingPolicy struct {
-	Name     string   `json:"name"`
-	Default  string   `json:"default"`
-	Ports    []string `json:"ports,omitempty"`
-	IPCidr   []string `json:"ipCidr"`
-	Rulesets []string `json:"rulesets"`
+	Name          string   `json:"name"`
+	Default       string   `json:"default"`
+	Ports         []string `json:"ports,omitempty"`
+	IPCidr        []string `json:"ipCidr"`
+	Rulesets      []string `json:"rulesets"`
+	Domain        []string `json:"domain"`
+	DomainSuffix  []string `json:"domainSuffix"`
+	DomainKeyword []string `json:"domainKeyword"`
+}
+
+// RoutingFallback 是兜底站点的名字与默认出口。
+type RoutingFallback struct {
+	Name    string `json:"name"`
+	Default string `json:"default"`
 }
 
 // TargetOverride 是「单独指定某个目标走哪个站点集」解析后的一条(上游 v0.1.423 起;name / default 是它指向的站点集)。
@@ -56,6 +66,7 @@ type TargetOverride struct {
 type RoutingModel struct {
 	Custom          *CustomPolicy    `json:"custom"`
 	ActivePolicies  []RoutingPolicy  `json:"activePolicies"`
+	Fallback        RoutingFallback  `json:"fallback"`
 	TargetOverrides []TargetOverride `json:"targetOverrides,omitempty"`
 }
 

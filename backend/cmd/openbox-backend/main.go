@@ -682,6 +682,29 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		LocalAddrs: sysres.LocalAddrs,
 	}})
 
+	// route-test 判断「DNS 规则是不是旧的」要按档案的站点集认归属(core normalizeRouting 的 activePolicies / fallback)
+	var routePolicies func(ctx context.Context) ([]routetest.Policy, string, error)
+	if mihomoCompiler != nil {
+		routePolicies = func(ctx context.Context) ([]routetest.Policy, string, error) {
+			prof, err := profileSvc.Get(ctx)
+			if err != nil {
+				return nil, "", err
+			}
+			model, err := mihomoCompiler.NormalizeRouting(ctx, prof["routing"])
+			if err != nil {
+				return nil, "", err
+			}
+			out := make([]routetest.Policy, 0, len(model.ActivePolicies))
+			for _, p := range model.ActivePolicies {
+				if p.Name == "" {
+					continue
+				}
+				out = append(out, routetest.Policy{Name: p.Name, Rulesets: p.Rulesets, DomainSuffix: p.DomainSuffix})
+			}
+			return out, model.Fallback.Name, nil
+		}
+	}
+
 	// 站点延迟(概览页):请求经内核的面板入站走一遍路由,从内核连接列表认出线路;历史单独存 site-latency-history,不和节点历史混
 	sitelatencyapi.Register(srv.Mux(), sitelatencyapi.Deps{Service: &sitelatency.Service{
 		Hist: &latencyhistory.Service{Store: st, File: "site-latency-history"},
@@ -705,6 +728,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Proxies: func(ctx context.Context) ([]singbox.KernelProxy, error) {
 			return singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
 		},
+		// 启用中的站点集与兜底站点(判断 dns.stale 用);core 不可用时为 nil,就不判断
+		Policies: routePolicies,
 	}
 	routeSvc := &routetest.Service{
 		Snapshot: func(ctx context.Context) (singbox.KernelSnapshot, error) {

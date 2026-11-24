@@ -27,6 +27,10 @@ type DNSPredictor struct {
 	// Rewrites 读档案里已启用的 DNS 重写规则,预测命中重写服务器时补上 rewrite;nil = 不补。
 	Rewrites func(ctx context.Context) ([]dnsrewrite.Rule, error)
 
+	// Policies 返回档案里启用中的站点集和兜底站点名(core normalizeRouting 的 activePolicies / fallback),
+	// 用来判断 dns.stale;nil = 不判断。
+	Policies func(ctx context.Context) (policies []Policy, fallback string, err error)
+
 	sets dnsdecide.FileSets // 只用它的解码缓存
 }
 
@@ -69,9 +73,12 @@ func (p *DNSPredictor) PredictFrom(ctx context.Context, domain string, src *dnsd
 	p.sets.SingBox, p.sets.TmpDir = p.SingBox, p.TmpDir
 	d := dnsdecide.DecideFrom(ctx, v, p.sets.Bind(dnsdecide.SetDefsFromConfig(cfg)), domain, "A", src)
 	p.annotateRewrite(ctx, d, domain)
-	if d.Server != nil && d.Server.Detour != "" && p.Proxies != nil {
+	if d.Server != nil && (p.Proxies != nil) {
 		if proxies, err := p.Proxies(ctx); err == nil {
-			p.fillRuntime(d, v, proxies)
+			if d.Server.Detour != "" {
+				p.fillRuntime(d, v, proxies)
+			}
+			p.annotateStale(ctx, cfg, d, proxies) // DNS 规则是不是旧的,见 stale.go
 		}
 	}
 	return d, nil

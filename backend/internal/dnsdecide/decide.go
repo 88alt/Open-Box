@@ -78,6 +78,9 @@ type Decision struct {
 	// 末尾是 RuntimeLeaf。预测本身不填,调用方读了内核的代理列表后补上。
 	RuntimeLeaf  string   `json:"runtimeLeaf,omitempty"`
 	RuntimeChain []string `json:"runtimeChain,omitempty"`
+	// Stale:已部署的 DNS 规则把命中的站点集指向了这一侧,而该站点集此刻在档案 / 内核里已经翻到另一侧
+	// (值是「现在应该在的一侧」:direct / proxy),说明 DNS 规则是旧的。预测本身不知道,调用方补。
+	Stale string `json:"stale,omitempty"`
 }
 
 // View 是从配置里取出来的、判断要用的部分。
