@@ -215,10 +215,10 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 
 - [x] `GET / POST / DELETE /api/openbox/profile/target-routing`(2026-11-23 已做,见日志):连接页「改分流」(main 的 ConnectionTargetRoutingDialog 在用,形状见 `panel/src/api/openbox.ts` 的 `OpenboxTargetRouting*`;上游 v0.1.423 起有)
 - [x] `GET /api/openbox/node-info/sharing/{ip}`(`?refresh=1`):Ping0.cc 的共享人数 / 风控值 / IP 类型,后端已做(`internal/nodesharing`、`internal/api/nodeinfo`);面板的调用本来就和上游 v0.1.478 一致,无需改前端(2026-11-23)
-- [ ] `GET /api/openbox/kernel/switch/preflight` 与内核切换接口:就是上面双内核的第 4 步,这里只是提醒面板已经在调
+- [x] `GET /api/openbox/kernel/switch/preflight` 与内核切换接口:就是上面双内核的第 4 步,这里只是提醒面板已经在调。**2026-11-25 已做**(预检 + 切换本体,见双内核第 4、5 步)
 - [x] `GET /api/openbox/subscriptions/updates?since=`(2026-11-23 已做,见日志):订阅页长轮询,前后端都做了
 - [x] `docs/ENDPOINTS.md` 补上上面几条缺口和 `/client/v1/{id}/regions|background|geodata/{tag}` 三条公开路由,去掉过时的总数(2026-11-23)
-- [~] 恢复 `.github/workflows/backend.yml`(原样取自 a0c31847;`sync-main.sh` 的 KEEP 含 `.github/workflows`,此后同步不再删)。**需维护者**推送后看 Actions 首次运行是否全绿
+- [~] 恢复 `.github/workflows/backend.yml`(原样取自 a0c31847;`sync-main.sh` 的 KEEP 含 `.github/workflows`,此后同步不再删)。**2026-11-25 状态:没恢复,等维护者定**——本次任务的运行前提就是「main 上没有 CI 工作流,推送后无 CI 可等」,擅自加一条会改变每批推送的验收方式(而且首次运行是否绿要有人看),所以只在 STATUS 记下:文件内容在 `a0c31847`,要加时 `git checkout a0c31847 -- .github/workflows/backend.yml` 即可。
 - [x] 上游 v0.1.481 对账(2026-11-23;catch-up-upstream 38ff402b 对 main 同步的 v0.1.480 cc415552,面板打包产物的接口字面量与三语文案键逐项比):接口没有新增或删除(多出来的 `/api/v3/enclave/quorum-*` 是打包时随机生成的占位字符串,每次构建都变,不是真接口,不用对);文案键新增 7 个、改 1 个,对应两个新功能:
   - [x] 带宽测试「按天测试可指定每天几点开始」(`bandwidthStartHour` / `bandwidthHelpCurrentTestDaily`,`bandwidthSettingsHelpInterval` 改文案):档案 `bandwidth.startHour`(0~23,默认 4)。后端、面板、三语键 2026-11-23 已做,见日志
   - [x] DNS 页「FakeIP 网段」(`dnsFakeIpRangeLabel` / `Note` / `Invalid` / `Reset` / `Save` 五个键):档案 `dns.fakeIpRange`(字符串,空 = 内核默认网段;IPv4 CIDR,掩码 /15~/24;改完要重启内核)。**卡在 core**:内核的 fake-ip 网段是 core 里的常量 `routing.FakeIPV4`(`core/internal/routing/dns.go`),要先让 core 读档案 `dns.fakeIpRange`,见上面「需要 core 配合」的同名条目;core 做完后再做后端(档案校验与 `profileKeyIgnored` 的取舍、重启提示)和面板(DnsPage 的输入框、三语键) → **2026-11-24 已做**(core 的 `routing.FakeIPRange`、后端 `checkFakeIPRange`、面板 `DnsModeCard.vue` 输入框与五个三语键),详见上面「需要 core 配合」里那条。
@@ -228,6 +228,8 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 - [x] (面板的活)概览顶栏:main 的顶栏是 `panel/src/components/sidebar/OverviewCtrl.vue`(左「面板版本」(加粗)、右「内核版本」(淡色)),文字由 `GET /api/openbox/activation` 的 `defaults` 给,不依赖是否激活。**2026-11-25 按例外 B 改完**:左边固定「Open-Box Latest」(+ 构建时注入的发布版本号,`dev` 不带),右边随包内核的版本字符串(魔改 sing-box);上游的 `OverviewCarousel`(市场推广轮播)不做。**推断点**:「Latest」的版本号取构建注入的 `-X main.version`(发布 tag),main 上没有发布 tag、本地构建是 `dev`,所以本机显示「Open-Box Latest」;维护者若要改成查线上最新 release tag,在 `internal/api/activation` 里换成一次 release 查询即可。
 
 ## 日志(新的在最上面)
+
+- 2026-11-25 backend: 收尾核对。**重新拉上游**:`origin/catch-up-upstream` 仍 `8f226922`(v0.1.482),与开工时一致,没有新增差异。**重跑两个对账脚本**:键集上游 2295 / main 2257(缺 38 全为例外 C、多 0、值不同仅 `chainProxyEmptyHint`),引用「上游引用、main 未引用」49 = C 28 + A 19 + B 2、真缺口 0。**动态拼接键**:扫 dist 的 `${}` 键前缀,逐组核对,除业务优选外 main 键齐引用齐。**订正**:`kernel/switch/preflight` 提醒条打勾;`.github/workflows/backend.yml` 记下不恢复的理由(任务前提是 main 无 CI)。**新增**:「最终差异清单」一节(键集 / 引用 / 动态键 / 后端 core / 未完成条目 / 推断点),末尾注明是「基于 dist 反推与文档口径的功能等价对齐」。**验证**:本批只改 STATUS,`go build ./...` 照旧干净。
 
 - 2026-11-25 backend: 概览顶栏文案按例外 B 改完。「Open-Box Latest」+ 发布版本号;右边保持随包内核版本(魔改 sing-box)。**对账**:`git fetch` 后 `origin/main` = `ef4ed73e`,工作区干净;上游仍 v0.1.482。**发现**:STATUS 原先记「main 没有概览顶栏」不准确——`panel/src/components/sidebar/OverviewCtrl.vue` 一直有,文字来自 `/api/openbox/activation` 的 `defaults`,只显示版本号,本来就没引用市场推广键(例外 A 的 `marketPromo` / `marketName` / `aiRelay*` 仍不引用)。**实现**:`internal/api/activation` 的 `state()`——左 `Open-Box Latest` + 版本(空或 `dev` 不带,取不到就只留文案),右 `sing-box <内核版本>` 不变。**验证**:`go build ./...` 干净;`go test ./internal/api/activation/` 通过(含新增的 `dev` 不显示版本号)。**推断点**:「Latest」的版本号取构建注入的发布 tag(main 上没有 tag、本地是 `dev`),要改成查线上 release 需另加查询。
 
@@ -470,3 +472,42 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 - 2026-10-25 M0 原子写存储 internal/store(临时文件 → fsync → rename;同文件读改写串行;损坏文件报错不覆盖;含并发测试,-race 通过)。
 - 2026-10-25 M0 HTTP 服务(internal/server)、slog、优雅退出、统一错误响应(internal/httpx)、/api/health。
 - 2026-10-25 M0 go.mod、入口、参数/环境变量/路径(internal/system/paths.go):命令行 > 环境变量 > 默认值。
+
+## 最终差异清单(2026-11-25 收尾核对)
+
+开工时对齐的上游:`catch-up-upstream` 的 `8f226922`(上游 v0.1.482)。收尾时重新 `git fetch`、重跑 `panel/scripts/cmp-upstream-i18n.py` 与 `cmp-upstream-refs.py`,上游仍是 v0.1.482,**没有新增差异**。
+
+### 前端文案(`panel/src/i18n` vs 上游 `panel/dist` 语言包)
+
+- **键集**:上游三语各 2295 键,main 2257 键。**缺失 38 个,全部是例外 C(业务优选)**:`businessPreference`、`businessOverview*`(25 个)、`businessReliabilityHalfLife`、`businessPerformanceTtl`、`businessPreferenceMinutes`、`bandwidthHelpCurrentBusiness`、`businessSettingsHelp*`(8 个)。剔除例外 C 后**缺失 0**。
+- **多出**:**无**。
+- **三语不一致**:只有 `chainProxyEmptyHint`(例外 B:main 有意不显示「安格商城」链接);其余共有键三语齐全,上游三份语言包之间键集完全一致。
+- **引用**:上游引用、main 未引用 49 个 = 例外 C 28 + 例外 A 19 + 例外 B 2,**真缺口 0**。main 引用、上游未引用 2 个(`manageHiddenGroup`、`customIcon`)是 Vue 模板属性写法(`v-if="x"`)被当成字面量的虚警,不是 i18n 引用。
+- **动态拼接键**:dist 里带 `${}` 的键只有 `bandwidthExample_` / `bandwidthOff_` / `bandwidthOn_` / `groupType_` / `proxyGroupColumns` / `qualityGrade_` / `qualityMode_` / `qualityState_` / `themeMode_` / `routerKernelCheck*` / `business*` 这几组;逐组比对,除业务优选外 main 的键全齐、引用也在(`RouterKernelSwitch.vue`、`NodeQualityCard.vue`、`RouteComparison.vue` 等按模板字符串取)。
+
+### 后端 / core
+
+- core 侧 Mihomo 相关方法 3a~3d 与三个新方法(`mihomoDnsUpstreams`、`dns.fakeIpRange`、`domainUpstreams`)全部完成,方法数 20,`core/HANDOFF.md`、`core/README.md` 同步。
+- 双内核第 1~6 步完成(路径与选择、档案字段、3e-1~3e-5 装配、预检、切换本体、服务脚本核对)。
+- 面板已经在调的接口:后端全部有路由(`docs/ENDPOINTS.md` 已无「缺口」条目)。
+- `route-test` / `terminal-test` 的边角(`context`、`dns.stale`、`kernelDns.chain`)已补齐;`debug` 上游也不认、前端只字未用,不做。
+
+### 未完成 / 跳过的条目及原因
+
+1. **双内核第 7 步(打包与更新)**:发布包里带 `bin/mihomo`,以及组件更新里的 Mihomo 版本检查。main 上没有打包脚本(`.github/workflows` 只有 ISSUE_TEMPLATE),本机也没有可随包的 Mihomo 二进制,无法产出 / 验证。阻塞原因写在双内核第 7 步那条。
+2. **M5 的 `/api/openbox/update*` 第二部分(真正升级)**:依赖 M6 的发布包设计(`docs/M6.md` 第十二节 7 项待维护者确认),确认前不动代码。
+3. **M6 打包与发布**:编译 amd64 / arm64、打包 `panel/dist` + `openbox-core` + sing-box 内核与安装脚本、接入 `main` 的发布流程、清理 `scripts/native-arm64/`。都依赖发布流程与产物,本机无法完成;打包时要把 `-config-dir` / `-data-dir` 指到 `<root>/etc`、`<root>/data`(服务脚本的约定,见双内核第 6 步)。
+4. **Docker(`container`)平台**:DESIGN 的目标平台只有 OpenWrt 与 Debian,Docker 不在范围内,不做。
+5. **`.github/workflows/backend.yml`**:没恢复,理由见上(任务前提是 main 无 CI)。
+6. **需真机**:前端联调(添加订阅 → 生成配置 → 启动);双内核切换两个方向各一次 + 故意让目标内核起不来验证回滚;预检 8 项的顺序与 NDJSON 逐项到达;`terminal-test` 的 `kernelDns.chain` / 入口取证;时区;诊断包;`update` 真升级。
+
+### 推断点 / 待维护者复核
+
+1. Mihomo 装配(`internal/mihomo/buildconfig.go`)的顶层键序、`mihomo.inputs` 的完整字段、DNS 规则在配置里的位置、`resolveDirectHosts` 默认关——按上游 `di` 反推,闭源服务端不可见的部分都在 3e 各条的日志里点了名。
+2. 内核切换的写入时序:main 先写配置再停旧内核(上游是临时目录 + 切换窗口内落位),失败靠内存备份写回。
+3. 预检里 sing-box 一侧的 `firewall` 回 `notApplicable`(main 的 sing-box 配置不生成入口 nft),`dnsGuard` 用 `dnssync` 的撤销 / 对齐代替上游的临时 nft。
+4. `dns.stale` 的方向判定:main 看内核链末尾出站的类型是不是 `direct`,上游看 core `builtinTags` 的直连组名。
+5. 概览顶栏「Latest」的版本号取构建时注入的发布 tag;本地 `dev` 构建只显示「Open-Box Latest」,要改成查线上 release tag 时只动 `internal/api/activation`。
+6. 服务脚本的打包路径(`/opt/open-box/etc`、`/opt/open-box/data` vs 后端默认 `/etc/openbox-backend`、`/var/lib/openbox-backend`)要在打包时对齐,已记进 M6。
+
+**口径说明**:以上是基于上游面板 `panel/dist` 反推、加上 HANDOFF / STATUS 文档口径做的**功能等价对齐**,不保证与闭源上游逐行一致。
