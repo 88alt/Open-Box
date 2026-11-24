@@ -36,7 +36,7 @@ func TestActivationIsFixedForEveryMethod(t *testing.T) {
 		}
 		def := got["defaults"].(map[string]any)
 		if got["activated"] != true || got["left"] != "" || got["right"] != "" ||
-			def["left"] != "Open-Box v0.1.369-main.1" || def["right"] != "sing-box 1.14.4" {
+			def["left"] != "Open-Box Latest v0.1.369-main.1" || def["right"] != "sing-box 1.14.4" {
 			t.Errorf("%s 应回固定状态且不保存请求里的文字: %s", c.method, rec.Body)
 		}
 	}
@@ -49,8 +49,12 @@ func TestActivationIsFixedForEveryMethod(t *testing.T) {
 
 func TestActivationDefaultsWithoutVersions(t *testing.T) {
 	rec := call(t, Deps{}, http.MethodGet, "/api/openbox/activation", "")
-	if !strings.Contains(rec.Body.String(), `"defaults":{"left":"Open-Box","right":"sing-box"}`) {
+	if !strings.Contains(rec.Body.String(), `"defaults":{"left":"Open-Box Latest","right":"sing-box"}`) {
 		t.Errorf("没有版本信息时只显示名字: %s", rec.Body)
+	}
+	// 本地构建的 dev 版本也不显示(没有发布 tag)
+	if rec := call(t, Deps{Version: "dev"}, http.MethodGet, "/api/openbox/activation", ""); !strings.Contains(rec.Body.String(), `"left":"Open-Box Latest"`) {
+		t.Errorf("dev 版本不该带上: %s", rec.Body)
 	}
 	d := Deps{KernelVersion: func(context.Context) string { return "" }}
 	if rec := call(t, d, http.MethodGet, "/api/openbox/activation", ""); !strings.Contains(rec.Body.String(), `"right":"sing-box"}`) {

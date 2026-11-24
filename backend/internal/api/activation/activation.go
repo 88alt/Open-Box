@@ -7,13 +7,15 @@ package activation
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/httpx"
 )
 
 // Deps 是本分组的依赖。
 type Deps struct {
-	// Version 是本后端的版本号,用来拼概览顶栏左边的默认文字「Open-Box <版本>」;空时只显示「Open-Box」。
+	// Version 是本后端的版本号(发布包里由构建时注入,等于发布 tag),用来拼概览顶栏左边的默认文字
+	// 「Open-Box Latest <版本>」;空或 dev(本地构建)时只显示「Open-Box Latest」。
 	Version string
 	// KernelVersion 返回 sing-box 内核版本号(如 1.14.4),读不到返回空串;用来拼右边的默认文字。可为 nil。
 	KernelVersion func(ctx context.Context) string
@@ -53,9 +55,11 @@ func Register(mux *http.ServeMux, d Deps) {
 }
 
 func (d Deps) state(ctx context.Context) state {
-	left := "Open-Box"
-	if d.Version != "" {
-		left += " " + d.Version
+	// 概览顶栏左边:main 有意不显示上游的市场推广(例外 B),固定「Open-Box Latest」,
+	// 有发布版本号(构建时注入的 tag)就带上;本地构建(dev)取不到就只留文案。
+	left := "Open-Box Latest"
+	if v := strings.TrimSpace(d.Version); v != "" && v != "dev" {
+		left += " " + v
 	}
 	right := "sing-box"
 	if d.KernelVersion != nil {
