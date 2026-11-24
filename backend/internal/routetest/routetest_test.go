@@ -10,12 +10,15 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/dnsdecide"
 	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
 )
 
@@ -364,4 +367,62 @@ func TestRunRejectsBadInputAndCancel(t *testing.T) {
 func asMap(v any) map[string]any {
 	m, _ := v.(map[string]any)
 	return m
+}
+
+// 请求里带 sourceIp:合法 IP 归一化,不合法的当没给(与上游一致,不报错)。
+func TestParseSourceIP(t *testing.T) {
+	got, err := Parse(Input{Target: "a.com", SourceIP: " 192.168.001.005 "})
+	if err != nil || got.SourceIP != "" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	got, _ = Parse(Input{Target: "a.com", SourceIP: "192.168.1.5"})
+	if got.SourceIP != "192.168.1.5" {
+		t.Errorf("%+v", got)
+	}
+	got, _ = Parse(Input{Target: "a.com", SourceIP: "::ffff:192.168.1.5"})
+	if got.SourceIP != "192.168.1.5" {
+		t.Errorf("v4-mapped 应当归一成 v4: %+v", got)
+	}
+}
+
+// 带来源时按这台终端预测 DNS(不再把 source_* 记成前提),并从邻居表补 MAC。
+func TestPredictDNSUsesSource(t *testing.T) {
+	cfg := `{"dns":{"final":"a","rules":[
+	  {"domain_suffix":["corp.test"],"source_ip_cidr":["192.168.1.0/24"],"server":"b"},
+	  {"domain_suffix":["corp.test"],"source_mac_address":["aa:bb:cc:dd:ee:ff"],"server":"c"},
+	  {"domain_suffix":["corp.test"],"server":"a"}
+	 ],"servers":[{"tag":"a","type":"udp","server":"1.1.1.1"},{"tag":"b","type":"udp","server":"2.2.2.2"},{"tag":"c","type":"udp","server":"3.3.3.3"}]},
+	 "outbounds":[{"tag":"direct","type":"direct"}]}`
+	file := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(file, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := &Service{
+		DNS: &DNSPredictor{ConfigFile: file},
+		NeighborMAC: func(_ context.Context, ip string) string {
+			if ip == "10.0.0.9" {
+				return "aa:bb:cc:dd:ee:ff"
+			}
+			return ""
+		},
+	}
+	// 没有来源:三条里前两条都判断不了,记前提,走兜底
+	d := s.predictDNS(context.Background(), Input{Target: "x.corp.test"}).(*dnsdecide.Decision)
+	if d.Server.Tag != "a" || len(d.Assumed) != 2 {
+		t.Fatalf("%+v", d)
+	}
+	// 网段命中:第一条,前面没有判断不了的规则,前提为空
+	d = s.predictDNS(context.Background(), Input{Target: "x.corp.test", SourceIP: "192.168.1.5"}).(*dnsdecide.Decision)
+	if d.RuleIndex == nil || *d.RuleIndex != 0 || d.Server.Tag != "b" || len(d.Assumed) != 0 {
+		t.Fatalf("%+v", d)
+	}
+	// 网段不命中、MAC 从邻居表补上:第二条
+	d = s.predictDNS(context.Background(), Input{Target: "x.corp.test", SourceIP: "10.0.0.9"}).(*dnsdecide.Decision)
+	if d.RuleIndex == nil || *d.RuleIndex != 1 || d.Server.Tag != "c" || len(d.Assumed) != 0 {
+		t.Fatalf("%+v", d)
+	}
+	// 目标是 IP:不预测
+	if m, ok := s.predictDNS(context.Background(), Input{Target: "1.1.1.1", SourceIP: "10.0.0.9"}).(map[string]any); !ok || m["skipped"] != true {
+		t.Fatalf("%v", m)
+	}
 }

@@ -4,9 +4,9 @@
 // 自己的设计,依据前端 api/openbox.ts 的 OpenboxRouteTest / OpenboxProbeMethod 类型和注释、RouteComparison.vue 的用法,
 // 以及 sing-box 官方 Clash API 的 GET /connections,没有参照上游。
 //
-// dns(按已部署配置里的 DNS 规则预测这个域名会问哪台服务器)见 dns.go。这一部分没有做、响应里如实标出的:
-//   - context(按终端预测)和 debug
-//     (resolve 做了:见 resolve.go 和 dns.go 的 annotateResolve;exit6 做了:见 exit6.go;connectTo / noDomain 也做了)
+// dns(按已部署配置里的 DNS 规则预测这个域名会问哪台服务器)见 dns.go;请求带 sourceIp 时按这台终端预测,
+// 并在响应里带 context(解析和访问仍由面板发起,sourceVerified 恒为 false)。
+// (resolve 做了:见 resolve.go 和 dns.go 的 annotateResolve;exit6 做了:见 exit6.go;connectTo / noDomain 也做了)
 //
 // GET / HEAD / TLS 的做法与 sitelatency 相同(复用它的 DialTunnel):先向面板入站发 HTTP CONNECT 建隧道,连接开着的时候读一次
 // /connections,按「来源 127.0.0.1:本地端口」找到自己那条。HTTP CONNECT 不能用来判断「内核连上目标没有」(见 tcp.go),
@@ -51,10 +51,20 @@ type InputError struct{ Msg string }
 func (e *InputError) Error() string { return e.Msg }
 
 // Input 是请求体。Port 为 0 表示没指定;Method 为空按 GET。
+// SourceIP 可选:给了就按这台终端预测 DNS 判定(见 dnsdecide.Source),解析和访问仍由面板自己发起。
 type Input struct {
-	Target string `json:"target"`
-	Port   int    `json:"port"`
-	Method string `json:"method"`
+	Target   string `json:"target"`
+	Port     int    `json:"port"`
+	Method   string `json:"method"`
+	SourceIP string `json:"sourceIp,omitempty"`
+}
+
+// Context 对应前端 OpenboxRouteTest.context:DNS 判定是按这台终端预测的,解析和访问不是它自己发的。
+type Context struct {
+	SourceIP       string `json:"sourceIp"`
+	PredictedFor   string `json:"predictedFor"`   // 恒为 "terminal"
+	ProbeOrigin    string `json:"probeOrigin"`    // 恒为 "panel"
+	SourceVerified bool   `json:"sourceVerified"` // 恒为 false:终端的实际路径要在终端上观测
 }
 
 // Exit 对应前端 OpenboxRouteTest.exit(只列这一部分实现了的字段)。
@@ -81,6 +91,7 @@ type Exit struct {
 type Result struct {
 	Target  string   `json:"target"`
 	DNS     any      `json:"dns"`               // {skipped:true} / {error} / *dnsdecide.Decision
+	Context *Context `json:"context,omitempty"` // 请求里带了 sourceIp 且目标是域名时才有
 	Resolve *Resolve `json:"resolve,omitempty"` // 目标是域名时才有
 	Exit6   *Exit6   `json:"exit6,omitempty"`   // 有 AAAA 答案时才有,见 exit6.go
 	Exit    Exit     `json:"exit"`
@@ -98,6 +109,8 @@ type Service struct {
 	DNS *DNSPredictor
 	// DNSAddr 是内核的 DNS 入站地址,空 = system.DefaultKernelDNSAddr。
 	DNSAddr string
+	// NeighborMAC 查邻居表里某台终端的 MAC(请求带 sourceIp 时用);nil 或查不到 = 不带 MAC,source_mac_address 记成前提。
+	NeighborMAC func(ctx context.Context, ip string) string
 	// IPv6 返回档案是否开了 IPv6(开了才再查一次 AAAA);nil 当作没开。
 	IPv6 func(ctx context.Context) bool
 	// Timeout 是整次探测的超时,0 = DefaultTimeout。
@@ -144,6 +157,15 @@ func Parse(in Input) (Input, error) {
 	default:
 		return in, &InputError{Msg: "探测方式只能是 GET、HEAD、TCP 或 TLS"}
 	}
+	// 来源只用来预测 DNS 判定:不是合法 IP 就当没给(与上游一致,不报错)
+	in.SourceIP = strings.TrimSpace(in.SourceIP)
+	if in.SourceIP != "" {
+		if ip, err := netip.ParseAddr(in.SourceIP); err == nil {
+			in.SourceIP = ip.Unmap().String()
+		} else {
+			in.SourceIP = ""
+		}
+	}
 	return in, nil
 }
 
@@ -188,8 +210,12 @@ func (s *Service) Run(ctx context.Context, in Input) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	res := &Result{Target: in.Target, DNS: s.predictDNS(ctx, in.Target)}
+	res := &Result{Target: in.Target, DNS: s.predictDNS(ctx, in)}
 	res.Exit = Exit{URL: ProbeURL(in.Target, in.Port), Method: in.Method}
+	// 请求指定了终端来源:上面的 DNS 判定是按该终端预测的;解析和访问仍是面板自己发起、没有该终端的来源
+	if in.SourceIP != "" && !isIP(in.Target) {
+		res.Context = &Context{SourceIP: in.SourceIP, PredictedFor: "terminal", ProbeOrigin: "panel", SourceVerified: false}
+	}
 
 	if in.Method == MethodTCP {
 		res.Exit.URL = tcpAddr(in) // 没有网址,显示「主机:端口」

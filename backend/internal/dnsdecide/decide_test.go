@@ -287,3 +287,55 @@ func TestJSONShape(t *testing.T) {
 		}
 	}
 }
+
+// 给了查询来源,source_* 条件就能判断:不再记成前提,命中/不命中和 sing-box 一样。
+func TestDecideFromSource(t *testing.T) {
+	ctx := context.Background()
+	v := view(t, `{"dns":{"final":"a","rules":[
+	  {"domain_suffix":["corp.test"],"source_ip_cidr":["192.168.1.0/24"],"server":"b"},
+	  {"domain_suffix":["corp.test"],"source_mac_address":["AA:BB:CC:DD:EE:FF"],"action":"reject"},
+	  {"domain_suffix":["corp.test"],"source_ip_is_private":true,"server":"c"},
+	  {"domain_suffix":["corp.test"],"server":"a"}
+	 ],"servers":[{"tag":"a","type":"udp"},{"tag":"b","type":"udp"},{"tag":"c","type":"udp"}]}}`)
+
+	// 终端 192.168.1.5、MAC 对上(大小写不敏感):第二条 reject 命中,前面那条网段规则也命中但要按顺序取第一条
+	d := DecideFrom(ctx, v, fakeSets{}, "x.corp.test", "A", &Source{IP: "192.168.1.5", MAC: "aa:bb:cc:dd:ee:ff"})
+	if idx(d) != 0 || d.Server.Tag != "b" || len(d.Assumed) != 0 {
+		t.Fatalf("%+v", d)
+	}
+	// 网段不对、MAC 对:第二条 reject
+	d = DecideFrom(ctx, v, fakeSets{}, "x.corp.test", "A", &Source{IP: "10.1.2.3", MAC: "aa:bb:cc:dd:ee:ff"})
+	if idx(d) != 1 || !d.Rejected {
+		t.Fatalf("%+v", d)
+	}
+	// 网段 / MAC 都不对,但来源是私网:第三条
+	d = DecideFrom(ctx, v, fakeSets{}, "x.corp.test", "A", &Source{IP: "10.1.2.3"})
+	if idx(d) != 2 || d.Server.Tag != "c" || len(d.Assumed) != 1 {
+		t.Fatalf("%+v", d)
+	}
+	// 公网来源、没有 MAC:网段和私网两条都判断得出「不命中」,MAC 那条没法判断(记前提),走兜底
+	d = DecideFrom(ctx, v, fakeSets{}, "x.corp.test", "A", &Source{IP: "8.8.8.8"})
+	if idx(d) != 3 || d.Server.Tag != "a" || len(d.Assumed) != 1 || !reflect.DeepEqual(d.Assumed[0].Needs, []string{"source_mac_address"}) {
+		t.Fatalf("%+v", d)
+	}
+	// 来源 IP 不合法 = 当作没给:仍然记成前提
+	d = DecideFrom(ctx, v, fakeSets{}, "x.corp.test", "A", &Source{IP: "not-an-ip"})
+	if idx(d) != 3 || len(d.Assumed) != 3 || !reflect.DeepEqual(d.Assumed[0].Needs, []string{"source_ip_cidr"}) {
+		t.Fatalf("%+v", d)
+	}
+}
+
+// source_ip_is_private 写成 false 时按「不是私网」判断。
+func TestSourcePrivateFalse(t *testing.T) {
+	v := view(t, `{"dns":{"final":"a","rules":[
+	  {"domain":["x.test"],"source_ip_is_private":false,"server":"b"}
+	 ],"servers":[{"tag":"a","type":"udp"},{"tag":"b","type":"udp"}]}}`)
+	d := DecideFrom(context.Background(), v, fakeSets{}, "x.test", "A", &Source{IP: "8.8.8.8"})
+	if d.Server.Tag != "b" || len(d.Assumed) != 0 {
+		t.Fatalf("%+v", d)
+	}
+	d = DecideFrom(context.Background(), v, fakeSets{}, "x.test", "A", &Source{IP: "192.168.1.5"})
+	if d.Server.Tag != "a" || len(d.Assumed) != 0 {
+		t.Fatalf("%+v", d)
+	}
+}

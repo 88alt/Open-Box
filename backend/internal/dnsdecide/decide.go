@@ -5,7 +5,8 @@
 // 规则按顺序取第一条命中的;没有命中走 dns.final),没有参照上游。
 //
 // 能判断的条件:domain / domain_suffix / domain_keyword / domain_regex、rule_set、query_type、ip_version,
-// 以及 logical(and / or)和 invert。判断不了的条件(终端来源、入站、clash_mode、解析后的 IP 等)不猜:
+// 以及 logical(and / or)和 invert;调用方给了查询来源(Source)时,source_ip_cidr / source_ip_is_private /
+// source_mac_address 也能判断。判断不了的条件(入站、clash_mode、源端口、解析后的 IP 等)不猜:
 // 如果一条规则其余条件都满足、只差这些条件,就记进 Assumed(needs 写明缺什么),预测时按「没命中」往下走,
 // 前端据此告诉用户这一步有前提。规则集读不出来也同样记成前提。
 //
@@ -15,6 +16,7 @@ package dnsdecide
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"regexp"
 	"sort"
 	"strconv"
@@ -153,6 +155,7 @@ type evalCtx struct {
 	sets    Sets
 	domain  string
 	qtype   string
+	src     *Source
 	needs   []string // 这条规则判断不了的条件
 	srcCIDR []string
 	srcMAC  []string
@@ -167,8 +170,20 @@ func (e *evalCtx) need(n string) {
 	e.needs = append(e.needs, n)
 }
 
+// Source 是一条查询的来源(可选的终端 IP / MAC)。给了就能判断 source_* 条件;
+// MAC 为空时 source_mac_address 仍然判断不了(邻居表里没有这台终端时就是这样,不猜)。
+type Source struct {
+	IP  string
+	MAC string
+}
+
 // Decide 预测 domain 的 qtype(如 "A")查询的走向。domain 会转小写并去掉末尾的点。
 func Decide(ctx context.Context, v *View, sets Sets, domain, qtype string) *Decision {
+	return DecideFrom(ctx, v, sets, domain, qtype, nil)
+}
+
+// DecideFrom 同 Decide,另外按 src 判断 source_* 条件(src 为 nil 时与 Decide 一样,这些条件记成前提)。
+func DecideFrom(ctx context.Context, v *View, sets Sets, domain, qtype string, src *Source) *Decision {
 	domain = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(domain), "."))
 	if qtype == "" {
 		qtype = "A"
@@ -202,7 +217,7 @@ func Decide(ctx context.Context, v *View, sets Sets, domain, qtype string) *Deci
 		if rule == nil {
 			continue
 		}
-		ec := &evalCtx{ctx: ctx, sets: sets, domain: domain, qtype: qtype}
+		ec := &evalCtx{ctx: ctx, sets: sets, domain: domain, qtype: qtype, src: src}
 		st := ec.evalRule(rule)
 		if st == unknown {
 			a := Assumption{RuleIndex: i, Needs: ec.needs, SourceIPCIDR: nz(ec.srcCIDR), SourceMAC: ec.srcMAC}
@@ -334,6 +349,24 @@ func (e *evalCtx) evalDefault(rule map[string]any) tri {
 			// 同一条规则里这四个是同一组,任意一个命中即可,下面统一算
 		case "rule_set":
 			and(e.evalRuleSets(val))
+		case "source_ip_cidr":
+			if r, ok := e.sourceCIDR(val); ok {
+				and(r)
+			} else {
+				unk = append(unk, k)
+			}
+		case "source_ip_is_private":
+			if r, ok := e.sourcePrivate(val); ok {
+				and(r)
+			} else {
+				unk = append(unk, k)
+			}
+		case "source_mac_address":
+			if r, ok := e.sourceMAC(val); ok {
+				and(r)
+			} else {
+				unk = append(unk, k)
+			}
 		default:
 			unk = append(unk, k)
 		}
@@ -360,6 +393,65 @@ func (e *evalCtx) evalDefault(rule map[string]any) tri {
 		return unknown
 	}
 	return res
+}
+
+// sourceAddr 解出这次查询的来源地址;没有来源(或不是合法 IP)时第二个返回值为 false,条件记成前提。
+func (e *evalCtx) sourceAddr() (netip.Addr, bool) {
+	if e.src == nil {
+		return netip.Addr{}, false
+	}
+	ip, err := netip.ParseAddr(strings.TrimSpace(e.src.IP))
+	if err != nil {
+		return netip.Addr{}, false
+	}
+	return ip.Unmap(), true
+}
+
+// sourceCIDR 判断 source_ip_cidr;来源未知时 ok=false(调用方记成前提)。
+// 写法与 sing-box 一致:一个条件里多个值取「或」,单个值也可以是裸地址。
+func (e *evalCtx) sourceCIDR(val any) (tri, bool) {
+	ip, ok := e.sourceAddr()
+	if !ok {
+		return no, false
+	}
+	for _, c := range strs(val) {
+		c = strings.TrimSpace(c)
+		if p, err := netip.ParsePrefix(c); err == nil && p.Contains(ip) {
+			return yes, true
+		}
+		if a, err := netip.ParseAddr(c); err == nil && a.Unmap() == ip {
+			return yes, true
+		}
+	}
+	return no, true
+}
+
+// sourcePrivate 判断 source_ip_is_private。私网口径同 sing-box:RFC1918、IPv6 ULA、回环、链路本地。
+func (e *evalCtx) sourcePrivate(val any) (tri, bool) {
+	ip, ok := e.sourceAddr()
+	if !ok {
+		return no, false
+	}
+	want := true
+	if b, isBool := val.(bool); isBool {
+		want = b
+	}
+	got := ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()
+	return boolTri(got == want), true
+}
+
+// sourceMAC 判断 source_mac_address;没拿到邻居表里的 MAC 时 ok=false(记成前提,不猜)。
+func (e *evalCtx) sourceMAC(val any) (tri, bool) {
+	if e.src == nil || strings.TrimSpace(e.src.MAC) == "" {
+		return no, false
+	}
+	want := strings.ToLower(strings.TrimSpace(e.src.MAC))
+	for _, c := range strs(val) {
+		if strings.ToLower(strings.TrimSpace(c)) == want {
+			return yes, true
+		}
+	}
+	return no, true
 }
 
 func (e *evalCtx) evalRuleSets(val any) tri {

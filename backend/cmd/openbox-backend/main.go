@@ -664,6 +664,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	}})
 
 	// 系统资源(概览页「硬件负载」、侧边栏卡片、概览的「活跃终端」):CPU / 内存读 /proc,活跃终端取内核连接的来源 IP 并按邻居表的 MAC 合并
+	// 邻居表也给 route-test 用:请求带 sourceIp 时按那台终端的 MAC 判断 source_mac_address
+	neighbors := sysres.Neighbors("/proc", system.ExecRunner)
 	sysresapi.Register(srv.Mux(), sysresapi.Deps{Service: &sysres.Service{
 		Sources: func(ctx context.Context) ([]string, error) {
 			snap, err := singbox.KernelConnections(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
@@ -676,7 +678,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			}
 			return out, nil
 		},
-		Neighbors:  sysres.Neighbors("/proc", system.ExecRunner),
+		Neighbors:  neighbors,
 		LocalAddrs: sysres.LocalAddrs,
 	}})
 
@@ -717,6 +719,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			on, _ := p["ipv6"].(bool)
 			return err == nil && on
 		},
+		// 请求带 sourceIp 时,按那台终端预测 DNS 判定(邻居表里有 MAC 就一起用来判断 source_mac_address)
+		NeighborMAC: func(ctx context.Context, ip string) string { return neighbors(ctx)[ip] },
 		// DNS 判定:读已部署的 config.json,按它的 DNS 规则预测这个域名问哪台服务器;规则集文件读不到、
 		// 二进制规则集需要 sing-box 解码,判断不了的如实记成前提;代理侧的实际线路读内核的代理列表补上
 		DNS: dnsPredictor,

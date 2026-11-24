@@ -53,6 +53,11 @@ func ReadConfig(file string) (map[string]any, error) {
 
 // Predict 返回 domain 的预测。读不到或解不开当前配置时返回 error(调用方写进 dns.error)。
 func (p *DNSPredictor) Predict(ctx context.Context, domain string) (*dnsdecide.Decision, error) {
+	return p.PredictFrom(ctx, domain, nil)
+}
+
+// PredictFrom 同 Predict,另外按查询来源(src)判断 source_* 条件;src 为 nil 时与 Predict 一样。
+func (p *DNSPredictor) PredictFrom(ctx context.Context, domain string, src *dnsdecide.Source) (*dnsdecide.Decision, error) {
 	cfg, err := ReadConfig(p.ConfigFile)
 	if err != nil {
 		return nil, err
@@ -62,7 +67,7 @@ func (p *DNSPredictor) Predict(ctx context.Context, domain string) (*dnsdecide.D
 		return nil, err
 	}
 	p.sets.SingBox, p.sets.TmpDir = p.SingBox, p.TmpDir
-	d := dnsdecide.Decide(ctx, v, p.sets.Bind(dnsdecide.SetDefsFromConfig(cfg)), domain, "A")
+	d := dnsdecide.DecideFrom(ctx, v, p.sets.Bind(dnsdecide.SetDefsFromConfig(cfg)), domain, "A", src)
 	p.annotateRewrite(ctx, d, domain)
 	if d.Server != nil && d.Server.Detour != "" && p.Proxies != nil {
 		if proxies, err := p.Proxies(ctx); err == nil {
@@ -124,14 +129,21 @@ func annotateResolve(r *Resolve, dns any) {
 }
 
 // predictDNS 给响应里的 dns:IP 目标不需要 DNS 判定;域名目标按预测器算,没接预测器或算不出就如实写 error。
-func (s *Service) predictDNS(ctx context.Context, target string) any {
-	if isIP(target) {
+func (s *Service) predictDNS(ctx context.Context, in Input) any {
+	if isIP(in.Target) {
 		return map[string]any{"skipped": true}
 	}
 	if s.DNS == nil {
 		return map[string]any{"error": "DNS 判定没有接入"}
 	}
-	d, err := s.DNS.Predict(ctx, target)
+	var src *dnsdecide.Source
+	if in.SourceIP != "" {
+		src = &dnsdecide.Source{IP: in.SourceIP}
+		if s.NeighborMAC != nil {
+			src.MAC = s.NeighborMAC(ctx, in.SourceIP)
+		}
+	}
+	d, err := s.DNS.PredictFrom(ctx, in.Target, src)
 	if err != nil {
 		return map[string]any{"error": fmt.Sprintf("DNS 判定失败: %v", err)}
 	}
