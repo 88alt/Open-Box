@@ -33,6 +33,7 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 **推送状态(2026-11-25)**:remote 改成 SSH(`git@github-timeflysoon:timeflysoon/Open-Box.git`,用 `~/.ssh/config` 里 timeflysoon 账号的 Host 别名与专属密钥),fetch / push 都通,不再走 https。3e-2 与 3e-5 两批都已推上去,`origin/main` = `dee88ae0`。main 上没有 `.github/workflows`,推送后无 CI 可等(Release 工作流只在 catch-up-upstream)。
 
 **续跑核对(2026-11-25 第二轮)**:开工时 `origin/main` = `0befae5f`(上游 `catch-up-upstream` = `8f226922`,v0.1.482),已打整体回滚 tag `pre-sync-20261125` 并推到远端(指向 `0befae5f`)。本轮把「对账 + 验证」重跑了一遍,结论:**对齐项没有新增缺口**,剩下的仍是下面「最终差异清单 / 未完成」里的环境阻塞项。验证结果:
+
 - 前端:`cmp-upstream-i18n.py` 三语仍各 2295 键、main 2257 键,缺失 38 个全部是例外 C;多出 0;值不同只有 `chainProxyEmptyHint`(例外 B)。`cmp-upstream-refs.py`:上游引用而 main 未引用 49 个 = 例外 C 28 + A 19 + B 2,真缺口 0。`pnpm install --frozen-lockfile` 后 `pnpm run type-check`、`pnpm run build` 均通过(构建产物落在 `panel/dist`,已被 .gitignore 忽略,未入库)。
 - core:`go vet ./...`、`go test ./...` 全绿(含金标准与自写向量)。
 - backend:`go vet ./...` 通过;`go test ./...` 除 2 个 **Windows 专有**的既有失败外全绿,与本轮无关,记录备查:`internal/store` 的 `TestConcurrentUpdate`(Windows 上 rename 覆盖被占用文件报 Access is denied)、`internal/system` 的 `TestVTermAcquireDHCP`(脚本路径用了 Windows 分隔符,断言按 POSIX 路径写)。Linux 上这两条不触发,工作流里也没出现过。
