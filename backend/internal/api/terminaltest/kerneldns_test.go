@@ -53,7 +53,7 @@ func tapDeps(t *testing.T, entries []singbox.LogEntry, openErr error) (Deps, *fa
 		}
 		return tap, nil
 	}
-	d.KernelDNSConfig = func() (*kerneldns.Config, error) {
+	d.KernelDNSConfig = func(context.Context) (*kerneldns.Config, error) {
 		return &kerneldns.Config{Servers: map[string]kerneldns.Server{"up": {Tag: "up", Type: "udp", Server: "1.1.1.1", Port: 53}}, Final: "up", RuleCount: 2, Outbounds: map[string]string{}}, nil
 	}
 	return d, tap, &events
@@ -136,7 +136,7 @@ func TestRunKernelDNSStopsTapEvenWhenProbeFails(t *testing.T) {
 
 func TestRunKernelDNSWorksWithoutConfig(t *testing.T) {
 	d, _, _ := tapDeps(t, logLines("example.com"), nil)
-	d.KernelDNSConfig = func() (*kerneldns.Config, error) { return nil, errors.New("读不到配置") }
+	d.KernelDNSConfig = func(context.Context) (*kerneldns.Config, error) { return nil, errors.New("读不到配置") }
 	k, _ := decode(t, serve(t, d, "POST", "/api/openbox/terminal-test", `{"target":"example.com"}`))["kernelDns"].(map[string]any)
 	if k["seen"] != true || k["server"] != nil || k["ruleIndex"] != float64(1) {
 		t.Fatalf("读不到配置时日志里认得出的照给,服务器信息留空:%v", k)

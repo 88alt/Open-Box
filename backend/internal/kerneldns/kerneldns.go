@@ -33,6 +33,38 @@ type Config struct {
 	Final     string            // dns.final;没写时是第一台服务器
 	RuleCount int               // dns.rules 的条数,用来核对日志里的规则序号
 	Outbounds map[string]string // 出站 tag → 类型,用来判断 detour 是不是直连
+	// Proxies 是内核此刻的代理列表(可选,由调用方从内核的 /proxies 取)。给了就把 chain 补全成
+	// 「detour → 站点集 → 节点组 → 节点」,没给就只给 detour(与以前一样)。
+	Proxies []singbox.KernelProxy
+}
+
+// maxChain 是跟着「当前选中」往下走的最大层数,防止内核里出现环。
+const maxChain = 8
+
+// Chain 把 chain 补全:从 detour 出发沿内核此刻的「当前选中」一路走到末尾。
+// Detour 为空时返回空;没有代理列表(读不到内核)时只回 detour,不猜。
+func (c *Config) Chain(detour string) []string {
+	if detour == "" {
+		return []string{}
+	}
+	chain := []string{detour}
+	if c == nil || len(c.Proxies) == 0 {
+		return chain
+	}
+	now := make(map[string]string, len(c.Proxies))
+	for _, p := range c.Proxies {
+		now[p.Name] = p.Now
+	}
+	cur := detour
+	for i := 0; i < maxChain; i++ {
+		next, ok := now[cur]
+		if !ok || next == "" {
+			break
+		}
+		chain = append(chain, next)
+		cur = next
+	}
+	return chain
 }
 
 // ConfigFrom 从完整的 sing-box 配置(已解码成 map)里取出 DNS 部分。
@@ -321,9 +353,9 @@ func (r Result) Map() map[string]any {
 	case q.Server != nil && q.Server.Detour != "" && r.cfg != nil:
 		via = r.cfg.Outbounds[q.Server.Detour] != "direct"
 	}
-	chain := []string{}
-	if via && q.Server != nil && q.Server.Detour != "" {
-		chain = append(chain, q.Server.Detour)
+	var chain []string
+	if via && q.Server != nil {
+		chain = r.cfg.Chain(q.Server.Detour) // 有内核代理列表时补全成实际线路,没有就只给 detour
 	}
 	var ruleIdx any
 	if q.Matched {

@@ -777,7 +777,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			}
 			return tap, nil
 		},
-		KernelDNSConfig: func() (*kerneldns.Config, error) {
+		KernelDNSConfig: func(ctx context.Context) (*kerneldns.Config, error) {
 			b, err := os.ReadFile(filepath.Join(cfg.ConfigDir, "config.json"))
 			if err != nil {
 				return nil, err
@@ -786,7 +786,12 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			if err := json.Unmarshal(b, &m); err != nil {
 				return nil, err
 			}
-			return kerneldns.ConfigFrom(m), nil
+			c := kerneldns.ConfigFrom(m)
+			// 内核此刻的代理列表:把 kernelDns.chain 补成「站点集 → 节点组 → 节点」;读不到就只给 detour
+			if proxies, err := singbox.KernelProxies(ctx, filepath.Join(cfg.ConfigDir, "config.json")); err == nil {
+				c.Proxies = proxies
+			}
+			return c, nil
 		},
 		Log: log})
 

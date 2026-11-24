@@ -250,3 +250,40 @@ func TestConfigFrom(t *testing.T) {
 		t.Fatalf("%+v", c)
 	}
 }
+
+// 有内核代理列表时,chain 补全成 detour → 站点集 → 节点组 → 节点;链断了就停在能走到的那一层。
+func TestChainFollowsKernelSelection(t *testing.T) {
+	cfg := cfgJSON(t, strings.Replace(testCfg, `"detour":"d2"`, `"detour":"海外"`, 1))
+	cfg.Proxies = []singbox.KernelProxy{
+		{Name: "海外", Type: "selector", Now: "自动选择"},
+		{Name: "自动选择", Type: "urltest", Now: "hk-01"},
+		{Name: "hk-01", Type: "vless"},
+	}
+	r := Analyze(ents(
+		"debug|[9 0ms] dns: exchange x.up.test. IN A",
+		"debug|[9 0ms] dns: match[0] domain_suffix=up.test => route(up)",
+	), "x.up.test", cfg)
+	c := r.Map()["chain"].([]string)
+	if len(c) != 3 || c[0] != "海外" || c[1] != "自动选择" || c[2] != "hk-01" {
+		t.Fatalf("chain = %v", c)
+	}
+	// 内核里没有这个 detour(刚改过配置还没生效):只给 detour,不猜
+	cfg.Proxies = []singbox.KernelProxy{{Name: "别的", Type: "selector", Now: "hk-01"}}
+	if c := Analyze(ents(
+		"debug|[9 0ms] dns: exchange x.up.test. IN A",
+		"debug|[9 0ms] dns: match[0] domain_suffix=up.test => route(up)",
+	), "x.up.test", cfg).Map()["chain"].([]string); len(c) != 1 || c[0] != "海外" {
+		t.Fatalf("chain = %v", c)
+	}
+	// 环:最多跟 8 层就停
+	cfg.Proxies = []singbox.KernelProxy{
+		{Name: "海外", Type: "selector", Now: "b"},
+		{Name: "b", Type: "selector", Now: "海外"},
+	}
+	if c := Analyze(ents(
+		"debug|[9 0ms] dns: exchange x.up.test. IN A",
+		"debug|[9 0ms] dns: match[0] domain_suffix=up.test => route(up)",
+	), "x.up.test", cfg).Map()["chain"].([]string); len(c) != 9 {
+		t.Fatalf("chain 应当在 8 层后停:%v", c)
+	}
+}

@@ -75,8 +75,9 @@ type Deps struct {
 	// KernelLog 订阅内核日志流(singbox.OpenKernelLogs)。为空 = 不做 kernelDns。订阅必须在发探测之前开、探测完关,
 	// 内核的日志流只给订阅期间产生的行。
 	KernelLog func(ctx context.Context) (LogTap, error)
-	// KernelDNSConfig 取判断 kernelDns 要用的配置(DNS 服务器、出站类型);为空或出错时不补服务器信息,日志里能认出的照给。
-	KernelDNSConfig func() (*kerneldns.Config, error)
+	// KernelDNSConfig 取判断 kernelDns 要用的配置(DNS 服务器、出站类型,以及内核此刻的代理列表——用来补全 chain);
+	// 为空或出错时不补服务器信息,日志里能认出的照给。
+	KernelDNSConfig func(ctx context.Context) (*kerneldns.Config, error)
 	// DNSForward 返回此刻 dnsmasq 对查询的转发情况(*dnsforward.Service 的 Describe),拿不准返回 nil;为空 = 不填 dnsForward。
 	DNSForward func(ctx context.Context) *dnsforward.Result
 	// FirstLayer 返回「进内核之前」那一层的情况(NewFirstLayer 接出来的),拿不准返回 nil;为空 = 不填 firstLayer。
@@ -314,7 +315,7 @@ func (h *handlers) probe(ctx context.Context, out map[string]any, env probeEnv, 
 		h.fillDNSForward(ctx, out, res.DNS.Server, env.lanAddr)
 		h.fillDNSEvidence(ctx, out, res.DNS, env.srcIP)
 		if wantKernelDNS {
-			h.fillKernelDNS(out, logs, tapErr, in.Target)
+			h.fillKernelDNS(ctx, out, logs, tapErr, in.Target)
 		}
 	}
 	ex := map[string]any{"url": url, "port": port, "method": in.Method, "ok": res.OK}
@@ -358,14 +359,14 @@ type LogTap interface {
 
 // fillKernelDNS 从订阅期间收到的内核日志里截这次 DNS 查询的过程(kerneldns.Analyze)。订阅没开成:no-log 并给原因;
 // 日志里没有这个域名的查询:not-seen(多半是 dnsmasq 用自己的缓存答了)。
-func (h *handlers) fillKernelDNS(out map[string]any, logs []singbox.LogEntry, tapErr error, domain string) {
+func (h *handlers) fillKernelDNS(ctx context.Context, out map[string]any, logs []singbox.LogEntry, tapErr error, domain string) {
 	if tapErr != nil {
 		out["kernelDns"] = map[string]any{"seen": false, "reason": "no-log", "error": tapErr.Error()}
 		return
 	}
 	var cfg *kerneldns.Config
 	if h.d.KernelDNSConfig != nil {
-		if c, err := h.d.KernelDNSConfig(); err == nil {
+		if c, err := h.d.KernelDNSConfig(ctx); err == nil {
 			cfg = c
 		}
 	}
