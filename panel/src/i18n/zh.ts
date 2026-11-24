@@ -1513,6 +1513,11 @@ const zh: LANG_MESSAGE = {
   dnsFakeIpTitle: '启用 FakeIP',
   dnsFakeIpNote:
     '代理域名交给支持域名转发的节点解析。',
+  dnsFakeIpRangeLabel: 'FakeIP 网段',
+  dnsFakeIpRangeNote: '留空使用内核默认网段（当前为 {defaultRange}）；若与本机其他 TUN / 虚拟网卡网段冲突，可改为如 198.20.0.0/16（支持 /15～/24 的 IPv4 CIDR）。修改后需重启内核生效。',
+  dnsFakeIpRangeSave: '保存',
+  dnsFakeIpRangeReset: '恢复默认',
+  dnsFakeIpRangeInvalid: '请输入有效的 IPv4 CIDR 网段，例如 198.20.0.0/16（掩码范围 /15～/24）',
   bypassPortsTitle: '进内核前放行的端口',
   mihomoTlsSniffPortsTitle: 'Mihomo 额外 TLS 嗅探端口',
   mihomoTlsSniffPortsDescription: '从经过内核的 TLS 连接中识别域名。默认嗅探 TCP 443，可添加其他端口或端口范围。',

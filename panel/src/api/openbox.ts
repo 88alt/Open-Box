@@ -135,6 +135,9 @@ export interface OpenboxProfileDns {
   proxy?: string
   // 走代理的域名由内核发占位地址(FakeIP 原型):域名交给选中的节点解析,解析和连接落在同一个节点
   fakeIpForProxy?: boolean
+  // FakeIP 的 v4 地址池(留空 = 内核默认:sing-box 198.19.0.0/16 / Mihomo 198.18.0.0/16)。
+  // 与别的 TUN / 虚拟网卡网段冲突时改成 /15~/24 的 IPv4 CIDR,改完要重启内核
+  fakeIpRange?: string
   // DNS 重写:initialized 记「默认规则补过了」,rules 是整份规则表(空数组 = 用户不要任何重写)
   rewrite?: { enabled?: boolean; initialized?: number; rules: OpenboxDnsRewriteRule[] }
 }
@@ -1123,6 +1126,8 @@ export const fetchConfigPreview = async (): Promise<OpenboxConfigPreview> => {
 export interface OpenboxServiceInfo {
   running: boolean
   raw: string
+  // 只有内核那份带:此刻选中的内核('sing-box' / 'mihomo';选择文件无效时没有这个字段)
+  kernel?: string
   // 只有内核那份带:开机自启是否开着
   autostart?: boolean
   // 只有内核那份带:进程运行时长(秒),没在跑或拿不到就是 null

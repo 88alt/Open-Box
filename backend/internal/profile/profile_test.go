@@ -116,6 +116,17 @@ func TestCheck(t *testing.T) {
 		{"更新通道非法", `{"updates":{"openbox":{"channel":"x"}}}`, "channel"},
 		{"更新时刻越界", `{"updates":{"openbox":{"hour":24}}}`, "hour"},
 		{"更新天数为 0", `{"updates":{"openbox":{"days":0}}}`, "days"},
+		{"FakeIP 网段留空合法", `{"dns":{"fakeIpRange":""}}`, ""},
+		{"FakeIP 网段合法 /16", `{"dns":{"fakeIpRange":"198.20.0.0/16"}}`, ""},
+		{"FakeIP 网段合法 /15", `{"dns":{"fakeIpRange":"198.18.0.0/15"}}`, ""},
+		{"FakeIP 网段合法 /24", `{"dns":{"fakeIpRange":"192.168.77.0/24"}}`, ""},
+		{"FakeIP 网段首尾空白合法", `{"dns":{"fakeIpRange":" 198.20.0.0/16 "}}`, ""},
+		{"FakeIP 网段掩码太宽", `{"dns":{"fakeIpRange":"198.18.0.0/14"}}`, "fakeIpRange"},
+		{"FakeIP 网段掩码太窄", `{"dns":{"fakeIpRange":"198.20.0.0/25"}}`, "fakeIpRange"},
+		{"FakeIP 网段没写掩码", `{"dns":{"fakeIpRange":"198.20.0.0"}}`, "fakeIpRange"},
+		{"FakeIP 网段是 IPv6", `{"dns":{"fakeIpRange":"fd00::/16"}}`, "fakeIpRange"},
+		{"FakeIP 网段写法错", `{"dns":{"fakeIpRange":"abc"}}`, "fakeIpRange"},
+		{"FakeIP 网段类型错", `{"dns":{"fakeIpRange":16}}`, "fakeIpRange"},
 		{"未知字段放行", `{"someFutureKey":{"a":1},"another":[1,2]}`, ""},
 	}
 	for _, c := range cases {

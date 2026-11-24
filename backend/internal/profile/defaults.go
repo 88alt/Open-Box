@@ -37,7 +37,9 @@ func DefaultDNS(region string) map[string]any {
 		"proxyPort":      float64(53),
 		"proxyExtras":    []any{},
 		"fakeIpForProxy": false,
-		"rewrite":        map[string]any{"enabled": false, "initialized": float64(0), "rules": []any{}},
+		// FakeIP 的 v4 地址池:空 = 内核默认(sing-box 198.19.0.0/16 / Mihomo 198.18.0.0/16)
+		"fakeIpRange": "",
+		"rewrite":     map[string]any{"enabled": false, "initialized": float64(0), "rules": []any{}},
 		"filter": map[string]any{
 			"enabled": false, "lists": []any{}, "allowDomains": []any{},
 			"autoUpdate": map[string]any{"enabled": false, "days": float64(1), "hour": float64(4)},

@@ -273,6 +273,9 @@ func checkDNS(p map[string]any) error {
 			return err
 		}
 	}
+	if err := checkFakeIPRange(dns); err != nil {
+		return err
+	}
 	for _, side := range []string{"direct", "proxy"} {
 		if err := wantEnum(dns, side+"Protocol", "dns."+side+"Protocol", dnsProtocols); err != nil {
 			return err
@@ -289,6 +292,25 @@ func checkDNS(p map[string]any) error {
 		if err := checkExtras(dns, side+"Extras", "dns."+side+"Extras"); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// checkFakeIPRange:FakeIP 的 v4 地址池(面板「FakeIP 网段」)。空 = 内核默认;否则必须是 IPv4 CIDR、
+// 掩码 /15~/24 —— 与面板校验同一口径(core 那边也按这个范围收,越界的值会退回默认池,这里先挡住,
+// 免得用户以为改成功了)。
+func checkFakeIPRange(m map[string]any) error {
+	s, ok, err := wantString(m, "fakeIpRange", "dns.fakeIpRange")
+	if err != nil || !ok {
+		return err
+	}
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	p, perr := netip.ParsePrefix(s)
+	if perr != nil || !p.Addr().Is4() || p.Bits() < 15 || p.Bits() > 24 {
+		return fmt.Errorf("dns.fakeIpRange 只能是掩码 /15~/24 的 IPv4 网段(例如 198.20.0.0/16),留空用内核默认")
 	}
 	return nil
 }

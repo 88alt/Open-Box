@@ -1591,6 +1591,11 @@ const en = {
   dnsFakeIpTitle: 'Enable FakeIP',
   dnsFakeIpNote:
     'Compatible proxy nodes resolve proxied domains.',
+  dnsFakeIpRangeLabel: 'FakeIP subnet',
+  dnsFakeIpRangeNote: 'Leave empty to use the kernel default ({defaultRange}). If it overlaps another TUN or virtual interface on this host, set a custom IPv4 CIDR like 198.20.0.0/16 (/15–/24). Restart the kernel to apply.',
+  dnsFakeIpRangeSave: 'Save',
+  dnsFakeIpRangeReset: 'Reset default',
+  dnsFakeIpRangeInvalid: 'Enter a valid IPv4 CIDR subnet such as 198.20.0.0/16 (prefix /15–/24)',
   bypassPortsTitle: 'Ports that skip the kernel',
   mihomoTlsSniffPortsTitle: 'Additional Mihomo TLS sniffing ports',
   mihomoTlsSniffPortsDescription:

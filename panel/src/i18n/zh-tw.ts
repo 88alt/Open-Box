@@ -1514,6 +1514,11 @@ const zhTW: LANG_MESSAGE = {
   dnsFakeIpTitle: '啟用 FakeIP',
   dnsFakeIpNote:
     '代理網域交給支援網域轉送的節點解析。',
+  dnsFakeIpRangeLabel: 'FakeIP 網段',
+  dnsFakeIpRangeNote: '留空使用核心預設網段（目前為 {defaultRange}）；若與本機其他 TUN / 虛擬網卡網段衝突，可改為如 198.20.0.0/16（支援 /15～/24 的 IPv4 CIDR）。修改後需重啟核心生效。',
+  dnsFakeIpRangeSave: '儲存',
+  dnsFakeIpRangeReset: '恢復預設',
+  dnsFakeIpRangeInvalid: '請輸入有效的 IPv4 CIDR 網段，例如 198.20.0.0/16（遮罩範圍 /15～/24）',
   bypassPortsTitle: '進核心前放行的連接埠',
   mihomoTlsSniffPortsTitle: 'Mihomo 額外 TLS 嗅探連接埠',
   mihomoTlsSniffPortsDescription: '從經過核心的 TLS 連線中辨識網域。預設嗅探 TCP 443，可新增其他連接埠或連接埠範圍。',

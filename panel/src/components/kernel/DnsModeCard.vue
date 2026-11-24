@@ -43,6 +43,48 @@
           <span class="text-base-content/50 text-xs">{{ $t('dnsFakeIpNote') }}</span>
         </span>
       </div>
+      <!-- FakeIP 网段:留空用内核默认(sing-box 198.19.0.0/16,Mihomo 198.18.0.0/16);和本机别的 TUN / 虚拟网卡冲突时改这里 -->
+      <div
+        v-if="mode !== 'off'"
+        class="flex flex-col gap-1.5"
+        :class="!fakeIp && 'opacity-50'"
+      >
+        <div class="flex flex-wrap items-center gap-2">
+          <label
+            class="text-xs"
+            for="dns-fake-ip-range"
+          >{{ $t('dnsFakeIpRangeLabel') }}</label>
+          <input
+            id="dns-fake-ip-range"
+            v-model="rangeInput"
+            type="text"
+            class="input input-sm w-44 font-mono"
+            :placeholder="defaultRange"
+            :disabled="saving || !fakeIp"
+            @keyup.enter="saveRange"
+          >
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            :disabled="saving || !fakeIp || !rangeDirty"
+            @click="saveRange"
+          >
+            {{ $t('dnsFakeIpRangeSave') }}
+          </button>
+          <button
+            v-if="rangeCurrent !== ''"
+            type="button"
+            class="btn btn-sm btn-ghost"
+            :disabled="saving || !fakeIp"
+            @click="resetRange"
+          >
+            {{ $t('dnsFakeIpRangeReset') }}
+          </button>
+        </div>
+        <p class="text-base-content/50 text-xs">
+          {{ $t('dnsFakeIpRangeNote', { defaultRange }) }}
+        </p>
+      </div>
     </div>
   </div>
 </template>
@@ -50,7 +92,7 @@
 <script setup lang="ts">
 import { fetchServiceStatus, type OpenboxDnsMode, type OpenboxProfile } from '@/api/openbox'
 import { showNotification } from '@/helper/notification'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 const props = defineProps<{
   profile: OpenboxProfile
@@ -65,11 +107,15 @@ const NOTE_KEY: Record<OpenboxDnsMode, string> = {
 const saving = ref(false)
 // 跑在 systemd 系统上时没有 dnsmasq 可转发:隐藏这一项,档案里写着 dnsmasq 的按防火墙劫持显示
 const platform = ref('openwrt')
+// 当前内核决定 FakeIP 的默认网段(Mihomo 与 sing-box 的缺省池不同),切换后要重选
+const kernel = ref('sing-box')
 onMounted(async () => {
   try {
-    platform.value = (await fetchServiceStatus()).platform ?? 'openwrt'
+    const status = await fetchServiceStatus()
+    platform.value = status.platform ?? 'openwrt'
+    kernel.value = status.core?.kernel ?? 'sing-box'
   } catch {
-    // 拿不到就按 openwrt 处理
+    // 拿不到就按 openwrt / sing-box 处理
   }
 })
 const dnsmasqAvailable = computed(() => platform.value !== 'systemd')
@@ -95,6 +141,50 @@ const save = async (patch: Record<string, unknown>) => {
 }
 
 const onFakeIp = (event: Event) => save({ fakeIpForProxy: (event.target as HTMLInputElement).checked })
+
+// FakeIP 网段:留空 = 用内核默认。档案里存的是用户改过的值(与默认值相同时存空串,和上游一样)。
+const defaultRange = computed(() => (kernel.value === 'mihomo' ? '198.18.0.0/16' : '198.19.0.0/16'))
+const rangeCurrent = computed(() => (props.profile.dns?.fakeIpRange ?? '').trim())
+const rangeInput = ref(rangeCurrent.value)
+watch([rangeCurrent, defaultRange], () => {
+  rangeInput.value = rangeCurrent.value || defaultRange.value
+}, { immediate: true })
+const rangeDirty = computed(() => rangeInput.value.trim() !== (rangeCurrent.value || defaultRange.value))
+
+// 与上游同一口径:IPv4 CIDR、每段 0~255、掩码 /15~/24;留空也算合法(回到默认)
+const validRange = (value: string) => {
+  if (value === '') return true
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})$/.exec(value)
+  if (!m) return false
+  for (let i = 1; i <= 4; i++) if (Number(m[i]) > 255) return false
+  const bits = Number(m[5])
+  return bits >= 15 && bits <= 24
+}
+
+const saveRange = async () => {
+  const value = rangeInput.value.trim()
+  if (!validRange(value)) {
+    showNotification({ content: 'dnsFakeIpRangeInvalid', type: 'alert-error' })
+    return
+  }
+  // 填的就是默认值 → 存空串,老档案与上游面板一致
+  const next = value === defaultRange.value ? '' : value
+  if (next === rangeCurrent.value) return
+  saving.value = true
+  try {
+    await props.patchProfile({ dns: { fakeIpRange: next } })
+    showNotification({ content: 'dnsModeSaved', type: 'alert-success' })
+  } catch (err) {
+    showNotification({ content: 'routingSaveFailed', params: { message: err instanceof Error ? err.message : String(err) }, type: 'alert-error' })
+  } finally {
+    saving.value = false
+  }
+}
+
+const resetRange = () => {
+  rangeInput.value = defaultRange.value
+  return saveRange()
+}
 
 const onChange = (event: Event) => {
   const next = (event.target as HTMLSelectElement).value as OpenboxDnsMode
