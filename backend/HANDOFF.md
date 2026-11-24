@@ -60,7 +60,7 @@ Go 静态编译(backend/go.mod 现为 go 1.25.4,core/go.mod 是 1.25.12,统一�
 [ ] 未做:
     - 双内核(sing-box / Mihomo)与内核切换:第 1、2 步和 core 的 3a–3d 已做,后端 3e(Go 版 mihomo.yaml 装配,拆成 3e-1~5)做了 3e-1(`internal/mihomo` 的输入与小工具)、3e-3(规则集转 provider、调 core 的组 / 规则并缓存、组分类)、3e-4a(网段小工具 `cidr.go`、读回已部署 geoip provider `deployed.go`)、3e-4b-1(规则集形状 `shape.go`、入口旁路的网段扣减 `entrybypass.go`)、3e-4b-2(直连 IP 计划 `directip.go`)、3e-4b-3(路由计划 `routeplan.go` 的 `DE` / `ug` / `si`、终端分流规整 `clientroutes.go`、稳定 JSON `stablejson.go`)和 3e-4c(终端名单判定 `entrylists.go` 的 `ol` / `b0` / `sl` / `w0`、`mihomo-entry-bypass.nft` 的生成 `entrynft.go` 的 `BuildEntryNft`),3e-2 卡在 core 新方法 `mihomo/mihomoDnsUpstreams`(STATUS「需要 core 配合」里),3e-4d(`SC`)、3e-5 和第 4–7 步没做。
     - 前后端对账缺口(STATUS 同名一节):kernel/switch(profile/target-routing、subscriptions/updates 已做)。
-    - 上游 v0.1.481 新增两项:带宽「按天测试指定开始时刻」(`bandwidth.startHour`)已做;DNS 页「FakeIP 网段」(`dns.fakeIpRange`)卡在 core(STATUS「需要 core 配合」同名条目)。
+    - 上游 v0.1.481 / v0.1.482 新增三项都已做(前端、后端、core 三头一起):带宽「按天测试指定开始时刻」(`bandwidth.startHour`)、DNS 页「FakeIP 网段」(`dns.fakeIpRange`)、DNS 页「指定域名 DNS」(`dns.domainUpstreams`,规则在配置里的位置是推断);见 STATUS 日志 2026-11-23 / 11-24 / 11-25。
     - update 第二部分与 M6 打包发布:设计草案在 docs/M6.md,等维护者确认。
     - 真机联调(维护者做):所有 [~] 条目。
 有意不做:激活 / 授权;例外 A、B、C(见 core/HANDOFF.md 与 STATUS「对齐口径」):教程、市场推广、AI 中转、业务优选整体、overview-links(上游概览顶栏的外链,改显示版本号)等。

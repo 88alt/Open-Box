@@ -349,11 +349,17 @@ func BuildDNS(profile any, o DNSOptions) (DNSResult, error) {
 		}
 		servers = append(servers, rewriteServers...)
 		servers = append(servers, localServers...)
+		duRules := domainUpstreamRules(profile, dnsConf, o.SystemDNS, func(up upstream, tag string) {
+			for _, e := range dnsServerEntries(up, tag, "", profile, o.SystemDNS) {
+				servers = append(servers, e)
+			}
+		})
 		only := map[string]any{"servers": servers, "final": "dns-direct", "strategy": strategy, "reverse_mapping": true}
-		if len(rewriteRules) > 0 || len(localRules) > 0 || len(filterRules) > 0 || len(terminalCustomRules) > 0 {
+		if len(rewriteRules) > 0 || len(localRules) > 0 || len(duRules) > 0 || len(filterRules) > 0 || len(terminalCustomRules) > 0 {
 			rules := []any{}
 			rules = append(rules, rewriteRules...)
 			rules = append(rules, localRules...)
+			rules = append(rules, duRules...)
 			rules = append(rules, filterRules...)
 			if len(terminalCustomRules) > 0 {
 				ruleOwners = append(ruleOwners, RuleOwner{From: len(rules), To: len(rules) + len(terminalCustomRules), Kind: "client", Index: 0, Name: ""})
@@ -395,9 +401,15 @@ func BuildDNS(profile any, o DNSOptions) (DNSResult, error) {
 	}
 
 	// 规则顺序和连接侧(routing)对齐:DNS 重写 → 本地主机名 → 前置自定义分流 → 订阅 / 节点站点直连 → 终端分流 → 站点集 → 兜底。
+	// 域名指定上游:排在重写与本地主机名之后、其余分流之前(推断,见 domainupstream.go)。
+	duRules := domainUpstreamRules(profile, dnsConf, o.SystemDNS, func(up upstream, tag string) {
+		appendEntries(up, tag, "")
+	})
+
 	rules := []any{}
 	rules = append(rules, rewriteRules...)
 	rules = append(rules, localRules...)
+	rules = append(rules, duRules...)
 	rules = append(rules, terminalLocalRules...)
 	rules = append(rules, httpsRRRule())
 	rules = append(rules, filterRules...)

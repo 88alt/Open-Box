@@ -276,6 +276,9 @@ func checkDNS(p map[string]any) error {
 	if err := checkFakeIPRange(dns); err != nil {
 		return err
 	}
+	if err := checkDomainUpstreams(dns); err != nil {
+		return err
+	}
 	for _, side := range []string{"direct", "proxy"} {
 		if err := wantEnum(dns, side+"Protocol", "dns."+side+"Protocol", dnsProtocols); err != nil {
 			return err
@@ -294,6 +297,128 @@ func checkDNS(p map[string]any) error {
 		}
 	}
 	return nil
+}
+
+// 域名指定上游的条数上限:与面板一致(单条规则的域名数上限 64 在 checkDomainUpstreamRule 里)。
+const maxDomainUpstreamRules = 200
+
+// checkDomainUpstreams:面板 DNS 页「域名分流上游」(档案 dns.domainUpstreams = {enabled, rules})。
+// 与面板同一口径:域名规整后不能为空、不能带 *;同一台上游不要 wan(内核那边的池子会退成上游 DNS,user 看不出来);
+// 地址按协议校验(udp / tcp 只收 IP,tls 收 IP 或域名,https 收 https:// 地址),域名类上游要带 bootstrap。
+func checkDomainUpstreams(dns map[string]any) error {
+	v, ok := dns["domainUpstreams"]
+	if !ok || v == nil {
+		return nil
+	}
+	du, isObj := v.(map[string]any)
+	if !isObj {
+		return fmt.Errorf("dns.domainUpstreams 必须是对象")
+	}
+	if err := wantBool(du, "enabled", "dns.domainUpstreams.enabled"); err != nil {
+		return err
+	}
+	list, hasList := du["rules"]
+	if !hasList || list == nil {
+		return nil
+	}
+	rules, isList := list.([]any)
+	if !isList {
+		return fmt.Errorf("dns.domainUpstreams.rules 必须是数组")
+	}
+	if len(rules) > maxDomainUpstreamRules {
+		return fmt.Errorf("dns.domainUpstreams.rules 最多 %d 条", maxDomainUpstreamRules)
+	}
+	for i, e := range rules {
+		item, isItem := e.(map[string]any)
+		if !isItem {
+			return fmt.Errorf("dns.domainUpstreams.rules 第 %d 条必须是对象", i+1)
+		}
+		if err := checkDomainUpstreamRule(item, fmt.Sprintf("dns.domainUpstreams.rules 第 %d 条", i+1)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkDomainUpstreamRule(r map[string]any, label string) error {
+	if err := wantBool(r, "enabled", label+"的 enabled"); err != nil {
+		return err
+	}
+	if err := wantEnum(r, "matchType", label+"的 matchType", []string{"domain", "domainSuffix"}); err != nil {
+		return err
+	}
+	matchType, _, _ := wantString(r, "matchType", label+"的 matchType")
+	proto, _, err := wantString(r, "protocol", label+"的 protocol")
+	if err != nil {
+		return err
+	}
+	if proto == "" {
+		proto = "udp"
+	}
+	if !slices.Contains(dnsProtocols, proto) {
+		return fmt.Errorf("%s的 protocol 只能是 %s", label, strings.Join(dnsProtocols, " / "))
+	}
+	server, present, err := wantString(r, "server", label+"的 server")
+	if err != nil {
+		return err
+	}
+	if !present || strings.TrimSpace(server) == "" {
+		return fmt.Errorf("%s缺少 server", label)
+	}
+	if strings.EqualFold(strings.TrimSpace(server), WAN) {
+		return fmt.Errorf("%s的 server 不能是 wan(域名指定上游要用具体地址)", label)
+	}
+	if err := validUpstreamAddr(server, proto, label+"的 server"); err != nil {
+		return err
+	}
+	if err := checkPortField(r, "port", label+"的 port"); err != nil {
+		return err
+	}
+	if err := checkBootstrap(r, "bootstrap", label+"的 bootstrap"); err != nil {
+		return err
+	}
+	// 域名为空时这条规则不会生效,与其让用户以为改了,不如直接告诉他。
+	rawDomains, hasDomains := r["domains"]
+	domains, isList := rawDomains.([]any)
+	if !hasDomains || !isList || len(domains) == 0 {
+		return fmt.Errorf("%s的 domains 至少要有 1 个域名", label)
+	}
+	if len(domains) > 64 {
+		return fmt.Errorf("%s的 domains 最多 64 个域名", label)
+	}
+	for _, d := range domains {
+		str, isStr := d.(string)
+		if !isStr {
+			return fmt.Errorf("%s的 domains 里只能放字符串", label)
+		}
+		if normalizeDomainUpstreamHost(str, matchType == "domainSuffix") == "" {
+			return fmt.Errorf("%s的域名 %q 不合法(不能为空、不能带 *)", label, str)
+		}
+	}
+	return nil
+}
+
+// normalizeDomainUpstreamHost:与 core 的 routing.normalizeDomainUpstreamHost 同一口径(去空白、转小写、
+// 去掉末尾的点;后缀形态另外去掉开头的 "*." / "."),不合格返回空串。
+func normalizeDomainUpstreamHost(raw any, suffix bool) string {
+	s, ok := raw.(string)
+	if !ok {
+		return ""
+	}
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.TrimRight(s, ".")
+	if suffix {
+		if strings.HasPrefix(s, "*.") {
+			s = s[2:]
+		} else if strings.HasPrefix(s, ".") {
+			s = s[1:]
+		}
+		s = strings.TrimRight(s, ".")
+	}
+	if s == "" || strings.Contains(s, "*") || len(s) > 253 {
+		return ""
+	}
+	return s
 }
 
 // checkFakeIPRange:FakeIP 的 v4 地址池(面板「FakeIP 网段」)。空 = 内核默认;否则必须是 IPv4 CIDR、

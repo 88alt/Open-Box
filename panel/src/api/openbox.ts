@@ -115,6 +115,20 @@ export interface OpenboxDnsRewriteRule {
 export type OpenboxDnsProtocol = 'udp' | 'tcp' | 'https' | 'tls'
 export interface OpenboxDnsBootstrap { server: string; protocol: 'udp' | 'tcp'; port: number }
 export interface OpenboxDnsExtra { server: string; protocol?: OpenboxDnsProtocol; port?: number; bootstrap?: OpenboxDnsBootstrap | null }
+// 指定域名 DNS 的一条规则:matchType 为 domain(精确)/ domainSuffix(该域及其子域);同一台上游只写一次地址
+export interface OpenboxDnsDomainUpstreamRule {
+  id: string
+  enabled?: boolean
+  matchType: 'domain' | 'domainSuffix'
+  // 最多 64 个(面板拦着,后端 / core 也按这个上限收)
+  domains: string[]
+  protocol?: OpenboxDnsProtocol
+  server: string
+  port?: number
+  bootstrap?: OpenboxDnsBootstrap | null
+  note?: string
+}
+
 export interface OpenboxProfileDns {
   filter?: DnsFilterSettings
   split?: boolean
@@ -138,6 +152,8 @@ export interface OpenboxProfileDns {
   // FakeIP 的 v4 地址池(留空 = 内核默认:sing-box 198.19.0.0/16 / Mihomo 198.18.0.0/16)。
   // 与别的 TUN / 虚拟网卡网段冲突时改成 /15~/24 的 IPv4 CIDR,改完要重启内核
   fakeIpRange?: string
+  // 指定域名 DNS(面板「域名分流上游」):为特定域名 / 通配子域指定直连上游,匹配后不进 FakeIP 与代理侧解析
+  domainUpstreams?: { enabled?: boolean; rules: OpenboxDnsDomainUpstreamRule[] }
   // DNS 重写:initialized 记「默认规则补过了」,rules 是整份规则表(空数组 = 用户不要任何重写)
   rewrite?: { enabled?: boolean; initialized?: number; rules: OpenboxDnsRewriteRule[] }
 }

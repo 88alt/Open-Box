@@ -36,6 +36,10 @@
           :patch-profile="patchProfile"
           @refresh="load"
         />
+        <DnsDomainUpstreamCard
+          :profile="profile"
+          :patch-profile="patchProfile"
+        />
         <DnsRewriteCard
           :profile="profile"
           :patch-profile="patchProfile"
@@ -71,6 +75,7 @@ import {
   type DnsFilterStatus,
   type OpenboxProfile,
 } from '@/api/openbox'
+import DnsDomainUpstreamCard from '@/components/dns/DnsDomainUpstreamCard.vue'
 import DnsFilterCard from '@/components/dns/DnsFilterCard.vue'
 import DnsFilterRecords from '@/components/dns/DnsFilterRecords.vue'
 import DnsUpstreamCard from '@/components/dns/DnsUpstreamCard.vue'
