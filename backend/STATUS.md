@@ -513,6 +513,7 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 - 双内核第 1~6 步完成(路径与选择、档案字段、3e-1~3e-5 装配、预检、切换本体、服务脚本核对);装配的选中项(实时读运行中的 Mihomo → 快照)与入口 nft 的局域网口也已接上(局域网口在 OpenWrt 上按 netifd 的逻辑网络判 lan / wan,与上游一致)。
 - 面板已经在调的接口:后端全部有路由(`docs/ENDPOINTS.md` 已无「缺口」条目)。
 - `route-test` / `terminal-test` 的边角(`context`、`dns.stale`、`kernelDns.chain`)已补齐;`debug` 上游也不认、前端只字未用,不做。
+- **core 与基线的有意差异(2026-11-25)**:前置自定义分流里「引用了规则集、出口又不在出站表里」的行不再写 DNS 规则(基线会写,而连接侧一直跳过这些行,sing-box 1.14 起这种配置被判非法、内核起不来)。`dns_golden` 不受影响,`config_golden` 500 条里按 `hasDanglingRuleSetRule` 跳过 28 条。细节与回退方式见 `core/HANDOFF.md` 第四节 3 与日志。
 
 ### 未完成 / 跳过的条目及原因
 
