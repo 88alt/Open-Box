@@ -255,6 +255,66 @@ type RulesModel struct {
 	FirstPolicy    int      `json:"firstPolicy"`
 }
 
+// BuiltinNames 是内置出站的名字与启用开关(上游 Dn / core builtinTags 的返回)。
+// 零值 = 默认的 direct / block,且两个都算启用(DirectEnabled / BlockEnabled 为 nil 时按启用算)。
+type BuiltinNames struct {
+	Direct        string `json:"direct"`
+	Block         string `json:"block"`
+	DirectEnabled *bool  `json:"directEnabled,omitempty"`
+	BlockEnabled  *bool  `json:"blockEnabled,omitempty"`
+}
+
+func (b BuiltinNames) directOn() bool { return b.DirectEnabled == nil || *b.DirectEnabled }
+func (b BuiltinNames) blockOn() bool  { return b.BlockEnabled == nil || *b.BlockEnabled }
+
+// withDefaults 把空名字补成 direct / block。
+func (b BuiltinNames) withDefaults() BuiltinNames {
+	if b.Direct == "" {
+		b.Direct = "direct"
+	}
+	if b.Block == "" {
+		b.Block = "block"
+	}
+	return b
+}
+
+// BuiltinTags 对应上游 Re:调 core 的 builtinTags,拿内置直连 / 拒绝此刻的名字与启用开关。
+func (c *Compiler) BuiltinTags(ctx context.Context, groups any) (BuiltinNames, error) {
+	raw, err := c.call(ctx, "builtinTags", groups)
+	if err != nil {
+		return BuiltinNames{}, err
+	}
+	var b BuiltinNames
+	if err := json.Unmarshal(raw, &b); err != nil {
+		return BuiltinNames{}, fmt.Errorf("core: 解析 builtinTags 的返回值失败: %w", err)
+	}
+	return b.withDefaults(), nil
+}
+
+// EmitResult 是 core emitGroups 里装配时用得到的部分。
+type EmitResult struct {
+	PublicTags []string `json:"publicTags"`
+	Outbounds  []any    `json:"outbounds"`
+}
+
+// PublicTags 对应上游 `Wt(s,o,{}).publicTags`:用户分组的公开成员(能当出站名字用的那些)。
+func (c *Compiler) PublicTags(ctx context.Context, groups, nodes any) (EmitResult, error) {
+	raw, err := c.call(ctx, "emitGroups", groups, nodes, map[string]any{})
+	if err != nil {
+		return EmitResult{}, err
+	}
+	var out EmitResult
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return EmitResult{}, fmt.Errorf("core: 解析 emitGroups 的返回值失败: %w", err)
+	}
+	return out, nil
+}
+
+// NormalizeRouting 调 core 的 normalizeRouting(上游 ke),返回规整后的分流。
+func (c *Compiler) NormalizeRouting(ctx context.Context, routing any) (RoutingModel, error) {
+	return c.routingModel(ctx, routing)
+}
+
 // TargetRules 对应上游 yC。baseKey 非空时,缓存键只看 baseKey 加 providers / ruleLists / directCIDRs / terminalRoutes
 // (调用方保证 baseKey 已覆盖 routing、targets、directDomains);为空就按整个入参算。返回的 Rules 是新切片,可以放心改。
 func (c *Compiler) TargetRules(ctx context.Context, in RulesInput, baseKey string) (*RulesModel, error) {

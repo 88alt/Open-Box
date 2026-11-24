@@ -39,6 +39,9 @@ type ClientRoute struct {
 	// IPv6Only 是上游从 ipv6Bindings 映射出来的 MAC 行(只对 IPv6 生效)。这里不产出,
 	// 留字段是为了入口旁路的名单(sl)与上游同形。
 	IPv6Only bool `json:"ipv6Only,omitempty"`
+	// Strict 是装配时补上的(上游 di 里的 R):不是「不进内核」,且出口不是内置直连 / 拒绝。
+	// 只有装配阶段才有意义,档案里没有这个键。
+	Strict bool `json:"strict,omitempty"`
 }
 
 var (

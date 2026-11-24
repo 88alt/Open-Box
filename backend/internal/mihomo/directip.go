@@ -18,12 +18,6 @@ import (
 //   - 有按端口分流的站点集、有走代理的端口规则、有「单独指定走代理的域名」,入口只按 IP 判不了,整份放弃。
 // 开了 FakeIP 时再把假 IP 池(198.19.0.0/16、2001:2::/49)从结果里扣掉。
 
-// BuiltinNames 是内置出站的名字(上游 Dn 的 direct / block)。零值 = 默认的 direct / block。
-type BuiltinNames struct {
-	Direct string `json:"direct"`
-	Block  string `json:"block"`
-}
-
 // CustomRule 是前置自定义分流的一行(core normalizeRouting 的 custom.rules[])。
 type CustomRule struct {
 	Type     string `json:"type"`
