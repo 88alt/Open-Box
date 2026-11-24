@@ -75,7 +75,7 @@ func TestCollectLAN(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a, s := CollectLAN(tt.ifs)
+			a, s := CollectLAN(tt.ifs, nil)
 			if !reflect.DeepEqual(a, tt.wantAddrs) || !reflect.DeepEqual(s, tt.wantSubnets) {
 				t.Errorf("addrs=%v subnets=%v;想要 %v %v", a, s, tt.wantAddrs, tt.wantSubnets)
 			}
@@ -132,7 +132,7 @@ func TestLANDevices(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := LANDevices(tt.ifs)
+			got := LANDevices(tt.ifs, nil)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("got %v;想要 %v", got, tt.want)
 			}

@@ -18,14 +18,16 @@ type IfaceAddrs struct {
 // CollectLAN 从网卡列表里挑出「家里局域网」的地址和网段,只读。
 //
 // 规则(自己的设计,依据前端 OpenboxClientAppInfo 里 lanAddresses / lanSubnets 的注释):
-//   - 跳过回环、没起来的、tun / wg / 容器网桥(docker*、veth*)这类接口;
+//   - 跳过回环、没起来的、tun / wg / 容器网桥(docker*、veth*、br-<容器 id>)这类接口;
+//   - kinds 给出接口所属逻辑网络时(OpenWrt 的 ubus,见 ifacekind.go):wan 口整个跳过,
+//     lan 口的地址排在前面;不给时按名字和地址判断;
 //   - 只收私有地址:IPv4 的 10/8、172.16/12、192.168/16,IPv6 的 fc00::/7(ULA);
 //     公网地址、链路本地(fe80::)、运营商级 NAT(100.64/10)都不算「家里」;
-//   - addrs:IPv4 在前、IPv6 在后;同一族里 br-lan / lan 这类 LAN 口的地址排前面,其余保持网卡原有顺序;去重;
+//   - addrs:IPv4 在前、IPv6 在后;同一族里 LAN 口的地址排前面,其余保持网卡原有顺序;去重;
 //   - subnets:只含 IPv4 网段(规整成网络地址,如 192.168.5.0/24),去重,顺序与 addrs 里的 IPv4 一致。
 //
 // 没有符合的地址时两个返回值都是空切片(不是 nil),方便直接编成 JSON 的 []。
-func CollectLAN(ifs []IfaceAddrs) (addrs, subnets []string) {
+func CollectLAN(ifs []IfaceAddrs, kinds map[string]string) (addrs, subnets []string) {
 	addrs, subnets = []string{}, []string{}
 	type item struct {
 		ip     string
@@ -41,7 +43,11 @@ func CollectLAN(ifs []IfaceAddrs) (addrs, subnets []string) {
 		if ifc.Loopback || !ifc.Up || skipLANName(ifc.Name) {
 			continue
 		}
-		lanIf := isLANName(ifc.Name)
+		kind := kinds[ifc.Name]
+		if kind == "wan" {
+			continue
+		}
+		lanIf := kind == "lan" || isLANName(ifc.Name)
 		for _, p := range ifc.Addrs {
 			a := p.Addr().Unmap()
 			if !a.IsValid() || !a.IsPrivate() {
@@ -89,16 +95,17 @@ func CollectLAN(ifs []IfaceAddrs) (addrs, subnets []string) {
 
 // LAN 读本机网卡后交给 CollectLAN。读不到网卡返回空切片,不报错(信息只用于展示和拼 App 码)。
 func LAN() (addrs, subnets []string) {
-	return CollectLAN(realIfaces())
+	ifs := realIfaces()
+	return CollectLAN(ifs, UbusIfaceKinds(ubusRunner))
 }
 
 // LANDevices 从网卡列表里挑出承载家里局域网的接口名(入口 nft 的 iifname 用,对齐上游 di 的 lanIfaces):
-// 与 CollectLAN 同一套过滤——跳过回环、没起来的、tun / 容器网桥,只收有私有地址的接口;
-// 同一个接口只出现一次,br-lan / lan 这类名字排前面,其余保持网卡原有顺序。
+// 跳过回环、没起来的、tun / 容器网桥;kinds 说它是 wan 的一律排除,说它是 lan 的(有地址时)直接收,
+// 其余按「有没有私有地址」判断。同一个接口只出现一次,LAN 口排前面,其余保持网卡原有顺序。
 //
-// 上游是从「网络清单」里取 kind=lan 的接口(OpenWrt 上就是 br-lan 这一族);
-// 这里只按地址判断,所以 WAN 口上如果配了运营商内网地址(10/8 之类)也会被算进来——推断点,见 STATUS。
-func LANDevices(ifs []IfaceAddrs) []string {
+// 上游从「网络清单」里取 kind=lan 的接口:OpenWrt 上就是 netifd 里名字以 lan 开头的逻辑网络
+// (kinds 由 UbusIfaceKinds 提供);没有 ubus 时按私有地址判断,与上游 systemd 分支一致。
+func LANDevices(ifs []IfaceAddrs, kinds map[string]string) []string {
 	type item struct {
 		name  string
 		lanIf bool
@@ -110,6 +117,10 @@ func LANDevices(ifs []IfaceAddrs) []string {
 		if ifc.Loopback || !ifc.Up || skipLANName(ifc.Name) || seen[ifc.Name] {
 			continue
 		}
+		kind := kinds[ifc.Name]
+		if kind == "wan" {
+			continue
+		}
 		private := false
 		for _, p := range ifc.Addrs {
 			if a := p.Addr().Unmap(); a.IsValid() && a.IsPrivate() {
@@ -117,11 +128,15 @@ func LANDevices(ifs []IfaceAddrs) []string {
 				break
 			}
 		}
-		if !private {
+		// 上游的清单是从 `ip -o addr` 里来的:没有地址的接口根本不会出现,所以 kind=lan 也要有地址。
+		if kind != "lan" && !private {
+			continue
+		}
+		if kind == "lan" && len(ifc.Addrs) == 0 {
 			continue
 		}
 		seen[ifc.Name] = true
-		items = append(items, item{name: ifc.Name, lanIf: isLANName(ifc.Name), order: len(items)})
+		items = append(items, item{name: ifc.Name, lanIf: kind == "lan" || isLANName(ifc.Name), order: len(items)})
 	}
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].lanIf != items[j].lanIf {
@@ -138,7 +153,8 @@ func LANDevices(ifs []IfaceAddrs) []string {
 
 // LANDeviceNames 读本机网卡后交给 LANDevices。读不到网卡返回空切片,不报错。
 func LANDeviceNames() []string {
-	return LANDevices(realIfaces())
+	ifs := realIfaces()
+	return LANDevices(ifs, UbusIfaceKinds(ubusRunner))
 }
 
 // realIfaces 读本机网卡此刻的状态(读不到返回 nil)。
@@ -181,13 +197,32 @@ func realIfaces() []IfaceAddrs {
 	return in
 }
 
-// skipLANName 是不可能代表「家里局域网」的接口:隧道类(与 isTunName 同一批)和容器网桥 / 虚拟对。
+// skipLANName 是不可能代表「家里局域网」的接口:隧道类(与 isTunName 同一批)和容器 / 虚拟机网桥、
+// 虚拟对(名单对齐上游 `vP` 的 xP,另加 br-<12 位容器 id> 这种 docker 自己建的网桥)。
 func skipLANName(n string) bool {
 	if isTunName(n) {
 		return true
 	}
 	n = strings.ToLower(n)
-	return strings.HasPrefix(n, "docker") || strings.HasPrefix(n, "veth") || strings.HasPrefix(n, "virbr")
+	for _, p := range []string{"docker", "veth", "virbr", "lxcbr", "lxdbr", "incusbr", "podman", "cni", "tailscale", "zt", "tap"} {
+		if strings.HasPrefix(n, p) {
+			return true
+		}
+	}
+	return strings.HasPrefix(n, "br-") && len(n) == 15 && isHex12(n[3:])
+}
+
+// isHex12 是 12 位小写十六进制(docker 网桥 br-<容器网络 id> 的后缀)。
+func isHex12(s string) bool {
+	if len(s) != 12 {
+		return false
+	}
+	for _, r := range s {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // isLANName 是 OpenWrt 上 LAN 口的常见名字:br-lan、lan、lan1…。
