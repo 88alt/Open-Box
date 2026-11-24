@@ -843,7 +843,8 @@ const detailOf = (r: OpenboxDnsUpstreamTestResult, withNote: boolean) =>
     ...(withNote && r.note ? [r.note] : []),
   ].join(' · ')
 const failText = (r: OpenboxDnsUpstreamTestResult) =>
-  [t('dnsUpstreamTestFail', { message: r.error ?? '' }), ...(r.note ? [r.note] : [])].join(' · ')
+  // 与上游同一口径:失败原因 = error · note,拼好后不再套一层「不可用」(文案自己带)
+  [r.error ?? '', r.note ?? ''].filter(Boolean).join(' · ')
 const runTest = async (u: Upstream, key: string) => {
   if (!isUpstreamValid(u)) return
   testingKey.value = key
@@ -851,10 +852,9 @@ const runTest = async (u: Upstream, key: string) => {
   try {
     const r = await testDnsUpstream(testPayload(u))
     if (!r.ok) {
-      if (key === 'draft') editorError.value = failText(r)
       showNotification({
         content: 'dnsUpstreamTestFailed',
-        params: { side: sideName(u.side), message: r.error ?? '' },
+        params: { side: sideName(u.side), message: failText(r) },
         type: 'alert-error',
         timeout: 8000,
       })
@@ -940,10 +940,15 @@ const saveEditor = async () => {
   busy.value = true
   editorError.value = ''
   try {
-    // 改完即保存:先让内核真的查一次,查不通不保存
+    // 改完即保存:先让内核真的查一次,查不通不保存(提示文案与上游一致)
     const r = await testDnsUpstream(testPayload(d))
     if (!r.ok) {
-      editorError.value = failText(r)
+      showNotification({
+        content: 'dnsUpstreamSaveBlocked',
+        params: { side: sideName(d.side), message: failText(r) },
+        type: 'alert-error',
+        timeout: 8000,
+      })
       return
     }
     const next: Upstream[] = current

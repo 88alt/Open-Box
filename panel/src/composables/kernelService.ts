@@ -119,6 +119,10 @@ const CONFLICT_TOAST_KEYS = {
 const conflictState = computed(() =>
   serviceStatus.value?.core.running ? 'running' : serviceStatus.value?.conflictAutoStopped ? 'autoStopped' : 'stopped',
 )
+// 「后端设置」内核卡片里的黄色横幅和右上角的提示是同一段话(上游只用提示,横幅是自研的常驻版本),
+// 取词和拼名字都走这两个,免得两处慢慢说成两套。
+export const conflictToastKey = computed(() => CONFLICT_TOAST_KEYS[conflictState.value])
+export const conflictNames = computed(() => (serviceStatus.value?.conflicts || []).map((c) => c.label))
 const conflictSignature = computed(() => {
   const conflicts = serviceStatus.value?.conflicts || []
   return conflicts.length ? `${conflictState.value}:${conflicts.map((c) => c.id).sort().join(',')}` : ''
@@ -144,10 +148,9 @@ export const useKernelConflictToast = () => {
       return
     }
     if (!next || next === prev) return
-    const names = (serviceStatus.value?.conflicts || []).map((c) => c.label).join(t('listSeparator'))
     showNotification({
-      content: CONFLICT_TOAST_KEYS[conflictState.value],
-      params: { names },
+      content: conflictToastKey.value,
+      params: { names: conflictNames.value.join(t('listSeparator')) },
       key: 'proxy-conflict',
       type: 'alert-warning',
       timeout: 20000,

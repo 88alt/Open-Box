@@ -72,20 +72,11 @@
 
       <div
         v-if="conflicts.length > 0"
-        class="alert alert-warning flex flex-col items-start gap-1"
+        class="alert alert-warning flex items-start gap-2"
       >
-        <div class="flex items-center gap-2 font-medium">
-          <ExclamationTriangleIcon class="h-4 w-4 shrink-0" />
-          {{ $t('kernelConflictTitle') }}
-        </div>
-        <ul class="list-disc pl-6 text-xs">
-          <li
-            v-for="c in conflicts"
-            :key="c.id"
-          >
-            {{ $t('kernelConflictItem', { name: c.label }) }}
-          </li>
-        </ul>
+        <ExclamationTriangleIcon class="mt-0.5 h-4 w-4 shrink-0" />
+        <!-- 常驻说明与右上角提示同一段话(上游只有提示);只列名字,不再逐条重复 -->
+        <span class="text-xs leading-relaxed">{{ $t(conflictToastKey, { names: conflictNamesText }) }}</span>
       </div>
 
       <!-- 内核版本 + sing-box 项目链接(文字、图标、间距与 v0.1.337 一致) -->
@@ -255,6 +246,8 @@ import FactoryResetButton from '@/components/kernel/FactoryResetButton.vue'
 import KernelRestartButton from '@/components/kernel/KernelRestartButton.vue'
 import OpenboxUpdateCard from '@/components/kernel/OpenboxUpdateCard.vue'
 import {
+  conflictNames,
+  conflictToastKey,
   isStartDisabled,
   isStopDisabled,
   pendingAction,
@@ -339,6 +332,10 @@ const kernelGithubLabel = computed(() => t('kernelGithubLabel', { kernel: kernel
 // 冲突的代理工具读共享状态,不用页面传进来的那份快照:
 // 快照只在进页面和点动作后更新,进页面时拿到 null,横幅就一直不出现
 const conflicts = computed(() => serviceStatus.value?.conflicts ?? props.status?.conflicts ?? [])
+// 横幅的措辞与右上角提示同源(上游只弹提示,横幅是自研的常驻版本);共享状态还没到就用页面传入的快照
+const conflictNamesText = computed(() =>
+  (conflictNames.value.length ? conflictNames.value : conflicts.value.map((c) => c.label)).join(t('listSeparator')),
+)
 
 // 本机系统:发行版名 + 版本 + 架构。osRelease 的形状随服务端版本不同,按几种常见写法读
 const osName = computed(() => {
