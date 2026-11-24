@@ -44,7 +44,7 @@ Go 静态编译(backend/go.mod 现为 go 1.25.4,core/go.mod 是 1.25.12,统一�
 - 过渡期的发布版本号规则 v0.1.<上游号>-main.<n>,正式发布前由维护者重定;main 上不要随便跑完整的 Release(会建标签并发布)。
 
 
-# 三、进度标记(2026-11-23 快照;细项以 STATUS.md 为准)
+# 三、进度标记(2026-11-25 快照;细项以 STATUS.md 为准)
 
 图例:[x] 完成  [~] 代码和单元测试完成、待真机或云端确认  [ ] 未做
 
@@ -57,23 +57,33 @@ Go 静态编译(backend/go.mod 现为 go 1.25.4,core/go.mod 是 1.25.12,统一�
     terminal-test(含 kernelDns、firstLayer)、penetration、system/resources、diagnostics。
 [~] M4 自动化:订阅定时更新、failover*、延迟历史采集、带宽择优(重写后的版本;节点评分权重 2026-11-23 起写进内核配置,core 的 `node_score_weights`,后端改权重提示重启,待真机)。
 [~] M5 系统运维:deploy*、rollback、factory-reset、update 第一部分(status / check / notes)、时区、backup。
+已做完、只剩真机的:
+    - 双内核(sing-box / Mihomo)与内核切换(维护者 2026-11-22 确认要完整做,对齐上游 v0.1.477):第 1~6 步完成——路径与选择、
+      core 的 3a–3d、后端 3e(Go 版 `mihomo.yaml` 装配,`internal/mihomo` + `internal/kernelgen`)、预检 8 项与 NDJSON、切换与回滚、
+      服务脚本核对(上游脚本已支持双内核,main 没有 overlay);装配用的选中项(实时读运行中的 Mihomo → 快照)与入口 nft 的局域网口也已接上
+      (OpenWrt 上按 netifd 的逻辑网络判 lan / wan)。设计见 `docs/DESIGN.md` 第 9 节,细项与「需真机」见 STATUS。
+    - 前后端对账缺口(STATUS 同名一节):全部做完,最后一组 kernel/switch 随双内核完成。
+    - 上游 v0.1.481 / v0.1.482 新增三项(前端、后端、core 三头一起):带宽「按天测试指定开始时刻」(`bandwidth.startHour`)、
+      DNS 页「FakeIP 网段」(`dns.fakeIpRange`)、DNS 页「指定域名 DNS」(`dns.domainUpstreams`,规则在配置里的位置是推断);
+      见 STATUS 日志 2026-11-23 / 11-24 / 11-25。
+
 [ ] 未做:
-    - 双内核(sing-box / Mihomo)与内核切换:第 1、2 步和 core 的 3a–3d 已做,后端 3e(Go 版 mihomo.yaml 装配,拆成 3e-1~5)做了 3e-1(`internal/mihomo` 的输入与小工具)、3e-3(规则集转 provider、调 core 的组 / 规则并缓存、组分类)、3e-4a(网段小工具 `cidr.go`、读回已部署 geoip provider `deployed.go`)、3e-4b-1(规则集形状 `shape.go`、入口旁路的网段扣减 `entrybypass.go`)、3e-4b-2(直连 IP 计划 `directip.go`)、3e-4b-3(路由计划 `routeplan.go` 的 `DE` / `ug` / `si`、终端分流规整 `clientroutes.go`、稳定 JSON `stablejson.go`)和 3e-4c(终端名单判定 `entrylists.go` 的 `ol` / `b0` / `sl` / `w0`、`mihomo-entry-bypass.nft` 的生成 `entrynft.go` 的 `BuildEntryNft`)、3e-4d(`entrydirect.go`:「直连 IP 段」提供者 `ob-entry-direct`)和 3e-2(DNS 段 `dnsconfig.go` + 有序对象 `ordered.go`,两侧上游从 core 的 `mihomoDnsUpstreams` 拿),3e-5(`buildconfig.go` 装配整份配置 + `yaml.go` 输出 + `deploy.go` 落盘与 `mihomo -t` 校验);3e 至此全部做完,剩下第 4–7 步(预检 / 切换 / 服务脚本 / 打包)。
-    - 前后端对账缺口(STATUS 同名一节):kernel/switch(profile/target-routing、subscriptions/updates 已做)。
-    - 上游 v0.1.481 / v0.1.482 新增三项都已做(前端、后端、core 三头一起):带宽「按天测试指定开始时刻」(`bandwidth.startHour`)、DNS 页「FakeIP 网段」(`dns.fakeIpRange`)、DNS 页「指定域名 DNS」(`dns.domainUpstreams`,规则在配置里的位置是推断);见 STATUS 日志 2026-11-23 / 11-24 / 11-25。
-    - update 第二部分与 M6 打包发布:设计草案在 docs/M6.md,等维护者确认。
-    - 真机联调(维护者做):所有 [~] 条目。
+    - 双内核第 7 步:发布包里带 `bin/mihomo`,以及组件更新里的 Mihomo 版本检查。后端口径已具备(`kernel/version` 的
+      `mihomoAvailable`),要动的是打包流程(M6),本机没有发布产物、也没有可随包的 Mihomo 二进制。
+    - update 第二部分(真正升级)与 M6 打包发布:设计草案在 `docs/M6.md`,第十二节 7 项等维护者确认;确认前不动这两块的代码。
+    - 真机联调(维护者做):所有 [~] 条目,含双内核两个方向的切换与故意失败的回滚。
+    - 清理旧文件 `scripts/native-arm64/`:等真机联调通过后单独一个提交。
 有意不做:激活 / 授权;例外 A、B、C(见 core/HANDOFF.md 与 STATUS「对齐口径」):教程、市场推广、AI 中转、业务优选整体、overview-links(上游概览顶栏的外链,改显示版本号)等。
 
 
 # 四、后续工作(按顺序)
 
 1. 先对账(第零节第 2 条),再做 STATUS「先做」小节(目前都已打勾,新增的会放在那里)。
-2. 「前后端对账缺口」里不依赖 core / 真机 / 维护者的条目:target-routing、subscriptions/updates 都已做,剩下的 kernel/switch 属双内核(见第 3 条);每条前后端分别对齐上游,ENDPOINTS.md 同一提交里补上。
-3. 双内核:3e 和第 4、5 步(kernel/switch/preflight 与 kernel/switch);第 6、7 步涉及同步覆盖的目录和打包,要维护者确认放哪。
+2. 「前后端对账缺口」已清零(2026-11-25):最后一条 kernel/switch 随双内核做完。以后上游出新版按第 4 条重新对一遍,新缺口写进 STATUS 同名小节。
+3. 双内核:第 1~6 步已完成(3e 装配、`kernel/switch/preflight`、`kernel/switch`、服务脚本核对);第 6 步核对下来上游脚本已支持双内核,不需要另放 overlay。只剩第 7 步(发布包带 `bin/mihomo` 与组件更新的 Mihomo 版本检查),它要动 M6 的打包,与第 5 条一起等维护者确认。
 4. 上游出新版本时(catch-up-upstream 更新):按 core/HANDOFF.md 第四节第 7 条的方法对账,即面板文案键集对上游打包产物、面板和上游打包产物调用的接口对后端路由;
    结果写进 STATUS「前后端对账缺口」。上游自 v0.1.463 起后端是闭源二进制,v0.1.462(bfd33a70)是最后一版明文 Node,只能对着前端行为和公开材料对齐。
-5. update 第二部分 + M6(docs/M6.md):维护者确认后做。
+5. update 第二部分 + M6(docs/M6.md)+ 双内核第 7 步的打包部分:维护者确认后做(三件事都要动发布产物)。
 6. 真机联调通过后,单独一个提交清理 scripts/native-arm64/。
 7. 前端和 ENDPOINTS.md 对不上时,先改 ENDPOINTS.md 再改实现,同一个提交里完成。
 
