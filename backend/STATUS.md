@@ -30,7 +30,7 @@
 ## 状态(2026-11-23)
 M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云端确认;未做:双内核的第 4–7 步(3e 装配本体 3e-1 ~ 3e-5 已全部做完)、「前后端对账缺口」几条、update 第二部分与 M6。总览见 `HANDOFF.md` 第三节。
 
-**推送状态(2026-11-25)**:网络已恢复,`git push origin main` 成功——积压的 7 个提交全部上去,`origin/main` 就是本地 HEAD (`985b4806`)。此后每批做完立即推,推送后在日志里记远端 HEAD;若再次不通,照旧把本批留在本地并在此记原因与所需条件。
+**推送状态(2026-11-25)**:remote 改成 SSH(`git@github-timeflysoon:timeflysoon/Open-Box.git`,用 `~/.ssh/config` 里 timeflysoon 账号的 Host 别名与专属密钥),fetch / push 都通,不再走 https。3e-2 与 3e-5 两批都已推上去,`origin/main` = `dee88ae0`。main 上没有 `.github/workflows`,推送后无 CI 可等(Release 工作流只在 catch-up-upstream)。
 
 ## M0 骨架
 - [x] `go.mod`、`cmd/openbox-backend`、参数 / 环境变量 / 路径(`internal/system/paths.go`)
