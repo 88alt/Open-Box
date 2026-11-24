@@ -138,6 +138,7 @@ openbox-core 交接笔记(第 7 版,只管 core;后端另见 backend/HANDOFF.md)
      - `internal/config/build.go` 在算出 `knownOutbounds` 之后调一次,把标记交给 DNS;`BuildDNS` 直接调用(测试)不传就完全不变,所以 `dns_golden` **一条都不用跳**。
      - 金标准:`build_golden_test.go` 新增跳过判定 `hasDanglingRuleSetRule`(入参里有「引用规则集 + 出口不在基线出站表里」的行、且 `dns.split` 开着才跳),`config_golden.json` 500 条里跳 28 条、其余 472 条逐字节一致;这 28 条正是行为真的变了的那批(不是宽口径的 61 条)。新行为由 `internal/config/build_customrules_vectors_test.go`(端到端:悬空的 geosite 行不写规则、认识的照写、归属下标仍是 1)与 `internal/routing/customrules_test.go`(标记口径、nil 表、空表)覆盖。
      - 端到端复核(真实 core + 真实后端,`config/preview`):档案里写一条 `geosite:netflix → 已删的组` 和一条 `domain:keep.example → 已删的组` 后,预览的 `dns.rules` 里没有任何「引用路由未声明的规则集」的条目,`keep.example` 那条(域名类)照旧保留。
+     - 官方内核复核:这 28 条各导两份配置(基线 / 新行为)交给官方 sing-box 1.14.4 跑 `check`(经 `testdata/tools/sbcheck.py`):基线 4/28 通过、15 条报 `rule-set not found: geosite-netflix`;新行为 14/28 通过,那 15 条全部消失。剩下的是 `auto_redirect is only supported on Linux`(5 条,Windows 环境限制)、语料自相矛盾的 dnsFilter 规则集(3 条,①)、订阅 id 重复导致 DNS tag 撞车(1 条,②)——都不是本批引入的。
      - **待维护者复核**:一是这条改动本身(要回退就 revert 这一个提交,金标准跳过判定一起删掉);二是「金标准语料怎么处理」这个大问题(①②③里的 ①② 仍未动,③ 的 28 条已按上面方式处理)。
 4. 授权三个方法:新后端不调用,先保留,等后端稳定后再决定是否删除。
 5. core/UPSTREAM_VERSION(现为 v0.1.354):原本记录"最后对齐的上游版本"。按第五节的规则不再按上游版本推进,默认不再改动,处理方式由维护者定。
