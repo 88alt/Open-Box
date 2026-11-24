@@ -29,14 +29,13 @@ import (
 
 // Mihomo 配置里的固定项(上游 di / 常量)。
 const (
-	mihomoExternalController = "127.0.0.1:9095"
-	mihomoMixedPort          = 7891
-	mihomoRoutingMark        = 8236 // Number("0x2024")
-	mihomoAdmitDNSPort       = 7855 // Ia
-	mihomoHealthHost         = "openbox-health.invalid"
-	mihomoTrafficHealthHost  = "openbox-traffic-health.invalid"
-	mihomoHealthAddr         = "192.0.2.1"
-	mihomoTrafficHealthAddr  = "127.0.0.1"
+	mihomoMixedPort         = 7891
+	mihomoRoutingMark       = 8236 // Number("0x2024")
+	mihomoAdmitDNSPort      = 7855 // Ia
+	mihomoHealthHost        = "openbox-health.invalid"
+	mihomoTrafficHealthHost = "openbox-traffic-health.invalid"
+	mihomoHealthAddr        = "192.0.2.1"
+	mihomoTrafficHealthAddr = "127.0.0.1"
 	// Mihomo 自己的两个假 IP 池(与 sing-box 的 198.19.0.0/16 不同,别混)。
 	mihomoPoolV4      = "198.18.0.0/16"
 	mihomoPoolV6      = "2001:2:0:8000::/49"
@@ -60,19 +59,19 @@ type DeployedBypass struct {
 
 // BuildInput 是装配一份 Mihomo 配置要用到的全部数据(字段名对齐上游 di 的解构参数)。
 type BuildInput struct {
-	Platform      string           // openwrt / container / linux …
-	DataDir       string           // 数据目录(Mihomo 的 -d 是 <DataDir>/mihomo)
-	Profile       map[string]any   // 档案
-	Nodes         []map[string]any // 节点
-	Groups        []map[string]any // 用户分组
-	Subscriptions []map[string]any // 订阅(取节点 DNS 与直连主机)
-	RuleLists     map[string]any   // 用户规则集链接(tag → {url, domain, ip})
-	Selections    map[string]any   // 面板里选中的节点
-	SystemDNS     []any            // 系统 DNS(core 的 mihomoDnsUpstreams 用)
-	Secret        string           // external-controller 的密钥
-	ChainNodes    []any            // 链式节点(上游 et(profile))
-	ClientBindings any             // 上游 r.clientBindings(现在 core 不产出 ipv6Only 行,留位)
-	LanIfaces     []string         // 局域网口(入口 nft 用;调用方读好传进来)
+	Platform       string           // openwrt / container / linux …
+	DataDir        string           // 数据目录(Mihomo 的 -d 是 <DataDir>/mihomo)
+	Profile        map[string]any   // 档案
+	Nodes          []map[string]any // 节点
+	Groups         []map[string]any // 用户分组
+	Subscriptions  []map[string]any // 订阅(取节点 DNS 与直连主机)
+	RuleLists      map[string]any   // 用户规则集链接(tag → {url, domain, ip})
+	Selections     map[string]any   // 面板里选中的节点
+	SystemDNS      []any            // 系统 DNS(core 的 mihomoDnsUpstreams 用)
+	Secret         string           // external-controller 的密钥
+	ChainNodes     []any            // 链式节点(上游 et(profile))
+	ClientBindings any              // 上游 r.clientBindings(现在 core 不产出 ipv6Only 行,留位)
+	LanIfaces      []string         // 局域网口(入口 nft 用;调用方读好传进来)
 
 	// 已部署配置里的 rule-providers(tag → 条目):能复用就不再转换规则集。
 	DeployedProviders     map[string]Provider
@@ -104,7 +103,7 @@ type BuildDeps struct {
 	TLSKey   string
 
 	// LookupHost 是「装配时现查节点域名」用的解析器(上游 r.directHostLookup);nil = 不查。
-	LookupHost func(ctx context.Context, hosts []string, servers []any) ([]string, error)
+	LookupHost         func(ctx context.Context, hosts []string, servers []any) ([]string, error)
 	ResolveDirectHosts bool
 }
 
@@ -116,6 +115,8 @@ type BuildResult struct {
 	Monitoring           json.RawMessage
 	NodeDirectResolution any
 	Providers            map[string]Provider
+	// Selections 是装配后各组此刻的第一选择({组名: 节点名}),切换成功后存成选中项快照。
+	Selections map[string]string
 }
 
 // BuildConfig 对应上游 di:装配整份配置。
@@ -345,7 +346,7 @@ func BuildConfig(ctx context.Context, in BuildInput, d BuildDeps) (*BuildResult,
 			AutoRedirect: autoRedirect, PureTun: !autoRedirect, LANIfaces: in.LanIfaces,
 			DirectIPCidrs: entryDirect.DirectIPCidrs, FallbackKeepIPv4: entryDirect.FallbackKeepIPv4,
 			TCPMss: TunOf(profile).TCPMSS, TerminalDNS: EntryLists(terminalCandidates(routes, profile, builtin), opts), DNSV6: ipv6Mode == "node",
-			FakeIPCidrs: FakeIPCidrs{V4: []string{mihomoPoolV4, mihomoRejectV4}, V6: []string{mihomoPoolV6, mihomoRejectV6}},
+			FakeIPCidrs:  FakeIPCidrs{V4: []string{mihomoPoolV4, mihomoRejectV4}, V6: []string{mihomoPoolV6, mihomoRejectV6}},
 			AdmitDNSPort: pickInt(admitDNS, mihomoAdmitDNSPort), ProxyTerminals: proxyTerminals,
 			TunDNSAddresses: defaultTunDNS, ProtectTunDNS: true,
 		})
@@ -424,7 +425,7 @@ func BuildConfig(ctx context.Context, in BuildInput, d BuildDeps) (*BuildResult,
 	cfg.Set("ipv6", isTrue(profile["ipv6"]))
 	cfg.Set("allow-lan", false)
 	cfg.Set("bind-address", "127.0.0.1")
-	cfg.Set("external-controller", mihomoExternalController)
+	cfg.Set("external-controller", MihomoControllerAddr)
 	cfg.Set("secret", in.Secret)
 	cfg.Set("log-level", "warning")
 	cfg.Set("mixed-port", mihomoMixedPort)
@@ -533,6 +534,7 @@ func BuildConfig(ctx context.Context, in BuildInput, d BuildDeps) (*BuildResult,
 	return &BuildResult{
 		Config: cfg, Entry: entry, Failover: nonEmptyJSON(model.Failover),
 		Monitoring: nil, NodeDirectResolution: nodeDirect, Providers: providers,
+		Selections: cloneSelections(model.First),
 	}, nil
 }
 
@@ -540,6 +542,30 @@ func BuildConfig(ctx context.Context, in BuildInput, d BuildDeps) (*BuildResult,
 
 func rulesDirOf(dataDir string) string  { return joinPath(mihomoDirOf(dataDir), "rules") }
 func mihomoDirOf(dataDir string) string { return joinPath(dataDir, "mihomo") }
+
+// SelectionsAny 把装配后的选中项转成存储用的 map[string]any(切换成功后写快照用)。
+func (r *BuildResult) SelectionsAny() map[string]any {
+	out := map[string]any{}
+	if r == nil {
+		return out
+	}
+	for k, v := range r.Selections {
+		if k != "" && v != "" {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+func cloneSelections(first map[string]string) map[string]string {
+	out := make(map[string]string, len(first))
+	for k, v := range first {
+		if k != "" && v != "" {
+			out[k] = v
+		}
+	}
+	return out
+}
 
 func nestedValue(m map[string]any, keys ...string) any {
 	var cur any = m
@@ -1398,4 +1424,3 @@ func serverNeedsTLS(s map[string]any) bool {
 	}
 	return false
 }
-

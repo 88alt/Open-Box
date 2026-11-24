@@ -89,3 +89,59 @@ func TestLANDoesNotPanic(t *testing.T) {
 		t.Fatalf("应返回空切片而不是 nil: %v %v", a, s)
 	}
 }
+
+func TestLANDevices(t *testing.T) {
+	tests := []struct {
+		name string
+		ifs  []IfaceAddrs
+		want []string
+	}{
+		{"没有网卡", nil, []string{}},
+		{"只有 LAN 口", []IfaceAddrs{{Name: "br-lan", Up: true, Addrs: pfx(t, "192.168.5.1/24")}}, []string{"br-lan"}},
+		{
+			"跳过回环、没起来的、隧道和容器网桥",
+			[]IfaceAddrs{
+				{Name: "lo", Up: true, Loopback: true, Addrs: pfx(t, "127.0.0.1/8")},
+				{Name: "eth1", Up: false, Addrs: pfx(t, "192.168.9.1/24")},
+				{Name: "tun0", Up: true, Addrs: pfx(t, "10.9.0.1/24")},
+				{Name: "wg0", Up: true, Addrs: pfx(t, "10.8.0.1/24")},
+				{Name: "docker0", Up: true, Addrs: pfx(t, "172.17.0.1/16")},
+				{Name: "veth1234", Up: true, Addrs: pfx(t, "10.7.0.1/24")},
+				{Name: "br-lan", Up: true, Addrs: pfx(t, "192.168.1.1/24")},
+			},
+			[]string{"br-lan"},
+		},
+		{
+			"没有私有地址的接口不算,LAN 口排前面、其余保持原序",
+			[]IfaceAddrs{
+				{Name: "eth3", Up: true, Addrs: pfx(t, "192.168.30.1/24")},
+				{Name: "eth0", Up: true, Addrs: pfx(t, "203.0.113.7/24", "fe80::1/64")},
+				{Name: "br-lan", Up: true, Addrs: pfx(t, "10.0.0.1/8")},
+				{Name: "eth2", Up: true, Addrs: pfx(t, "fd00:2::1/64")},
+			},
+			[]string{"br-lan", "eth3", "eth2"},
+		},
+		{
+			"同一个接口只出现一次",
+			[]IfaceAddrs{
+				{Name: "br-lan", Up: true, Addrs: pfx(t, "192.168.1.1/24", "192.168.1.2/24")},
+				{Name: "br-lan", Up: true, Addrs: pfx(t, "192.168.1.1/24")},
+			},
+			[]string{"br-lan"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := LANDevices(tt.ifs)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got %v;想要 %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLANDeviceNamesDoesNotPanic(t *testing.T) {
+	if got := LANDeviceNames(); got == nil {
+		t.Fatal("应返回空切片而不是 nil")
+	}
+}

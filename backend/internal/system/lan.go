@@ -92,6 +92,55 @@ func LAN() (addrs, subnets []string) {
 	return CollectLAN(realIfaces())
 }
 
+// LANDevices 从网卡列表里挑出承载家里局域网的接口名(入口 nft 的 iifname 用,对齐上游 di 的 lanIfaces):
+// 与 CollectLAN 同一套过滤——跳过回环、没起来的、tun / 容器网桥,只收有私有地址的接口;
+// 同一个接口只出现一次,br-lan / lan 这类名字排前面,其余保持网卡原有顺序。
+//
+// 上游是从「网络清单」里取 kind=lan 的接口(OpenWrt 上就是 br-lan 这一族);
+// 这里只按地址判断,所以 WAN 口上如果配了运营商内网地址(10/8 之类)也会被算进来——推断点,见 STATUS。
+func LANDevices(ifs []IfaceAddrs) []string {
+	type item struct {
+		name  string
+		lanIf bool
+		order int
+	}
+	var items []item
+	seen := map[string]bool{}
+	for _, ifc := range ifs {
+		if ifc.Loopback || !ifc.Up || skipLANName(ifc.Name) || seen[ifc.Name] {
+			continue
+		}
+		private := false
+		for _, p := range ifc.Addrs {
+			if a := p.Addr().Unmap(); a.IsValid() && a.IsPrivate() {
+				private = true
+				break
+			}
+		}
+		if !private {
+			continue
+		}
+		seen[ifc.Name] = true
+		items = append(items, item{name: ifc.Name, lanIf: isLANName(ifc.Name), order: len(items)})
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].lanIf != items[j].lanIf {
+			return items[i].lanIf
+		}
+		return items[i].order < items[j].order
+	})
+	out := make([]string, 0, len(items))
+	for _, it := range items {
+		out = append(out, it.name)
+	}
+	return out
+}
+
+// LANDeviceNames 读本机网卡后交给 LANDevices。读不到网卡返回空切片,不报错。
+func LANDeviceNames() []string {
+	return LANDevices(realIfaces())
+}
+
 // realIfaces 读本机网卡此刻的状态(读不到返回 nil)。
 func realIfaces() []IfaceAddrs {
 	ifs, err := net.Interfaces()

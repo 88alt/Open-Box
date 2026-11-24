@@ -489,6 +489,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	if mihomoCall != nil {
 		mihomoCompiler = mihomo.NewCompiler(mihomoCall)
 	}
+	// 面板里各节点组的选中项:切换成功时存快照;装配时先问正在运行的 Mihomo,读不到再用快照。
+	selectionsStore := mihomo.SelectionsStore{Store: st}
 	kg := kernelgen.New(kernelgen.Deps{
 		Profiles: profileSvc, Groups: groupsSvc, Catalog: subsSvc, Lists: lists,
 		Secret:   gen.ClashSecret,
@@ -496,6 +498,17 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		Platform: platformName(initKind), DataDir: cfg.DataDir, GeoDir: cfg.GeoDir,
 		RulesetDir: filepath.Join(cfg.DataDir, "rules"), SingBox: cfg.SingBox, Mihomo: cfg.Mihomo, ConfigDir: cfg.ConfigDir,
 		SystemDNS: func() []string { return system.ReadResolvers("/etc/resolv.conf") },
+		LANIfaces: func() ([]string, error) { return system.LANDeviceNames(), nil },
+		Selections: func(context.Context) map[string]any {
+			return selectionsStore.Get()
+		},
+		LiveSelections: func(ctx context.Context) (map[string]string, error) {
+			secret, err := gen.ClashSecret()
+			if err != nil {
+				return nil, err
+			}
+			return mihomo.ControllerSelections(ctx, mihomo.MihomoControllerAddr, secret)
+		},
 	})
 	kernelSwitch := kernelswitch.New(kernelswitch.Deps{
 		KernelFile: cfg.RouterKernelFile(), SingBox: cfg.SingBox, Mihomo: cfg.Mihomo,
@@ -536,6 +549,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			DNSMasq: cfg.MihomoDnsmasqFile(),
 		},
 		Platform: platformName(initKind), GeoDir: cfg.GeoDir,
+		SaveSelections: selectionsStore.Set,
 	}
 	kernelapi.Register(srv.Mux(), kernelapi.Deps{
 		Engine: kernelSwitch,

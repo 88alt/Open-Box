@@ -245,3 +245,94 @@ func TestListTagMatchesCore(t *testing.T) {
 		t.Fatalf("用户规则集路径 = %s, err=%v", b, err)
 	}
 }
+
+// groupFirst 取装配结果里某个组的第一个成员(选中项)。
+func groupFirst(t *testing.T, res *mihomo.BuildResult, name string) string {
+	t.Helper()
+	raw, _ := res.Config.Get("proxy-groups")
+	list, _ := raw.([]any)
+	for _, it := range list {
+		g, _ := it.(map[string]any)
+		if tag, _ := g["name"].(string); tag != name {
+			continue
+		}
+		members, _ := g["proxies"].([]any)
+		if len(members) == 0 {
+			return ""
+		}
+		s, _ := members[0].(string)
+		return s
+	}
+	return ""
+}
+
+// 面板选中的节点要套到组上,并在结果的 Selections 里回给调用方(切换成功后存快照用)。
+func TestMihomoBuildAppliesSelections(t *testing.T) {
+	d := minimalDeps(t, newMemFS(), fakeLists{})
+	d.Selections = func(context.Context) map[string]any { return map[string]any{"PROXY": "DIRECT"} }
+	res, err := New(d).MihomoBuild(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := groupFirst(t, res, "PROXY"); got != "DIRECT" {
+		t.Errorf("PROXY 的第一项 = %q,想要 DIRECT", got)
+	}
+	if got := res.SelectionsAny()["PROXY"]; got != "DIRECT" {
+		t.Errorf("结果里的选中项 = %v,想要 DIRECT", got)
+	}
+}
+
+// 正在运行的内核里的实时选择优先;它是 DIRECT / REJECT 时要换成我们自己配置里的内置组名字。
+func TestMihomoBuildPrefersLiveSelections(t *testing.T) {
+	d := minimalDeps(t, newMemFS(), fakeLists{})
+	d.Selections = func(context.Context) map[string]any { return map[string]any{"PROXY": "n1"} }
+	d.LiveSelections = func(context.Context) (map[string]string, error) {
+		return map[string]string{"PROXY": "DIRECT"}, nil
+	}
+	res, err := New(d).MihomoBuild(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := groupFirst(t, res, "PROXY"); got != "DIRECT" {
+		t.Errorf("PROXY 的第一项 = %q,想要 DIRECT(实时选择优先于快照里的 n1)", got)
+	}
+}
+
+// 实时读不到(内核没在跑 / 不是 Mihomo)就用快照,快照也没有就按默认第一项。
+func TestMihomoBuildSelectionsFallback(t *testing.T) {
+	d := minimalDeps(t, newMemFS(), fakeLists{})
+	d.LiveSelections = func(context.Context) (map[string]string, error) { return nil, errors.New("连不上") }
+	d.Selections = func(context.Context) map[string]any { return map[string]any{"PROXY": "DIRECT"} }
+	res, err := New(d).MihomoBuild(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := groupFirst(t, res, "PROXY"); got != "DIRECT" {
+		t.Errorf("PROXY 的第一项 = %q,想要快照里的 DIRECT", got)
+	}
+
+	d.Selections = nil
+	res, err = New(d).MihomoBuild(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := groupFirst(t, res, "PROXY"); got != "n1" {
+		t.Errorf("没有选中项时 PROXY 的第一项 = %q,想要默认的 n1", got)
+	}
+}
+
+// 白名单端口要按局域网口写入口 nft;没给接口时如实报错(第 4、5 步的 kernelgen 把 system.LANDeviceNames 接进来)。
+func TestMihomoBuildNeedsLanIfaces(t *testing.T) {
+	d := minimalDeps(t, newMemFS(), fakeLists{})
+	prof := d.Profiles.(fakeProfiles)
+	prof.p["bypassPortsMode"] = "whitelist"
+	prof.p["bypassPortsWhitelist"] = "80,443"
+	d.Profiles = prof
+	if _, err := New(d).MihomoBuild(context.Background()); err == nil || !strings.Contains(err.Error(), "局域网接口") {
+		t.Fatalf("err = %v,想要「找不到局域网接口」", err)
+	}
+	d.LANIfaces = func() ([]string, error) { return []string{"br-lan"}, nil }
+	if _, err := New(d).MihomoBuild(context.Background()); err != nil {
+		t.Fatalf("给了局域网口仍然出错: %v", err)
+	}
+}

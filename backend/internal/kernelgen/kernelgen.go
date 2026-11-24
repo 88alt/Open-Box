@@ -65,10 +65,35 @@ type Deps struct {
 	// ConfigDir 放证书(<ConfigDir>/certs/server.{crt,key} 给共享网络入口用)。
 	ConfigDir string
 
-	SystemDNS  func() []string
-	LANIfaces  func() ([]string, error)
-	Selections func() map[string]any // 面板里选中的节点;nil = 没有
-	FS         mihomo.FS
+	SystemDNS func() []string
+	LANIfaces func() ([]string, error)
+	// Selections 是选中项快照({组名: 节点名});nil = 没有。
+	Selections func(ctx context.Context) map[string]any
+	// LiveSelections 问正在运行的内核要各组此刻的选择(Mihomo 的 GET /proxies);读不到返回 error,退到快照。
+	LiveSelections func(ctx context.Context) (map[string]string, error)
+	FS             mihomo.FS
+}
+
+// selections 取装配用的选中项(对齐上游:实时选择优先,读不到用上次切换存下的快照,都没有就是空)。
+// Mihomo 的实时选择里内置出站叫 DIRECT / REJECT,要换成我们自己配置里的内置组名字。
+func (g *Generator) selections(ctx context.Context, groups []any) map[string]any {
+	if g.d.LiveSelections != nil {
+		if now, err := g.d.LiveSelections(ctx); err == nil && len(now) > 0 {
+			builtin := mihomo.BuiltinNames{}
+			if g.d.Compiler != nil {
+				if b, err := g.d.Compiler.BuiltinTags(ctx, groups); err == nil {
+					builtin = b
+				}
+			}
+			return mihomo.SelectionsToTags(now, builtin)
+		}
+	}
+	if g.d.Selections != nil {
+		if sel := g.d.Selections(ctx); len(sel) > 0 {
+			return sel
+		}
+	}
+	return map[string]any{}
 }
 
 // Generator 按需生成某一侧内核的配置。并发安全靠下层(singbox.Generator / mihomo.Compiler)。
@@ -236,12 +261,7 @@ func (g *Generator) MihomoBuild(ctx context.Context) (*mihomo.BuildResult, error
 	if g.d.LANIfaces != nil {
 		lanIfaces, _ = g.d.LANIfaces()
 	}
-	selections := map[string]any{}
-	if g.d.Selections != nil {
-		for k, v := range g.d.Selections() {
-			selections[k] = v
-		}
-	}
+	selections := g.selections(ctx, groups)
 	groupMaps := make([]map[string]any, 0, len(groups))
 	for _, v := range groups {
 		if m, ok := v.(map[string]any); ok {
@@ -312,10 +332,7 @@ func (g *Generator) MihomoCompat(ctx context.Context) ([]string, error) {
 		nodes = append(nodes, m)
 	}
 	_ = recs
-	var selections any
-	if g.d.Selections != nil {
-		selections = g.d.Selections()
-	}
+	selections := g.selections(ctx, groups)
 	return g.d.Compiler.Compatibility(ctx, mihomo.CompatInput{
 		Profile: prof, Nodes: nodes, Groups: groups, ChainNodes: chainNodes(prof), Selections: selections,
 	})

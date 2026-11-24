@@ -34,7 +34,9 @@ type SwitchDeps struct {
 	FS            mihomo.FS
 	Platform      string
 	GeoDir        string
-	Now           func() time.Time
+	// SaveSelections 在切到 Mihomo 成功之后存下这次装配出的选中项(下次内核没在跑时照它装配);可为 nil。
+	SaveSelections func(map[string]any) error
+	Now            func() time.Time
 }
 
 // Service 是内核服务控制(*system.Services 满足)。
@@ -75,7 +77,7 @@ func (d SwitchDeps) Switch(ctx context.Context, kernel string) Result {
 	}
 
 	// 1. 生成目标配置并准备好「写哪些文件」;生成失败时还没有碰任何东西。
-	apply, paths, err := d.stage(ctx, kernel)
+	apply, paths, onSuccess, err := d.stage(ctx, kernel)
 	if err != nil {
 		return Result{Code: 1, Stderr: err.Error()}
 	}
@@ -124,6 +126,12 @@ func (d SwitchDeps) Switch(ctx context.Context, kernel string) Result {
 		got, derr := d.DNS.AfterKernelStart(ctx)
 		warning = dnssync.Note(got, derr)
 	}
+	// 切换成功后记下这一份配置里各组的选择,下次装配(内核没在跑时)照它来。
+	if onSuccess != nil {
+		if err := onSuccess(); err != nil {
+			warning = joinLines(warning, []string{"保存选中项失败: " + err.Error()})
+		}
+	}
 	return Result{OK: true, Code: 0, Warning: warning}
 }
 
@@ -148,7 +156,10 @@ func describe(res system.ActionResult, err error) string {
 }
 
 func joinLines(head string, more []string) string {
-	parts := []string{head}
+	parts := []string{}
+	if head != "" {
+		parts = append(parts, head)
+	}
 	for _, m := range more {
 		if m != "" {
 			parts = append(parts, m)
@@ -176,16 +187,17 @@ func failedReason(checks []Check) string {
 	return "切换前预检没通过:" + strings.Join(bad, " | ")
 }
 
-// stage 生成目标内核的配置,返回「写文件」的动作与要备份的路径。生成失败时什么都不写。
-func (d SwitchDeps) stage(ctx context.Context, kernel string) (func() error, []string, error) {
+// stage 生成目标内核的配置,返回「写文件」的动作、要备份的路径,以及切换成功后才做的事(可为 nil)。
+// 生成失败时什么都不写。
+func (d SwitchDeps) stage(ctx context.Context, kernel string) (apply func() error, paths []string, onSuccess func() error, err error) {
 	if kernel == system.KernelMihomo {
 		profile, err := d.Profile(ctx)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		res, err := d.Gen.MihomoBuild(ctx)
 		if err != nil {
-			return nil, nil, fmt.Errorf("生成 mihomo 配置失败: %w", err)
+			return nil, nil, nil, fmt.Errorf("生成 mihomo 配置失败: %w", err)
 		}
 		dnsMode, _ := nestedString(profile, "dns", "mode")
 		meta := mihomo.ArtifactMeta{
@@ -194,29 +206,33 @@ func (d SwitchDeps) stage(ctx context.Context, kernel string) (func() error, []s
 		}
 		paths := []string{d.MihomoPaths.Config, d.MihomoPaths.Inputs, d.MihomoPaths.EntryBypass, d.MihomoPaths.DNSMasq}
 		fs := d.fs()
+		var save func() error
+		if d.SaveSelections != nil {
+			save = func() error { return d.SaveSelections(res.SelectionsAny()) }
+		}
 		return func() error {
 			return mihomo.WriteArtifacts(fs, d.MihomoPaths, res, meta)
-		}, paths, nil
+		}, paths, save, nil
 	}
 	// 切到 sing-box:生成 → 写本地规则集 → 写 config.json。
 	built, err := d.Gen.SingboxBuild(ctx, d.Sbx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("生成 sing-box 配置失败: %w", err)
+		return nil, nil, nil, fmt.Errorf("生成 sing-box 配置失败: %w", err)
 	}
 	if rep, err := (singbox.Files{SingBox: d.SbxBin, GeoDir: d.GeoDir}).WriteLocalSetsFlip(ctx, built.Config, built.DirectHosts, built.FlipFlags); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	} else if !rep.OK() {
 		var why []string
 		for _, m := range rep.Missing {
 			why = append(why, m.Tag+"("+m.Reason+")")
 		}
-		return nil, nil, fmt.Errorf("规则集还没准备好,未切换: %s", strings.Join(why, "、"))
+		return nil, nil, nil, fmt.Errorf("规则集还没准备好,未切换: %s", strings.Join(why, "、"))
 	}
 	data, err := built.JSON()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return func() error { return d.fs().WriteFile(d.SingBoxConfig, data, 0o600) }, []string{d.SingBoxConfig}, nil
+	return func() error { return d.fs().WriteFile(d.SingBoxConfig, data, 0o600) }, []string{d.SingBoxConfig}, nil, nil
 }
 
 func (d SwitchDeps) fs() mihomo.FS {
