@@ -28,7 +28,7 @@
 - **有意不做**:激活码、会员、市场推广、授权校验等产品边界内的能力(与 panel 有意不引用的 i18n 键一致)。业务优选整体不做(例外 C:设置页卡、概览统计卡、内核按连接证据选路,以及对应的接口、档案字段、三语键都没有)。
 
 ## 状态(2026-11-23)
-M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云端确认;未做:双内核的第 4–7 步(3e 装配本体 3e-1 ~ 3e-5 已全部做完)、「前后端对账缺口」几条、update 第二部分与 M6。总览见 `HANDOFF.md` 第三节。
+M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云端确认;「前后端对账缺口」全部做完;双内核第 1~6 步完成(3e 装配、预检、切换本体、服务脚本核对,含 `selections` 与 `LanIfaces`),只剩第 7 步打包;**剩下未做的只有**第 7 步、`update` 第二部分与 M6 打包发布,三者都卡在「main 上没有打包脚本 / 发布流程」与 `docs/M6.md` 第十二节的维护者确认,另加需真机的项。总览见 `HANDOFF.md` 第三节。
 
 **推送状态(2026-11-25)**:remote 改成 SSH(`git@github-timeflysoon:timeflysoon/Open-Box.git`,用 `~/.ssh/config` 里 timeflysoon 账号的 Host 别名与专属密钥),fetch / push 都通,不再走 https。3e-2 与 3e-5 两批都已推上去,`origin/main` = `dee88ae0`。main 上没有 `.github/workflows`,推送后无 CI 可等(Release 工作流只在 catch-up-upstream)。
 
@@ -490,7 +490,7 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 ### 后端 / core
 
 - core 侧 Mihomo 相关方法 3a~3d 与三个新方法(`mihomoDnsUpstreams`、`dns.fakeIpRange`、`domainUpstreams`)全部完成,方法数 20,`core/HANDOFF.md`、`core/README.md` 同步。
-- 双内核第 1~6 步完成(路径与选择、档案字段、3e-1~3e-5 装配、预检、切换本体、服务脚本核对)。
+- 双内核第 1~6 步完成(路径与选择、档案字段、3e-1~3e-5 装配、预检、切换本体、服务脚本核对);装配的选中项(实时读运行中的 Mihomo → 快照)与入口 nft 的局域网口也已接上。
 - 面板已经在调的接口:后端全部有路由(`docs/ENDPOINTS.md` 已无「缺口」条目)。
 - `route-test` / `terminal-test` 的边角(`context`、`dns.stale`、`kernelDns.chain`)已补齐;`debug` 上游也不认、前端只字未用,不做。
 
@@ -511,5 +511,7 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 4. `dns.stale` 的方向判定:main 看内核链末尾出站的类型是不是 `direct`,上游看 core `builtinTags` 的直连组名。
 5. 概览顶栏「Latest」的版本号取构建时注入的发布 tag;本地 `dev` 构建只显示「Open-Box Latest」,要改成查线上 release tag 时只动 `internal/api/activation`。
 6. 服务脚本的打包路径(`/opt/open-box/etc`、`/opt/open-box/data` vs 后端默认 `/etc/openbox-backend`、`/var/lib/openbox-backend`)要在打包时对齐,已记进 M6。
+7. Mihomo 的选中项:上游切换成功后还会把选择 `PUT /proxies/<组>` 推回正在跑的内核,main 只在装配时把选中项排到组的第一位(效果等价),没推。
+8. 入口 nft 的局域网口:上游取「网络清单」里 `kind=lan` 的接口,main 按「有私有地址」挑(`system.LANDevices`),WAN 口若配了 10/8 之类的地址也会被算进来。
 
 **口径说明**:以上是基于上游面板 `panel/dist` 反推、加上 HANDOFF / STATUS 文档口径做的**功能等价对齐**,不保证与闭源上游逐行一致。
