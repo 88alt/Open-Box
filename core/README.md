@@ -10,14 +10,14 @@
 - 第一次调用先发 `hello`,返回 `implementation:"go-native"`、`protocol:1`、`buildID`;
   自研后端只要求 implementation 为 go-native、protocol 为 1,**不校验 buildID**(只是个构建标识,见 `scripts/build.sh`)
 
-## 方法(共 19 个 + hello)
+## 方法(共 20 个 + hello)
 | 包 | 方法 | 状态 |
 |---|---|---|
 | routing | normalizePolicy normalizeRouting routingFingerprint migrateStoredRouting classes forwardPlan bypassPlan | 已实现(对照基线的金标准测试) |
 | routing | entryPlan | 已实现(含 whitelist,按基线 entryModePlan 对齐) |
 | groups | normalizeGroups builtinTags emitGroups | 已实现(对照基线的金标准测试,含逐字节键序);组类型 urltest / selector / failover / loadbalance,负载均衡的行为见 HANDOFF 第五节授权记录和 loadbalance_test.go |
 | config | configDetailed | 已实现(返回 config / dnsRuleOwners / directHosts / failover,另多带 flipFlags、nativeBypass;对照基线 engine/config.mjs 的 buildConfigDetailed 的金标准测试 + 官方 sing-box check,见下) |
-| mihomo | mihomoProxies mihomoGroups mihomoTargetRules mihomoCompatibility | 已实现(节点 → Mihomo proxies、节点组 → proxy-groups、分流 → rules(规则表分段是推断,见 HANDOFF 第三节)、切换前的兼容性清单 problems(检查范围自研定的);自写向量 + 可选真实 Mihomo `-t`,见 HANDOFF 第三节) |
+| mihomo | mihomoProxies mihomoGroups mihomoTargetRules mihomoCompatibility mihomoDnsUpstreams | 已实现(节点 → Mihomo proxies、节点组 → proxy-groups、分流 → rules(规则表分段是推断,见 HANDOFF 第三节)、切换前的兼容性清单 problems(检查范围自研定的)、两侧 DNS 上游的形状(mihomoDnsUpstreams,给后端装配 Mihomo 的 DNS 段);自写向量 + 可选真实 Mihomo `-t`,见 HANDOFF 第三节) |
 | authz | checkActivationCode activationState authorizationState | 已实现(一律解锁) |
 
 ## 目录
