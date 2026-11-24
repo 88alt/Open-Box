@@ -414,7 +414,7 @@ func TestPatchConcurrent(t *testing.T) {
 func TestPatchNodeScoreWeightsAndIntervalUnit(t *testing.T) {
 	svc, _ := newSvc(t, nil)
 	ctx := context.Background()
-	got, err := svc.Patch(ctx, j(t, `{"nodeScoreWeights":{"latency":70,"download":15,"jitter":15},"bandwidth":{"intervalHours":48,"intervalUnit":"days"}}`))
+	got, err := svc.Patch(ctx, j(t, `{"nodeScoreWeights":{"latency":70,"download":15,"jitter":15},"bandwidth":{"intervalHours":48,"intervalUnit":"days","startHour":23}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,7 +423,7 @@ func TestPatchNodeScoreWeightsAndIntervalUnit(t *testing.T) {
 		t.Fatalf("权重没存上: %v", got["nodeScoreWeights"])
 	}
 	b, _ := got["bandwidth"].(map[string]any)
-	if b["intervalHours"] != 48.0 || b["intervalUnit"] != "days" {
+	if b["intervalHours"] != 48.0 || b["intervalUnit"] != "days" || b["startHour"] != 23.0 {
 		t.Fatalf("周期没存上: %v", got["bandwidth"])
 	}
 	for _, bad := range []string{
@@ -431,6 +431,9 @@ func TestPatchNodeScoreWeightsAndIntervalUnit(t *testing.T) {
 		`{"nodeScoreWeights":{"latency":50,"download":50}}`,
 		`{"nodeScoreWeights":"40/30/30"}`,
 		`{"bandwidth":{"intervalUnit":"weeks"}}`,
+		`{"bandwidth":{"startHour":24}}`,
+		`{"bandwidth":{"startHour":-1}}`,
+		`{"bandwidth":{"startHour":"4"}}`,
 	} {
 		var ve *ValidationError
 		if _, err := svc.Patch(ctx, j(t, bad)); !errors.As(err, &ve) {

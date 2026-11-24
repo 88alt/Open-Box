@@ -922,6 +922,8 @@ export interface OpenboxBandwidthSettings {
   intervalUnit?: 'hours' | 'days'
   // 单次测试最多下载多少 MB(1~1024)
   maxDownloadMB: number
+  // 按「天」测试时每天几点开始(本地时间 0~23,默认 4);按小时测试时不起作用
+  startHour?: number
 }
 
 // GET /api/openbox/bandwidth:后端测速调度的运行情况

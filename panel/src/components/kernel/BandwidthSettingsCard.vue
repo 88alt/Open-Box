@@ -41,6 +41,33 @@
             </template>
           </NumberStepper>
         </div>
+        <div
+          v-if="unit === 'days'"
+          class="flex flex-col gap-1"
+        >
+          <label
+            for="bandwidth-start-hour"
+            class="text-xs font-medium"
+          >
+            {{ $t('bandwidthStartHour') }}
+          </label>
+          <select
+            id="bandwidth-start-hour"
+            v-model.number="startHour"
+            :aria-label="$t('bandwidthStartHour')"
+            class="select select-sm w-24 tabular-nums"
+            :disabled="saving"
+            @change="saveBandwidth"
+          >
+            <option
+              v-for="h in 24"
+              :key="h - 1"
+              :value="h - 1"
+            >
+              {{ String(h - 1).padStart(2, '0') }}:00
+            </option>
+          </select>
+        </div>
         <div class="flex flex-col gap-1">
           <label
             for="bandwidth-download-cap"
@@ -125,6 +152,8 @@ const DEFAULT_HOURS = 12
 const MIN_MB = 1
 const MAX_MB = 1024
 const DEFAULT_MB = 64
+// 按天测试时的默认开始时刻(与后端 DefaultStartHour 一致)
+const DEFAULT_START_HOUR = 4
 const DEFAULT_WEIGHTS: OpenboxNodeScoreWeights = { latency: 40, download: 30, jitter: 30 }
 
 const props = defineProps<{
@@ -148,12 +177,14 @@ const effective = computed<OpenboxBandwidthSettings>(
       intervalHours: DEFAULT_HOURS,
       intervalUnit: 'hours',
       maxDownloadMB: DEFAULT_MB,
+      startHour: DEFAULT_START_HOUR,
     },
 )
 
 const unit = ref<Unit>(effective.value.intervalUnit ?? 'hours')
 const period = ref<number>(toDisplay(effective.value.intervalHours, unit.value))
 const maxDownloadMB = ref<number>(effective.value.maxDownloadMB)
+const startHour = ref<number>(effective.value.startHour ?? DEFAULT_START_HOUR)
 const saving = ref(false)
 const nodeCount = computed(() => status.value?.nodes ?? 0)
 
@@ -161,6 +192,7 @@ watch(effective, (s) => {
   unit.value = s.intervalUnit ?? 'hours'
   period.value = toDisplay(s.intervalHours, unit.value)
   maxDownloadMB.value = s.maxDownloadMB
+  startHour.value = s.startHour ?? DEFAULT_START_HOUR
 })
 
 const hoursNow = () => Math.round(Number(period.value) * (unit.value === 'days' ? 24 : 1))
@@ -187,6 +219,7 @@ const resetBandwidthFields = () => {
   unit.value = effective.value.intervalUnit ?? 'hours'
   period.value = toDisplay(effective.value.intervalHours, unit.value)
   maxDownloadMB.value = effective.value.maxDownloadMB
+  startHour.value = effective.value.startHour ?? DEFAULT_START_HOUR
 }
 
 const saveBandwidth = async () => {
@@ -204,7 +237,12 @@ const saveBandwidth = async () => {
   saving.value = true
   try {
     await props.patchProfile({
-      bandwidth: { intervalHours, intervalUnit: unit.value, maxDownloadMB: cappedMB },
+      bandwidth: {
+        intervalHours,
+        intervalUnit: unit.value,
+        maxDownloadMB: cappedMB,
+        startHour: Math.min(23, Math.max(0, Math.round(Number(startHour.value)) || 0)),
+      },
     })
   } catch (e) {
     resetBandwidthFields()

@@ -2384,11 +2384,13 @@ const zhTW: LANG_MESSAGE = {
   nodeScoreWeightSecondDivider: '頻寬與抖動分界',
   nodeScoreWeightValues: '延遲 {latency}%，頻寬 {download}%，抖動 {jitter}%',
   bandwidthDays: '天',
+  bandwidthStartHour: '開始時間',
   bandwidthPeriodUnit: '頻寬測試週期單位',
   bandwidthPeriodInvalid: '請輸入至少 1 小時的有效週期。',
   bandwidthSettingsHelpLabel: '{title}說明',
   bandwidthHelpCurrent: '目前設定',
   bandwidthHelpCurrentTest: '頻寬測試每 {hours} 小時，每次最多 {maxMB} MB',
+  bandwidthHelpCurrentTestDaily: '頻寬測試每 {days} 天（{hour} 開始），每次最多 {maxMB} MB',
   bandwidthHelpEditLocation: '在「設定 → 後端設定 → {section}」修改',
   bandwidthHelpSwitchOn: '編輯中的開關已開啟',
   bandwidthHelpSwitchOff: '編輯中的開關已關閉',
@@ -2397,7 +2399,7 @@ const zhTW: LANG_MESSAGE = {
   bandwidthSettingsHelpExampleHeading: '範例',
   bandwidthSettingsHelpIntro:
     '路由器透過節點下載測試資料，估算節點的下載速度。啟用定期頻寬檢查的訂閱和啟用節點評分的群組會將符合條件的節點納入測速。同一個實際節點出現在多個訂閱或群組裡，也共用一次測試。',
-  bandwidthSettingsHelpInterval: '決定每個符合條件的節點隔多久安排一次測速。',
+  bandwidthSettingsHelpInterval: '決定每個符合條件的節點隔多久安排一次測速；按天測試時可指定每天幾點開始。',
   bandwidthSettingsHelpCap: '限制一次測速最多下載多少測試資料。測速可能提前結束。',
   bandwidthSettingsHelpExample:
     '週期設為 2 小時，單次上限設為 64 MB。若有 99 個去重後的節點，每個節點每天安排 12 次。每次都用滿上限時，99 × 12 × 64 MB 約為 76.03 GB/天。首次或新增節點測速、協定開銷和機場流量倍率另計。',

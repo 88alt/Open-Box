@@ -2516,11 +2516,14 @@ const en = {
   nodeScoreWeightSecondDivider: 'Divider between bandwidth and jitter',
   nodeScoreWeightValues: 'Latency {latency}%, bandwidth {download}%, jitter {jitter}%',
   bandwidthDays: 'days',
+  bandwidthStartHour: 'Start time',
   bandwidthPeriodUnit: 'Bandwidth test interval unit',
   bandwidthPeriodInvalid: 'Enter a valid interval of at least one hour.',
   bandwidthSettingsHelpLabel: '{title} help',
   bandwidthHelpCurrent: 'Current settings',
   bandwidthHelpCurrentTest: 'Bandwidth test every {hours} h, up to {maxMB} MB per test',
+  bandwidthHelpCurrentTestDaily:
+    'Bandwidth test every {days} d (from {hour}), up to {maxMB} MB per test',
   bandwidthHelpEditLocation: 'Edit in Settings → Backend Settings → {section}',
   bandwidthHelpSwitchOn: 'Switch on in this draft',
   bandwidthHelpSwitchOff: 'Switch off in this draft',
@@ -2529,7 +2532,8 @@ const en = {
   bandwidthSettingsHelpExampleHeading: 'Example',
   bandwidthSettingsHelpIntro:
     'The router downloads test data through eligible nodes to estimate download speed. Subscriptions with periodic bandwidth checks and groups with node scoring can add nodes to the test schedule. The same node shares one test across subscriptions and groups.',
-  bandwidthSettingsHelpInterval: 'How often the router schedules a test for each eligible node.',
+  bandwidthSettingsHelpInterval:
+    'How often the router schedules a test for each eligible node. Daily intervals can choose the start hour.',
   bandwidthSettingsHelpCap:
     'The maximum amount of data one test may download. A test can end before reaching the limit.',
   bandwidthSettingsHelpExample:

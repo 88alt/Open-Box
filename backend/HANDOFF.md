@@ -1,7 +1,7 @@
 自研后端交接笔记(第 2 版,只管 backend;core 另见 core/HANDOFF.md)
 
 写给下一位接手后端的 AI。读完这份,再按顺序读 backend/README.md、backend/docs/DESIGN.md、backend/STATUS.md、backend/docs/ENDPOINTS.md,
-就可以接着做,不用反复问维护者。进度要看两处并对账:backend/STATUS.md 和 main 下的提交记录(git log -- backend);本文第三节的进度是 2026-11-23 的快照(对齐到上游 v0.1.478)。
+就可以接着做,不用反复问维护者。进度要看两处并对账:backend/STATUS.md 和 main 下的提交记录(git log -- backend);本文第三节的进度是 2026-11-23 的快照(后端对齐到上游 v0.1.481 的接口与文案键)。
 
 
 # 零、先读这一节
@@ -60,6 +60,7 @@ Go 静态编译(backend/go.mod 现为 go 1.25.4,core/go.mod 是 1.25.12,统一�
 [ ] 未做:
     - 双内核(sing-box / Mihomo)与内核切换:第 1、2 步和 core 的 3a–3d 已做,后端 3e(Go 版 mihomo.yaml 装配,拆成 3e-1~5)做了 3e-1(`internal/mihomo` 的输入与小工具),3e-2 卡在 core 新方法 `mihomo/mihomoDnsUpstreams`(STATUS「需要 core 配合」里),3e-3~5 和第 4–7 步没做。
     - 前后端对账缺口(STATUS 同名一节):kernel/switch(profile/target-routing、subscriptions/updates 已做)。
+    - 上游 v0.1.481 新增两项:带宽「按天测试指定开始时刻」(`bandwidth.startHour`)已做;DNS 页「FakeIP 网段」(`dns.fakeIpRange`)卡在 core(STATUS「需要 core 配合」同名条目)。
     - update 第二部分与 M6 打包发布:设计草案在 docs/M6.md,等维护者确认。
     - 真机联调(维护者做):所有 [~] 条目。
 有意不做:激活 / 授权;例外 A、B、C(见 core/HANDOFF.md 与 STATUS「对齐口径」):教程、市场推广、AI 中转、业务优选整体、overview-links(上游概览顶栏的外链,改显示版本号)等。

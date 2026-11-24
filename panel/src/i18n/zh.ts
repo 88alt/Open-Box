@@ -2383,11 +2383,13 @@ const zh: LANG_MESSAGE = {
   nodeScoreWeightSecondDivider: '带宽与抖动分界',
   nodeScoreWeightValues: '延时 {latency}%，带宽 {download}%，抖动 {jitter}%',
   bandwidthDays: '天',
+  bandwidthStartHour: '开始时间',
   bandwidthPeriodUnit: '带宽测试周期单位',
   bandwidthPeriodInvalid: '请输入至少 1 小时的有效周期。',
   bandwidthSettingsHelpLabel: '{title}说明',
   bandwidthHelpCurrent: '当前设置',
   bandwidthHelpCurrentTest: '带宽测试每 {hours} 小时，每次最多 {maxMB} MB',
+  bandwidthHelpCurrentTestDaily: '带宽测试每 {days} 天（{hour} 开始），每次最多 {maxMB} MB',
   bandwidthHelpEditLocation: '在「设置 → 后端设置 → {section}」修改',
   bandwidthHelpSwitchOn: '当前编辑的开关已开启',
   bandwidthHelpSwitchOff: '当前编辑的开关已关闭',
@@ -2396,7 +2398,7 @@ const zh: LANG_MESSAGE = {
   bandwidthSettingsHelpExampleHeading: '示例',
   bandwidthSettingsHelpIntro:
     '路由器通过节点下载测试数据，估算节点的下载速度。开启定期带宽检查的订阅和开启节点评分的分组会将符合条件的节点纳入测速。同一个实际节点出现在多个订阅或分组里，也共用一次测试。',
-  bandwidthSettingsHelpInterval: '决定每个符合条件的节点隔多久安排一次测速。',
+  bandwidthSettingsHelpInterval: '决定每个符合条件的节点隔多久安排一次测速；按天测试时可指定每天几点开始。',
   bandwidthSettingsHelpCap: '限制一次测速最多下载多少测试数据。测速可能提前结束。',
   bandwidthSettingsHelpExample:
     '周期设为 2 小时，单次上限设为 64 MB。若有 99 个去重后的节点，每个节点每天安排 12 次。每次都用满上限时，99 × 12 × 64 MB 约为 76.03 GB/天。首次或新增节点测速、协议开销和机场流量倍率另计。',

@@ -274,13 +274,13 @@
 测速与调度:
 
 - 排队只是记在内存里,真正测速由后台循环做:`Loop` 每 15 秒一轮,先按周期入队、再取队里一个节点测一次(同一时刻只测一个)。进程启动时先读回上次保存的测量。
-- **按周期入队**(`EnqueueDue`):只排「订阅启用 + 订阅开了 `bandwidthCheck`」的节点,且距上次完成已超过 `intervalHours`(从没测过的直接排);已在队里的跳过。
+- **按周期入队**(`EnqueueDue`):只排「订阅启用 + 订阅开了 `bandwidthCheck`」的节点,且已到下一次测速时刻(从没测过的直接排;已在队里的跳过):`intervalUnit` 是 `hours` 时是距上次完成满 `intervalHours`;是 `days` 时是上次完成那天(本地时区的日历日)往后数 `round(intervalHours / 24)` 天(至少 1 天)、当天 `startHour` 点整(`Settings.NextDue`,按日历日期推算,夏令时切换日也还是当地整点)。
 - **怎么测**:临时起一个 sing-box 出站,经被测节点下载,读满 `maxDownloadMB` 就停;下载地址取档案 `testUrl`,没有就用默认的 Cloudflare 测速地址。超时按上限估算,最少 30 秒、最多 3 分钟。读满上限时 `lowerBound` 为 true,表示真实速度不低于 `mbps`。节点找不到、配置生成失败、探测失败都记成一次失败样本(`failed`,带 `error` 和 `reason`),并写进 `lastError`;下一次成功会清掉 `lastError`。没有装配测速器时一律记失败(`measurer not configured`),不会悄悄直连外网。
 - **历史**:每个节点最多保留 48 条样本,落盘到状态目录的 `bandwidth-history.json`。保留时长跟随档案 `traffic.keepMonths`(按每月 30 天,取 1~24 个月,最少 24 小时),不写死 24 小时(对齐上游 v0.1.405 的口径)。
 
 相关的校验和字段(不在这三个接口里,但配套):
 
-- **档案 `bandwidth`**:`{intervalHours, intervalUnit, maxDownloadMB}`,`intervalHours` 是 1~720 的整数(最长 30 天;面板可按「天」输入,折成小时存)、`intervalUnit` 是 `hours` / `days`(只决定面板怎么显示,默认 `hours`)、`maxDownloadMB` 是 1~1024 的整数,默认 6 小时和 50 MB;缺哪个键就补默认;不是对象、单位不认得或超出范围回 400。保存时会规整成这三个键。上限 720 小时是按「面板有天单位」推断的,上游 v0.1.472 的实际上限未核实。这个键是测速参数,不进 sing-box 配置,已列入 `profileKeyIgnored`,改它不会让服务状态误报「需要重启」。
+- **档案 `bandwidth`**:`{intervalHours, intervalUnit, maxDownloadMB, startHour}`,`intervalHours` 是 1~720 的整数(最长 30 天;面板可按「天」输入,折成小时存)、`intervalUnit` 是 `hours` / `days`(只决定面板怎么显示,默认 `hours`)、`maxDownloadMB` 是 1~1024 的整数,`startHour`(对齐上游 v0.1.481)是 0~23 的整数、按天测试时每天几点开始(本地时间,默认 4,按小时测试时不起作用);默认 6 小时、50 MB、4 点;缺哪个键就补默认;不是对象、单位不认得、`startHour` 不是 0~23 的整数或其它项超出范围回 400。保存时会规整成这四个键。上限 720 小时是按「面板有天单位」推断的,上游 v0.1.472 的实际上限未核实。这个键是测速参数,不进 sing-box 配置,已列入 `profileKeyIgnored`,改它不会让服务状态误报「需要重启」。
 - **档案 `nodeScoreWeights`**:`{latency, download, jitter}`,节点评分三项权重(百分点)。三项必须齐全,每项 0~100 的数(可以是 0、可以有小数,按 10 位小数规整),合计 100(容许 1e-6 的浮点误差);没设就是 40 / 30 / 30;缺项、越界、合计不是 100 或不是对象回 400。`/api/openbox/node-quality` 的节点与订阅分数按它算:某项权重为 0 就不计入,测到的项权重全是 0 时按等权重算。同时它也写进内核配置:档案整份交给 core,core 把它写成开着带宽择优的 urltest / loadbalance(含故障转移多节点自动页签的内部 urltest)的 `node_score_weights`(补丁版 sing-box 的字段,`{latency, download, jitter}`);没开带宽、`disableBandwidth` 的客户端配置、权重不合法时不写,内核用固定的 40 / 30 / 30。所以改它会在 `pendingRestart` 里记「节点」(`bandwidth` 档案键仍不进配置、不提示重启)。
 - **节点组 `bandwidth`**:必须是布尔(启用带宽择优),可以不带;其他类型回 400「节点组 … 的 bandwidth 必须是布尔」。组上为真时由 core 把 `bandwidth: true` 写进 urltest / loadbalance 出站(和故障转移多节点自动页签里的内部 urltest),内核自己择优,**后端不改组成员顺序**。客户端配置的 `disableBandwidth` 选项不写。
 - **订阅 `bandwidthCheck`**:创建和修改订阅时落盘,只决定自动入队,不进 sing-box 配置。

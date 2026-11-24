@@ -366,6 +366,7 @@ func normalizeBandwidth(clean map[string]any) error {
 		"intervalHours": float64(norm.IntervalHours),
 		"intervalUnit":  norm.IntervalUnit,
 		"maxDownloadMB": float64(norm.MaxDownloadMB),
+		"startHour":     float64(norm.StartHour),
 	}
 	return nil
 }

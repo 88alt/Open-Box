@@ -73,7 +73,7 @@ func (s *Service) pruneHistoryLocked(ctx context.Context) {
 	}
 }
 
-// EnqueueDue 把「启用定期检查」且距上次完成已超过 intervalHours 的节点排进队。
+// EnqueueDue 把「启用定期检查」且已到下一次测速时刻(Settings.NextDue:按小时是距上次完成满 intervalHours,按天是隔 N 天后的 startHour 点)的节点排进队。
 func (s *Service) EnqueueDue(ctx context.Context) (int, error) {
 	settings, err := s.loadSettings(ctx)
 	if err != nil {
@@ -82,10 +82,6 @@ func (s *Service) EnqueueDue(ctx context.Context) (int, error) {
 	nodes, err := s.listNodes(ctx)
 	if err != nil {
 		return 0, err
-	}
-	interval := time.Duration(settings.IntervalHours) * time.Hour
-	if interval < time.Hour {
-		interval = time.Hour
 	}
 	now := s.now()
 	ts := now.UnixMilli()
@@ -106,7 +102,7 @@ func (s *Service) EnqueueDue(ctx context.Context) (int, error) {
 			continue
 		}
 		m := s.measures[node.Name]
-		if m.CompletedAt > 0 && now.Sub(time.UnixMilli(m.CompletedAt)) < interval {
+		if m.CompletedAt > 0 && now.Before(settings.NextDue(time.UnixMilli(m.CompletedAt).In(now.Location()))) {
 			continue
 		}
 		s.pending[node.Name] = queueItem{SubID: node.SubscriptionID, RequestedAt: ts, Manual: false}

@@ -27,7 +27,7 @@
           v-if="section === 'nodeScoreWeights' && mode && profile"
           class="font-medium tabular-nums"
         >
-          {{ $t('bandwidthHelpCurrentTest', testParams) }}
+          {{ $t(currentTestKey, testParams) }}
         </p>
         <p class="text-base-content/75 text-xs">
           {{ $t('bandwidthHelpEditLocation', { section: editLocation }) }}
@@ -186,10 +186,26 @@ const editLocation = computed(() =>
     : t(props.section),
 )
 
-const testParams = computed(() => ({
-  hours: props.profile?.bandwidth?.intervalHours ?? 12,
-  maxMB: props.profile?.bandwidth?.maxDownloadMB ?? 64,
-}))
+const testParams = computed(() => {
+  const b = props.profile?.bandwidth
+  const hours = b?.intervalHours ?? 12
+  const maxMB = b?.maxDownloadMB ?? 64
+  if (b?.intervalUnit === 'days') {
+    const h = b.startHour
+    const hour = Number.isInteger(h) && Number(h) >= 0 && Number(h) <= 23 ? Number(h) : 4
+    return {
+      days: Math.max(1, Math.round(hours / 24)),
+      hour: `${String(hour).padStart(2, '0')}:00`,
+      maxMB,
+    }
+  }
+  return { hours, maxMB }
+})
+const currentTestKey = computed(() =>
+  props.profile?.bandwidth?.intervalUnit === 'days'
+    ? 'bandwidthHelpCurrentTestDaily'
+    : 'bandwidthHelpCurrentTest',
+)
 
 // 「当前设置」一行:档案里已保存的值(不是输入框里还没保存的草稿)
 const currentText = computed(() => {
@@ -197,7 +213,7 @@ const currentText = computed(() => {
   const p = props.profile
   if (!p) return t('bandwidthHelpUnavailable')
   if (props.section === 'bandwidthSettingsTitle') {
-    return t('bandwidthHelpCurrentTest', testParams.value)
+    return t(currentTestKey.value, testParams.value)
   }
   const w = p.nodeScoreWeights ?? { latency: 40, download: 30, jitter: 30 }
   return t('nodeScoreWeightValues', { ...w })
