@@ -137,6 +137,9 @@ func (b *Built) JSON() ([]byte, error) {
 	return json.Marshal(b.Config)
 }
 
+// ClashSecret 取(没有就生成并保存)内核控制接口的密钥。双内核切换的预检与装配也要用它。
+func (g *Generator) ClashSecret() (string, error) { return g.clashSecret() }
+
 // clashSecret 取(没有就生成并保存)内核控制接口的密钥:重启之后保持不变,面板才连得上。
 func (g *Generator) clashSecret() (string, error) {
 	var rt struct {
