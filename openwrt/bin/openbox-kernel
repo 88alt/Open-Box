@@ -34,8 +34,10 @@ openbox_kernel_mem_env() {
 	OPENBOX_KERNEL_GOGC="${GOGC:-}"
 	[ -n "$OPENBOX_KERNEL_GOMEMLIMIT" ] && return 0
 
-	_ob_mem_kb=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null)
-	for _ob_cg in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory/memory.limit_in_bytes /sys/fs/cgroup/memory.limit_in_bytes; do
+	_ob_meminfo=${OPENBOX_MEMINFO_PATH:-/proc/meminfo}
+	_ob_cg_root=${OPENBOX_CGROUP_ROOT:-/sys/fs/cgroup}
+	_ob_mem_kb=$(awk '/^MemTotal:/ {print $2}' "$_ob_meminfo" 2>/dev/null)
+	for _ob_cg in "$_ob_cg_root/memory.max" "$_ob_cg_root/memory/memory.limit_in_bytes" "$_ob_cg_root/memory.limit_in_bytes"; do
 		[ -r "$_ob_cg" ] || continue
 		_ob_cg_kb=$(awk '$1 ~ /^[0-9]+$/ && $1 > 0 && $1 < 1125899906842624 {printf "%.0f", $1 / 1024}' "$_ob_cg" 2>/dev/null)
 		if [ -n "$_ob_cg_kb" ] && [ "$_ob_cg_kb" -gt 0 ]; then
@@ -47,30 +49,37 @@ openbox_kernel_mem_env() {
 	case "$_ob_mem_kb" in
 		''|*[!0-9]*) return 0 ;;
 	esac
+	[ "$_ob_mem_kb" -gt 0 ] || return 0
 
-	if [ "$_ob_mem_kb" -lt 393216 ]; then
-		case "$OPENBOX_KERNEL" in
-			mihomo)
-				OPENBOX_KERNEL_GOMEMLIMIT=96MiB
-				[ -n "$OPENBOX_KERNEL_GOGC" ] || OPENBOX_KERNEL_GOGC=30
-				;;
-			*)
-				OPENBOX_KERNEL_GOMEMLIMIT=72MiB
-				[ -n "$OPENBOX_KERNEL_GOGC" ] || OPENBOX_KERNEL_GOGC=35
-				;;
-		esac
-	elif [ "$_ob_mem_kb" -lt 786432 ]; then
-		case "$OPENBOX_KERNEL" in
-			mihomo)
-				OPENBOX_KERNEL_GOMEMLIMIT=144MiB
-				[ -n "$OPENBOX_KERNEL_GOGC" ] || OPENBOX_KERNEL_GOGC=40
-				;;
-			*)
-				OPENBOX_KERNEL_GOMEMLIMIT=112MiB
-				[ -n "$OPENBOX_KERNEL_GOGC" ] || OPENBOX_KERNEL_GOGC=50
-				;;
-		esac
-	fi
+	case "${OPENBOX_KERNEL:-sing-box}" in
+		mihomo)
+			if [ "$_ob_mem_kb" -lt 393216 ]; then
+				OPENBOX_KERNEL_GOMEMLIMIT=96MiB; _ob_default_gogc=30
+			elif [ "$_ob_mem_kb" -lt 786432 ]; then
+				OPENBOX_KERNEL_GOMEMLIMIT=144MiB; _ob_default_gogc=40
+			elif [ "$_ob_mem_kb" -lt 1572864 ]; then
+				OPENBOX_KERNEL_GOMEMLIMIT=224MiB; _ob_default_gogc=50
+			elif [ "$_ob_mem_kb" -lt 3145728 ]; then
+				OPENBOX_KERNEL_GOMEMLIMIT=320MiB; _ob_default_gogc=60
+			else
+				OPENBOX_KERNEL_GOMEMLIMIT=512MiB; _ob_default_gogc=75
+			fi
+			;;
+		*)
+			if [ "$_ob_mem_kb" -lt 393216 ]; then
+				OPENBOX_KERNEL_GOMEMLIMIT=72MiB; _ob_default_gogc=35
+			elif [ "$_ob_mem_kb" -lt 786432 ]; then
+				OPENBOX_KERNEL_GOMEMLIMIT=112MiB; _ob_default_gogc=50
+			elif [ "$_ob_mem_kb" -lt 1572864 ]; then
+				OPENBOX_KERNEL_GOMEMLIMIT=176MiB; _ob_default_gogc=60
+			elif [ "$_ob_mem_kb" -lt 3145728 ]; then
+				OPENBOX_KERNEL_GOMEMLIMIT=256MiB; _ob_default_gogc=75
+			else
+				OPENBOX_KERNEL_GOMEMLIMIT=384MiB; _ob_default_gogc=80
+			fi
+			;;
+	esac
+	[ -n "$OPENBOX_KERNEL_GOGC" ] || OPENBOX_KERNEL_GOGC="$_ob_default_gogc"
 }
 
 openbox_kernel_exec() {
