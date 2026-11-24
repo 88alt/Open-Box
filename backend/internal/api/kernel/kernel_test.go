@@ -34,7 +34,15 @@ func newMux(t *testing.T, compatible func(context.Context) []string) *http.Serve
 		},
 	})
 	mux := http.NewServeMux()
-	Register(mux, Deps{Engine: engine, Compatible: compatible})
+	Register(mux, Deps{
+		Engine: engine, Compatible: compatible,
+		Switch: func(_ context.Context, k string) kernelswitch.Result {
+			if k == "bogus" {
+				return kernelswitch.Result{Code: 1, Stderr: "不支持"}
+			}
+			return kernelswitch.Result{OK: true, Code: 0}
+		},
+	})
 	return mux
 }
 
@@ -148,6 +156,33 @@ func TestCompatibilityShape(t *testing.T) {
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/openbox/kernel/mihomo/compatibility", nil))
 	if strings.TrimSpace(rec.Body.String()) != `{"blockers":[],"problems":[]}` {
 		t.Fatalf("body = %s", rec.Body.String())
+	}
+}
+
+func TestSwitchEndpoint(t *testing.T) {
+	mux := newMux(t, nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/openbox/kernel/switch", strings.NewReader(`{"kernel":"mihomo"}`)))
+	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != `{"ok":true,"code":0,"stderr":""}` {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+	}
+	// 内核名不合法:400,不会调到切换。
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/openbox/kernel/switch", strings.NewReader(`{"kernel":"bogus"}`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+	}
+	// 坏 JSON:400。
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/openbox/kernel/switch", strings.NewReader(`{`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("code=%d", rec.Code)
+	}
+	// GET 不允许。
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/openbox/kernel/switch", nil))
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("code=%d", rec.Code)
 	}
 }
 

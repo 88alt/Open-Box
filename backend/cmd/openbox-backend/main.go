@@ -526,8 +526,20 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			return true, []string{"切换时先撤销 dnsmasq 接管,新内核起来后按 dns.mode 重新对齐"}, nil
 		},
 	})
+	switcher := kernelswitch.SwitchDeps{
+		Engine: kernelSwitch, Gen: kg, Sbx: gen, SbxBin: cfg.SingBox, Profile: profileSvc.Get,
+		Services: svcCtl, ServiceName: cfg.CoreService, DNS: dnsSync,
+		KernelFile: cfg.RouterKernelFile(), SingBoxConfig: filepath.Join(cfg.ConfigDir, "config.json"),
+		MihomoPaths: mihomo.ArtifactPaths{
+			Config: cfg.MihomoConfigFile(), Inputs: cfg.MihomoInputsFile(),
+			EntryBypass: cfg.MihomoEntryBypassFile(), RouterKernel: cfg.RouterKernelFile(),
+			DNSMasq: cfg.MihomoDnsmasqFile(),
+		},
+		Platform: platformName(initKind), GeoDir: cfg.GeoDir,
+	}
 	kernelapi.Register(srv.Mux(), kernelapi.Deps{
 		Engine: kernelSwitch,
+		Switch: switcher.Switch,
 		Compatible: func(ctx context.Context) []string {
 			problems, err := kg.MihomoCompat(ctx)
 			if err != nil {
