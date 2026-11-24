@@ -226,7 +226,7 @@ func TestDNSGoldenAgainstUpstream(t *testing.T) {
 				"fallback": FlipFallbackTag, "bypassTag": FlipBypassTag("geoip-cn"), "needTag": FlipNeedTag("geoip-cn"), "needFixed": FlipNeedFixed,
 				"on": FlipFlagOn, "off": FlipFlagOff, "content": []string{FlipFlagContent(true), FlipFlagContent(false)},
 				"placeholderSource": FlipPlaceholderSource(), "placeholderSrs": FlipPlaceholderSRSBase64, "placeholder": FlipBypassPlaceholder,
-				"fakeIpCachePath": FakeIPCachePath("/var/lib/openbox/cache.db"), "v4": FakeIPV4, "v6": FakeIPV6,
+				"fakeIpCachePath": FakeIPCachePath("/var/lib/openbox/cache.db", nil), "v4": FakeIPV4, "v6": FakeIPV6,
 			})
 			if !reflect.DeepEqual(got, want) {
 				report(i, c.Fn, c.Args, got, want)

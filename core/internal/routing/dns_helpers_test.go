@@ -34,7 +34,7 @@ func TestFakeIPCachePath(t *testing.T) {
 		"":                      suffix,
 		`C:\x y\c.db`:           `C:\x y\c.db` + suffix, // base 本身原样,不被替换
 	} {
-		if got := FakeIPCachePath(in); got != want {
+		if got := FakeIPCachePath(in, nil); got != want {
 			t.Errorf("FakeIPCachePath(%q) = %q,想要 %q", in, got, want)
 		}
 	}

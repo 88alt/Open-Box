@@ -348,6 +348,11 @@ func BuildDetailed(args any) (map[string]any, error) {
 		holes = append(append([]any{}, localSubnets...), TunV4Net, TunV6Net)
 	}
 	fakeIP := routing.DNSFakeIPEnabled(profile)
+	if fakeIP {
+		// v4 池改过网段(面板「FakeIP 网段」)时可能落在 192.168/16 这类被排除的私网里,挖出来才进得了 TUN;
+		// 缺省池 198.19.0.0/16 本来就不在排除表里,挖洞是空操作,老档案的输出不变。
+		holes = append(holes, routing.FakeIPRange(profile))
+	}
 	if fakeIP && routing.IPv6ProxyMode(profile) == "node" {
 		holes = append(holes, routing.FakeIPV6)
 	}
@@ -524,7 +529,7 @@ func BuildDetailed(args any) (map[string]any, error) {
 	}
 	cachePath := cacheFilePath
 	if fakeIP {
-		cachePath = routing.FakeIPCachePath(cacheFilePath)
+		cachePath = routing.FakeIPCachePath(cacheFilePath, profile)
 	}
 	if fakeIP {
 		for _, o := range outbounds {

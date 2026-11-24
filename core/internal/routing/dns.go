@@ -3,7 +3,9 @@ package routing
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"regexp"
+	"strings"
 
 	"github.com/timeflysoon/Open-Box/core/internal/clientroutes"
 	"github.com/timeflysoon/Open-Box/core/internal/dnsrewrite"
@@ -37,9 +39,28 @@ const (
 var localSuffixes = []string{".lan", ".local", ".home", ".internal", ".home.arpa"}
 
 // FakeIPCachePath:按地址池隔离缓存文件(旧内核清理单栈 FakeIP 缓存时缺失的 IPv6 bucket 会使事务回滚;
-// 升级换池后也不会继续返回旧占位地址)。
-func FakeIPCachePath(base string) string {
-	return base + ".fakeip-" + regexp.MustCompile(`[^a-zA-Z0-9]`).ReplaceAllString(FakeIPV4+"-"+FakeIPV6, "_")
+// 升级换池后也不会继续返回旧占位地址)。池子取档案里此刻生效的那份(见 FakeIPRange)。
+func FakeIPCachePath(base string, profile any) string {
+	pool := FakeIPRange(profile) + "-" + FakeIPV6
+	return base + ".fakeip-" + regexp.MustCompile(`[^a-zA-Z0-9]`).ReplaceAllString(pool, "_")
+}
+
+// FakeIPRange:v4 的 fake-ip 地址池(sing-box 的 inet4_range)。档案 dns.fakeIpRange 合法时用它,
+// 否则用缺省 198.19.0.0/16。合法 = IPv4 CIDR、掩码 /15~/24(与面板校验同一口径),主机位非零的按该掩码
+// 的网络地址写进配置(sing-box 只收网络地址,写错会让整份配置起不来);IPv6 池没有公开材料,不跟着改。
+func FakeIPRange(profile any) string {
+	raw, ok := jsx.Get(jsx.Get(profile, "dns"), "fakeIpRange").(string)
+	if !ok {
+		return FakeIPV4
+	}
+	p, err := netip.ParsePrefix(strings.TrimSpace(raw))
+	if err != nil || !p.Addr().Is4() {
+		return FakeIPV4
+	}
+	if p.Bits() < 15 || p.Bits() > 24 {
+		return FakeIPV4
+	}
+	return p.Masked().String()
 }
 
 // DNSStrategy:内核解析的地址族。没开 IPv6 只要 A(路由器上 v6 出不去)。
@@ -616,7 +637,7 @@ func BuildDNS(profile any, o DNSOptions) (DNSResult, error) {
 	}
 	if fakeIP {
 		// v6 占位段只在「代理也管 v6」(交给节点)时给;降级和不进内核都不给——不进内核时终端拿到占位 v6 会直接往 WAN 发。
-		fs := map[string]any{"type": "fakeip", "tag": fakeIPTag, "inet4_range": FakeIPV4}
+		fs := map[string]any{"type": "fakeip", "tag": fakeIPTag, "inet4_range": FakeIPRange(profile)}
 		if v6mode == "node" {
 			fs["inet6_range"] = FakeIPV6
 		}
