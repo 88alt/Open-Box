@@ -58,7 +58,7 @@ Go 静态编译(backend/go.mod 现为 go 1.25.4,core/go.mod 是 1.25.12,统一�
 [~] M4 自动化:订阅定时更新、failover*、延迟历史采集、带宽择优(重写后的版本;节点评分权重 2026-11-23 起写进内核配置,core 的 `node_score_weights`,后端改权重提示重启,待真机)。
 [~] M5 系统运维:deploy*、rollback、factory-reset、update 第一部分(status / check / notes)、时区、backup。
 [ ] 未做:
-    - 双内核(sing-box / Mihomo)与内核切换:第 1、2 步和 core 的 3a–3d 已做,后端 3e(Go 版 mihomo.yaml 装配)和第 4–7 步没做。
+    - 双内核(sing-box / Mihomo)与内核切换:第 1、2 步和 core 的 3a–3d 已做,后端 3e(Go 版 mihomo.yaml 装配,拆成 3e-1~5)做了 3e-1(`internal/mihomo` 的输入与小工具),3e-2~5 和第 4–7 步没做。
     - 前后端对账缺口(STATUS 同名一节):kernel/switch(profile/target-routing、subscriptions/updates 已做)。
     - update 第二部分与 M6 打包发布:设计草案在 docs/M6.md,等维护者确认。
     - 真机联调(维护者做):所有 [~] 条目。

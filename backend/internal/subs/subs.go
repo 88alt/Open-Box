@@ -499,6 +499,9 @@ func validateAutoUpdate(m map[string]any) error {
 	return intIn("hour", 0, 23, true)
 }
 
+// ValidateNodeDNS 校验一份订阅的节点 DNS({url, bootstrap}),给别的包(装配 Mihomo 配置)复用同一套规则。
+func ValidateNodeDNS(m map[string]any) error { return validateNodeDNS(m) }
+
 func validateNodeDNS(m map[string]any) error {
 	if m == nil {
 		return nil
