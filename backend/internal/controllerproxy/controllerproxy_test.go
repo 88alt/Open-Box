@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -15,6 +16,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/timeflysoon/Open-Box/backend/internal/system"
 )
 
 const wsGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -335,5 +338,33 @@ func TestFileResolverCachesAndPicksUpChanges(t *testing.T) {
 	}
 	if _, err := FileResolver(filepath.Join(t.TempDir(), "nope.json"))(); err == nil {
 		t.Error("没有配置文件应报错")
+	}
+}
+
+// 设备跑 mihomo 时,控制接口要从 mihomo.yaml 里读(真机上只读 config.json 会让代理页整片 502)。
+func TestKernelResolverPicksFileByKernel(t *testing.T) {
+	dir := t.TempDir()
+	sbx := filepath.Join(dir, "config.json")
+	mih := filepath.Join(dir, "mihomo.yaml")
+	if err := os.WriteFile(sbx, []byte(`{"experimental":{"clash_api":{"external_controller":"127.0.0.1:9095","secret":"s1"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mih, []byte(`{"external-controller":"127.0.0.1:9090","secret":"m1"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	kernel := system.KernelSingBox
+	r := KernelResolver(dir, func() (string, error) { return kernel, nil })
+
+	if tg, err := r(); err != nil || tg.Addr != "127.0.0.1:9095" || tg.Secret != "s1" {
+		t.Fatalf("sing-box 应读 config.json: %+v %v", tg, err)
+	}
+	kernel = system.KernelMihomo
+	if tg, err := r(); err != nil || tg.Addr != "127.0.0.1:9090" || tg.Secret != "m1" {
+		t.Fatalf("mihomo 应读 mihomo.yaml: %+v %v", tg, err)
+	}
+	// 读不出内核时退回 sing-box,不因为一个读失败就整片不可用
+	r2 := KernelResolver(dir, func() (string, error) { return "", errors.New("坏文件") })
+	if tg, err := r2(); err != nil || tg.Addr != "127.0.0.1:9095" {
+		t.Fatalf("读不出内核应按 sing-box: %+v %v", tg, err)
 	}
 }

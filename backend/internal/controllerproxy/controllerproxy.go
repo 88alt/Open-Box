@@ -21,11 +21,14 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/mihomo"
 	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
+	"github.com/timeflysoon/Open-Box/backend/internal/system"
 )
 
 const (
@@ -42,6 +45,31 @@ type Resolver func() (Target, error)
 
 // FileResolver 从正式配置文件里取,按文件的修改时间和大小缓存:没变就不重新解析(配置可能有几 MB,面板又轮询得很勤)。
 func FileResolver(configFile string) Resolver {
+	return fileResolver(configFile, singbox.ControllerFromFile)
+}
+
+// KernelResolver 按当前路由器内核选配置文件:sing-box 读 <ConfigDir>/config.json,mihomo 读
+// <ConfigDir>/mihomo.yaml。两个内核的控制接口地址与密钥都在各自的配置文件里,而且控制接口的形状
+// (REST + WebSocket 的路径)是一样的,所以转发层只需要换「从哪读」。
+//
+// 为什么需要:真机上 router-kernel = mihomo 时,只读 config.json 会让代理页、连接页、实时流量/日志
+// 整片 502(2026-11-25 真机联调复现)。kernel 为空或读不出来时按 sing-box(与 system.ReadRouterKernel
+// 的默认一致),让不知道内核的调用方行为不变。
+func KernelResolver(configDir string, kernel func() (string, error)) Resolver {
+	sbx := fileResolver(filepath.Join(configDir, "config.json"), singbox.ControllerFromFile)
+	mih := fileResolver(filepath.Join(configDir, "mihomo.yaml"), mihomo.ControllerFromFile)
+	return func() (Target, error) {
+		if kernel != nil {
+			if k, err := kernel(); err == nil && k == system.KernelMihomo {
+				return mih()
+			}
+		}
+		return sbx()
+	}
+}
+
+// fileResolver 是两种配置共用的缓存读取:parse 把文件解析成地址与密钥。
+func fileResolver(configFile string, parse func(string) (string, string, error)) Resolver {
 	var mu sync.Mutex
 	var cached Target
 	var cachedErr error
@@ -57,7 +85,7 @@ func FileResolver(configFile string) Resolver {
 		if st.ModTime().Equal(mod) && st.Size() == size {
 			return cached, cachedErr
 		}
-		addr, secret, err := singbox.ControllerFromFile(configFile)
+		addr, secret, err := parse(configFile)
 		mod, size = st.ModTime(), st.Size()
 		cached, cachedErr = Target{Addr: addr, Secret: secret}, err
 		return cached, cachedErr

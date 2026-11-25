@@ -562,7 +562,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	nodequalityapi.Register(srv.Mux(), nodequalityapi.Deps{Service: nqSvc})
 
 	latencyapi.Register(srv.Mux(), latencyapi.Deps{Gen: gen, Subs: subsSvc, Profiles: profileSvc, Runner: probeRunner, History: nodeHistory,
-		Kernel: controllerproxy.FileResolver(filepath.Join(cfg.ConfigDir, "config.json"))})
+		Kernel: controllerproxy.KernelResolver(cfg.ConfigDir,
+			func() (string, error) { return system.ReadRouterKernel(cfg.RouterKernelFile()) })})
 	// 节点信息:类型 / 协议层 / 服务器 / 链式上游 / 入口地址解析 / 入口国家 / 出口归属和风控值
 	entryDetector := &regiondetect.Detector{} // 只用它的按 IP 查国家,不占用其它两处的「判断中」状态
 	nodeinfoapi.Register(srv.Mux(), nodeinfoapi.Deps{Service: &nodeinfo.Service{
@@ -1052,7 +1053,9 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 
 	// 内核控制接口(Clash API)的转发:/api/controller/ 是 REST,/api/controller-ws/ 是 WebSocket;
 	// 前端的代理、规则、连接、配置页和实时流量 / 日志都走这里。登录保护由全站的 Require 中间件统一管。
-	controllerapi.Register(srv.Mux(), controllerproxy.New(controllerproxy.FileResolver(filepath.Join(cfg.ConfigDir, "config.json"))))
+	// 按当前内核选配置文件:设备跑 mihomo 时读 mihomo.yaml(否则代理页 / 连接页 / 实时流量整片 502)
+	controllerapi.Register(srv.Mux(), controllerproxy.New(controllerproxy.KernelResolver(cfg.ConfigDir,
+		func() (string, error) { return system.ReadRouterKernel(cfg.RouterKernelFile()) })))
 
 	// 诊断包:版本 / 固件 / 服务状态 / 脱敏的运行配置和档案 / 最近日志,只读
 	diagnosticsapi.Register(srv.Mux(), diagnosticsapi.Deps{Service: &diagnostics.Service{
