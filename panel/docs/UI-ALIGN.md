@@ -96,3 +96,23 @@
       实测 main 显示「Open-Box v0.1.486」+「sing-box 1.14.4-openbox-60」;
       其中 `v0.1.486` 是**官方面板后端** `/api/openbox/activation` 自己给的 `defaults.left`,不是 main 写死的,所以版本号跟着后端走(当前真机是 v0.1.486 官方包)。
       按预设决策,这里应取「main 最新 release tag」;main 现在取的是构建时注入的 tag(`dev` 构建只显示「Open-Box Latest」),要改成查线上 release 只在 `internal/api/activation` 一处,已记在 STATUS 的推断点里。
+
+- 2026-11-26 **代理页:三语 × 深浅主题矩阵**(脚本已能语言无关登录——登录按钮文案随语言变,按文案找会超时):
+  | 语言 | 主题 | 结构差异 | 计算样式差异 | 结论 |
+  | --- | --- | --- | --- | --- |
+  | zh | light | 211 / 120 | 3 | 仅已归因项 |
+  | zh-tw | light | 211 / 120 | 3 | 仅已归因项 |
+  | en | light | 211 / 120 | 4 | 多 1 项 `tab.color`(见下) |
+  | zh | dark | 211 / 120 | 4 | 多 1 项 `button.color`(见下) |
+  | zh-tw | dark | 211 / 120 | 4 | 同上 |
+  | en | dark | 211 / 120 | 5 | 上面两项都有 |
+  三语的结构差异数完全相同(211/120),说明语言只影响文案、不影响结构;文案已全部占位符化。
+  **把剩余 5 项逐一定性(DOM + 计算样式证据,不再改动)**:
+  1. `card.radius` 19px vs 18px:差 1px,来自上游那套 `corner-radius` → `global-radius` 的迁移逻辑保留了一档偏移,视觉不可辨。
+  2. `input.padding` 右内边距 12px vs 32px:main 的 `TextInput` 无论有没有「清空」按钮都留 20px 给按钮;上游只在实际显示按钮时留。
+     实测两边都会显示清空按钮且按钮位置一致,只是内边距策略不同。
+  3. `tab.bg` 透明 vs `rgb(74,93,128)`:**实测上游 `seg-highlight` 层的背景就是 `rgb(74,93,128)`(= `--color-neutral`)、文字 `neutral-content`,
+     main 把同一个颜色画在 `menu-active` 元素自己身上**。视觉结果相同,只是「单独一层高亮」还是「元素自身上色」的实现差异。
+  4. `tab.color`(en/light):同第 3 项,上游把前景色放在高亮层(`rgb(229,231,235)` = base-content),main 放在元素上。
+  5. `button.color`(dark):同第 3 项,深色下 `neutral-content`(`#faf5e4`)与 base-content(`#e5e7eb`)的差别,背景已经一致。
+  **结论**:代理页在 zh / zh-tw / en × light / dark 六种组合下,除上述「实现方式不同、视觉等价」的 5 项外没有其它差异。
