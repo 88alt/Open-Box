@@ -82,6 +82,13 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "postcss@>=8.0.0 <8.5.23": "^8.5.23",
+      "nanoid@<3.3.18": "^3.3.18",
+      "serialize-javascript@<7.1.3": "^7.1.3",
+      "picomatch@>=4.0.0 <4.0.4": "^4.0.4",
+      "source-map-js@<1.2.2": "^1.2.2"
+    }
   }
 }
