@@ -79,6 +79,10 @@
                 </div>
                 <p class="text-base-content/60 mt-1 text-xs">
                   {{ $t('qualityUsable', { usable: sub.usable, total: sub.total }) }}
+                  <template v-if="sub.failed > 0">
+                    ·
+                    <span class="text-high-latency">{{ $t('qualityFailedCount', { count: sub.failed }) }}</span>
+                  </template>
                 </p>
               </div>
             </div>
@@ -101,7 +105,7 @@
                       v-tip="timeAt(sub.scoreAt || 0)"
                     >{{ $t('qualityPreviousScore') }}</span>
                     <template v-else>
-                      {{ $t(`qualityGrade_${sub.grade}`) }}
+                      {{ gradeLabel(sub) }}
                       <span v-if="sub.provisional"> · {{ $t('qualityProvisional') }}</span>
                     </template>
                   </div>
@@ -211,7 +215,7 @@
                         <span
                           v-tip="node.scoreStale ? `${$t('qualityPreviousScore')} · ${timeAt(node.scoreAt || 0)}` : undefined"
                           class="shrink-0 font-bold tabular-nums"
-                          :class="node.state === 'down' ? 'text-error' : ''"
+                          :class="nodeScoreClass(node)"
                         >
                           {{ node.score === null ? '—' : `${node.score} ${$t('qualityPoints')}` }}
                         </span>
@@ -334,14 +338,19 @@
 </template>
 
 <script setup lang="ts">
-import { fetchNodeQuality, type OpenboxNodeQuality, type OpenboxQualitySubscription } from '@/api/openbox'
+import {
+  fetchNodeQuality,
+  type OpenboxNodeQuality,
+  type OpenboxQualityNode,
+  type OpenboxQualitySubscription,
+} from '@/api/openbox'
 import CountryFlag from '@/components/common/CountryFlag.vue'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import ExpandTransition from '@/components/common/ExpandTransition.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import NodeInfoPanel from '@/components/proxies/NodeInfoPanel.vue'
 import { useNodeExit } from '@/composables/nodeExit'
-import { getColorForBandwidth, getColorForLatency } from '@/helper'
+import { getColorForBandwidth, getColorForLatency, getColorForNodeScore, getNodeScoreGrade } from '@/helper'
 import { showNotification } from '@/helper/notification'
 import { prettyBytesHelper } from '@/helper/utils'
 import { ChevronDownIcon, ChevronUpIcon, InformationCircleIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
@@ -373,14 +382,19 @@ const num = (v: number | null | undefined, digits = 0) => (typeof v === 'number'
 const bytes = (v: number) => prettyBytesHelper(v, { maximumFractionDigits: 1 })
 const timeText = (ms: number) => t('qualityTime', { hours: Math.floor(ms / 3_600_000), minutes: Math.floor((ms % 3_600_000) / 60_000) })
 const timeAt = (v: number | string | null) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : t('qualityNever'))
-const gradeClass = (s: OpenboxQualitySubscription) =>
-  s.scoreStale || s.grade === 'pending'
-    ? 'text-base-content/70'
-    : s.grade === 'attention'
-      ? 'text-error'
-      : s.grade === 'fair'
-        ? 'text-warning'
-        : 'text-success'
+// 评分颜色和等级文案按「设置 → 前端面板 → 检测阈值」里的节点评分阈值分档(与上游 v0.1.486 一致);
+// 没有分数时文案退回后端给的 grade
+const gradeClass = (s: OpenboxQualitySubscription) => getColorForNodeScore(s.score, s.scoreStale)
+const gradeLabel = (s: OpenboxQualitySubscription) => {
+  const grade = getNodeScoreGrade(s.score)
+  return t(grade ? `qualityGrade_${grade}` : `qualityGrade_${s.grade}`)
+}
+const nodeScoreClass = (n: OpenboxQualityNode) =>
+  n.state === 'down'
+    ? n.scoreStale
+      ? 'text-base-content/70'
+      : 'text-high-latency'
+    : getColorForNodeScore(n.score, n.scoreStale)
 
 const summary = computed(() => {
   const subs = data.value?.subscriptions || []

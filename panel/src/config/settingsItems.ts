@@ -132,6 +132,8 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
       { key: `${SETTINGS_MENU_KEY.proxies}.bandwidthAdequate`, label: 'bandwidthAdequateDesc' },
       { key: `${SETTINGS_MENU_KEY.proxies}.cpuLoadLow`, label: 'cpuLoadLowDesc' },
       { key: `${SETTINGS_MENU_KEY.proxies}.cpuLoadMedium`, label: 'cpuLoadMediumDesc' },
+      { key: `${SETTINGS_MENU_KEY.proxies}.nodeScorePoor`, label: 'nodeScorePoorDesc' },
+      { key: `${SETTINGS_MENU_KEY.proxies}.nodeScoreFair`, label: 'nodeScoreFairDesc' },
       { key: `${SETTINGS_MENU_KEY.proxies}.ipv6Test`, label: 'ipv6Test' },
       {
         key: `${SETTINGS_MENU_KEY.proxies}.independentLatencyTest`,

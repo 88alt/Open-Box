@@ -1,7 +1,7 @@
 import { NOT_CONNECTED, PROXY_CHAIN_DIRECTION, PROXY_TYPE, ROUTE_NAME } from '@/constant'
 import { timeSaved } from '@/store/overview'
 import { hiddenGroupMap, proxyMap } from '@/store/proxies'
-import { bandwidthAdequateThreshold, bandwidthPoorThreshold, lowLatency, mediumLatency, proxyChainDirection } from '@/store/settings'
+import { bandwidthAdequateThreshold, bandwidthPoorThreshold, lowLatency, mediumLatency, nodeScoreThresholds, proxyChainDirection } from '@/store/settings'
 import type { Connection, Proxy } from '@/types'
 import dayjs from 'dayjs'
 import * as ipaddr from 'ipaddr.js'
@@ -170,6 +170,21 @@ export const getBgColorForBandwidth = (mbps?: number | null) => {
     case 'text-high-latency': return 'bg-high-latency'
     default: return 'bg-base-content/20'
   }
+}
+
+// 节点评分分档:低于 poor 为 poor,低于 fair 为 fair,更高为 excellent;分数缺失返回 null(阈值在设置 → 前端面板 → 检测阈值)
+export type NodeScoreGrade = 'poor' | 'fair' | 'excellent'
+export const getNodeScoreGrade = (score?: number | null): NodeScoreGrade | null => {
+  if (score == null || !Number.isFinite(score)) return null
+  const [poor, fair] = nodeScoreThresholds.value
+  return score < poor ? 'poor' : score < fair ? 'fair' : 'excellent'
+}
+// 类名要写全,Tailwind 只编它在源码里见过的类;stale(沿用上一次评分)一律灰色
+export const getColorForNodeScore = (score?: number | null, stale = false) => {
+  if (stale) return 'text-base-content/70'
+  const grade = getNodeScoreGrade(score)
+  if (!grade) return 'text-base-content/70'
+  return grade === 'excellent' ? 'text-low-latency' : grade === 'fair' ? 'text-medium-latency' : 'text-high-latency'
 }
 
 export const renderRoutes = computed(() => {

@@ -233,6 +233,24 @@ export const setCpuLoadThreshold = (index: 0 | 1, value: number) => {
   if (index === 0) cpuLoadLowThreshold.value = clampInt(value, 0, medium - 1)
   else cpuLoadMediumThreshold.value = clampInt(value, low + 1, 100)
 }
+// 节点评分着色/分档阈值(分):低于 poor 为「较低」红,低于 fair 为「一般」橙,更高为「优秀」绿;默认 30 / 80(与上游 v0.1.486 一致)
+const NODE_SCORE_DEFAULTS = [30, 80]
+export const nodeScorePoorThreshold = useStorage('config/node-score-poor-threshold', NODE_SCORE_DEFAULTS[0])
+export const nodeScoreFairThreshold = useStorage('config/node-score-fair-threshold', NODE_SCORE_DEFAULTS[1])
+// 读出来时保证 0 ≤ poor < fair ≤ 100;存的值不合法(被手改过)就退回默认
+export const nodeScoreThresholds = computed<[number, number]>(() => {
+  const rawFair = Number(nodeScoreFairThreshold.value)
+  const fair = clampInt(Number.isFinite(rawFair) ? rawFair : NODE_SCORE_DEFAULTS[1], 1, 100)
+  const rawPoor = Number(nodeScorePoorThreshold.value)
+  const poor = clampInt(Number.isFinite(rawPoor) ? rawPoor : NODE_SCORE_DEFAULTS[0], 0, fair - 1)
+  return [poor, fair]
+})
+export const setNodeScoreThreshold = (index: 0 | 1, value: number) => {
+  if (!Number.isFinite(value)) return
+  const [poor, fair] = nodeScoreThresholds.value
+  if (index === 0) nodeScorePoorThreshold.value = clampInt(value, 0, fair - 1)
+  else nodeScoreFairThreshold.value = clampInt(value, poor + 1, 100)
+}
 export const IPv6test = useStorage('config/ipv6-test', false)
 export const proxyCardSize = useStorage<PROXY_CARD_SIZE>(
   'config/proxy-card-size',

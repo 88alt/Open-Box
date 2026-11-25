@@ -60,6 +60,27 @@
           @update="onCpuUpdate"
         />
       </div>
+      <!-- 节点评分分档阈值(订阅质量里的评分着色和等级文案按它走):低于第一个为「较低」红,低于第二个为「一般」橙,更高为「优秀」绿 -->
+      <div
+        v-if="isVisibleNodeScorePoor || isVisibleNodeScoreFair"
+        class="flex min-w-0 flex-col gap-2"
+      >
+        <div class="text-sm font-normal">
+          {{ $t('nodeScoreThresholds') }}
+        </div>
+        <ThresholdRangeBar
+          :label="$t('nodeScoreThresholds')"
+          :markers="nodeScoreMarkers"
+          :segments="nodeScoreSegments"
+          :stops="nodeScoreStops"
+          unit="%"
+          :unit-space="false"
+          integer
+          min-label="0%"
+          max-label="100%"
+          @update="onNodeScoreUpdate"
+        />
+      </div>
       <div
         v-if="isVisibleIpv6Test"
         class="flex min-w-0 flex-col justify-center"
@@ -89,7 +110,9 @@ import {
   IPv6test,
   lowLatency,
   mediumLatency,
+  nodeScoreThresholds,
   setCpuLoadThreshold,
+  setNodeScoreThreshold,
   speedtestTimeout,
 } from '@/store/settings'
 import { computed } from 'vue'
@@ -104,6 +127,8 @@ const isVisibleMediumLatency = useIsSettingVisible(k.mediumLatencyDesc)
 const isVisibleIpv6Test = useIsSettingVisible(k.ipv6Test)
 const isVisibleCpuLoadLow = useIsSettingVisible(k.cpuLoadLowDesc)
 const isVisibleCpuLoadMedium = useIsSettingVisible(k.cpuLoadMediumDesc)
+const isVisibleNodeScorePoor = useIsSettingVisible(k.nodeScorePoorDesc)
+const isVisibleNodeScoreFair = useIsSettingVisible(k.nodeScoreFairDesc)
 
 const hasVisibleLatencyItems = computed(
   () => isVisibleLowLatency.value || isVisibleMediumLatency.value || isVisibleSpeedtestTimeout.value,
@@ -292,5 +317,41 @@ const cpuMarkers = computed(() => [
 ])
 const onCpuUpdate = (index: number, value: number) => {
   if (index === 0 || index === 1) setCpuLoadThreshold(index, value)
+}
+
+// ===== 节点评分:低 / 一般两个滑块(0 ≤ 低 < 一般 ≤ 100) =====
+const nodeScoreStops = [
+  { value: 0, percent: 0 },
+  { value: 100, percent: 100, step: 1 },
+]
+const nodeScoreSegments = computed(() => [
+  { key: 'poor', label: t('nodeScorePoorShort'), colorClass: 'bg-high-latency' },
+  { key: 'fair', label: t('nodeScoreFairShort'), colorClass: 'bg-medium-latency' },
+  { key: 'excellent', label: t('nodeScoreExcellentShort'), colorClass: 'bg-low-latency' },
+])
+const nodeScoreMarkers = computed(() => [
+  {
+    key: 'nodeScorePoor',
+    label: t('nodeScorePoorShort'),
+    ariaLabel: t('nodeScorePoorDesc'),
+    value: nodeScoreThresholds.value[0],
+    min: 0,
+    max: nodeScoreThresholds.value[1] - 1,
+    step: 1,
+    dotClass: 'bg-high-latency',
+  },
+  {
+    key: 'nodeScoreFair',
+    label: t('nodeScoreFairShort'),
+    ariaLabel: t('nodeScoreFairDesc'),
+    value: nodeScoreThresholds.value[1],
+    min: nodeScoreThresholds.value[0] + 1,
+    max: 100,
+    step: 1,
+    dotClass: 'bg-medium-latency',
+  },
+])
+const onNodeScoreUpdate = (index: number, value: number) => {
+  if (index === 0 || index === 1) setNodeScoreThreshold(index, value)
 }
 </script>
