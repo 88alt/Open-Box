@@ -7,21 +7,28 @@
       :for="selectId"
       class="text-base-content/70"
     >{{ $t('routerKernelLabel') }}</label>
-    <select
-      :id="selectId"
-      class="select select-sm w-auto"
-      :value="selected ?? current"
-      :disabled="switching"
-      @change="onSelect(($event.target as HTMLSelectElement).value as OpenboxRouterKernel)"
-    >
-      <option
-        v-for="k in KERNELS"
-        :key="k"
-        :value="k"
+    <!-- 选择框左侧带当前内核的图标(对齐上游 v0.1.487) -->
+    <div class="relative inline-flex items-center">
+      <KernelIcon
+        :kernel="selected ?? current"
+        class="pointer-events-none absolute left-3 z-10"
+      />
+      <select
+        :id="selectId"
+        class="select select-sm w-auto pl-9"
+        :value="selected ?? current"
+        :disabled="switching"
+        @change="onSelect(($event.target as HTMLSelectElement).value as OpenboxRouterKernel)"
       >
-        {{ KERNEL_NAMES[k] }}
-      </option>
-    </select>
+        <option
+          v-for="k in KERNELS"
+          :key="k"
+          :value="k"
+        >
+          {{ KERNEL_NAMES[k] }}
+        </option>
+      </select>
+    </div>
     <span
       v-if="!kernelVersion?.mihomoAvailable"
       class="text-base-content/60 text-xs"
@@ -143,6 +150,7 @@
 // 代理工具冲突、内核专用设置兼容性、规则集、目标内核配置、入口防火墙、切换期间 DNS 防泄露)→ 全部通过
 // (或不适用)才允许「切换并重启」。预检是流式的,每项之间至少隔 120ms,让用户看得清进度。
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
+import KernelIcon from '@/components/kernel/KernelIcon.vue'
 import type { OpenboxKernelSwitchCheck, OpenboxKernelVersion, OpenboxRouterKernel } from '@/api/openbox'
 import { fetchKernelSwitchPreflight, KERNEL_SWITCH_CHECK_IDS, switchRouterKernel } from '@/api/openbox'
 import { showNotification } from '@/helper/notification'

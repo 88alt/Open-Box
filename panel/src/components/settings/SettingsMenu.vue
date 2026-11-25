@@ -12,7 +12,7 @@
       <ul
         ref="listRef"
         v-segmented="{ active: '.menu-active', variant: 'menu' }"
-        class="menu menu-horizontal settings-menu-list scrollbar-hidden app-card-gap flex min-w-0 flex-1 flex-nowrap overflow-x-auto bg-transparent p-0"
+        class="menu menu-horizontal settings-menu-list scrollbar-hidden app-inline-gap flex min-w-0 flex-1 flex-nowrap overflow-x-auto bg-transparent p-0"
         :style="fadeStyle"
         @scroll.passive="updateFade"
         @wheel="onWheel"

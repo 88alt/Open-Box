@@ -79,11 +79,16 @@
         <span class="text-xs leading-relaxed">{{ $t(conflictToastKey, { names: conflictNamesText }) }}</span>
       </div>
 
-      <!-- 内核版本 + sing-box 项目链接(文字、图标、间距与 v0.1.337 一致) -->
-      <div class="flex items-center gap-2">
-        <CpuChipIcon class="text-base-content/60 h-4 w-4 shrink-0" />
-        <span class="text-base-content/70">{{ $t('kernelVersionLabel') }}:</span>
-        <span class="font-medium">{{ kernelText }}</span>
+      <!-- 内核切换 + 当前内核版本 + 内核项目链接,合成一行(对齐上游 v0.1.487:
+           「内核切换:[选择框] [芯片图标][内核图标] 版本号 [GitHub 链接]」,不再单独一行「内核版本:」) -->
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <!-- 内核切换(sing-box / Mihomo),由内核页传进来 -->
+        <slot name="kernel-controls" />
+        <span class="flex items-center gap-2">
+          <CpuChipIcon class="text-base-content/60 h-4 w-4 shrink-0" />
+          <KernelIcon :kernel="kernelName" />
+          <span class="font-medium">{{ kernelText }}</span>
+        </span>
         <a
           :href="kernelGithubUrl"
           target="_blank"
@@ -96,9 +101,6 @@
           <ArrowTopRightOnSquareIcon class="h-4 w-4" />
         </a>
       </div>
-
-      <!-- 内核切换(sing-box / Mihomo),由内核页传进来 -->
-      <slot name="kernel-controls" />
 
       <!-- Geo 数据:份数、数据日期、数据来源 -->
       <div
@@ -241,6 +243,7 @@
 import type { OpenboxKernelVersion, OpenboxProfile, OpenboxServiceStatus } from '@/api/openbox'
 import CountryFlag from '@/components/common/CountryFlag.vue'
 import GithubIcon from '@/components/common/GithubIcon.vue'
+import KernelIcon from '@/components/kernel/KernelIcon.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import FactoryResetButton from '@/components/kernel/FactoryResetButton.vue'
 import KernelRestartButton from '@/components/kernel/KernelRestartButton.vue'
