@@ -151,11 +151,16 @@ const blurClass = computed(() => {
   return `blur-intensity-${blurIntensity.value}`
 })
 
+// 圆角推导对齐上游(Upstream `fo` 那个 computed):以用户选的半径 R 为基准,
+// 字段 / 选择器 / 导航 = R,卡片 = R+1,面板 = R+2,进度条 = R*0.04。
+// main 早先用的是乘系数(0.85 / 0.75 / 0.58),基数也写成 26,结果整体比上游圆一大截
+// (实测 2026-11-25:面板 29px vs 26px、按钮 26px vs 15.1px、输入框 26px vs 15.1px)。
 const appStyles = computed(() => {
-  const panelRadius = `${Math.round(globalRadius.value * 10) / 10}px`
-  const boxRadius = `${Math.round(globalRadius.value * 0.85 * 10) / 10}px`
-  const navRadius = `${Math.round(globalRadius.value * 0.75 * 10) / 10}px`
-  const fieldRadius = `${Math.round(globalRadius.value * 0.58 * 10) / 10}px`
+  const r = Math.min(50, Math.max(0, Math.round(globalRadius.value || 0)))
+  const fieldRadius = `${r}px`
+  const boxRadius = `${r + 1}px`
+  const navRadius = fieldRadius
+  const panelRadius = `${r + 2}px`
 
   return [
     backgroundImage.value,
@@ -168,8 +173,10 @@ const appStyles = computed(() => {
       '--radius-selector': fieldRadius,
       '--radius-field': fieldRadius,
       '--app-radius-panel': panelRadius,
+      '--app-radius-card': boxRadius,
       '--app-radius-nav': navRadius,
       '--app-radius-field': fieldRadius,
+      '--app-radius-bar': `${(r * 0.04).toFixed(1)}px`,
     },
   ]
 })

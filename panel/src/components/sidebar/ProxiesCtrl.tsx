@@ -160,7 +160,7 @@ export default defineComponent({
         <ul
           key="proxy-main-tabs"
           role="tablist"
-          class="proxy-main-tabs menu menu-horizontal scrollbar-hidden app-card-gap flex min-w-0 flex-nowrap items-center overflow-x-auto bg-transparent p-0"
+          class="proxy-main-tabs menu menu-horizontal scrollbar-hidden app-inline-gap flex min-w-0 flex-nowrap items-center overflow-x-auto bg-transparent p-0"
         >
           {tabsWithNumbers.value.map(({ type, count }) => {
             const label = t(type)

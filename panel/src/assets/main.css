@@ -910,6 +910,23 @@ div::-webkit-scrollbar-thumb:hover {
 /* 暗色主题下把自定义背景图压暗:面板本身已经是深色半透明,亮堂堂的图片垫在下面
    会把整页衬得刺眼、文字也不好读。用 multiply 和一层半透明黑混合,图片整体暗下去,
    不动内联的 background-image,亮色主题不受影响。 */
+/* 深色主题的底色对齐上游:上游在 daisyUI 的 forest 之上又覆盖了一层更偏藏青的配色
+   (base-100 #263449 / base-200 #1e293b / base-300 #131c2e),main 之前直接用 daisyUI 原版
+   forest(oklch 20.84% .008 17.911,偏棕灰),实测深色下卡片背景与上游明显不同。
+   这里只覆盖上游确实改过的那几个变量,其余(primary/secondary/accent…)保持 daisyUI 原值。 */
+[data-theme='forest'] {
+  --color-base-100: #263449;
+  --color-base-200: #1e293b;
+  --color-base-300: #131c2e;
+  --color-base-content: #e5e7eb;
+  --color-neutral: #4a5d80;
+  --color-neutral-content: #faf5e4;
+  --app-divider-color: #505d70;
+  --app-green-control: #087052;
+  --app-traffic-in: var(--color-success);
+  --app-traffic-out: var(--color-info);
+}
+
 [data-theme='forest'] .custom-background {
   background-color: rgb(0 0 0 / 0.65);
   background-blend-mode: multiply;
