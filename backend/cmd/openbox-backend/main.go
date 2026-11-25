@@ -779,7 +779,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 
 	// 组件更新:status / check / notes 读发布信息;run 走「探测 → 下载并解压到暂存 → 校验 → 冒烟」,
 	// 提交(替换文件并重启)是 M6-6,还没接上,所以跑完会明确回一句「本次没有改动系统」
-	updateapi.Register(srv.Mux(), updateapi.Deps{Service: &update.Service{
+	updateSvc := &update.Service{
 		Checker: &update.Checker{MirrorPrefix: cfg.UpdateMirror},
 		Version: version, BuiltAt: builtAt,
 		KernelVersion:  func(ctx context.Context) string { return singbox.ReadKernelVersion(ctx, cfg.SingBox).Version },
@@ -795,7 +795,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			}
 			return nil
 		},
-	}})
+	}
+	updateapi.Register(srv.Mux(), updateapi.Deps{Service: updateSvc})
 
 	// 系统资源(概览页「硬件负载」、侧边栏卡片、概览的「活跃终端」):CPU / 内存读 /proc,活跃终端取内核连接的来源 IP 并按邻居表的 MAC 合并
 	// 邻居表也给 route-test 用:请求带 sourceIp 时按那台终端的 MAC 判断 source_mac_address
@@ -972,6 +973,24 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 每日流量:后台每 10 秒读一次内核的连接快照(/connections),按天、按小时、按终端 / 节点 / 访问目标记进数据目录下的 traffic/;
 	// 这里只读。终端名取 DHCP 租约;保留月数取档案的 traffic.keepMonths
 	var background func(ctx context.Context) func()
+	// 自动升级调度(档案里的 profile.updates.openbox):每分钟看一眼,到点才动手。
+	// 放在这里是因为 background 是在这之后一路被包起来的,先挂上就能一起被调用。
+	background = func(ctx context.Context) func() {
+		sched := &update.Scheduler{
+			Service: updateSvc,
+			Schedule: func(ctx context.Context) update.Schedule {
+				p, err := profileSvc.Get(ctx)
+				if err != nil {
+					return update.Schedule{}
+				}
+				return update.ParseSchedule(p)
+			},
+			StatePath: filepath.Join(cfg.DataDir, "update", "auto.json"),
+			Log:       log,
+		}
+		go sched.Run(ctx)
+		return func() {}
+	}
 	var trafficSource trafficapi.Source
 	var trafficStore *traffic.Store // 恢复出厂设置要清它;创建失败时为空
 	if ts, err := traffic.Open(filepath.Join(cfg.DataDir, "traffic"), nil); err != nil {
