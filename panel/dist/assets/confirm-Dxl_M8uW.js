@@ -1,0 +1,1 @@
+import{G as a}from"./vendor-vue-CaulVtFc.js";const r=a({open:!1,title:"",message:"",danger:!0});let s;const o=e=>e.required===!1?Promise.resolve(!0):(s&&s(!1),r.title=e.title||"",r.message=e.message,r.danger=e.danger!==!1,r.open=!0,new Promise(t=>{s=t})),i=e=>{const t=s;s=void 0,r.open=!1,t?.(e)};export{o as a,r as c,i as r};
