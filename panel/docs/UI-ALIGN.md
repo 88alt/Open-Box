@@ -35,21 +35,21 @@
 | 概览 | `#/overview` | `OverviewPage` | 已对齐(例外 B/C 有意不同) |
 | 连接(含日志 / 规则页签) | `#/connections` | `ConnectionWorkspacePage` | 有差异待做(节点名缺延迟标签) |
 | 设置(含订阅 / 分流 / 内核页签) | `#/settings` | `SettingsPage` | 已对齐(DOM 比对,zh/light/1440) |
-| 登录 | `#/login` | `LoginPage` | 待做 |
-| 设置访问密码 | `#/setup` | `SetupPasswordPage` | 待做 |
+| 登录 | `#/login` | `LoginPage` | 已对齐(结构一致,见下) |
+| 设置访问密码 | `#/setup` | `SetupPasswordPage` | 已对齐 |
 
 ## 独立页面组件(在侧栏之外,由页面内入口进入)
 
 | 页面 / 弹窗 | 组件 | 上游对应块 | 状态 |
 | --- | --- | --- | --- |
-| 链式代理 | `ChainProxiesPage.vue` | `ChainProxyPage` | 待做 |
-| 客户端 App | `ClientAppPage.vue` | `ClientAppsPage` | 待做 |
-| 终端分流 | `ClientRoutingPage.vue` | `ClientRoutingPage` | 待做 |
-| DNS | `DnsPage.vue` | `DnsPage` | 待做 |
-| 内核 | `KernelPage.vue` | `KernelPage` | 待做 |
-| 共享网络 | `ShareNetworkPage.vue` | `ShareNetworkPage` | 待做 |
-| 订阅 | `SubscriptionsPage.vue` | `SubscriptionsPage` | 待做 |
-| 分流 | `RoutingPage.vue` | `RoutingPage` | 待做 |
+| 链式代理 | `ChainProxiesPage.vue` | `ChainProxyPage` | 已对齐(即设置页 `chain` 页签;例外 B 的安格超市链接不补) |
+| 客户端 App | `ClientAppPage.vue` | `ClientAppsPage` | 已对齐(即设置页 `clientApp` 页签) |
+| 终端分流 | `ClientRoutingPage.vue` | `ClientRoutingPage` | 已对齐(即设置页 `clients` 页签) |
+| DNS | `DnsPage.vue` | `DnsPage` | 已对齐(即设置页 `dns` 页签) |
+| 内核 | `KernelPage.vue` | `KernelPage` | 已对齐(即设置页 `kernel` 页签;例外 A/C 不补) |
+| 共享网络 | `ShareNetworkPage.vue` | `ShareNetworkPage` | 已对齐(即设置页 `share` 页签) |
+| 订阅 | `SubscriptionsPage.vue` | `SubscriptionsPage` | 已对齐(即设置页 `subscriptions` 页签) |
+| 分流 | `RoutingPage.vue` | `RoutingPage` | 已对齐(即设置页 `routing` 页签) |
 
 ## 已确认与上游一致的结构(2026-11-25 核对)
 
@@ -225,3 +225,14 @@
   (正文显示「按终端 (0 · 0)」),没有连接行就不会渲染药丸;上游基准连的是官方面板,连接列表里有 81 条历史连接,
   因此它显示 81 个。两边数据源不同,这一步只能在有真实连接的设备上确认。
   **仍不标「已对齐」**:结构已按上游实现,但 81 个药丸的出现未经端到端验证;记在这里等真机。
+
+- 2026-11-26 **清单订正 + 窄屏/三语矩阵**:上面「独立页面组件」那 8 项其实都是**设置页的一级页签**
+  (`share` / `chain` / `dns` / `kernel` / `clientApp` / `clients` / `subscriptions` / `routing`),
+  上一批已用 DOM 比对逐个过了一遍,所以把状态从「待做」订正为「已对齐」,不再重复比对。
+  **登录页**:两侧结构一致(标题「密码登录」、说明句、密码框 + 显示密码按钮 + 登录按钮),文案键同为 `passwordLogin*`。
+  **窄屏(420×900)三组**:zh-tw/light、en/light、zh/dark。
+  结构行数 上游 350~352 / main 289,差异全是已有的两类噪音(图标哈希、dev 内联 SVG)。
+  **一处曾疑似差异、核实后不成立**:我一度以为 main 窄屏缺 `role=tablist`,复查发现是脚本点错元素导致状态异常——
+  在窄屏下直接打开 `#/proxies`,`role=tablist` 为 **1**、内含 3 个 `role=tab`(策略/节点/订阅),与上游一致;
+  桌面端同样一致。`ProxiesCtrl.tsx` 本来就带 `role="tablist"` / `role="tab"` / `aria-selected`,不需要改。
+  计算样式差异仍是老几项(1px 圆角、输入框右内边距、选中态颜色画在高亮层还是元素自身),已归因。
