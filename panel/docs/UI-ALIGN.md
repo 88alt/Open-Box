@@ -125,3 +125,12 @@
   验证(1440×900,同一后端):两页均 `dots=86 / bars=0`,圆点 16×16、`flex` + `gap 6px`、26 行,逐项一致。
   **教训**:之前用截图判断这一块时把长条当成了「实现方式不同」,实际是可辨的回归——这类「同一组件的两种渲染形态」
   必须查组件里的判定条件,不能靠肉眼归因。
+
+- 2026-11-26 **侧栏底部「内核」那一行(新增对齐)**:上游在侧栏资源卡上方有一行
+  `div.flex.items-center.gap-1.5.px-[12px][data-sidebar-kernel]`,内容是**内核图标 + 内核名**
+  (名字表 `sing-box → Sing-Box` / `mihomo → Mihomo`),只在服务端回了 `core.kernel` 时显示;main 之前整行没有。
+  已补:`components/kernel/KernelIcon.vue` + `sidebar/CommonCtrl.vue` 里的这一行。
+  **图标来源(不用上游产物)**:sing-box 用 SagerNet/sing-box 的组织头像(即其 logo),Mihomo 用 MetaCubeX/mihomo 仓库的 `docs/logo.png`,
+  都缩到 96px 入库。
+  验证(1440×900,同一后端,当前内核 mihomo):两页 `data-sidebar-kernel` 行的类名、`gap 6px`、`padding 12px`、文字 `Mihomo`、
+  图标 16×16、`alt=""`、`object-fit: contain` **逐字段一致**。
