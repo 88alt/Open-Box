@@ -27,10 +27,10 @@ import { computed } from 'vue'
 import TextInput from '../common/TextInput.vue'
 
 const sourceIPLabel = defineModel<Partial<SourceIPLabel>>({
-  default: {
+  default: () => ({
     key: '',
     label: '',
-  },
+  }),
 })
 const sourceList = computed(() => {
   return uniq(connections.value.map((conn) => conn.metadata.sourceIP))
