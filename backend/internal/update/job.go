@@ -17,14 +17,16 @@ import (
 
 // 阶段名。前端按这些字符串显示进度(M6 第七节);committing / restarting_core 要等 M6-6。
 const (
-	StageStarting    = "starting"
-	StageProbing     = "probing"
-	StageDownloading = "downloading"
-	StageVerifying   = "verifying"
-	StageExtracting  = "extracting"
-	StageDone        = "done"
-	StageFailed      = "failed"
-	StageCancelled   = "cancelled"
+	StageStarting       = "starting"
+	StageProbing        = "probing"
+	StageDownloading    = "downloading"
+	StageVerifying      = "verifying"
+	StageExtracting     = "extracting"
+	StageCommitting     = "committing"
+	StageRestartingCore = "restarting_core"
+	StageDone           = "done"
+	StageFailed         = "failed"
+	StageCancelled      = "cancelled"
 )
 
 // ErrBusy 表示已经有一次升级在进行(接口回 409)。
@@ -167,8 +169,15 @@ func (s *Service) pipeline(ctx context.Context, j *job, channel string) error {
 	base := filepath.Join(s.DataDir, "update")
 
 	j.setStage(StageStarting, "准备升级")
+	// 上一次升级没收尾(日志停在 committing / restarting)时不许再开:
+	// 那说明有文件换了一半或者新版本还没自检,再叠一次只会更难收拾
+	if prev, err := ReadJournal(filepath.Join(base, JournalName)); err != nil {
+		return err
+	} else if prev != nil && (prev.Status == JournalCommitting || prev.Status == JournalRestarting) {
+		return fmt.Errorf("上一次升级还没收尾(状态 %s),先等它自检完或人工处理", prev.Status)
+	}
 	// 上一次失败或取消可能留下暂存目录,先清干净,免得把旧文件当成新包
-	if err := os.RemoveAll(base); err != nil {
+	if err := cleanUpdateDir(base); err != nil {
 		return fmt.Errorf("清理旧的暂存目录失败:%w", err)
 	}
 	if err := os.MkdirAll(base, 0o755); err != nil {
@@ -261,9 +270,60 @@ func (s *Service) pipeline(ctx context.Context, j *job, channel string) error {
 	}
 	j.logf("冒烟检查通过")
 
-	// 下载、校验、冒烟都过了。提交是 M6-6;这里明确停下,并清掉暂存目录,不留半截状态。
-	os.RemoveAll(dir)
-	return errCommitNotReady
+	// 提交(M6-6)。没接安装根 / 没接服务管理器时**不做**:换了文件却不重启,
+	// 会留下「文件是新的、进程是旧的」的半截状态,比不升级更糟。
+	if s.InstallRoot == "" || s.Restart == nil {
+		os.RemoveAll(dir)
+		return errCommitNotReady
+	}
+
+	j.setStage(StageCommitting, "正在替换文件")
+	journalPath := filepath.Join(base, JournalName)
+	req := CommitRequest{
+		Root: s.InstallRoot, Staging: ex.Root, Journal: journalPath,
+		StateDir: s.StateDir, From: s.Version, To: plan.Tag, Now: time.Now(),
+	}
+	// 从这里起不能取消(文件已经在换),ctx 也就不再传给提交
+	commitCtx := context.Background()
+	cj, err := Commit(commitCtx, req, Ops{})
+	if err != nil {
+		if cj != nil {
+			if rbErr := Rollback(commitCtx, journalPath, cj, Ops{}); rbErr != nil {
+				return fmt.Errorf("提交失败(%v),回滚也失败(%v):需要人工处理", err, rbErr)
+			}
+			return fmt.Errorf("提交失败,已回滚:%w", err)
+		}
+		os.RemoveAll(dir)
+		return fmt.Errorf("提交失败:%w", err)
+	}
+
+	// 先脱离一个看门狗,再请服务管理器重启:新版本起不来时由它把文件换回去
+	entries := make([]string, 0, len(cj.Entries))
+	for _, e := range cj.Entries {
+		entries = append(entries, e.Path)
+	}
+	startWD := s.StartWatchdog
+	if startWD == nil {
+		startWD = StartWatchdog
+	}
+	if _, err := startWD(WatchdogRequest{
+		Dir: base, Journal: journalPath, Root: s.InstallRoot, StateDir: s.StateDir,
+		Backup: cj.Backup, Entries: entries, Restart: s.RestartCommand,
+	}); err != nil {
+		if rbErr := Rollback(commitCtx, journalPath, cj, Ops{}); rbErr != nil {
+			return fmt.Errorf("拉不起看门狗(%v),回滚也失败(%v):需要人工处理", err, rbErr)
+		}
+		return fmt.Errorf("拉不起看门狗,已回滚:%w", err)
+	}
+
+	j.setStage(StageRestartingCore, "正在重启服务")
+	if err := s.Restart(commitCtx); err != nil {
+		// 服务没重启:文件已经是新的,进程还是旧的;看门狗会等到超时后回滚
+		return fmt.Errorf("请服务管理器重启失败:%w", err)
+	}
+	// 走到这里说明重启是异步的,本进程随时会退出;新进程自检后把日志写成 healthy
+	j.finish(StageDone, "已升级到 "+plan.Tag+",新进程会做自检")
+	return nil
 }
 
 // viaName 把通道标记变成人能读的写法。
@@ -280,4 +340,26 @@ func short(sum string) string {
 		return sum[:12]
 	}
 	return sum
+}
+
+// cleanUpdateDir 清掉 <data-dir>/update 下的暂存目录,但**保留**升级日志、
+// 回滚标记与看门狗脚本:那三样是恢复用的,删了就没法判断上一次升级到哪了。
+func cleanUpdateDir(base string) error {
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	for _, e := range entries {
+		switch e.Name() {
+		case JournalName, JournalName + ".tmp", RollbackFlag, "watchdog.sh":
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(base, e.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }

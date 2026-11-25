@@ -68,6 +68,18 @@ type Service struct {
 	// FreeSpace 报目录所在文件系统剩余字节数,为空时用 FreeSpace。
 	FreeSpace func(dir string) (int64, error)
 
+	// 提交(M6-6)。InstallRoot 为空时**不做提交**——开发机、容器、没接线的环境里
+	// 升级跑到冒烟为止就停(「本次没有改动系统」),不会去换文件。
+	InstallRoot string
+	// StateDir 是状态目录(<data-dir>/state),提交前打快照、回滚时恢复。
+	StateDir string
+	// Restart 请服务管理器重启后端。重启后本进程会退出,由新进程接着自检。
+	Restart func(ctx context.Context) error
+	// RestartCommand 写进看门狗脚本,看门狗回滚后用它把旧版本拉起来。
+	RestartCommand string
+	// StartWatchdog 拉起看门狗,为空时用 StartWatchdog。
+	StartWatchdog func(req WatchdogRequest) (string, error)
+
 	// mu 保护 j:Run / Cancel / Status 会并发进来。
 	mu sync.Mutex
 	j  *job

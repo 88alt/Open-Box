@@ -39,4 +39,5 @@ exec "$BIN" \
 	-mihomo "$ROOT/bin/mihomo" \
 	-core "$ROOT/bin/openbox-core" \
 	-core-service openbox \
-	-panel-service openbox-backend
+	-panel-service openbox-backend \
+	-install-root "$ROOT"

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"net/netip"
 	"os"
 	"os/signal"
@@ -170,6 +171,8 @@ func run(args []string) int {
 	if background != nil {
 		waitBackground = background(ctx)
 	}
+	// 上次升级留下的日志:提交中崩溃就回滚,刚被重启就自检(M6 第七节)
+	go recoverUpdate(ctx, cfg, ln, log)
 	if err := srv.Serve(ctx, ln); err != nil {
 		log.Error("服务异常退出", "err", err)
 		stop()
@@ -179,6 +182,60 @@ func run(args []string) int {
 	waitBackground() // ctx 已结束:等后台任务写完盘再退出
 	log.Info("已退出")
 	return 0
+}
+
+// restartCommand 是写进看门狗脚本的重启命令:看门狗回滚后用它把旧版本拉起来。
+func restartCommand(cfg system.Config) string {
+	switch system.DetectInitHere() {
+	case system.InitOpenWrt:
+		return "/etc/init.d/" + cfg.PanelService + " restart"
+	case system.InitSystemd:
+		return "systemctl restart " + cfg.PanelService
+	}
+	return ""
+}
+
+// recoverUpdate 处理上次升级留下的日志(M6 第七节):提交中崩溃就回滚,刚被重启就自检。
+// 只在装了安装根(-install-root)时才有意义;自检要打自己的健康接口,所以等监听建好之后再跑。
+func recoverUpdate(ctx context.Context, cfg system.Config, ln net.Listener, log *slog.Logger) {
+	if cfg.InstallRoot == "" {
+		return
+	}
+	addr, ok := ln.Addr().(*net.TCPAddr)
+	if !ok {
+		return
+	}
+	health := fmt.Sprintf("http://127.0.0.1:%d/api/health", addr.Port)
+	client := &http.Client{Timeout: 5 * time.Second}
+	err := update.Recover(ctx, update.RecoverDeps{
+		Journal:  filepath.Join(cfg.DataDir, "update", update.JournalName),
+		Root:     cfg.InstallRoot,
+		StateDir: cfg.StateDir(),
+		Health: func(ctx context.Context) error {
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, health, nil)
+			if err != nil {
+				return err
+			}
+			resp, err := client.Do(req)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("健康接口回了 %d", resp.StatusCode)
+			}
+			return nil
+		},
+		CoreHello: func(ctx context.Context) error {
+			_, err := core.New(cfg.Core).Hello(ctx)
+			return err
+		},
+		Exit: os.Exit,
+		Log:  log,
+	})
+	if err != nil {
+		log.Error("升级恢复失败", "err", err)
+	}
 }
 
 // dnsReverter 把 system.DNSTakeover 接到 cleanup 的接口上,错误文案与停内核那条路一致。
@@ -725,10 +782,19 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	updateapi.Register(srv.Mux(), updateapi.Deps{Service: &update.Service{
 		Checker: &update.Checker{MirrorPrefix: cfg.UpdateMirror},
 		Version: version, BuiltAt: builtAt,
-		KernelVersion: func(ctx context.Context) string { return singbox.ReadKernelVersion(ctx, cfg.SingBox).Version },
-		DataDir:       cfg.DataDir,
-		GeoDir:        cfg.GeoDir,
-		ConfigFile:    filepath.Join(cfg.ConfigDir, "config.json"),
+		KernelVersion:  func(ctx context.Context) string { return singbox.ReadKernelVersion(ctx, cfg.SingBox).Version },
+		DataDir:        cfg.DataDir,
+		GeoDir:         cfg.GeoDir,
+		ConfigFile:     filepath.Join(cfg.ConfigDir, "config.json"),
+		InstallRoot:    cfg.InstallRoot,
+		StateDir:       cfg.StateDir(),
+		RestartCommand: restartCommand(cfg),
+		Restart: func(ctx context.Context) error {
+			if _, err := svcCtl.Do(ctx, cfg.PanelService, "restart"); err != nil {
+				return err
+			}
+			return nil
+		},
 	}})
 
 	// 系统资源(概览页「硬件负载」、侧边栏卡片、概览的「活跃终端」):CPU / 内存读 /proc,活跃终端取内核连接的来源 IP 并按邻居表的 MAC 合并

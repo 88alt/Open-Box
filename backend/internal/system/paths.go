@@ -35,6 +35,8 @@ const (
 	EnvDNSQueryLog = "OPENBOX_DNS_QUERY_LOG"
 	// EnvUpdateMirror 是在线更新用的镜像加速前缀;不设就只走 GitHub 直连。
 	EnvUpdateMirror = "OPENBOX_UPDATE_MIRROR"
+	// EnvInstallRoot 是安装根(如 /opt/open-box)。给了才允许在线升级去换文件;不给就只检查、只下载。
+	EnvInstallRoot = "OPENBOX_INSTALL_ROOT"
 
 	// 服务名:交给系统服务管理器(OpenWrt init.d / systemd)的名字
 	EnvCoreService  = "OPENBOX_CORE_SERVICE"
@@ -104,6 +106,9 @@ type Config struct {
 	Paths
 	CoreService  string // sing-box 的服务名
 	PanelService string // 后端自己的服务名(只用来查开机自启)
+	// InstallRoot 是安装根(/opt/open-box)。空 = 不做在线升级的「提交」那一步:
+	// 换了文件却不重启会留下「文件是新的、进程是旧的」,比不升级更糟。
+	InstallRoot string
 }
 
 // LoadConfig 解析命令行参数和环境变量。getenv 传入 os.Getenv;usage 输出写到 out。
@@ -129,6 +134,7 @@ func LoadConfig(args []string, getenv func(string) string, out io.Writer) (Confi
 	core := fs.String("core", env(EnvCore, def.Core), "openbox-core 可执行文件(环境变量 "+EnvCore+")")
 	dnsQueryLog := fs.String("dns-query-log", env(EnvDNSQueryLog, def.DNSQueryLog), "dnsmasq 查询日志文件:DNS 接管时让 dnsmasq 写到这里,后端跟读;off = 不开不读(环境变量 "+EnvDNSQueryLog+")")
 	updateMirror := fs.String("update-mirror", env(EnvUpdateMirror, ""), "在线更新的镜像加速前缀(空 = 只走 GitHub 直连)(环境变量 "+EnvUpdateMirror+")")
+	installRoot := fs.String("install-root", env(EnvInstallRoot, ""), "安装根,如 /opt/open-box;空 = 不做在线升级的提交(环境变量 "+EnvInstallRoot+")")
 	coreSvc := fs.String("core-service", env(EnvCoreService, DefaultCoreService), "内核服务的服务名,OpenWrt / Debian 上都是 openbox(环境变量 "+EnvCoreService+")")
 	panelSvc := fs.String("panel-service", env(EnvPanelService, DefaultPanelService), "后端自己的服务名(环境变量 "+EnvPanelService+")")
 	if err := fs.Parse(args); err != nil {
@@ -173,6 +179,9 @@ func LoadConfig(args []string, getenv func(string) string, out io.Writer) (Confi
 	}
 	if v := strings.TrimSpace(*dnsQueryLog); v != "" && !strings.EqualFold(v, "off") {
 		cfg.DNSQueryLog = filepath.Clean(v)
+	}
+	if v := strings.TrimSpace(*installRoot); v != "" {
+		cfg.InstallRoot = filepath.Clean(v)
 	}
 	for name, v := range map[string]string{"data-dir": *dataDir, "config-dir": *configDir, "web-dir": *webDir, "geo-dir": *geoDir, "sing-box": *singBox, "mihomo": *mihomo, "core": *core} {
 		if strings.TrimSpace(v) == "" {
