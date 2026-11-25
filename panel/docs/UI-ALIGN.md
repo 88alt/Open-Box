@@ -247,3 +247,44 @@
   **结论**:`ProxyName` 的 `hideBandwidth` 结构与上游一致(上一批已实现、`tsc` + `build` 通过、代理页 14 个药丸未回退),
   但「连接列表里的药丸」只能在**有真实连接流量**的设备上确认。**本页保持「有差异待做」**,不虚标已对齐。
   **运维提示**:要验证这一项,在设备上跑一段产生连接的流量(打开几个网站),再从面板进「连接」页看节点名旁边是否出现彩色延迟药丸。
+
+---
+
+## 最终差异清单(2026-11-26 收尾核对)
+
+**对齐基准**:上游 v0.1.487(`catch-up-upstream` `a2368215`)。
+
+### 键集(三语,`cmp-upstream-i18n.py`)
+
+- **缺失**:上游三语各 **2331** 键,main **2293** 键,缺 **38** 个——**全部是例外 C(业务优选)**:
+  `businessPreference`、`businessOverview*`(25 个)、`businessReliabilityHalfLife`、`businessPerformanceTtl`、
+  `businessPreferenceMinutes`、`bandwidthHelpCurrentBusiness`、`businessSettingsHelp*`(8 个)。**扣除例外 C 后缺失 0**。
+- **多出**:**无**。
+- **三语不一致**:只有 `chainProxyEmptyHint`(例外 B:main 有意不显示「安格超市」链接);其余共有键三语齐全。
+
+### 引用(`cmp-upstream-refs.py`)
+
+- 上游引用、main 未引用:**49** = 例外 C 28 + 例外 A 19 + 例外 B 2,**真缺口 0**。
+- main 引用、上游未引用:2 个(`manageHiddenGroup`、`customIcon`),是 Vue 模板属性写法造成的虚警。
+- 动态拼接键(13 组:`httpStatus_` / `obUpdateStage_` / `routeTermMissing_` / `qualityGrade_` / `qualityState_` /
+  `qualityMode_` / `groupType_` / `bandwidthOn_` / `bandwidthOff_` / `bandwidthExample_` / `themeMode_` /
+  `routerKernelCheck*` / `proxyGroupColumns`)逐组核对,main 键全齐、引用都在。
+
+### 界面(逐页 DOM + 计算样式比对)
+
+| 页面 | 状态 | 说明 |
+| --- | --- | --- |
+| 代理 | 已对齐 | zh/zh-tw/en × light/dark × 1440,另加 420 窄屏三组 |
+| 概览 | 已对齐 | 仅例外 B/C 有意不同(业务优选卡、市场外链) |
+| 连接(含日志/路由页签) | **有差异待做** | 节点名后的延迟药丸结构已按上游实现,但两实例均 0 条连接,无法端到端验证 |
+| 设置(10 个页签) | 已对齐 | kernel 页差异属例外 A/C;clientApp 的 6 项经复核为参数误用造成的假差异 |
+| 登录 / 设置密码 | 已对齐 | 结构一致 |
+
+**已修的真实差异(本轮)**:① 穿透按钮 hover 底色与不换行;② 圆角基数 26→16 及派生规则;③ 深色底 `#263449` 等;
+④ 页签间距 `app-card-gap`→`app-inline-gap`;⑤ 折叠态预览恢复成一排排小圆点(维护者指出的回归);
+⑥ 节点评分滑块端点改「0 分 / 100 分」;⑦ 内置分组图标按 `kind` 铺给同类出站;⑧ 侧栏「内核图标 + 内核名」行。
+
+**不可消除噪音**(脚本已归因,不计入差异):图标文件名哈希、dev 模式下 Vite 把 `.svg` 内联成 data URI、
+`span`/`div` 容器层级差异、1px 圆角、输入框右内边距策略、选中态颜色画在高亮层还是元素自身。
+
+**口径说明**:本次是基于上游 `panel/dist` 反推与文档口径做的**功能等价对齐**,不保证与闭源上游逐行一致。
