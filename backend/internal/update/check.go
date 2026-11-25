@@ -168,6 +168,47 @@ func (c *Checker) Latest(ctx context.Context) (tag, via string, err error) {
 	return "", "", last
 }
 
+// LatestTagOnly 只取「仓库里最新的、版本号能认出来的发布 tag」,不要求它带本架构安装包。
+//
+// 为什么单独一个方法:`Latest` 的「必须带本架构安装包」是给**自动升级**用的(装了也装不上就不该催人升级);
+// 但概览顶栏只是**显示版本号**,不该因为这个仓库的资产命名和自打包规则不一致就显示不出来。
+// 实测:main 自己的 release 用 `openbox-<版本>-linux-<架构>.tar.gz`,而当前仓库里只有上游命名的
+// `open-box-linux-x64.tar.gz`,于是 `Latest` 恒为空、顶栏只能退回构建时注入的版本(2026-11-25 真机发现)。
+// 草稿一律跳过(草稿对 `check` 也不可见)。直连失败再试镜像。
+func (c *Checker) LatestTagOnly(ctx context.Context) (tag, via string, err error) {
+	var last error
+	for _, v := range c.routes() {
+		var list []ghRelease
+		if err := c.get(ctx, "/repos/"+c.repo()+"/releases?per_page=30", v, &list); err != nil {
+			last = err
+			continue
+		}
+		var best string
+		var bestV Version
+		for _, r := range list {
+			if r.Draft {
+				continue
+			}
+			pv, ok := ParseVersion(r.Tag)
+			if !ok {
+				continue
+			}
+			if best == "" || pv.Compare(bestV) > 0 {
+				best, bestV = r.Tag, pv
+			}
+		}
+		if best == "" {
+			last = errors.New("仓库里没有版本号能认出来的发布")
+			continue
+		}
+		return best, v, nil
+	}
+	if last == nil {
+		last = errors.New("没有可用的通道")
+	}
+	return "", "", last
+}
+
 // latestOn 在指定通道上找最新一版(只看带本架构安装包的)。
 func (c *Checker) latestOn(ctx context.Context, via string) (ghRelease, error) {
 	arch := c.arch()

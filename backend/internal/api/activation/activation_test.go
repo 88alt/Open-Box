@@ -82,3 +82,28 @@ func TestTutorialVideosEmptyList(t *testing.T) {
 		t.Errorf("POST 应 405: %d", rec.Code)
 	}
 }
+
+// 概览顶栏的版本号按预设决策取「main 最新 release tag」:查得到就用它,
+// 查不到退回构建时注入的版本,两者都没有(dev 本地构建)就只留文案。
+func TestActivationPrefersLatestReleaseTag(t *testing.T) {
+	d := Deps{
+		Version:   "v0.1.480-main.3",
+		LatestTag: func(context.Context) string { return "v0.1.487" },
+	}
+	rec := call(t, d, http.MethodGet, "/api/openbox/activation", "")
+	if !strings.Contains(rec.Body.String(), `"left":"Open-Box Latest v0.1.487"`) {
+		t.Fatalf("应优先用最新 release tag: %s", rec.Body)
+	}
+
+	// 取不到 release tag 时退回构建注入的版本
+	d2 := Deps{Version: "v0.1.480-main.3", LatestTag: func(context.Context) string { return "" }}
+	if rec := call(t, d2, http.MethodGet, "/api/openbox/activation", ""); !strings.Contains(rec.Body.String(), `"left":"Open-Box Latest v0.1.480-main.3"`) {
+		t.Fatalf("应退回构建版本: %s", rec.Body)
+	}
+
+	// 都没有就只留文案(不出现尾部空格或空版本)
+	d3 := Deps{Version: "dev", LatestTag: func(context.Context) string { return "" }}
+	if rec := call(t, d3, http.MethodGet, "/api/openbox/activation", ""); !strings.Contains(rec.Body.String(), `"left":"Open-Box Latest"`) {
+		t.Fatalf("都没有应只留文案: %s", rec.Body)
+	}
+}

@@ -19,6 +19,10 @@ type Deps struct {
 	Version string
 	// KernelVersion 返回 sing-box 内核版本号(如 1.14.4),读不到返回空串;用来拼右边的默认文字。可为 nil。
 	KernelVersion func(ctx context.Context) string
+	// LatestTag 返回 main 上最新的发布 tag(如 v0.1.487),取不到返回空串。
+	// 按预设决策,概览顶栏的「Open-Box Latest」优先用它;取不到时退回构建时注入的 Version,再取不到就只留文案。
+	// 可为 nil。实现方应自带缓存并设超时——这个接口面板每隔几秒就会轮询一次。
+	LatestTag func(ctx context.Context) string
 }
 
 // state 对应前端的 OpenboxActivation。activated 恒为真(没有激活机制,等于一直解锁),
@@ -55,10 +59,11 @@ func Register(mux *http.ServeMux, d Deps) {
 }
 
 func (d Deps) state(ctx context.Context) state {
-	// 概览顶栏左边:main 有意不显示上游的市场推广(例外 B),固定「Open-Box Latest」,
-	// 有发布版本号(构建时注入的 tag)就带上;本地构建(dev)取不到就只留文案。
+	// 概览顶栏左边:main 有意不显示上游的市场推广(例外 B),固定「Open-Box Latest」,后面跟版本号。
+	// 版本号按预设决策取「main 最新 release tag」;查不到(离网、限流)时退回构建时注入的 tag;
+	// 本地构建(dev)两者都没有,就只留文案。
 	left := "Open-Box Latest"
-	if v := strings.TrimSpace(d.Version); v != "" && v != "dev" {
+	if v := d.latestVersion(ctx); v != "" {
 		left += " " + v
 	}
 	right := "sing-box"
@@ -68,4 +73,18 @@ func (d Deps) state(ctx context.Context) state {
 		}
 	}
 	return state{Activated: true, Defaults: defaults{Left: left, Right: right}}
+}
+
+// latestVersion 取顶栏要显示的版本号:先问最新 release tag,取不到退回构建时注入的版本,
+// 再取不到(本地 dev 构建)返回空串。两边都是空或 dev 时只显示文案,不留一个孤零零的版本号。
+func (d Deps) latestVersion(ctx context.Context) string {
+	if d.LatestTag != nil {
+		if v := strings.TrimSpace(d.LatestTag(ctx)); v != "" {
+			return v
+		}
+	}
+	if v := strings.TrimSpace(d.Version); v != "" && v != "dev" {
+		return v
+	}
+	return ""
 }

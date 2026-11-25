@@ -235,3 +235,23 @@ func TestServiceStatusRunCancel(t *testing.T) {
 	}
 	_ = time.Second
 }
+
+// LatestTagOnly 只认 tag,不要求带本架构安装包——概览顶栏显示版本号用。
+// 这条用例覆盖 2026-11-25 真机发现的问题:本仓库的发布是上游命名(open-box-linux-x64.tar.gz),
+// 没有 openbox-<版本>-linux-amd64.tar.gz,`Latest` 取不到,但 `LatestTagOnly` 必须能取到。
+func TestLatestTagOnlyWithoutArchAsset(t *testing.T) {
+	f := &fakeGH{releases: `[
+	 {"tag_name":"v0.1.487","draft":false,"assets":[{"name":"open-box-linux-x64.tar.gz","browser_download_url":"http://x/a"}]},
+	 {"tag_name":"v0.1.486","draft":false,"assets":[{"name":"open-box-linux-x64.tar.gz","browser_download_url":"http://x/b"}]},
+	 {"tag_name":"v0.1.488","draft":true,"assets":[{"name":"open-box-linux-x64.tar.gz","browser_download_url":"http://x/c"}]},
+	 {"tag_name":"nightly","draft":false,"assets":[]}]`}
+	c := newChecker(t, f)
+	tag, via, err := c.LatestTagOnly(context.Background())
+	if err != nil || tag != "v0.1.487" || via != "api" {
+		t.Fatalf("应取到 v0.1.487(跳过草稿与认不出的 tag): %q %q %v", tag, via, err)
+	}
+	// 同一份数据下 Latest(要安装包)按设计取不到
+	if _, _, err := c.Latest(context.Background()); err == nil {
+		t.Error("Latest 应当因为没有本架构安装包而失败")
+	}
+}

@@ -1161,11 +1161,16 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	})
 
 	// 激活和教程视频:没有对应概念,只回固定内容(DESIGN D9 和第 8 节),不保存任何东西
+	// 概览顶栏「Open-Box Latest」后面的版本号:按预设决策取 main 上最新的 release tag。
+	// 这里挂一个 10 分钟缓存 + 5 秒超时:面板会频繁轮询这个接口,不能每次都去问 GitHub;
+	// 查不到(离网、限流、仓库没发布)返回空串,由 activation 退回构建时注入的版本。
+	latestTag := latestReleaseTagCached(&update.Checker{MirrorPrefix: cfg.UpdateMirror}, 10*time.Minute)
 	activationapi.Register(srv.Mux(), activationapi.Deps{
 		Version: version,
 		KernelVersion: func(ctx context.Context) string {
 			return singbox.ReadKernelVersion(ctx, cfg.SingBox).Version
 		},
+		LatestTag: latestTag,
 	})
 
 	// 已知终端(只读):DHCP 租约里的设备,给「终端分流」选来源;流量里出现过的来源 IP 等 traffic* 做了再并进来
