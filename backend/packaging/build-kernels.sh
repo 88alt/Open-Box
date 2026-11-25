@@ -8,12 +8,15 @@
 # openbox-* 字段、Mihomo 的 openbox-* 补丁键),官方二进制没有这些,配置会起不来或功能不全。
 # 上游把补丁源码作为 release 资产公开,所以这里下载源码自己编,不碰闭源产物。
 #
-# 缓存:源码包与解包结果放 ${OPENBOX_KERNEL_CACHE:-$TMPDIR/openbox-kernels/<版本>},
+# 缓存:源码包与解包结果放 ${OPENBOX_KERNEL_CACHE:-$TMPDIR/openbox-kernels/<两个源码包的 sha256 前 12 位>},
 # 同一台机器上重复构建不会重新下载。校验和每次都核,缓存命中也要核。
+# 缓存键用 sha256 而不是版本串:v0.1.482 → v0.1.484 时 sing-box 的补丁源码包**同名但内容变了**
+# (版本串还是 1.14.4-openbox-60),按版本串做键会一直用旧的那份,然后在校验和上失败。
 set -eu
 
 die() { echo "[build-kernels] 错误:$*" >&2; exit 1; }
-info() { echo "[build-kernels] $*"; }
+# 日志走 stderr:unpack 用 $(...) 取「解包后的路径」,日志混进 stdout 会让 SRC 变成两行
+info() { echo "[build-kernels] $*" >&2; }
 
 [ "$#" -ge 2 ] || die "用法: $0 <amd64|arm64> <outdir> [sing-box|mihomo|all]"
 
@@ -36,7 +39,9 @@ mkdir -p "$2"
 OUT=$(CDPATH= cd -- "$2" && pwd)
 
 TMPBASE="${TMPDIR:-/tmp}"
-CACHE="${OPENBOX_KERNEL_CACHE:-$TMPBASE/openbox-kernels/sing-box-$SINGBOX_BUILD_VERSION+mihomo-$MIHOMO_BUILD_VERSION}"
+_sb_key=$(printf '%s' "$SINGBOX_SOURCE_SHA256" | cut -c1-12)
+_mh_key=$(printf '%s' "$MIHOMO_SOURCE_SHA256" | cut -c1-12)
+CACHE="${OPENBOX_KERNEL_CACHE:-$TMPBASE/openbox-kernels/$_sb_key-$_mh_key}"
 mkdir -p "$CACHE"
 CACHE=$(CDPATH= cd -- "$CACHE" && pwd)
 
