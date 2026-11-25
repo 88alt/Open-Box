@@ -20,9 +20,11 @@ on:
 permissions:
   contents: read
 
+# main 上的推送不互相取消(每个提交都要跑完,否则 Commits 页会留下红叉、check-runs 查不到);
+# 只有 PR 才取消旧运行。2026-11-25 因连推 #47/#48 被取消而改,见 backend/STATUS.md「CI 门禁」第 8 条。
 concurrency:
   group: backend-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:

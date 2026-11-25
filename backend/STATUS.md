@@ -16,7 +16,10 @@ Backend 工作流(`.github/workflows/backend.yml`)是 main 上唯一的自动验
 5. **涉及 `backend/` 却没出现任何检查,当异常处理**,不当通过:先按第 1 条确认工作流还在,再等,不要往下做。
 6. 本批只改前端面板或文档(不碰 `backend/` 和 `backend.yml`)不会触发 Backend,没有检查是正常的,不用等。
 7. **每批的日志必须带一行结果**:`Backend:<提交号前 8 位> Test / Build amd64 / Build arm64 全绿`;或者 `Backend:本批不涉及 backend/,未触发`。日志里没有这一行,就当这一批没做完。
-8. **一次只推一批,等它绿了再推下一批**(2026-11-25 补,踩过):`backend.yml` 有 `concurrency: {group: backend-${{ github.ref }}, cancel-in-progress: true}`,连推会**取消前一批还在跑的 run**,前一批的 check-runs 就查不到了,结论也就永远补不回来(Actions 的 run 记录还有保留期限,过期连列表都没了)。所以:推完 → 等到 `Test` / `Build (amd64)` / `Build (arm64)` 三项 completed+success → **把结论写进 STATUS 并推这一条** → 才做下一批。如果某一批的 run 确实被后续推送取消了,如实写「该批 run 被取消、无完整绿勾,已按同口径本地复验」,**不要**补写成「全绿」,也不要为空提交去补一个勾。
+8. **一次只推一批,等它绿了再推下一批**(2026-11-25 补,踩过):`backend.yml` 原先是 `cancel-in-progress: true`,连推(如 Backend #47、#48 相隔约 2 分钟)会**取消前一批还在跑的 run**,Actions 页显示灰色感叹号、Commits 页汇总成红叉(日志是 `Error: The operation was canceled.`,不是测试失败),前一批的 check-runs 也就查不到了(Actions 的 run 记录还有保留期限)。**2026-11-25 维护者已把 `concurrency` 改为 `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`**(提交说明以 `ci:` 开头):main 上的推送不再互相取消,只有 PR 取消旧运行;**不要改回 `true`,也不要自行改这一段**。但同组仍是「一个运行中 + 一个排队」,连推三批时排队中间那个仍可能被替换,所以规则不变:
+   - **推送前先查** `https://api.github.com/repos/timeflysoon/Open-Box/actions/runs?branch=main&per_page=5`,有 `in_progress` / `queued` 就等 30 秒再查,最多 10 分钟;上一批没跑完不推下一批。
+   - 推完 → 等到 `Test` / `Build (amd64)` / `Build (arm64)` 三项 completed+success → **把结论写进 STATUS 并推这一条** → 才做下一批。
+   - **`cancelled` ≠ 失败**:先看同一分支上是否有更晚的提交把它顶掉。是 → 不回退、不修代码,日志如实写「该批 run 被取消、无完整绿勾,后续提交 <sha> 已通过」,以最新提交的检查为准,**不计入**「连续 3 批验证失败」,也**不要**补写成「全绿」或为空提交去补勾。没有后续推送却 cancelled → 当异常,先重新观察一次;只有 `failure` 才按第 4 条处理。
 9. 连续 3 批验证失败,或 main 上出现不是本任务产生的陌生提交(维护者的 `ci:` 提交、作者栏含 timeflysoon 的提交除外,先对账再继续),立即停止推送,把现状写进 STATUS。
 
 ## 先做
@@ -264,6 +267,7 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 - [x] (面板的活)概览顶栏:main 的顶栏是 `panel/src/components/sidebar/OverviewCtrl.vue`(左「面板版本」(加粗)、右「内核版本」(淡色)),文字由 `GET /api/openbox/activation` 的 `defaults` 给,不依赖是否激活。**2026-11-25 按例外 B 改完**:左边固定「Open-Box Latest」(+ 构建时注入的发布版本号,`dev` 不带),右边随包内核的版本字符串(魔改 sing-box);上游的 `OverviewCarousel`(市场推广轮播)不做。**推断点**:「Latest」的版本号取构建注入的 `-X main.version`(发布 tag),main 上没有发布 tag、本地构建是 `dev`,所以本机显示「Open-Box Latest」;维护者若要改成查线上最新 release tag,在 `internal/api/activation` 里换成一次 release 查询即可。
 
 ## 日志(新的在最上面)
+- 2026-11-25 ci: 排障经验写入。**现象**:Commits 页 `a179524`(Backend #47)显示红叉 `0 / 2`,Actions 页为灰色感叹号;日志 `go test` 全部 `ok`、末行 `Error: The operation was canceled.`,Test 与 Build 都是 cancelled(Build `needs: test`,连带取消)。**原因**:#47 之后约 2 分钟推了 #48,`concurrency` 的 `cancel-in-progress: true` 取消了 #47;与提交说明文字(`[x]` 等)无关。**处理**:`backend.yml` 的 `cancel-in-progress` 改为只对 PR 生效(`ci:` 提交,维护者要求);CI 门禁第 8 条改写,补「推送前先查是否有在跑的 run」和「cancelled 不算失败」。#48~#50 均全绿且包含 #47 的内容,不重跑。Backend:本批改了 `.github/workflows/backend.yml`,以推送后的检查为准。
 
 - 2026-11-25 backend: 真机验证规则库分类展开,`policies/entries` 的 geosite/geoip 展开转 `[x]`。**跑法**:把设备官方安装里的真实规则集(`/opt/open-box/data/geo-cache/*.srs`,25 个)拷进测试 geo 目录,用 `-geo-dir` 指过去,自研后端读它们做 `sing-box rule-set decompile`。**结果(数字互相勾稽,不是只看状态码)**:`rulesets/entries?tag=geosite-cn` = **110177** 条(`domain_suffix`)、`geoip-cn` = **9665** 条(`ip_cidr`);`policies/entries?name=国内直连`(默认档案里唯一带 `rulesets` 的站点集,`geosite-cn`+`geoip-cn`)回 `counts={all:119842,domain:110177,ip:9665}`、`missing=[]`,**110177 + 9665 = 119842 完全对上**——展开路径在真实 `.srs` 上是正确的。不存在的分类 404 + 中文原因;`其他` 作为兜底集 `fallback:true`/`total:0` 且 200。**踩坑**:两次 heredoc 内嵌单引号把脚本写坏了(设备上根本没生成日志),改成**本地写脚本 + scp** 之后稳定;以后设备端脚本都这么做。
 - 2026-11-25 backend: CI 门禁补记落地记录。本批(订正 CI 记录 + 新增「一次只推一批」规则)推送后,`f2ceb080` 的 **Test / Build (amd64) / Build (arm64) 三项 completed + success**。按新规则第 8 条,从这条起每次只推一批、等绿了把结论写进 STATUS 再往下做,不再让 `cancel-in-progress` 吞掉前一批的结论。
