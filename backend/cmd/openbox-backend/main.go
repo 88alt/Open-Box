@@ -66,6 +66,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/contentfilter"
 	"github.com/timeflysoon/Open-Box/backend/internal/controllerproxy"
 	"github.com/timeflysoon/Open-Box/backend/internal/core"
+	"github.com/timeflysoon/Open-Box/backend/internal/deploykernel"
 	"github.com/timeflysoon/Open-Box/backend/internal/deploystate"
 	"github.com/timeflysoon/Open-Box/backend/internal/diagnostics"
 	"github.com/timeflysoon/Open-Box/backend/internal/dnscache"
@@ -732,8 +733,55 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		// 当前选中的内核不是 sing-box 时拒绝部署这份 sing-box 配置(见 Deployer.RouterKernel 的说明)
 		RouterKernel: func() (string, error) { return system.ReadRouterKernel(cfg.RouterKernelFile()) },
 	}
+	// 设备跑 mihomo 时的部署流程:与 sing-box 那条并列,由下面的 KernelDeployer 按 router-kernel 分派。
+	// 两条流程各自做「校验 → 备份 → 原子替换 → 重启 → 健康检查 → 失败回滚」;mihomo 用 `mihomo -t` 校验、
+	// 用 mihomo.yaml 里的 external-controller + secret 做健康检查(与 sing-box 的 clash_api 不是同一个 secret)。
+	dnsModeForMihomo := func(ctx context.Context) string {
+		p, err := profileSvc.Get(ctx)
+		if err != nil {
+			return ""
+		}
+		dns, _ := p["dns"].(map[string]any)
+		m, _ := dns["mode"].(string)
+		return m
+	}
+	mihomoDeployer := &mihomo.Deployer{
+		Build: kernelgen.MihomoBuilder{Gen: kg},
+		Paths: mihomo.ArtifactPaths{
+			Config: cfg.MihomoConfigFile(), Inputs: cfg.MihomoInputsFile(),
+			EntryBypass: cfg.MihomoEntryBypassFile(), RouterKernel: cfg.RouterKernelFile(),
+			DNSMasq: cfg.MihomoDnsmasqFile(),
+		},
+		Meta:     mihomo.ArtifactMeta{DNSMasq: dnsModeForMihomo(context.Background()) == "dnsmasq"},
+		Mihomo:   cfg.Mihomo,
+		Home:     cfg.MihomoHome(),
+		Platform: platformName(initKind),
+		Service:  svcCtl, ServiceName: cfg.CoreService,
+		BeforeApply: dnsSync.BeforeKernelStop,
+		AfterRunning: func(ctx context.Context) string {
+			res, err := dnsSync.AfterKernelStart(ctx)
+			return dnssync.Note(res, err)
+		},
+		Conflicts: func(ctx context.Context) ([]string, error) {
+			found, err := conflictDetector.Find(ctx)
+			var names []string
+			for _, c := range found {
+				if c.Running {
+					names = append(names, c.Label)
+				}
+			}
+			return names, err
+		},
+		SaveSelections: selectionsStore.Set,
+	}
+	// 按 <ConfigDir>/router-kernel 选一条:sing-box 写 config.json,mihomo 写 mihomo.yaml
+	kernelDeployer := &deploykernel.Deployer{
+		Kernel:  func() (string, error) { return system.ReadRouterKernel(cfg.RouterKernelFile()) },
+		SingBox: deployer.Deploy,
+		Mihomo:  mihomoDeployer,
+	}
 	// 每次部署(面板的「部署」按钮、DNS 过滤的应用)都经这里记下最近一次的结果,GET /deploy/state 读它
-	deploySvc := &deploystate.Service{Store: st, Deploy: deployer.Deploy}
+	deploySvc := &deploystate.Service{Store: st, Deploy: kernelDeployer.Deploy}
 	deployapi.Register(srv.Mux(), deployapi.Deps{Service: deploySvc})
 	filterFiles := singbox.FilterFiles{SingBox: cfg.SingBox}
 	filterSvc := &dnsfilter.Service{
