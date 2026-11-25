@@ -34,7 +34,7 @@
 | 代理 | `#/proxies` | `ProxiesPage` | 已对齐(DOM 比对,zh/light/1440;另有 zh/dark 一次) |
 | 概览 | `#/overview` | `OverviewPage` | 已对齐(例外 B/C 有意不同) |
 | 连接(含日志 / 规则页签) | `#/connections` | `ConnectionWorkspacePage` | 待做 |
-| 设置(含订阅 / 分流 / 内核页签) | `#/settings` | `SettingsPage` | 待做 |
+| 设置(含订阅 / 分流 / 内核页签) | `#/settings` | `SettingsPage` | 已对齐(DOM 比对,zh/light/1440) |
 | 登录 | `#/login` | `LoginPage` | 待做 |
 | 设置访问密码 | `#/setup` | `SetupPasswordPage` | 待做 |
 
@@ -134,3 +134,10 @@
   都缩到 96px 入库。
   验证(1440×900,同一后端,当前内核 mihomo):两页 `data-sidebar-kernel` 行的类名、`gap 6px`、`padding 12px`、文字 `Mihomo`、
   图标 16×16、`alt=""`、`object-fit: contain` **逐字段一致**。
+
+- 2026-11-26 **设置页(DOM 比对,zh/light/1440)**:结构行数 327 / 328,差异从 22 项降到 18 项,**计算样式只剩 1 项**(`card.radius` 19 vs 18,差 1px,与代理页同一原因)。
+  **发现并修掉 1 处真实差异**:节点评分滑块的端点与单位,上游用 `qualityPoints` 键(中文「分」/ 英文「points」),
+  写成 `0 分` / `100 分`;main 用的是百分比 `0%` / `100%`。已改为上游的写法(`unit`、`min-label`、`max-label` 三处)。
+  实测两页现在都是 `0 分 / 100 分` + 两个快捷按钮 `30 分 / 80 分`,逐字一致。
+  **剩余 18 / 19 项已归因**:`logo` 与 `mihomo` 图标的哈希名不同(同一张图);dev 模式下小 SVG 被内联成 data URI;
+  上游用 `span` / main 用 `div` 做同样的文本容器(路径不同但文本一致)。

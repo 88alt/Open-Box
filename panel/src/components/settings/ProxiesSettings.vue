@@ -68,16 +68,16 @@
         <div class="text-sm font-normal">
           {{ $t('nodeScoreThresholds') }}
         </div>
+        <!-- 节点评分是「分」不是百分比:端点与单位都取 qualityPoints(对齐上游) -->
         <ThresholdRangeBar
           :label="$t('nodeScoreThresholds')"
           :markers="nodeScoreMarkers"
           :segments="nodeScoreSegments"
           :stops="nodeScoreStops"
-          unit="%"
-          :unit-space="false"
+          :unit="$t('qualityPoints')"
           integer
-          min-label="0%"
-          max-label="100%"
+          :min-label="`0 ${$t('qualityPoints')}`"
+          :max-label="`100 ${$t('qualityPoints')}`"
           @update="onNodeScoreUpdate"
         />
       </div>
