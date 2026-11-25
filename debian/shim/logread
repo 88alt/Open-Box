@@ -12,6 +12,9 @@ while [ $# -gt 0 ]; do
 		*) shift ;;
 	esac
 done
+if [ "$PATTERN" = "sing-box" ]; then
+	PATTERN='sing-box|openbox-kernel'
+fi
 if [ -n "$PATTERN" ]; then
 	journalctl --no-pager -q -o short -u openbox.service -u openbox-panel.service -n "$LINES" | grep -E -- "$PATTERN"
 else
