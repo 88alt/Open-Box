@@ -33,7 +33,7 @@
 | --- | --- | --- | --- |
 | 代理 | `#/proxies` | `ProxiesPage` | 已对齐(DOM 比对,zh/light/1440;另有 zh/dark 一次) |
 | 概览 | `#/overview` | `OverviewPage` | 已对齐(例外 B/C 有意不同) |
-| 连接(含日志 / 规则页签) | `#/connections` | `ConnectionWorkspacePage` | 有差异待做(仅 1 项待定位) |
+| 连接(含日志 / 规则页签) | `#/connections` | `ConnectionWorkspacePage` | 有差异待做(节点名缺延迟标签) |
 | 设置(含订阅 / 分流 / 内核页签) | `#/settings` | `SettingsPage` | 已对齐(DOM 比对,zh/light/1440) |
 | 登录 | `#/login` | `LoginPage` | 待做 |
 | 设置访问密码 | `#/setup` | `SetupPasswordPage` | 待做 |
@@ -203,3 +203,15 @@
     (……「负载检测 负载较小 负载一般 负载较高 0% 100% 50% 90% 节点评分 评分较低 评分一般 评分优秀 0 分 100 分 30 分 80 分 IPv6 测试 测试站点」),
     说明页面对齐、先前那 6 项是抽样元素不同造成的假差异。
     **教训**:跨实现比对子页签不能靠 URL 参数(两边的 key 命名不同),要先落地同一入口再点同名页签。
+
+- 2026-11-26 **连接页剩余那 1 项已定位到根因(但尚未实现,故本页仍不标已对齐)**:上游连接页有 81 个
+  `.latency-tag`(每个带 `role="group"` 和 `aria-label=<节点名>`,即节点名旁边那枚延迟药丸),main 一个都没有。
+  顺着 dist 追到了确切位置:连接列表的「策略 / 出站」列渲染的是一个组合组件
+  `d(ct, { name, class: "inline-flex!", hideBandwidth: true })`——`ct` 同时负责**节点名 + 延迟标签**,
+  并通过 `hideBandwidth` 只显示延迟、不显示带宽段;详情弹窗与日志页的链路也用同一套。
+  main 的 `ProxyName.vue` 只渲染 `ProxyIcon` + 名字,**没有延迟标签,也不接受 `hideBandwidth`**。
+  这不是「差一个属性」,而是「少了一整块子组件」,要做就得给 `ProxyName` 加一个可选的延迟药丸(读同一个
+  `latency` 来源、同一套阈值着色),同时确认连接页三处调用点都传 `hideBandwidth`。
+  我这一页已经误判过两次(先说「实现方式不同」、后把 `role="group"` 加到两个不在这条渲染链上的组件),
+  所以**这次只记录根因,不再凭推测改**;下一批按上面的结构实现,并逐点验证 81 个全部出现。
+  另外:我加过的 `role="group"` 与分组行 `role` 均已全部撤回,没有留在任何提交里。
