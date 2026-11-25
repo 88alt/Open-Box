@@ -71,6 +71,16 @@ export const IPv6Map = useStorage<Record<string, boolean>>('config/ipv6-map', {}
 export const hiddenGroupMap = useStorage<Record<string, boolean>>('config/hidden-group-map', {})
 export const proxyProviederList = ref<ProxyProvider[]>([])
 
+// 出站类型 → 档案里分组的 kind('direct' / 'block'),对齐上游按 kind 铺图标的口径。
+// 内核给的类型是 'Direct' / 'Block' / 'Reject' / 'RejectDrop' 之类(大小写不一),
+// 这里统一小写后归类;认不出来返回空串,不参与传播。
+const outboundKindOf = (type: string | undefined): string => {
+  const t = String(type || '').toLowerCase()
+  if (t === 'direct') return 'direct'
+  if (t === 'block' || t === 'reject' || t === 'rejectdrop' || t === 'reject-drop') return 'block'
+  return ''
+}
+
 const AUTO_REFRESHABLE_PROXY_TYPES = new Set([PROXY_TYPE.Fallback, PROXY_TYPE.URLTest])
 const MIN_AUTO_REFRESH_INTERVAL_MS = 30 * 1000
 const MAX_AUTO_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000
@@ -365,11 +375,24 @@ export const fetchProxies = async () => {
         history: [],
       } as unknown as Proxy
     }
-    if (item.icon) {
-      const url = iconUrlFor(item.icon)
-      if (url) proxyMap.value[item.name].icon = url
+    // 带 kind 的内置分组(直连 / 拒绝):图标不只给它自己,还要给**所有同 kind 的出站**。
+    // 内核的 clash_api 里拒绝出站可能叫 REJECT / REJECT-DROP 等多个名字,或者根本没列出来;
+    // 档案里只有一个 kind=block 的「拒绝」组。上游就是按 kind 批量铺的(见其
+    // `if (l.kind) for (...) sameKind.push(f)` 那段),main 之前只给了组自己,
+    // 于是连接页 / 链路上那些出站的标签前面没有图标(2026-11-26 比对发现)。
+    const sameKind: Proxy[] = [proxyMap.value[item.name]]
+    if (item.kind) {
+      for (const [otherName, other] of Object.entries(proxyMap.value)) {
+        if (otherName === item.name) continue
+        if (outboundKindOf(other.type) !== item.kind) continue
+        sameKind.push(other)
+      }
     }
-    proxyMap.value[item.name].iconScale = item.iconScale || 0
+    const iconURL = item.icon ? iconUrlFor(item.icon) : ''
+    for (const target of sameKind) {
+      if (iconURL) target.icon = iconURL
+      target.iconScale = item.iconScale || 0
+    }
     // 故障转移的内部子组(__fo:组id:页签id)带页签自己的图标,没挑就继承父组的:链路和穿透里显示的是页签
     if (item.type === 'failover') {
       for (const lane of item.lanes ?? []) {

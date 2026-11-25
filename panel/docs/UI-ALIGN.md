@@ -164,3 +164,15 @@
   非 link 按钮带 `1px solid var(--app-card-border)` 描边;main 缺这两条,字重落到 daisyUI 默认 600,「取消」也没有胶囊描边。
   已在 `main.css` 补上这两条,并带上上游对方形/圆形/紧凑图标 ghost 按钮与侧栏折叠按钮的例外(不描边、静止无底色)。
   不放「使用教程」按钮及教程视频相关面板与后端(例外 A)。
+
+- 2026-11-26 **连接页:上一批留下的「拒绝/直连标签无图标」已定位并修好**。根因在 `store/proxies.ts`:
+  上游遍历档案分组时,对带 `kind` 的内置分组(`builtin-direct` / `builtin-block`,档案里名字是中文「直连」「拒绝」)
+  会**把它的图标按 kind 铺给所有同类出站**(`if (l.kind) for (...) sameKind.push(f)`),而内核 clash_api 里的出站名是
+  `DIRECT` / `REJECT` / `REJECT-DROP`(名字对不上,靠 kind 才认得)。main 只给了「组自己」,而组名在 `proxyMap` 里
+  根本不存在,于是图标从未落到 `REJECT` 上。
+  已补:`outboundKindOf()`(Direct→direct;Block/Reject/RejectDrop→block)+ 按 kind 批量写 `icon` / `iconScale`。
+  验证:两页「拒绝」标签各 83 个、**带图标的各 83 个**,逐项一致;`cross` 83↔83、`dart` 34↔34。
+  **仍未对齐的 1 项(本页继续保持「有差异待做」)**:上游连接页里有 `.latency-tag` 元素(带 `role="group"`,共 81 个),
+  main 的连接页**完全没有这个元素**——不是缺一个属性,而是这条延迟标签在这页没渲染。我试过给 `proxies/LatencyTag.vue`
+  与 `common/LatencyPill.vue` 加 `role="group"`,但这两个组件都不在连接页的渲染路径上,所以改动无效、已全部撤回,
+  没有留在提交里。下一批继续查连接页延迟列的实现。
