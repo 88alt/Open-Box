@@ -233,17 +233,19 @@ function diffLines(a, b) {
 async function login(page, origin) {
   await page.goto(origin + '/#/login', { waitUntil: 'domcontentloaded' })
   // main 的登录页是懒加载路由,首帧可能还没渲染出输入框:等它出现,不要只 sleep 一下就去数
-  const input = page.locator('input[type=password]')
+  // 登录页的密码框在 input 上(:type 是 password),但首帧可能还没挂载;等它出现。
+  // 用 input.input 兜底:有些实现把 class 放在外层 span 上,内层 input 只有类型。
+  const input = page.locator('input[type=password], input.input, .input input')
   try {
-    await input.first().waitFor({ state: 'visible', timeout: 15000 })
+    await input.first().waitFor({ state: 'visible', timeout: 20000 })
   } catch {
     return // 真的没有登录框(已登录),交给后面的页面判断
   }
   await input.first().fill(LOGIN)
-  await page
-    .locator('button:has-text("登录"), button:has-text("Login"), button[type=submit]')
-    .first()
-    .click()
+  // 登录按钮的文案随语言变(简体「登录」/ 繁体「登入」/ 英文「Login」),用表单里的 submit 按钮定位,
+  // 不靠文案(踩过:繁体下按「登录」找不到按钮,超时)。
+  const btn = page.locator('button[type=submit], form button, button:has-text("登录"), button:has-text("登入"), button:has-text("Login")').first()
+  await btn.click()
   // 登录成功后路由会跳到默认页;等它离开 /login 再继续,否则抓到的是登录页
   for (let i = 0; i < 20; i++) {
     await page.waitForTimeout(500)

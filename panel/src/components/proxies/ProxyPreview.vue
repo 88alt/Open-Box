@@ -103,11 +103,6 @@ watch(isWindowResizing, (resizing) => {
   }
 })
 
-const widthEnough = computed(() => {
-  const effectiveWidth = stableWidth.value || width.value
-  return effectiveWidth > 20 * props.nodes.length
-})
-
 const makeTippy = (e: Event, node: { name: string; latency: number }) => {
   const tag = document.createElement('div')
   const name = document.createElement('div')
@@ -127,15 +122,14 @@ const makeTippy = (e: Event, node: { name: string; latency: number }) => {
   showTip(e, tag)
 }
 
+// 对齐上游:`forceDots || 预览类型 !== bar` —— 也就是**除了显式选「长条」以外一律画圆点**。
+// main 早先写的是 `dots || (auto && 宽度够)`,AUTO 下宽度不够就退成长条,于是窄一点的卡片
+// (代理页折叠态)上圆点会突然变成长条,与上游不一致(2026-11-26 维护者指出,截图确认)。
 const showDots = computed(() => {
   if (props.forceDots) {
     return true
   }
-
-  return (
-    proxyPreviewType.value === PROXY_PREVIEW_TYPE.DOTS ||
-    (proxyPreviewType.value === PROXY_PREVIEW_TYPE.AUTO && widthEnough.value)
-  )
+  return proxyPreviewType.value !== PROXY_PREVIEW_TYPE.BAR
 })
 const nodesLatency = computed(() =>
   props.nodes.map((name) => {
