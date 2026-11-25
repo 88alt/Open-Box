@@ -175,14 +175,18 @@ openbox_load_modules() {
 	done
 }
 
-# 内核的 auto_redirect 会自己建一张 inet sing-box 表,被强杀 / OOM 时不会删,下次启动撞上就 FATAL(file exist)。
-# 只在没有任何 sing-box 在跑时才清:机器上要是还跑着别的 sing-box,那张表是它的
+# 内核的 auto_redirect 会自己建一张 inet sing-box / inet mihomo 表,被强杀 / OOM 时不会删,下次启动撞上就 FATAL(file exist)。
+# 只在没有任何对应内核进程在跑时才清:机器上要是还跑着别的实例,那张表是它的
 openbox_clean_stale_nft() {
 	command -v nft >/dev/null 2>&1 || return 0
-	pgrep -x sing-box >/dev/null 2>&1 && return 0
-	nft list table inet sing-box >/dev/null 2>&1 || return 0
-	echo "openbox: removing stale nftables table left by a previous kernel run" >&2
-	nft delete table inet sing-box >/dev/null 2>&1
+	if ! pgrep -x sing-box >/dev/null 2>&1 && nft list table inet sing-box >/dev/null 2>&1; then
+		echo "openbox: removing stale nftables table left by a previous kernel run" >&2
+		nft delete table inet sing-box >/dev/null 2>&1
+	fi
+	if ! pgrep -x mihomo >/dev/null 2>&1 && nft list table inet mihomo >/dev/null 2>&1; then
+		echo "openbox: removing stale nftables table left by a previous mihomo run" >&2
+		nft delete table inet mihomo >/dev/null 2>&1
+	fi
 	return 0
 }
 

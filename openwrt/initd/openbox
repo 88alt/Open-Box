@@ -495,10 +495,14 @@ openbox_load_modules() {
 # sing-box(passwall 之类),那张表是它的,不能动。
 openbox_clean_stale_nft() {
 	command -v nft >/dev/null 2>&1 || return 0
-	pgrep sing-box >/dev/null 2>&1 && return 0
-	nft list table inet sing-box >/dev/null 2>&1 || return 0
-	echo "openbox: removing stale nftables table left by a previous kernel run" >&2
-	nft delete table inet sing-box >/dev/null 2>&1
+	if ! pgrep sing-box >/dev/null 2>&1 && nft list table inet sing-box >/dev/null 2>&1; then
+		echo "openbox: removing stale nftables table left by a previous kernel run" >&2
+		nft delete table inet sing-box >/dev/null 2>&1
+	fi
+	if ! pgrep mihomo >/dev/null 2>&1 && nft list table inet mihomo >/dev/null 2>&1; then
+		echo "openbox: removing stale nftables table left by a previous mihomo run" >&2
+		nft delete table inet mihomo >/dev/null 2>&1
+	fi
 	return 0
 }
 
