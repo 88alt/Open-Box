@@ -205,3 +205,38 @@ func parseMode(s string) (fs.FileMode, error) {
 	}
 	return fs.FileMode(n), nil
 }
+
+// CountGeoFiles 数一个规则库目录里的分类文件:<分类名>.srs 里以 geosite- 开头算 geosite,geoip- 开头算 geoip。
+// 别的文件(说明、清单自己)不算。
+func CountGeoFiles(dir string) (GeoCounts, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return GeoCounts{}, err
+	}
+	var c GeoCounts
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".srs") {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(e.Name(), "geosite-"):
+			c.Geosite++
+		case strings.HasPrefix(e.Name(), "geoip-"):
+			c.Geoip++
+		}
+	}
+	return c, nil
+}
+
+// WriteGeoData 在 dir 下写 geodata.json(规则库清单),后端的 GET /update/status 从这里取
+// geoVersion / geoDate / geoCounts。它也会被写进 manifest.files,所以要在写清单之前调。
+func WriteGeoData(dir string, g GeoData) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(g, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, GeoDataName), append(b, '\n'), 0o644)
+}

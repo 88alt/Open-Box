@@ -2,12 +2,14 @@ package update
 
 import (
 	"context"
-	"errors"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
-)
+	"sync"
 
-// ErrNotReady 表示「下载并替换」这一步还没有实现:它要等 M6 定下发布包的格式和安装目录。
-var ErrNotReady = errors.New("在线升级还没有实现:发布包的格式和安装目录要等打包(M6)定下来;现在可以检查有没有新版,升级请手动下载发布包替换")
+	"github.com/timeflysoon/Open-Box/backend/internal/release"
+)
 
 // Channel 是安装通道:direct = GitHub 直连,mirror = 镜像加速(Prefix 是镜像前缀)。
 type Channel struct {
@@ -25,15 +27,24 @@ type Progress struct {
 	Running bool    `json:"running"`
 }
 
-// Status 对应前端 OpenboxUpdateStatus。geoVersion / geoDate / geoCounts 是可选字段,要等打包定下规则库清单文件的格式才有来源,
-// 现在不给。
+// Status 对应前端 OpenboxUpdateStatus。
+// geoVersion / geoDate / geoCounts 读随包规则库的清单(geodata.json);没有随包规则库时不给这三个字段。
 type Status struct {
-	Version        string   `json:"version"`
-	SingboxVersion string   `json:"singboxVersion"`
-	BuiltAt        string   `json:"builtAt"`
-	Channel        Channel  `json:"channel"`
-	Status         Progress `json:"status"`
-	LogTail        string   `json:"logTail"`
+	Version        string     `json:"version"`
+	SingboxVersion string     `json:"singboxVersion"`
+	BuiltAt        string     `json:"builtAt"`
+	GeoVersion     string     `json:"geoVersion,omitempty"`
+	GeoDate        string     `json:"geoDate,omitempty"`
+	GeoCounts      *GeoCounts `json:"geoCounts,omitempty"`
+	Channel        Channel    `json:"channel"`
+	Status         Progress   `json:"status"`
+	LogTail        string     `json:"logTail"`
+}
+
+// GeoCounts 是规则库的分类文件个数,与前端 OpenboxUpdateStatus.geoCounts 一致。
+type GeoCounts struct {
+	Geosite int `json:"geosite"`
+	Geoip   int `json:"geoip"`
 }
 
 // Service 把版本信息、检查器和升级进度合在一起。
@@ -43,6 +54,23 @@ type Service struct {
 	Version, BuiltAt string
 	// KernelVersion 读 sing-box 内核版本,读不到返回空串;为空时 singboxVersion 是空串。
 	KernelVersion func(ctx context.Context) string
+
+	// DataDir 是数据目录;升级的暂存放 <DataDir>/update/<版本>(与安装目标同一个文件系统,提交时改名就是原子的)。
+	DataDir string
+	// GeoDir 是规则库目录,读里面的 geodata.json 填 geoVersion / geoDate / geoCounts。
+	GeoDir string
+	// ConfigFile 是当前已部署的 sing-box 配置,冒烟时用新内核 check 它;为空或不存在就跳过这一步。
+	ConfigFile string
+	// Client 是下载用的 HTTP 客户端,为空时用不设整体超时的默认客户端。
+	Client *http.Client
+	// Smoke 是冒烟检查,为空时用 SmokeTest(跑暂存目录里的新二进制)。
+	Smoke func(ctx context.Context, root string) error
+	// FreeSpace 报目录所在文件系统剩余字节数,为空时用 FreeSpace。
+	FreeSpace func(dir string) (int64, error)
+
+	// mu 保护 j:Run / Cancel / Status 会并发进来。
+	mu sync.Mutex
+	j  *job
 }
 
 func (s *Service) channel() Channel {
@@ -58,7 +86,49 @@ func (s *Service) Status(ctx context.Context) Status {
 	if s.KernelVersion != nil {
 		st.SingboxVersion = s.KernelVersion(ctx)
 	}
+	st.GeoVersion, st.GeoDate, st.GeoCounts = s.geo()
+	s.mu.Lock()
+	j := s.j
+	s.mu.Unlock()
+	if j != nil {
+		st.Status, st.LogTail = j.snapshot()
+	}
 	return st
+}
+
+// geo 读随包规则库的清单。没有 geodata.json 时退回数目录里的 .srs 文件(版本与日期就给不出来)。
+func (s *Service) geo() (version, date string, counts *GeoCounts) {
+	if s.GeoDir == "" {
+		return "", "", nil
+	}
+	if f, err := os.Open(filepath.Join(s.GeoDir, release.GeoDataName)); err == nil {
+		defer f.Close()
+		if g, err := release.ParseGeoData(f); err == nil {
+			c := GeoCounts{Geosite: g.Counts.Geosite, Geoip: g.Counts.Geoip}
+			return g.Version, g.Date, &c
+		}
+	}
+	// 数文件兜底:规则库是 <分类名>.srs,前缀决定它算 geosite 还是 geoip
+	entries, err := os.ReadDir(s.GeoDir)
+	if err != nil {
+		return "", "", nil
+	}
+	var c GeoCounts
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".srs") {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(e.Name(), "geosite-"):
+			c.Geosite++
+		case strings.HasPrefix(e.Name(), "geoip-"):
+			c.Geoip++
+		}
+	}
+	if c.Geosite == 0 && c.Geoip == 0 {
+		return "", "", nil
+	}
+	return "", "", &c
 }
 
 // Check 联网看有没有新版。
@@ -70,15 +140,3 @@ func (s *Service) Check(ctx context.Context) (*CheckResult, error) {
 func (s *Service) Notes(ctx context.Context, latest string) Notes {
 	return s.Checker.Notes(ctx, latest)
 }
-
-// Run 开始升级。channel 取 auto / direct / mirror;目前一律返回 ErrNotReady。
-func (s *Service) Run(channel string) error {
-	switch channel {
-	case "auto", "direct", "mirror":
-		return ErrNotReady
-	}
-	return errors.New("通道只能是 auto、direct 或 mirror")
-}
-
-// Cancel 取消正在进行的升级。现在不会有在跑的升级,恒返回 "not-running"。
-func (s *Service) Cancel() string { return "not-running" }

@@ -1,13 +1,14 @@
 // Package update 是「组件更新」(前端 OpenboxUpdateCard)的后端部分。
 //
-// 本包目前做只读的三件事(自己的设计,依据前端 api/openbox.ts 的 OpenboxUpdateStatus / OpenboxUpdateNotes 类型和注释、
-// composables/openboxUpdate.ts 与 OpenboxUpdateCard.vue 的用法、GitHub 官方 REST API 文档的 Releases 一节,没有参照上游):
-//   - 当前状态(版本、内核版本、安装通道、升级进度);
-//   - 检查有没有新版(读仓库的公开发布列表);
-//   - 取某一版的更新说明。
+// 依据前端 api/openbox.ts 的 OpenboxUpdateStatus / OpenboxUpdateNotes 类型和注释、
+// composables/openboxUpdate.ts 与 OpenboxUpdateCard.vue 的用法、GitHub 官方 REST API 文档的 Releases 一节,
+// 以及 docs/M6.md 第六到第八节(自己定的发布包格式与升级流程),没有参照上游。
+//   - 当前状态(版本、内核版本、规则库版本、安装通道、升级进度);
+//   - 检查有没有新版(读仓库的公开发布列表,只认带本架构安装包的发布);
+//   - 取某一版的更新说明;
+//   - 升级的前半段(M6-5):探测 → 下载(边下边算 sha256、边解压到暂存)→ 校验 → 冒烟。这一段**不碰系统**。
 //
-// 真正的「下载 → 校验 → 解包 → 替换文件 → 重启」依赖 M6 打包定下来的发布包格式和安装目录,不在本包里;
-// 没有它之前 run 如实回 501,cancel 回「没有在升级」。
+// 后半段(提交:替换文件、重启、看门狗、回滚)是 M6-6,还没实现,所以跑完会如实停在 failed 并说明没有改动系统。
 package update
 
 import (

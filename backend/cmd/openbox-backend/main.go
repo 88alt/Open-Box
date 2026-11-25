@@ -720,11 +720,15 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		},
 	})
 
-	// 组件更新:目前只有 status / check / notes(读发布信息);下载替换要等 M6 的发布包格式,run 回 501
+	// 组件更新:status / check / notes 读发布信息;run 走「探测 → 下载并解压到暂存 → 校验 → 冒烟」,
+	// 提交(替换文件并重启)是 M6-6,还没接上,所以跑完会明确回一句「本次没有改动系统」
 	updateapi.Register(srv.Mux(), updateapi.Deps{Service: &update.Service{
 		Checker: &update.Checker{MirrorPrefix: cfg.UpdateMirror},
 		Version: version, BuiltAt: builtAt,
 		KernelVersion: func(ctx context.Context) string { return singbox.ReadKernelVersion(ctx, cfg.SingBox).Version },
+		DataDir:       cfg.DataDir,
+		GeoDir:        cfg.GeoDir,
+		ConfigFile:    filepath.Join(cfg.ConfigDir, "config.json"),
 	}})
 
 	// 系统资源(概览页「硬件负载」、侧边栏卡片、概览的「活跃终端」):CPU / 内存读 /proc,活跃终端取内核连接的来源 IP 并按邻居表的 MAC 合并

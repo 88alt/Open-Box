@@ -89,6 +89,23 @@ func run(args []string) error {
 			Geodata: release.Component{Version: *geodataVersion, Date: *geodataDate},
 		},
 	}
+	// 随包规则库:先写 geodata.json,再写清单(它要进 files 列表,后端的 /update/status 从这里取版本与条数)
+	if *geodataVersion != "" {
+		geoDir := filepath.Join(*root, "geodata")
+		counts, err := release.CountGeoFiles(geoDir)
+		if err != nil {
+			return fmt.Errorf("读规则库目录失败:%w", err)
+		}
+		if counts.Geosite == 0 && counts.Geoip == 0 {
+			return fmt.Errorf("%s 里没有 .srs,不该带 -geodata-version", geoDir)
+		}
+		g := release.GeoData{Version: *geodataVersion, Date: *geodataDate, Counts: counts}
+		if err := release.WriteGeoData(geoDir, g); err != nil {
+			return fmt.Errorf("写 %s 失败:%w", release.GeoDataName, err)
+		}
+		fmt.Printf("规则库:%s(%d 个 geosite / %d 个 geoip)\n", g.Version, counts.Geosite, counts.Geoip)
+	}
+
 	modeOf := releaseMode
 	if *modesFile != "" {
 		table, err := readModes(*modesFile)

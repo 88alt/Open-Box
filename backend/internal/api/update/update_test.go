@@ -15,7 +15,7 @@ func newMux(t *testing.T, gh http.Handler) *http.ServeMux {
 	srv := httptest.NewServer(gh)
 	t.Cleanup(srv.Close)
 	mux := http.NewServeMux()
-	Register(mux, Deps{Service: &update.Service{Checker: &update.Checker{APIBase: srv.URL}, Version: "v0.1.1"}})
+	Register(mux, Deps{Service: &update.Service{Checker: &update.Checker{APIBase: srv.URL, Arch: "amd64"}, Version: "v0.1.1"}})
 	return mux
 }
 
@@ -29,7 +29,7 @@ func TestEndpoints(t *testing.T) {
 	gh := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/releases"):
-			_, _ = w.Write([]byte(`[{"tag_name":"v0.1.5"}]`))
+			_, _ = w.Write([]byte(`[{"tag_name":"v0.1.5","assets":[{"name":"openbox-v0.1.5-linux-amd64.tar.gz","browser_download_url":"https://dl.example/a.tgz","size":1}]}]`))
 		case strings.Contains(r.URL.Path, "/releases/tags/v0.1.5"):
 			_, _ = w.Write([]byte(`{"tag_name":"v0.1.5","body":"说明"}`))
 		default:
@@ -73,8 +73,13 @@ func TestCheckFailureIs502WithReason(t *testing.T) {
 
 func TestRun(t *testing.T) {
 	mux := newMux(t, http.NotFoundHandler())
-	if rec := do(mux, "POST", "/api/openbox/update/run", `{"channel":"mirror"}`); rec.Code != http.StatusNotImplemented || !strings.Contains(rec.Body.String(), "还没有实现") {
-		t.Errorf("run: %d %s", rec.Code, rec.Body)
+	// 没配镜像前缀时不能用镜像通道
+	if rec := do(mux, "POST", "/api/openbox/update/run", `{"channel":"mirror"}`); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "镜像前缀") {
+		t.Errorf("run mirror: %d %s", rec.Code, rec.Body)
+	}
+	// 直连:立即返回 200,进度靠轮询 status
+	if rec := do(mux, "POST", "/api/openbox/update/run", `{"channel":"direct"}`); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"ok":true`) {
+		t.Errorf("run direct: %d %s", rec.Code, rec.Body)
 	}
 	if rec := do(mux, "POST", "/api/openbox/update/run", `{"channel":"x"}`); rec.Code != http.StatusBadRequest {
 		t.Errorf("通道不对回 400: %d", rec.Code)

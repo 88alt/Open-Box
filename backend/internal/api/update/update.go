@@ -1,6 +1,7 @@
 // Package update 挂「组件更新」的五个接口:GET /api/openbox/update/status、/check、/notes,POST /update/run、/cancel。
 // 契约见 docs/ENDPOINTS.md 与前端 api/openbox.ts 的 OpenboxUpdateStatus 等类型。
-// 目前 status / check / notes 可用;run 在发布包格式(M6)定下来之前回 501。
+// run 现在走「探测 → 下载并解压到暂存 → 校验 → 冒烟」,提交(替换文件并重启)是 M6-6;
+// 已经有一次升级在跑时回 409。
 package update
 
 import (
@@ -50,6 +51,8 @@ func (h *handlers) notes(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, h.s.Notes(r.Context(), r.URL.Query().Get("latest")))
 }
 
+// run:开始一次升级。已经在升级时回 409(M6 第七节:同一时刻只一个升级)。
+// 接口立即返回,进度靠轮询 status。
 func (h *handlers) run(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Channel string `json:"channel"`
@@ -59,8 +62,8 @@ func (h *handlers) run(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.s.Run(req.Channel); err != nil {
 		status := http.StatusBadRequest
-		if errors.Is(err, update.ErrNotReady) {
-			status = http.StatusNotImplemented
+		if errors.Is(err, update.ErrBusy) {
+			status = http.StatusConflict
 		}
 		httpx.Error(w, status, err.Error())
 		return

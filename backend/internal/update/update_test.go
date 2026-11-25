@@ -81,12 +81,22 @@ func (f *fakeGH) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-const relList = `[
- {"tag_name":"v0.1.390-main.1","draft":true,"published_at":"2026-11-01T00:00:00Z"},
- {"tag_name":"v0.1.382-main.2","draft":false,"published_at":"2026-10-30T00:00:00Z","body":"修了几个问题"},
+// asset 造一个附件。版本号写进名字,与 release.ArchiveName 一致。
+func asset(version, arch string) string {
+	return `{"name":"openbox-` + version + `-linux-` + arch + `.tar.gz","browser_download_url":"https://dl.example/` +
+		version + `-` + arch + `.tar.gz","size":123}`
+}
+
+// sumsAsset 造 SHA256SUMS 附件。
+const sumsAsset = `{"name":"SHA256SUMS","browser_download_url":"https://dl.example/SHA256SUMS","size":99}`
+
+// relList 是发布列表:草稿要跳过、认不出的一律跳过、只有 arm64 安装包的在 amd64 上也要跳过。
+var relList = `[
+ {"tag_name":"v0.1.390-main.1","draft":true,"published_at":"2026-11-01T00:00:00Z","assets":[` + asset("v0.1.390-main.1", "amd64") + `]},
+ {"tag_name":"v0.1.382-main.2","draft":false,"published_at":"2026-10-30T00:00:00Z","body":"修了几个问题","assets":[` + asset("v0.1.382-main.2", "amd64") + `,` + sumsAsset + `]},
  {"tag_name":"nightly","draft":false},
- {"tag_name":"v0.1.382-main.1","draft":false},
- {"tag_name":"v0.1.318","draft":false}]`
+ {"tag_name":"v0.1.382-main.1","draft":false,"assets":[` + asset("v0.1.382-main.1", "amd64") + `,` + sumsAsset + `]},
+ {"tag_name":"v0.1.318","draft":false,"assets":[` + asset("v0.1.318", "arm64") + `]}]`
 
 func newChecker(t *testing.T, f *fakeGH) *Checker {
 	srv := httptest.NewServer(f)
@@ -122,7 +132,7 @@ func TestCheckErrors(t *testing.T) {
 		f    *fakeGH
 		want string
 	}{
-		{&fakeGH{status: 403}, "限流"}, {&fakeGH{status: 500}, "状态码 500"}, {&fakeGH{releases: "[]"}, "没有找到能识别版本号"},
+		{&fakeGH{status: 403}, "限流"}, {&fakeGH{status: 500}, "状态码 500"}, {&fakeGH{releases: "[]"}, "没有找到带"},
 		{&fakeGH{releases: "{"}, "不是预期的格式"}, {&fakeGH{status: 404}, "没有找到"},
 	} {
 		if _, err := newChecker(t, c.f).Check(ctx, "v0.1.1"); err == nil || !strings.Contains(err.Error(), c.want) {
@@ -143,7 +153,7 @@ func TestMirrorFallback(t *testing.T) {
 		mu.Lock()
 		paths = append(paths, r.URL.Path)
 		mu.Unlock()
-		_, _ = w.Write([]byte(`[{"tag_name":"v0.1.5"}]`))
+		_, _ = w.Write([]byte(`[{"tag_name":"v0.1.5","assets":[` + asset("v0.1.5", "amd64") + `]}]`))
 	}))
 	defer srv.Close()
 	// 直连地址连不上,镜像前缀(这里借用同一台假服务器)接得住:请求是 <前缀><原地址>
@@ -211,11 +221,11 @@ func TestServiceStatusRunCancel(t *testing.T) {
 	if c := s.Status(context.Background()).Channel; c.Mode != "mirror" || c.Prefix != "https://m.example/" {
 		t.Errorf("%+v", c)
 	}
-	if err := s.Run("direct"); err == nil || err != ErrNotReady {
-		t.Errorf("%v", err)
+	if err := s.Run("bogus"); err == nil || !strings.Contains(err.Error(), "通道只能是") {
+		t.Errorf("通道写错要立刻拒绝: %v", err)
 	}
-	if err := s.Run("bogus"); err == nil || err == ErrNotReady {
-		t.Errorf("%v", err)
+	if err := (&Service{}).Run("direct"); err == nil || !strings.Contains(err.Error(), "发布来源") {
+		t.Errorf("没有检查器时要报错: %v", err)
 	}
 	if s.Cancel() != "not-running" {
 		t.Error("没有在升级")

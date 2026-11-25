@@ -426,7 +426,7 @@ func (s Sums) Check(name, got string) error {
 	return nil
 }
 
-// GeoData 是随包规则库的清单(share/geodata/geodata.json),对应 GET /update/status 的
+// GeoData 是随包规则库的清单(geodata/geodata.json),对应 GET /update/status 的
 // geoVersion / geoDate / geoCounts(M6 第三节)。
 type GeoData struct {
 	Version string    `json:"version"`
