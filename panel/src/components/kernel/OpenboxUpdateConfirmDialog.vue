@@ -160,7 +160,8 @@ const parseNotes = (body: string): Block[] => {
     blocks.push(cur.kind === 'item' ? { kind: 'item', level: cur.level, text } : { kind: 'para', text })
     cur = null
   }
-  const src = String(body || '').replace(/<!--[\s\S]*?(?:-->|$)/g, '')
+  // 正则里不写字面量的 HTML 注释起止符:Vite 依赖扫描会把它当注释抹掉,正则被截断后 esbuild 报 Unexpected ")"
+  const src = String(body || '').replace(/<!-{2}[\s\S]*?(?:-{2}>|$)/g, '')
   for (const line of src.replace(/\r/g, '').split('\n')) {
     if (!line.trim()) {
       flush()
