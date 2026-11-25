@@ -813,7 +813,7 @@ const zh: LANG_MESSAGE = {
   obUpdateAuto: '自动更新',
   obUpdateAutoAt: '每天',
   obUpdateAutoHint:
-    '到点先探最新版,有新版才升级;按设定的间隔探,一天最多一次。钟点按路由器的时区(下面「时区」里可改)。',
+    '按所选整点先探最新版，有新版才升级；按设定间隔执行，一天最多一次，修改计划后立即按新时间生效。钟点按路由器时区（下面「时区」里可改）。',
   timezoneTitle: '时区',
   timezoneDescription:
     '路由器的系统时区,和 LuCI「系统 → 时区」是同一个设置。自动更新、订阅定时更新都按这个时区的钟点执行。',

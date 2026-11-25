@@ -846,7 +846,7 @@ const en = {
   obUpdateAuto: 'Auto update',
   obUpdateAutoAt: 'daily at',
   obUpdateAutoHint:
-    "Checks for a new version on schedule and only upgrades when there is one; at the chosen interval, at most once a day. The hour is in the router's time zone (change it under Time zone below).",
+    "Checks on the chosen top-of-the-hour slot and only upgrades when a newer release exists; runs on the chosen day interval, at most once per day, and takes effect immediately when you change the schedule. Hours use the router's time zone (change it under Time zone below).",
   timezoneTitle: 'Time zone',
   timezoneDescription:
     "The router's system time zone, the same setting as LuCI System → Timezone. Auto update and scheduled subscription updates run at hours in this time zone.",
