@@ -1,7 +1,7 @@
 自研后端交接笔记(第 2 版,只管 backend;core 另见 core/HANDOFF.md)
 
 写给下一位接手后端的 AI。读完这份,再按顺序读 backend/README.md、backend/docs/DESIGN.md、backend/STATUS.md、backend/docs/ENDPOINTS.md,
-就可以接着做,不用反复问维护者。进度要看两处并对账:backend/STATUS.md 和 main 下的提交记录(git log -- backend);本文第三节的进度是 2026-11-25 的快照(后端对齐到上游 v0.1.484 的接口与文案键;上游随后又出了 v0.1.485,开工先对一次账,新差异按 STATUS「最终差异清单」的口径补)。**先读 STATUS.md 文首的「CI 门禁」。**
+就可以接着做,不用反复问维护者。进度要看两处并对账:backend/STATUS.md 和 main 下的提交记录(git log -- backend);本文第三节的进度是 2026-11-25 的快照(后端已对齐到上游 **v0.1.486** 的接口与文案键,`catch-up-upstream` = `51d025df`;开工仍要先对一次账,新差异按 STATUS「最终差异清单」的口径补)。**先读 STATUS.md 文首的「CI 门禁」。**
 
 
 # 零、先读这一节
