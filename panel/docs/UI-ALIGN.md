@@ -13,7 +13,7 @@
 
 | 页面 | 路由 | 上游对应块 | 状态 |
 | --- | --- | --- | --- |
-| 代理 | `#/proxies` | `ProxiesPage` | 待做 |
+| 代理 | `#/proxies` | `ProxiesPage` | 已对齐 |
 | 概览 | `#/overview` | `OverviewPage` | 待做 |
 | 连接(含日志 / 规则页签) | `#/connections` | `ConnectionWorkspacePage` | 待做 |
 | 设置(含订阅 / 分流 / 内核页签) | `#/settings` | `SettingsPage` | 待做 |
@@ -42,3 +42,13 @@
 ## 进度日志
 
 - 2026-11-25:建立本清单,确认路由结构与上游一致。逐页比对从「代理」页开始。
+- 2026-11-25 **代理页**:用 DOM 对照而不是只看截图(截图判断反复出过错,以下结论都有 DOM / 代码证据)。
+  - 页签、数量、搜索框占位文字、空状态文案:两页**完全一致**(`策略 (14) / 节点 (3) / 订阅 (2)`、「搜索 | 多个关键词用空格分隔」)。
+  - **修正一处真实差异**:分组卡片标题上的「域名穿透 / 策略穿透」按钮,上游用
+    `hover:bg-(--app-interactive-hover)!` + `whitespace-nowrap`,main 少了 `whitespace-nowrap`,
+    且暗色 hover 底色写成了 `#4b4428`(上游 `--app-interactive-hover` 的暗色是 `#264b3d`,亮色 `#f1ead6` 本来一致)。
+    已补齐 `whitespace-nowrap`(`ProxyGroup.vue` 两处),并把 `#4b4428` → `#264b3d`(`ProxyGroup.vue`、`ProxyNodeCard.vue`)。
+    DOM 复核:`whiteSpace` 两页都是 `nowrap`,按钮类名与上游逐项一致。
+  - 分组卡片图标(直连 `misc:dart` / 拒绝 `misc:cross`)与上游**一致**——两边都是后端返回的 `icon` 字段,`core/internal/groups/group.go` 补的正是这两个值,不是前端缺图标。
+  - 侧栏顶部标识、侧栏底部资源块:与上游结构一致(同一张 `logo.png`、同样的 `alt="Open-Box"`、同样的「收起侧边栏」按钮)。
+  - 未覆盖:三语 × 深浅主题 × 桌面/窄屏的组合矩阵,这一页只在中简体 + 浅色 + 1440 宽下逐项验过。

@@ -142,7 +142,7 @@ const hoverClass = computed(() => {
   }
 
   return DARK_HOVER_THEMES.has(theme.value)
-    ? 'sm:hover:!bg-[#4b4428] sm:hover:border-base-content/[0.16]'
+    ? 'sm:hover:!bg-[#264b3d] sm:hover:border-base-content/[0.16]'
     : 'sm:hover:!bg-[#f1ead6] sm:hover:border-base-content/[0.16]'
 })
 const typeDescription = computed(() => {

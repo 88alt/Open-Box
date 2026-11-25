@@ -30,7 +30,7 @@
                 v-if="isSiteSet"
                 type="button"
                 :class="[
-                  'btn btn-sm bg-base-200 border-base-200 text-base-content/80 hover:text-base-content h-6 min-h-6 shrink-0 cursor-pointer px-2 text-xs font-medium shadow-none',
+                  'btn btn-sm bg-base-200 border-base-200 text-base-content/80 hover:text-base-content h-6 min-h-6 shrink-0 cursor-pointer px-2 text-xs font-medium whitespace-nowrap shadow-none',
                   domainPenetrationHoverClass,
                 ]"
                 @click.stop="openPenetrationDialog(name)"
@@ -108,7 +108,7 @@
             v-if="isSiteSet"
             type="button"
             :class="[
-              'btn btn-sm bg-base-200 border-base-200 text-base-content/80 hover:text-base-content h-6 min-h-6 shrink-0 cursor-pointer px-2 text-xs font-medium shadow-none',
+              'btn btn-sm bg-base-200 border-base-200 text-base-content/80 hover:text-base-content h-6 min-h-6 shrink-0 cursor-pointer px-2 text-xs font-medium whitespace-nowrap shadow-none',
               domainPenetrationHoverClass,
             ]"
             @click.stop="openPenetrationDialog(name)"
@@ -326,9 +326,11 @@ const titleIconSize = computed(() => Math.max(proxyGroupIconSize.value, 46))
 
 // 「域名穿透」只给站点集(它们才有自己的匹配规则);节点组的成员是节点,没有域名可穿
 const isSiteSet = computed(() => siteSetNames.value.has(props.name))
+// hover 底色对齐上游的 --app-interactive-hover(亮色 #f1ead6 / 暗色 #264b3d)。
+// 这里用具体色值而不是 CSS 变量,与 main 现有写法一致;改主题色时这两处要一起改。
 const domainPenetrationHoverClass = computed(() =>
   theme.value === DARK_THEME
-    ? 'hover:!bg-[#4b4428] hover:!border-base-content/[0.16]'
+    ? 'hover:!bg-[#264b3d] hover:!border-base-content/[0.16]'
     : 'hover:!bg-[#f1ead6] hover:!border-base-content/[0.16]',
 )
 
