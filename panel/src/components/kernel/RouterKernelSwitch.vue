@@ -4,31 +4,16 @@
     class="flex flex-wrap items-center gap-2"
   >
     <label
-      :for="selectId"
+      id="router-kernel-label"
+      for="router-kernel"
       class="text-base-content/70"
     >{{ $t('routerKernelLabel') }}</label>
-    <!-- 选择框左侧带当前内核的图标(对齐上游 v0.1.487) -->
-    <div class="relative inline-flex items-center">
-      <KernelIcon
-        :kernel="selected ?? current"
-        class="pointer-events-none absolute left-3 z-10"
-      />
-      <select
-        :id="selectId"
-        class="select select-sm w-auto pl-9"
-        :value="selected ?? current"
-        :disabled="switching"
-        @change="onSelect(($event.target as HTMLSelectElement).value as OpenboxRouterKernel)"
-      >
-        <option
-          v-for="k in KERNELS"
-          :key="k"
-          :value="k"
-        >
-          {{ KERNEL_NAMES[k] }}
-        </option>
-      </select>
-    </div>
+    <!-- 自定义下拉:触发按钮和每一项都带内核图标(对齐上游 v0.1.487) -->
+    <KernelSelect
+      :model-value="selected ?? current"
+      :disabled="switching"
+      @update:model-value="onSelect"
+    />
     <span
       v-if="!kernelVersion?.mihomoAvailable"
       class="text-base-content/60 text-xs"
@@ -42,10 +27,7 @@
       @update:model-value="onDialogToggle"
     >
       <div class="flex flex-col gap-2">
-        <p
-          v-if="selected"
-          class="text-sm"
-        >
+        <p v-if="selected">
           {{ $t('routerKernelConfirm', { kernel: KERNEL_NAMES[selected] }) }}
         </p>
         <p
@@ -88,11 +70,10 @@
               class="text-base-content/60 mt-0.5 size-5 shrink-0"
               aria-hidden="true"
             />
-            <div class="flex min-w-0 flex-1 flex-col gap-1">
-              <div class="flex flex-wrap items-center justify-between gap-x-2">
-                <span class="text-sm">{{ $t(`routerKernelChecks.${item.id}`) }}</span>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
+                <span class="font-medium">{{ $t(`routerKernelChecks.${item.id}`) }}</span>
                 <span
-                  class="text-xs"
                   :class="{
                     'text-success': item.status === 'passed',
                     'text-error': item.status === 'failed',
@@ -102,7 +83,7 @@
               </div>
               <ul
                 v-if="item.details?.length"
-                class="text-base-content/60 flex flex-col gap-0.5 text-xs"
+                class="text-base-content/70 mt-1 space-y-1 text-xs"
               >
                 <li
                   v-for="(line, index) in item.details"
@@ -150,12 +131,12 @@
 // 代理工具冲突、内核专用设置兼容性、规则集、目标内核配置、入口防火墙、切换期间 DNS 防泄露)→ 全部通过
 // (或不适用)才允许「切换并重启」。预检是流式的,每项之间至少隔 120ms,让用户看得清进度。
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
-import KernelIcon from '@/components/kernel/KernelIcon.vue'
+import KernelSelect from '@/components/kernel/KernelSelect.vue'
 import type { OpenboxKernelSwitchCheck, OpenboxKernelVersion, OpenboxRouterKernel } from '@/api/openbox'
 import { fetchKernelSwitchPreflight, KERNEL_SWITCH_CHECK_IDS, switchRouterKernel } from '@/api/openbox'
 import { showNotification } from '@/helper/notification'
 import { CheckCircleIcon, ClockIcon, MinusCircleIcon, XCircleIcon } from '@heroicons/vue/24/outline'
-import { computed, onBeforeUnmount, ref, useId } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 
 type ItemStatus = OpenboxKernelSwitchCheck['status'] | 'waiting' | 'pending'
 interface CheckItem {
@@ -167,12 +148,10 @@ interface CheckItem {
 const props = defineProps<{ kernelVersion: OpenboxKernelVersion | null }>()
 const emit = defineEmits<{ switched: [] }>()
 
-const KERNELS: OpenboxRouterKernel[] = ['sing-box', 'mihomo']
-const KERNEL_NAMES: Record<OpenboxRouterKernel, string> = { 'sing-box': 'sing-box', mihomo: 'Mihomo' }
+const KERNEL_NAMES: Record<OpenboxRouterKernel, string> = { 'sing-box': 'Sing-Box', mihomo: 'Mihomo' }
 const NOTIFY_KEY = 'router-kernel-switch'
 const STEP_INTERVAL_MS = 120
 
-const selectId = useId()
 const current = computed(() => props.kernelVersion?.kernel ?? null)
 const selected = ref<OpenboxRouterKernel | null>(null)
 const checks = ref<OpenboxKernelSwitchCheck[]>([])

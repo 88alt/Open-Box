@@ -151,3 +151,9 @@
   已确认:内核 `/proxies` 返回的 `REJECT` 本身**没有** `icon` 字段,所以这不是后端漏字段;上游是在前端某处把档案分组的 `icon` 合并进了出站表。
   我还没定位到那一处的确切代码位置(试过订阅页的默认分组构造,但那是分组编辑器用的,不是连接页的来源),**因此本页暂不标「已对齐」,留作下一批继续定位**,
   不凭推测改代码。
+- 2026-11-25 **内核切换(设置页)**:对照上游 v0.1.487 的 `KernelSelect` 与切换弹窗,修掉两处差异。
+  1. 下拉:原生 `<select>` 换成自定义弹出菜单(新增 `KernelSelect.vue`,复用 `useAnchoredDropdown`),触发按钮与每一项带图标、当前项打勾;
+     名称写作 `Sing-Box`;sing-box 图标换成 `assets/sing-box.svg`(与上游内联 SVG 逐字相同,此前误用了 SagerNet 头像 png)。
+  2. 弹窗:提示句不再加 `text-sm`(上游沿用基础字号);检查项标题 `font-medium`,状态文字 `text-sm`(原来 `text-xs`),
+     详情行 `text-base-content/70 mt-1 space-y-1 text-xs`。
+  不放「使用教程」按钮及教程视频相关面板与后端(例外 A)。
