@@ -1,0 +1,24 @@
+# Open-Box 后端(自研 backend)。安装到 /etc/systemd/system/openbox-backend.service。
+#
+# 为什么服务名不叫 openbox:上游同步来的 openbox.service 是内核服务(debian/systemd/openbox.service),
+# 不能占。后端用 -core-service openbox 去控制它。
+# 端口与路径由 openbox-backend-run 算(端口跟上游面板一致,读 <data>/panel-port,没有就 2026),
+# 与 OpenWrt 那边共用同一个启动脚本,两边不会漂。
+[Unit]
+Description=Open-Box backend
+Documentation=https://github.com/timeflysoon/Open-Box
+After=network.target
+# 与上游面板服务一致:不限重启次数(路由器上长时间运行,偶尔崩一次不该被 systemd 锁死)
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/opt/open-box/bin/openbox-backend-run
+WorkingDirectory=/opt/open-box
+Restart=always
+RestartSec=3
+# 后端要管 DNS 接管、防火墙、网络命名空间
+User=root
+
+[Install]
+WantedBy=multi-user.target

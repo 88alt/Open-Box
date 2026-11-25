@@ -1,0 +1,42 @@
+#!/bin/sh
+# 起 Open-Box 后端(自研 backend)。procd 与 systemd 都调这一个脚本,端口与路径只在这里算一次。
+#
+# 布局依据 backend/docs/M6.md 第四节:安装根 /opt/open-box,内核与 core 在 bin/,配置在 etc/,
+# 数据在 data/,前端在 panel/dist,规则库在 geodata。这些目录由上游同步来的服务脚本
+# (openwrt/bin/openbox-kernel、debian/systemd/openbox.service)写死,改不得,所以后端用参数指过去。
+#
+# 端口:与上游面板一致——优先读 <data>/panel-port(install.sh 装的时候写,升级不动它),
+# 没有这个文件就用 2026(上游老版本装的机器也是这个默认值)。这样从上游换过来时用户书签不用改。
+#
+# 可用环境变量覆盖:OPENBOX_ROOT(安装根)、OPENBOX_LISTEN(完整监听地址,如 0.0.0.0:2026)。
+set -eu
+
+ROOT=${OPENBOX_ROOT:-/opt/open-box}
+DATA="$ROOT/data"
+BIN="$ROOT/bin/openbox-backend"
+
+[ -x "$BIN" ] || {
+	echo "openbox-backend-run: 找不到 $BIN" >&2
+	exit 1
+}
+
+listen=${OPENBOX_LISTEN:-}
+if [ -z "$listen" ]; then
+	port=$(cat "$DATA/panel-port" 2>/dev/null | tr -dc '0-9')
+	[ -n "$port" ] || port=2026
+	listen="0.0.0.0:$port"
+fi
+
+mkdir -p "$DATA"
+
+exec "$BIN" \
+	-listen "$listen" \
+	-config-dir "$ROOT/etc" \
+	-data-dir "$DATA" \
+	-web-dir "$ROOT/panel/dist" \
+	-geo-dir "$ROOT/geodata" \
+	-sing-box "$ROOT/bin/sing-box" \
+	-mihomo "$ROOT/bin/mihomo" \
+	-core "$ROOT/bin/openbox-core" \
+	-core-service openbox \
+	-panel-service openbox-backend

@@ -59,6 +59,7 @@ import (
 	"github.com/timeflysoon/Open-Box/backend/internal/auth"
 	"github.com/timeflysoon/Open-Box/backend/internal/backup"
 	"github.com/timeflysoon/Open-Box/backend/internal/bandwidth"
+	"github.com/timeflysoon/Open-Box/backend/internal/cleanup"
 	"github.com/timeflysoon/Open-Box/backend/internal/clientapp"
 	"github.com/timeflysoon/Open-Box/backend/internal/conntrack"
 	"github.com/timeflysoon/Open-Box/backend/internal/contentfilter"
@@ -127,6 +128,11 @@ func run(args []string) int {
 	if len(args) >= 1 && args[0] == "ns-probe" {
 		return nsprobe.Main(args[1:], os.Stdout, os.Stderr)
 	}
+	// 隐藏子命令:卸载脚本先调它把后端对系统的改动收干净(撤销 DNS 接管、停内核、拆虚拟终端),
+	// 退出码非 0 就不继续删文件(M6 第五节)。不建目录、不读档案、不开端口——这时候这些东西可能正在被删。
+	if len(args) >= 1 && args[0] == "cleanup" {
+		return runCleanup(args[1:])
+	}
 	if len(args) == 1 && (args[0] == "-version" || args[0] == "--version") {
 		fmt.Println("openbox-backend", version)
 		return 0
@@ -172,6 +178,50 @@ func run(args []string) int {
 	}
 	waitBackground() // ctx 已结束:等后台任务写完盘再退出
 	log.Info("已退出")
+	return 0
+}
+
+// dnsReverter 把 system.DNSTakeover 接到 cleanup 的接口上,错误文案与停内核那条路一致。
+type dnsReverter struct{ t *system.DNSTakeover }
+
+func (r dnsReverter) BeforeKernelStop(ctx context.Context) error {
+	if err := r.t.Revert(ctx); err != nil {
+		return fmt.Errorf("撤销 DNS 接管失败: %w", err)
+	}
+	return nil
+}
+
+// runCleanup 是 `openbox-backend cleanup` 的实现。成功时往 stdout 打一行结果,失败时原因在 stderr 与日志里。
+func runCleanup(args []string) int {
+	cfg, err := system.LoadConfig(args, os.Getenv, os.Stderr)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "参数错误:", err)
+		return 2
+	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
+	initKind := system.DetectInitHere()
+	svcCtl := &system.Services{Kind: initKind, Run: system.ExecRunner, ProcUptime: system.ReadProcUptime}
+	takeover := &system.DNSTakeover{
+		StateFile: filepath.Join(cfg.StateDir(), "dns-takeover.json"),
+		Services:  svcCtl,
+		QueryLog:  cfg.DNSQueryLog,
+	}
+	vterm := &system.VTermNet{Run: system.ExecRunner, StateFile: filepath.Join(cfg.StateDir(), "terminal-net.json")}
+
+	res, err := (&cleanup.Service{
+		Services:    svcCtl,
+		CoreService: cfg.CoreService,
+		DNS:         dnsReverter{takeover},
+		VTerm:       vterm,
+		Log:         log,
+	}).Run(context.Background())
+	if err != nil {
+		log.Error("卸载前清理失败", "err", err)
+		fmt.Fprintln(os.Stderr, "清理失败:", err)
+		return 1
+	}
+	fmt.Printf("清理完成:撤销 DNS 接管 %v,内核 %v,虚拟终端 %v(服务管理器:%v)\n",
+		res.DNSReverted, res.KernelStopped, res.TerminalRemoved, res.Managed)
 	return 0
 }
 

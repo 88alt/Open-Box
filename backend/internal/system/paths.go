@@ -45,9 +45,12 @@ const (
 // 查询日志写得频繁,不能落在路由器的闪存或 SD 卡上。位置依据 OpenWrt 和 Debian 的目录约定,没有在真机上见过,需真机确认(见 STATUS.md)。
 const DefaultDNSQueryLog = "/var/run/openbox-dnsmasq.log"
 
-// 服务名默认值。M6 打包时再和安装脚本对齐。
+// 服务名默认值。与上游同步来的服务脚本对齐(scripts/install.sh 第 338~339 行):
+// 内核是 openbox(OpenWrt 的 /etc/init.d/openbox、Debian 的 openbox.service),
+// 面板是 openbox-panel。我们的后端自己叫 openbox-backend,不占这两个名字,
+// 用 -core-service 去控制内核服务。
 const (
-	DefaultCoreService  = "sing-box"
+	DefaultCoreService  = "openbox"
 	DefaultPanelService = "openbox-backend"
 )
 
@@ -126,7 +129,7 @@ func LoadConfig(args []string, getenv func(string) string, out io.Writer) (Confi
 	core := fs.String("core", env(EnvCore, def.Core), "openbox-core 可执行文件(环境变量 "+EnvCore+")")
 	dnsQueryLog := fs.String("dns-query-log", env(EnvDNSQueryLog, def.DNSQueryLog), "dnsmasq 查询日志文件:DNS 接管时让 dnsmasq 写到这里,后端跟读;off = 不开不读(环境变量 "+EnvDNSQueryLog+")")
 	updateMirror := fs.String("update-mirror", env(EnvUpdateMirror, ""), "在线更新的镜像加速前缀(空 = 只走 GitHub 直连)(环境变量 "+EnvUpdateMirror+")")
-	coreSvc := fs.String("core-service", env(EnvCoreService, DefaultCoreService), "sing-box 的服务名(环境变量 "+EnvCoreService+")")
+	coreSvc := fs.String("core-service", env(EnvCoreService, DefaultCoreService), "内核服务的服务名,OpenWrt / Debian 上都是 openbox(环境变量 "+EnvCoreService+")")
 	panelSvc := fs.String("panel-service", env(EnvPanelService, DefaultPanelService), "后端自己的服务名(环境变量 "+EnvPanelService+")")
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
