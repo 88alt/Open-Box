@@ -94,6 +94,12 @@ type Deployer struct {
 	// 状态接口按已部署的那份计划说话。回滚和校验失败不调(旧配置对应的旧计划还在)。它的失败不改变 OK
 	// (内核是好的),错误作为一句话附在 Message 后面。
 	SavePlan func(failover any) error
+	// RouterKernel 读当前路由器选择的内核(<ConfigDir>/router-kernel;system.ReadRouterKernel 满足)。
+	// 非 nil 且选中 mihomo 时拒绝用 sing-box 的流程部署:两条内核的配置文件名、控制接口和密钥都不同,
+	// 拿 sing-box 的配置去重启 mihomo 服务必然健康检查失败,而失败回滚会重启一次内核、打断正在用的连接
+	// (真机联调时踩到过:2026-11-25,设备跑 mihomo,点「部署」后被回滚且服务没有恢复成原样)。
+	// nil = 不检查(单内核的老用法)。
+	RouterKernel func() (string, error)
 
 	HealthTimeout time.Duration
 	StableFor     time.Duration
@@ -147,6 +153,19 @@ func (d *Deployer) Deploy(ctx context.Context) DeployResult {
 
 	if d.Build == nil || d.Service == nil || d.ConfigDir == "" || d.ServiceName == "" {
 		return fail(StageError, "部署没有配置完整(缺少配置生成、服务管理或目录)", nil)
+	}
+
+	// 0. 当前路由器选中的内核不是 sing-box 时,这条流程（写 config.json、重启、按 sing-box 的控制接口
+	// 做健康检查）一定跑不通:配置文件名、控制接口地址和密钥都不一样。拒绝比「重启一次再回滚」安全,
+	// 因为回滚本身要再重启一次内核,会打断正在用的连接。要让改动生效请先在内核切换里切回 sing-box。
+	if d.RouterKernel != nil {
+		kernel, err := d.RouterKernel()
+		if err != nil {
+			return fail(StageError, "读不到当前路由器内核,为安全起见没有改动:"+err.Error(), nil)
+		}
+		if kernel != system.KernelSingBox {
+			return fail(StageError, "当前路由器内核是 "+kernel+",这份配置只适用于 sing-box,没有部署(先切换内核再试)", nil)
+		}
 	}
 
 	// 1. 先摸清现状:读不到服务状态就不动

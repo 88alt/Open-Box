@@ -129,6 +129,69 @@ func marker(b []byte) string {
 	return s
 }
 
+// ---------- 当前内核不是 sing-box 时拒绝部署 ----------
+
+// 真机联调(2026-11-25)发现:设备上 router-kernel = mihomo 时点「部署」,这条流程会写 sing-box 的
+// config.json、重启服务,健康检查打到 mihomo 的控制接口(密钥不同)必然 401,回滚还要再重启一次内核,
+// 把正在用的连接打断。所以先看当前内核,不是 sing-box 就直接拒绝,一个文件都不动、服务一次都不重启。
+func TestDeployRefusesWhenKernelIsMihomo(t *testing.T) {
+	svc := &fakeSvc{running: true}
+	d := newDP(t, map[string]any{"marker": "new"}, svc)
+	d.RouterKernel = func() (string, error) { return system.KernelMihomo, nil }
+	old := writeCfg(t, d, "old")
+
+	res := d.Deploy(context.Background())
+	if res.OK || res.Stage != StageError || res.RolledBack {
+		t.Fatalf("应当拒绝: %+v", res)
+	}
+	if !strings.Contains(res.Message, "mihomo") {
+		t.Fatalf("原因里要说明当前内核: %s", res.Message)
+	}
+	if got := marker(readCfg(t, d)); got != "old" {
+		t.Fatalf("配置不能被改: %s", got)
+	}
+	if calls := svc.callList(); calls != "" {
+		t.Fatalf("服务不能被碰: %s", calls)
+	}
+	if _, err := os.Stat(d.PrevPath()); !os.IsNotExist(err) {
+		t.Fatalf("不该写备份: %v", err)
+	}
+	if old != nil && marker(old) != "old" {
+		t.Fatal("测试自身写错了")
+	}
+}
+
+// 读不到内核选择文件时同样拒绝(读不出就不猜)。
+func TestDeployRefusesWhenKernelUnreadable(t *testing.T) {
+	svc := &fakeSvc{running: true}
+	d := newDP(t, map[string]any{"marker": "new"}, svc)
+	d.RouterKernel = func() (string, error) { return "", errors.New("权限不足") }
+
+	res := d.Deploy(context.Background())
+	if res.OK || res.Stage != StageError {
+		t.Fatalf("应当拒绝: %+v", res)
+	}
+	if !strings.Contains(res.Message, "权限不足") {
+		t.Fatalf("要带上原因: %s", res.Message)
+	}
+	if calls := svc.callList(); calls != "" {
+		t.Fatalf("服务不能被碰: %s", calls)
+	}
+}
+
+// 选中 sing-box 时照常部署(默认值是 sing-box,文件不存在也是 sing-box)。
+func TestDeployProceedsWhenKernelIsSingBox(t *testing.T) {
+	svc := &fakeSvc{running: true}
+	d := newDP(t, map[string]any{"marker": "new"}, svc)
+	d.RouterKernel = func() (string, error) { return system.KernelSingBox, nil }
+	writeCfg(t, d, "old")
+
+	res := d.Deploy(context.Background())
+	if !res.OK || svc.callList() != "restart" || marker(readCfg(t, d)) != "new" {
+		t.Fatalf("%+v %s", res, svc.callList())
+	}
+}
+
 // ---------- 流程 ----------
 
 func TestDeployFirstTime(t *testing.T) {

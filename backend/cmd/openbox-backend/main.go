@@ -728,6 +728,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			}
 			return names, err
 		},
+		// 当前选中的内核不是 sing-box 时拒绝部署这份 sing-box 配置(见 Deployer.RouterKernel 的说明)
+		RouterKernel: func() (string, error) { return system.ReadRouterKernel(cfg.RouterKernelFile()) },
 	}
 	// 每次部署(面板的「部署」按钮、DNS 过滤的应用)都经这里记下最近一次的结果,GET /deploy/state 读它
 	deploySvc := &deploystate.Service{Store: st, Deploy: deployer.Deploy}
