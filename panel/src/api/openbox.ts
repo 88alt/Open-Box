@@ -1177,7 +1177,9 @@ export interface OpenboxServiceStatus {
   platform?: string
   osRelease?: string | Record<string, unknown> | null
   arch?: string
-  pendingRestart?: { pending: boolean; reasons: string[] }
+  // details:具体改了什么的明细码(上游 v0.1.486 起;对应 kernelService.ts 的 RESTART_DETAIL_KEYS),
+  // 老服务端或判断不出来时没有 / 为空,界面回退到按 reasons 显示。
+  pendingRestart?: { pending: boolean; reasons: string[]; details?: string[] }
   // 内核因为和别的代理服务冲突被自动停掉了(界面提示「已自动停止」用)
   conflictAutoStopped?: boolean
   // Docker 容器里跑时('container')才有:容器的局域网 IP,以及容器自检结果(Docker 卡片用)

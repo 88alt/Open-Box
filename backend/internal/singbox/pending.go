@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
@@ -41,6 +42,44 @@ const (
 
 // reasonOrder 是原因在响应里的固定顺序。
 var reasonOrder = []string{ReasonNodes, ReasonDNS, ReasonRoute, ReasonInbounds, ReasonSystem}
+
+// 待重启的明细码(对齐上游 v0.1.486 面板的 pendingRestart.details,取值就是前端 RESTART_DETAIL_KEYS 的键,不能改)。
+// 明细比原因细:同一个原因(例如 dns)下,改了 DNS 劫持方式、改了 FakeIP 设置是两条。
+// **推断点 / 待维护者复核**:上游服务端闭源,明细码与档案键的对应关系是按各码的中文文案自己定的,见 detailParts。
+const (
+	DetailDNSMode            = "dns_mode"
+	DetailDNSListen53        = "dns_listen_53"
+	DetailDNSFakeIP          = "dns_fakeip"
+	DetailDNSUpstreams       = "dns_upstreams"
+	DetailDNSDomainUpstreams = "dns_domain_upstreams"
+	DetailDNSRewrite         = "dns_rewrite"
+	DetailDNSFilter          = "dns_filter"
+	DetailDNSNodeResolver    = "dns_node_resolver"
+	DetailRoutingPolicies    = "routing_policies"
+	DetailRoutingRuleLists   = "routing_rule_lists" // 目前不产出:规则集链接的远端内容不进指纹(见文件头),留给「立即更新」的 needsRestart
+	DetailDirectBypass       = "direct_bypass"
+	DetailRejectQUIC         = "reject_quic"
+	DetailClientRoutes       = "client_routes"
+	DetailTunSettings        = "tun_settings"
+	DetailIPv6Settings       = "ipv6_settings"
+	DetailBypassPorts        = "bypass_ports"
+	DetailMihomoSniffPorts   = "mihomo_sniff_ports" // 目前不产出:mihomoTlsSniffPorts 仍在 profileKeyIgnored(指纹不知道在跑哪个内核)
+	DetailSharedServers      = "shared_servers"
+	DetailChainProxies       = "chain_proxies"
+	DetailNodesAndGroups     = "nodes_and_groups"
+	DetailLegacyDeploy       = "legacy_deploy" // 上次部署记录里没有明细指纹(旧版本写的),只知道原因、不知道改了什么
+)
+
+// detailOrder 是明细在响应里的固定顺序(与前端 RESTART_DETAIL_KEYS 的顺序一致)。
+var detailOrder = []string{
+	DetailDNSMode, DetailDNSListen53, DetailDNSFakeIP, DetailDNSUpstreams, DetailDNSDomainUpstreams,
+	DetailDNSRewrite, DetailDNSFilter, DetailDNSNodeResolver, DetailRoutingPolicies, DetailRoutingRuleLists,
+	DetailDirectBypass, DetailRejectQUIC, DetailClientRoutes, DetailTunSettings, DetailIPv6Settings,
+	DetailBypassPorts, DetailMihomoSniffPorts, DetailSharedServers, DetailChainProxies, DetailNodesAndGroups,
+}
+
+// detailKeyPrefix 是明细指纹在 Fingerprint 里的键前缀(和原因的键放在同一张表里,落盘格式不变、旧记录照常读)。
+const detailKeyPrefix = "d:"
 
 // profileKeyReason:档案键 → 原因。依据是 core 实际读取的键(core/internal/config 里 jsx.Get(profile, …))
 // 加上后端自己读的 chainProxies。没列出的键一律归「系统」(见 profileReason)。
@@ -166,6 +205,117 @@ func hashOf(v any) string {
 	return hex.EncodeToString(sum[:16])
 }
 
+// detailParts 把同样的输入再按明细码分一遍组。只是「怎么分」不同,输入的范围与 ComputeFingerprint 完全一样
+// (被忽略的档案键、不进指纹的本机输入这里也都不看),所以「有明细变了」必然伴随「有原因变了」。
+//
+// 对应关系(推断,上游闭源):
+//   - dns.mode → dns_mode;dns.listen53 → dns_listen_53;dns.fakeIpForProxy / fakeIpRange → dns_fakeip;
+//     dns.domainUpstreams → dns_domain_upstreams;dns.rewrite → dns_rewrite;dns 里其余的键
+//     (direct* / proxy* / split / region 以及将来新增的)和顶层 region → dns_upstreams;
+//   - 域名过滤「是否已按当前设置应用」→ dns_filter;各订阅的 nodeDns → dns_node_resolver;
+//   - routing → routing_policies;clientRoutes → client_routes;directBypass / directForNodes → direct_bypass;rejectQuic → reject_quic;
+//   - tun → tun_settings;ipv6 / ipv6Proxy → ipv6_settings;bypassPorts / bypassPortsWhitelist / bypassPortsMode → bypass_ports;
+//   - servers → shared_servers;chainProxies → chain_proxies;
+//   - 节点组、订阅(不含 nodeDns)、节点、测速地址与期望状态码、节点评分权重 → nodes_and_groups;
+//   - 其余落在「系统」的键没有对应的明细码:只有原因,前端按原因显示。
+func detailParts(in FingerprintInput) map[string]map[string]any {
+	parts := make(map[string]map[string]any, len(detailOrder))
+	for _, c := range detailOrder {
+		parts[c] = map[string]any{}
+	}
+	put := func(code, key string, v any) { parts[code][key] = v }
+	for k, v := range in.Profile {
+		if _, ignored := profileReason(k); ignored {
+			continue
+		}
+		switch k {
+		case "dns":
+			m, ok := v.(map[string]any)
+			if !ok {
+				put(DetailDNSUpstreams, "dns", v)
+				continue
+			}
+			for dk, dv := range m {
+				switch dk {
+				case "filter":
+					// 与 ComputeFingerprint 一致:只看 FilterKey(见下)
+				case "mode":
+					put(DetailDNSMode, dk, dv)
+				case "listen53":
+					put(DetailDNSListen53, dk, dv)
+				case "fakeIpForProxy", "fakeIpRange":
+					put(DetailDNSFakeIP, dk, dv)
+				case "domainUpstreams":
+					put(DetailDNSDomainUpstreams, dk, dv)
+				case "rewrite":
+					put(DetailDNSRewrite, dk, dv)
+				default:
+					put(DetailDNSUpstreams, dk, dv)
+				}
+			}
+		case "region":
+			put(DetailDNSUpstreams, "profile.region", v)
+		case "routing":
+			put(DetailRoutingPolicies, k, v)
+		case "clientRoutes":
+			put(DetailClientRoutes, k, v)
+		case "directBypass", "directForNodes":
+			put(DetailDirectBypass, k, v)
+		case "rejectQuic":
+			put(DetailRejectQUIC, k, v)
+		case "tun":
+			put(DetailTunSettings, k, v)
+		case "ipv6", "ipv6Proxy":
+			put(DetailIPv6Settings, k, v)
+		case "bypassPorts", "bypassPortsWhitelist", "bypassPortsMode":
+			put(DetailBypassPorts, k, v)
+		case "servers":
+			put(DetailSharedServers, k, v)
+		case "chainProxies":
+			put(DetailChainProxies, k, v)
+		case "testUrl", "directTestUrl", "testExpectedStatus", "nodeScoreWeights":
+			put(DetailNodesAndGroups, "profile."+k, v)
+		}
+	}
+	put(DetailDNSFilter, "filter", in.FilterKey)
+	put(DetailNodesAndGroups, "groups", in.Groups)
+	type resolver struct {
+		ID      string         `json:"id"`
+		NodeDNS map[string]any `json:"nodeDns"`
+	}
+	var resolvers []resolver
+	var subList []subInput
+	for _, r := range in.Subs {
+		if !r.Enabled {
+			continue
+		}
+		resolvers = append(resolvers, resolver{ID: r.ID, NodeDNS: r.NodeDNS})
+		subList = append(subList, subInput{ID: r.ID, Name: r.Name, URL: r.URL, URLs: r.URLs, URLEntries: r.URLEntries, DirectSubscription: r.DirectSubscription, DirectNodes: r.DirectNodes})
+	}
+	put(DetailDNSNodeResolver, "resolvers", resolvers)
+	put(DetailNodesAndGroups, "subscriptions", subList)
+	type nodeInput struct {
+		Subscription string `json:"subscription"`
+		Node         any    `json:"node"`
+	}
+	nodes := make([]nodeInput, 0, len(in.Nodes))
+	for _, n := range in.Nodes {
+		nodes = append(nodes, nodeInput{Subscription: n.SubscriptionID, Node: n.Node})
+	}
+	put(DetailNodesAndGroups, "nodes", nodes)
+	return parts
+}
+
+// ComputeDetailFingerprint 按明细码分组算指纹,键带 detailKeyPrefix,可以直接并进 ComputeFingerprint 的结果。
+func ComputeDetailFingerprint(in FingerprintInput) Fingerprint {
+	parts := detailParts(in)
+	fp := make(Fingerprint, len(parts))
+	for c, p := range parts {
+		fp[detailKeyPrefix+c] = hashOf(p)
+	}
+	return fp
+}
+
 // Fingerprint 按当前已保存的数据算一份指纹。只读,不调 core、不联网。
 func (g *Generator) Fingerprint(ctx context.Context) (Fingerprint, error) {
 	prof, err := g.profiles.Get(ctx)
@@ -191,7 +341,11 @@ func (g *Generator) Fingerprint(ctx context.Context) (Fingerprint, error) {
 			in.FilterKey = key
 		}
 	}
-	return ComputeFingerprint(in), nil
+	fp := ComputeFingerprint(in)
+	for k, v := range ComputeDetailFingerprint(in) {
+		fp[k] = v
+	}
+	return fp, nil
 }
 
 // ---------- 记录与比对 ----------
@@ -208,10 +362,12 @@ type FingerprintSource interface {
 	Fingerprint(ctx context.Context) (Fingerprint, error)
 }
 
-// PendingRestart 对应前端的 pendingRestart。Reasons 永远是数组(不是 null),按固定顺序。
+// PendingRestart 对应前端的 pendingRestart。Reasons / Details 永远是数组(不是 null),按固定顺序。
+// Details 是更细的明细码(见 detailOrder):空数组 = 判断不出具体改了什么,前端回退到按 Reasons 显示。
 type PendingRestart struct {
 	Pending bool     `json:"pending"`
 	Reasons []string `json:"reasons"`
+	Details []string `json:"details"`
 }
 
 // Applied 记「上次成功部署用的输入指纹」,并和当前的比。
@@ -241,7 +397,7 @@ func (a *Applied) Record(fp Fingerprint) error {
 
 // Pending 比较存着的记录和当前输入。没有记录就是「没有」,读不到记录或算不出当前指纹返回错误(调用方当作没有)。
 func (a *Applied) Pending(ctx context.Context) (PendingRestart, error) {
-	out := PendingRestart{Reasons: []string{}}
+	out := PendingRestart{Reasons: []string{}, Details: []string{}}
 	var rec appliedFile
 	ok, err := a.Store.Load(fileApplied, &rec)
 	if err != nil {
@@ -260,7 +416,37 @@ func (a *Applied) Pending(ctx context.Context) (PendingRestart, error) {
 		}
 	}
 	out.Pending = len(out.Reasons) > 0
+	if out.Pending {
+		out.Details = pendingDetails(rec.Fingerprint, cur)
+	}
 	return out, nil
+}
+
+// pendingDetails 比较两份指纹里的明细。当前指纹带明细、而上次部署的记录里一个明细都没有(旧版本写的),
+// 说明只知道原因、不知道具体改了什么:给 legacy_deploy,提示重新部署一次让记录带上明细。
+// 当前指纹不带明细(别的 FingerprintSource)就不产出明细,前端回退到原因。
+func pendingDetails(rec, cur Fingerprint) []string {
+	out := []string{}
+	hasDetail := func(fp Fingerprint) bool {
+		for k := range fp {
+			if strings.HasPrefix(k, detailKeyPrefix) {
+				return true
+			}
+		}
+		return false
+	}
+	if !hasDetail(cur) {
+		return out
+	}
+	if !hasDetail(rec) {
+		return append(out, DetailLegacyDeploy)
+	}
+	for _, c := range detailOrder {
+		if rec[detailKeyPrefix+c] != cur[detailKeyPrefix+c] {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // Tracker 是部署用到的记录接口(*Applied 满足)。

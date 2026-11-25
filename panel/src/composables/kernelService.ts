@@ -78,7 +78,8 @@ export const useServiceStatusPolling = (intervalMs = 10_000) => {
   })
 }
 
-// 有改动要重启内核才生效:原因组合变了(或第一次出现)就弹一条黄色提示,同一条提示只更新不叠加
+// 有改动要重启内核才生效:内容变了(或第一次出现)就弹一条黄色提示,同一条提示只更新不叠加。
+// 上游 v0.1.486 起服务端多给一份 details(具体改了什么),优先按它显示;没有 details 时回退到按 reasons(粗分类)。
 const RESTART_REASON_KEYS: Record<string, string> = {
   nodes: 'restartPendingReasonNodes',
   dns: 'restartPendingReasonDns',
@@ -86,20 +87,52 @@ const RESTART_REASON_KEYS: Record<string, string> = {
   inbounds: 'restartPendingReasonInbounds',
   system: 'restartPendingReasonSystem',
 }
+const RESTART_DETAIL_KEYS: Record<string, string> = {
+  dns_mode: 'restartDetailDnsMode',
+  dns_listen_53: 'restartDetailDnsListen53',
+  dns_fakeip: 'restartDetailDnsFakeIp',
+  dns_upstreams: 'restartDetailDnsUpstreams',
+  dns_domain_upstreams: 'restartDetailDnsDomainUpstreams',
+  dns_rewrite: 'restartDetailDnsRewrite',
+  dns_filter: 'restartDetailDnsFilter',
+  dns_node_resolver: 'restartDetailDnsNodeResolver',
+  routing_policies: 'restartDetailRoutingPolicies',
+  routing_rule_lists: 'restartDetailRoutingRuleLists',
+  direct_bypass: 'restartDetailDirectBypass',
+  reject_quic: 'restartDetailRejectQuic',
+  client_routes: 'restartDetailClientRoutes',
+  tun_settings: 'restartDetailTunSettings',
+  ipv6_settings: 'restartDetailIpv6Settings',
+  bypass_ports: 'restartDetailBypassPorts',
+  mihomo_sniff_ports: 'restartDetailMihomoSniffPorts',
+  shared_servers: 'restartDetailSharedServers',
+  chain_proxies: 'restartDetailChainProxies',
+  nodes_and_groups: 'restartDetailNodesAndGroups',
+  legacy_deploy: 'restartDetailLegacyDeploy',
+}
 export const restartPendingSignature = computed(() => {
   const pending = serviceStatus.value?.pendingRestart
   if (!serviceStatus.value?.core.running || !pending?.pending) return ''
+  const details = pending.details || []
+  if (details.length > 0) return `d:${[...details].sort().join(',')}`
   return [...(pending.reasons || [])].sort().join(',') || 'pending'
 })
+// 待生效改动的文字列表:有 details 按 details,否则按 reasons;认不得的码丢掉
+export const restartPendingReasons = (t: (key: string) => string) => {
+  const pending = serviceStatus.value?.pendingRestart
+  if (!serviceStatus.value?.core.running || !pending?.pending) return []
+  const fromDetails = (pending.details || [])
+    .map((code) => (RESTART_DETAIL_KEYS[code] ? t(RESTART_DETAIL_KEYS[code]) : ''))
+    .filter(Boolean)
+  if (fromDetails.length > 0) return fromDetails
+  return (pending.reasons || []).map((code) => (RESTART_REASON_KEYS[code] ? t(RESTART_REASON_KEYS[code]) : '')).filter(Boolean)
+}
 export const useRestartPendingToast = () => {
   const { t } = useI18n()
   useServiceStatusPolling()
   watch(restartPendingSignature, (next, prev) => {
     if (!next || next === prev) return
-    const reasons = (serviceStatus.value?.pendingRestart?.reasons || [])
-      .map((reason) => (RESTART_REASON_KEYS[reason] ? t(RESTART_REASON_KEYS[reason]) : ''))
-      .filter(Boolean)
-      .join(t('restartPendingReasonSeparator'))
+    const reasons = restartPendingReasons(t).join(t('restartPendingReasonSeparator'))
     showNotification({
       content: reasons ? 'restartPendingToast' : 'restartPendingToastPlain',
       params: { reasons },

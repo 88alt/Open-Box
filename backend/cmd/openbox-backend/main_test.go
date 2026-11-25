@@ -76,8 +76,8 @@ func TestAppWiring(t *testing.T) {
 		t.Fatalf("dns/region-detect: %d %s", code, body)
 	}
 
-	// 服务状态已装配:带 pendingRestart(从没部署过 / 内核没在运行时恒为没有,reasons 是空数组而不是 null)
-	if code, body := get(c, ts.URL+"/api/openbox/service/status"); code != 200 || !strings.Contains(body, `"pendingRestart":{"pending":false,"reasons":[]}`) {
+	// 服务状态已装配:带 pendingRestart(从没部署过 / 内核没在运行时恒为没有,reasons / details 是空数组而不是 null)
+	if code, body := get(c, ts.URL+"/api/openbox/service/status"); code != 200 || !strings.Contains(body, `"pendingRestart":{"pending":false,"reasons":[],"details":[]}`) {
 		t.Fatalf("service/status: %d %s", code, body)
 	}
 

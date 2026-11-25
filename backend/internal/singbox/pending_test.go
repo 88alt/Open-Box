@@ -193,6 +193,15 @@ func (f *fpFilter) CoreArtifact(context.Context, map[string]any) (map[string]any
 	return nil, f.key, true, f.ready, f.err
 }
 
+// fullFingerprint 是 Generator.Fingerprint 的期望:原因指纹并上明细指纹。
+func fullFingerprint(in FingerprintInput) Fingerprint {
+	fp := ComputeFingerprint(in)
+	for k, v := range ComputeDetailFingerprint(in) {
+		fp[k] = v
+	}
+	return fp
+}
+
 func filterOn() map[string]any {
 	return map[string]any{"dns": map[string]any{"filter": map[string]any{"enabled": true}}}
 }
@@ -212,7 +221,7 @@ func TestGeneratorFingerprintFollowsBuildInputs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := ComputeFingerprint(in); !reflect.DeepEqual(got, want) {
+	if want := fullFingerprint(in); !reflect.DeepEqual(got, want) {
 		t.Fatalf("%v != %v", got, want)
 	}
 }
@@ -226,7 +235,8 @@ func TestGeneratorFingerprintFilterOnlyCountsWhenReady(t *testing.T) {
 		}
 		return fp
 	}
-	off := ComputeFingerprint(FingerprintInput{Profile: filterOn()})
+	offIn := FingerprintInput{Profile: filterOn()}
+	off := fullFingerprint(offIn)
 	notReady := mk(&fpFilter{key: "k1", ready: false})
 	if changed(off, notReady) != nil {
 		t.Fatalf("开了但还没应用,生成的配置里没有过滤,与没开一样: %v", changed(off, notReady))
@@ -591,5 +601,167 @@ func TestDeployWithoutTrackerStillWorks(t *testing.T) {
 	d := newDP(t, map[string]any{"marker": "new"}, &fakeSvc{})
 	if res := d.Deploy(context.Background()); !res.OK {
 		t.Fatalf("%+v", res)
+	}
+}
+
+// ---------- 待重启的明细(对齐上游 v0.1.486 的 pendingRestart.details) ----------
+
+// detailsChanged 返回两份指纹里不一样的明细码(按固定顺序)。
+func detailsChanged(a, b Fingerprint) []string {
+	var out []string
+	for _, c := range detailOrder {
+		if a[detailKeyPrefix+c] != b[detailKeyPrefix+c] {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func TestDetailFingerprintCoversEveryCode(t *testing.T) {
+	fp := ComputeDetailFingerprint(baseInput())
+	if len(fp) != len(detailOrder) {
+		t.Fatalf("每个明细码都要有指纹: %d != %d", len(fp), len(detailOrder))
+	}
+	for _, c := range detailOrder {
+		if fp[detailKeyPrefix+c] == "" {
+			t.Fatalf("%s 没有指纹", c)
+		}
+	}
+	// 纯函数 ComputeFingerprint 只带原因,不带明细(落盘 / 比对时由 Generator.Fingerprint 合并)
+	if len(ComputeFingerprint(baseInput())) != len(reasonOrder) {
+		t.Fatal("ComputeFingerprint 不该带明细键")
+	}
+}
+
+func TestDetailFingerprintMapsChanges(t *testing.T) {
+	dnsWith := func(in *FingerprintInput, k string, v any) {
+		d := in.Profile["dns"].(map[string]any)
+		in.Profile["dns"] = map[string]any{}
+		for dk, dv := range d {
+			in.Profile["dns"].(map[string]any)[dk] = dv
+		}
+		in.Profile["dns"].(map[string]any)[k] = v
+	}
+	cases := []struct {
+		name       string
+		mut        func(in *FingerprintInput)
+		wantDetail []string
+		wantReason []string
+	}{
+		{"DNS 劫持方式", func(in *FingerprintInput) { dnsWith(in, "mode", "hijack") }, []string{DetailDNSMode}, []string{ReasonDNS}},
+		{"监听 53 端口", func(in *FingerprintInput) { dnsWith(in, "listen53", true) }, []string{DetailDNSListen53}, []string{ReasonDNS}},
+		{"FakeIP 网段", func(in *FingerprintInput) { dnsWith(in, "fakeIpRange", "198.20.0.0/16") }, []string{DetailDNSFakeIP}, []string{ReasonDNS}},
+		{"FakeIP 开关", func(in *FingerprintInput) { dnsWith(in, "fakeIpForProxy", true) }, []string{DetailDNSFakeIP}, []string{ReasonDNS}},
+		{"DNS 上游", func(in *FingerprintInput) { dnsWith(in, "proxy", "8.8.8.8") }, []string{DetailDNSUpstreams}, []string{ReasonDNS}},
+		{"指定域名 DNS", func(in *FingerprintInput) {
+			dnsWith(in, "domainUpstreams", map[string]any{"enabled": true})
+		}, []string{DetailDNSDomainUpstreams}, []string{ReasonDNS}},
+		{"DNS 重写", func(in *FingerprintInput) { dnsWith(in, "rewrite", map[string]any{"enabled": true}) }, []string{DetailDNSRewrite}, []string{ReasonDNS}},
+		{"顶层地区", func(in *FingerprintInput) { in.Profile["region"] = "intl" }, []string{DetailDNSUpstreams}, []string{ReasonDNS}},
+		{"域名过滤应用", func(in *FingerprintInput) { in.FilterKey = "k1" }, []string{DetailDNSFilter}, []string{ReasonDNS}},
+		{"IPv6", func(in *FingerprintInput) { in.Profile["ipv6"] = true }, []string{DetailIPv6Settings}, []string{ReasonDNS}},
+		{"分流", func(in *FingerprintInput) { in.Profile["routing"] = map[string]any{"x": 1} }, []string{DetailRoutingPolicies}, []string{ReasonRoute}},
+		{"终端分流", func(in *FingerprintInput) { in.Profile["clientRoutes"] = []any{"a"} }, []string{DetailClientRoutes}, []string{ReasonRoute}},
+		{"直连不进内核", func(in *FingerprintInput) { in.Profile["directBypass"] = true }, []string{DetailDirectBypass}, []string{ReasonRoute}},
+		{"屏蔽 QUIC", func(in *FingerprintInput) { in.Profile["rejectQuic"] = true }, []string{DetailRejectQUIC}, []string{ReasonRoute}},
+		{"TUN", func(in *FingerprintInput) { in.Profile["tun"] = map[string]any{"stack": "gvisor"} }, []string{DetailTunSettings}, []string{ReasonInbounds}},
+		{"共享服务器", func(in *FingerprintInput) { in.Profile["servers"] = []any{} }, []string{DetailSharedServers}, []string{ReasonInbounds}},
+		{"绕过端口", func(in *FingerprintInput) { in.Profile["bypassPorts"] = "8443" }, []string{DetailBypassPorts}, []string{ReasonSystem}},
+		{"链式代理", func(in *FingerprintInput) { in.Profile["chainProxies"] = []any{"c"} }, []string{DetailChainProxies}, []string{ReasonNodes}},
+		{"测速地址", func(in *FingerprintInput) { in.Profile["testUrl"] = "https://t.example/" }, []string{DetailNodesAndGroups}, []string{ReasonNodes}},
+		{"节点组", func(in *FingerprintInput) { in.Groups = []any{map[string]any{"id": "g2"}} }, []string{DetailNodesAndGroups}, []string{ReasonNodes}},
+		{"节点", func(in *FingerprintInput) { in.Nodes = in.Nodes[:1] }, []string{DetailNodesAndGroups}, []string{ReasonNodes}},
+		{"订阅地址", func(in *FingerprintInput) { in.Subs[0].URL = "https://a.example/other" }, []string{DetailNodesAndGroups}, []string{ReasonNodes}},
+		{"节点专用 DNS", func(in *FingerprintInput) { in.Subs[0].NodeDNS = map[string]any{"direct": "1.1.1.1"} }, []string{DetailDNSNodeResolver}, []string{ReasonNodes}},
+		// 没有对应明细码的键:只有原因(前端按原因显示)
+		{"其它系统键", func(in *FingerprintInput) { in.Profile["somethingNew"] = true }, nil, []string{ReasonSystem}},
+		// 被忽略的键、没启用的订阅、刷新一次就变的字段:原因和明细都不变
+		{"自动更新计划", func(in *FingerprintInput) { in.Profile["updates"] = map[string]any{"subscriptions": "daily"} }, nil, nil},
+		{"没启用的订阅", func(in *FingerprintInput) { in.Subs[1].URL = "https://b.example/other" }, nil, nil},
+		{"节点数与更新时间", func(in *FingerprintInput) { in.Subs[0].NodeCount = 9; in.Subs[0].UpdatedAt = 2 }, nil, nil},
+	}
+	base := ComputeDetailFingerprint(baseInput())
+	baseReasons := ComputeFingerprint(baseInput())
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			in := baseInput()
+			c.mut(&in)
+			if got := detailsChanged(base, ComputeDetailFingerprint(in)); !reflect.DeepEqual(got, c.wantDetail) {
+				t.Fatalf("明细: %v, 想要 %v", got, c.wantDetail)
+			}
+			if got := changed(baseReasons, ComputeFingerprint(in)); !reflect.DeepEqual(got, c.wantReason) {
+				t.Fatalf("原因: %v, 想要 %v", got, c.wantReason)
+			}
+		})
+	}
+}
+
+func TestAppliedPendingDetails(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "state")
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	merged := fullFingerprint
+	cur := baseInput()
+	src := &fakeSource{fp: merged(cur)}
+	a := &Applied{Store: st, Source: src, Now: func() time.Time { return time.UnixMilli(1700000000000) }}
+	ctx := context.Background()
+	fp, _ := a.Snapshot(ctx)
+	if err := a.Record(fp); err != nil {
+		t.Fatal(err)
+	}
+	if p, err := a.Pending(ctx); err != nil || p.Pending || p.Details == nil || len(p.Details) != 0 {
+		t.Fatalf("刚部署完没有待重启,details 必须是空数组而不是 nil: %+v %v", p, err)
+	}
+	// 同时改 DNS 劫持方式和 TUN:明细按固定顺序(dns_mode 在 tun_settings 前),原因也跟着有
+	cur.Profile["dns"] = map[string]any{"region": "cn", "mode": "hijack", "filter": map[string]any{"enabled": false}}
+	cur.Profile["tun"] = map[string]any{"stack": "gvisor"}
+	src.mu.Lock()
+	src.fp = merged(cur)
+	src.mu.Unlock()
+	p, err := a.Pending(ctx)
+	if err != nil || !p.Pending {
+		t.Fatalf("应有待重启: %+v %v", p, err)
+	}
+	if !reflect.DeepEqual(p.Details, []string{DetailDNSMode, DetailTunSettings}) || !reflect.DeepEqual(p.Reasons, []string{ReasonDNS, ReasonInbounds}) {
+		t.Fatalf("details/reasons: %+v", p)
+	}
+	// 只改了没有明细码的键:有原因、details 为空数组(前端回退到按原因显示)
+	cur2 := baseInput()
+	cur2.Profile["somethingNew"] = true
+	src.mu.Lock()
+	src.fp = merged(cur2)
+	src.mu.Unlock()
+	p, _ = a.Pending(ctx)
+	if !p.Pending || p.Details == nil || len(p.Details) != 0 || !reflect.DeepEqual(p.Reasons, []string{ReasonSystem}) {
+		t.Fatalf("没有明细码的改动: %+v", p)
+	}
+}
+
+func TestAppliedLegacyRecordGivesLegacyDeploy(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "state")
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := baseInput()
+	// 旧版本写的记录:只有五个原因的指纹,没有明细
+	if err := st.Save(fileApplied, appliedFile{Fingerprint: ComputeFingerprint(in), At: 1}); err != nil {
+		t.Fatal(err)
+	}
+	in.Profile["tun"] = map[string]any{"stack": "gvisor"}
+	fp := fullFingerprint(in)
+	a := &Applied{Store: st, Source: &fakeSource{fp: fp}}
+	p, err := a.Pending(context.Background())
+	if err != nil || !p.Pending || !reflect.DeepEqual(p.Details, []string{DetailLegacyDeploy}) || !reflect.DeepEqual(p.Reasons, []string{ReasonInbounds}) {
+		t.Fatalf("旧记录应给 legacy_deploy: %+v %v", p, err)
+	}
+	// 重新部署一次(记录带上明细)之后恢复到按明细比
+	if err := a.Record(fp); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := a.Pending(context.Background()); p.Pending {
+		t.Fatalf("记录更新后不该再提示: %+v", p)
 	}
 }

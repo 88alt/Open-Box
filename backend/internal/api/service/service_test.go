@@ -257,6 +257,21 @@ func TestStatusPendingRestartWhenRunning(t *testing.T) {
 	}
 }
 
+// details(上游 v0.1.486 的待重启明细)原样带出;没有明细时是空数组而不是 null,前端据此回退到按 reasons 显示
+func TestStatusPendingRestartDetails(t *testing.T) {
+	p := &fakePending{res: singbox.PendingRestart{Pending: true, Reasons: []string{"dns", "inbounds"}, Details: []string{"dns_mode", "tun_settings"}}}
+	pr := statusWithPending(t, true, p)["pendingRestart"].(map[string]any)
+	d, ok := pr["details"].([]any)
+	if !ok || len(d) != 2 || d[0] != "dns_mode" || d[1] != "tun_settings" {
+		t.Fatalf("details 应原样带出: %v", pr["details"])
+	}
+	q := &fakePending{res: singbox.PendingRestart{Pending: true, Reasons: []string{"system"}}}
+	pr = statusWithPending(t, true, q)["pendingRestart"].(map[string]any)
+	if d, ok := pr["details"].([]any); !ok || len(d) != 0 {
+		t.Fatalf("没有明细时 details 必须是空数组而不是 null: %v", pr["details"])
+	}
+}
+
 func TestStatusPendingRestartNotAskedWhenStopped(t *testing.T) {
 	p := &fakePending{res: singbox.PendingRestart{Pending: true, Reasons: []string{"nodes"}}}
 	pending, reasons := pendingOf(t, statusWithPending(t, false, p))

@@ -119,6 +119,8 @@ type statusResponse struct {
 type pending struct {
 	Pending bool     `json:"pending"`
 	Reasons []string `json:"reasons"`
+	// 具体改了什么的明细码(对齐上游 v0.1.486);空数组 = 只知道原因,前端按 reasons 显示
+	Details []string `json:"details"`
 }
 
 func (d Deps) status(w http.ResponseWriter, r *http.Request) {
@@ -127,7 +129,7 @@ func (d Deps) status(w http.ResponseWriter, r *http.Request) {
 		Conflicts:      []system.Conflict{},
 		Platform:       string(d.Kind),
 		Arch:           d.Arch,
-		PendingRestart: pending{Reasons: []string{}},
+		PendingRestart: pending{Reasons: []string{}, Details: []string{}},
 		// 后端自己:能回答这个请求就是在运行
 		Panel: system.ServiceInfo{Running: true, Raw: "running"},
 	}
@@ -154,7 +156,7 @@ func (d Deps) status(w http.ResponseWriter, r *http.Request) {
 		if p, err := d.Pending.Pending(r.Context()); err != nil {
 			slog.Debug("判断待重启失败", "error", err)
 		} else if p.Pending {
-			resp.PendingRestart = pending{Pending: true, Reasons: append([]string{}, p.Reasons...)}
+			resp.PendingRestart = pending{Pending: true, Reasons: append([]string{}, p.Reasons...), Details: append([]string{}, p.Details...)}
 		}
 	}
 	// 后端自己的开机自启:查不到就不带这个字段
