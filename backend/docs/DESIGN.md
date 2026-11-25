@@ -66,7 +66,7 @@
 - v0.1.318 快照(tag `engine-snapshot`)等历史材料:可作只读行为/格式参考;禁止整文件复制进 backend 当运行时组件。
 - 前端里有几处是按上游新版的编译产物对齐出来的(订阅「登录」来源、教程视频等)。它们对应的接口 `subscriptions/login`、`tutorial-videos` 在后端按下面的默认处理,不要为它们去研究上游行为。
 
-## 8. 待维护者确认(接手者直接按默认做,不用停下来问)
+## 8. 已按默认处理的事项(原「待维护者确认」;接手者直接按默认做,不用停下来问)
 | 事项 | 默认做法 |
 |---|---|
 | 订阅「登录」来源(`/api/openbox/subscriptions/login`) | M1 返回 501 + 中文错误「暂不支持」;以后需要再设计 |
@@ -91,7 +91,7 @@
 | 带宽择优(3414adff) | 整体回退(`git revert`,不改写历史),按前端 `BandwidthSettingsCard` 和 sing-box 公开文档重写;core 层 e5f8d5ab 保留。重写已完成(见 STATUS 的带宽择优条目),`GET /api/openbox/bandwidth` 已恢复 |
 | `route-test` 的 `dns.stale` / `debug`、`penetration` 的 `firstLayer` / `preMatch` | 不做:前端没规定含义,或依据的是上游部署产物。`route-test` 的 `context` 留到 `terminal-test` 做探测时一起做 |
 | Docker 平台 | 不在范围(目标平台只有 OpenWrt 和 Debian);`docker/` 是上游同步目录,会被覆盖 |
-| M6 发布包设计 | 由后端起草,另出文档(`docs/M6.md`)交维护者过目;确认前不动 `update*` 第二部分和打包的代码。发布签名 v1 不做(只做 SHA256 加 HTTPS),需要签名时由维护者生成密钥并放进 Actions secrets |
+| M6 发布包设计 | 设计在 `docs/M6.md`,已按其第十二节的答复与默认推进完 M6-1~M6-7(代码与单测),只剩 M6-8 真机联调。发布签名 v1 不做(只做 SHA256 加 HTTPS),需要签名时由维护者生成密钥并放进 Actions secrets |
 
 ## 9. 双内核(sing-box / Mihomo)与内核切换
 
@@ -121,7 +121,7 @@
 
 ### 9.6 服务脚本与打包
 `openwrt/bin/openbox-kernel`、`initd/openbox`、`debian/systemd/openbox.service`、`docker/bin/openbox-ctl` 都随上游同步,已经支持双内核,**main 没有另做 overlay**(如果以后要改,按 `docs/M6.md` 的放法另放。`openwrt/`、`debian/`、`docker/` 不在 `sync-main.sh` 的 KEEP 里,改了会被覆盖)。
-发布包里要带 `bin/mihomo`(没带时 `mihomoAvailable=false`,面板提示「当前安装包未包含 Mihomo」),以及组件更新里的 Mihomo 版本检查;这两项要动打包流程,见 `STATUS.md` 第 7 步。
+发布包里带 `bin/mihomo`:`packaging/build-kernels.sh` 现编补丁版内核,`build-package.sh` 装进包,`release-backend.yml` 断言包里有它(没带时 `mihomoAvailable=false`,面板提示「当前安装包未包含 Mihomo」)。组件更新里的 Mihomo 版本检查是同步来的面板代码本来就有,行为与上游一致,没动。剩下的只是真机验证「装上后 `mihomoAvailable=true` 且能切过去」。
 
 ### 9.7 与上游的已知差异
 逐条列在 `STATUS.md` 的「最终差异清单」第 7、8 条(选中项不 `PUT /proxies` 回内核、guest / iot 类接口仍按地址收)。**双内核的预检、切换、回滚都需要真机验证**(两个方向、故意让某一步失败看回滚、NDJSON 逐项到达),见 `STATUS.md` 对应条目的「需真机」。
