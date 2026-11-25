@@ -70,7 +70,7 @@
             <dt class="text-base-content/65">{{ $t('outbound') }}</dt>
             <dd class="flex min-w-0 flex-wrap items-center gap-1">
               <template v-if="routingPolicy">
-                <ProxyName :name="routingPolicy" />
+                <ProxyName :name="routingPolicy" hide-bandwidth />
                 <span v-if="nodeChain.length">·</span>
               </template>
               <template
@@ -81,7 +81,7 @@
                   v-if="index > 0"
                   class="size-4 shrink-0"
                 />
-                <ProxyName :name="name" />
+                <ProxyName :name="name" hide-bandwidth />
               </template>
               <span v-if="!routingPolicy && !nodeChain.length">—</span>
             </dd>

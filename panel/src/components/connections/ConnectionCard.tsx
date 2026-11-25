@@ -65,7 +65,7 @@ export default defineComponent<{
       const nodeChain = [...(routingPolicy ? conn.chains.slice(0, -1) : conn.chains)].reverse()
       const componentMap: Record<ConnectionCardColumn, JSX.Element> = {
         [TARGET_ROUTING_COLUMN]: (
-          <div class="min-w-0 truncate">{routingPolicy && <ProxyName name={routingPolicy} />}</div>
+          <div class="min-w-0 truncate">{routingPolicy && <ProxyName name={routingPolicy} hideBandwidth />}</div>
         ),
         [CONNECTIONS_TABLE_ACCESSOR_KEY.Host]: (
           <span class="inline-flex w-80 min-w-0 grow items-center gap-1">
@@ -123,7 +123,7 @@ export default defineComponent<{
                 {index > 0 && (
                   <ArrowRightCircleIcon class="h-4 w-4 shrink-0"></ArrowRightCircleIcon>
                 )}
-                <ProxyName name={name} />
+                <ProxyName name={name} hideBandwidth />
               </>
             ))}
           </span>
@@ -138,7 +138,7 @@ export default defineComponent<{
           >
             {routingPolicy && (
               <>
-                <ProxyName name={routingPolicy} />
+                <ProxyName name={routingPolicy} hideBandwidth />
                 {nodeChain.length > 0 && (
                   <span
                     class="text-base-content/60 shrink-0"
@@ -152,7 +152,7 @@ export default defineComponent<{
             {nodeChain.map((name, index) => (
               <>
                 {index > 0 && <ArrowRightCircleIcon class="size-4 shrink-0" />}
-                <ProxyName name={name} />
+                <ProxyName name={name} hideBandwidth />
               </>
             ))}
             {!routingPolicy && !nodeChain.length && <span>—</span>}
