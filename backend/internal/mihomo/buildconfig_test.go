@@ -42,13 +42,13 @@ func minimalInput() BuildInput {
 		DataDir:  "/d",
 		Profile: map[string]any{
 			"ipv6": false, "directForNodes": false,
-			"tun": map[string]any{"stack": "mixed", "autoRedirect": false},
-			"dns": map[string]any{"mode": "hijack", "split": false},
+			"tun":     map[string]any{"stack": "mixed", "autoRedirect": false},
+			"dns":     map[string]any{"mode": "hijack", "split": false},
 			"servers": []any{}, "clientRoutes": []any{},
 		},
-		Nodes:    []map[string]any{{"tag": "n1", "type": "ss", "server": "1.2.3.4", "port": float64(8388)}},
-		Groups:   []map[string]any{},
-		Secret:   "s3cret",
+		Nodes:     []map[string]any{{"tag": "n1", "type": "ss", "server": "1.2.3.4", "port": float64(8388)}},
+		Groups:    []map[string]any{},
+		Secret:    "s3cret",
 		SystemDNS: nil,
 	}
 }
@@ -418,9 +418,9 @@ nothing: []
 
 func TestMarshalYAMLQuotes(t *testing.T) {
 	cases := map[string]string{
-		"":            `""`,
-		"true":        `"true"`,
-		"123":         `"123"`,
+		"":     `""`,
+		"true": `"true"`,
+		"123":  `"123"`,
 		// yaml 库(上游用的那个)认为 1.1.1.1 和 -x 都是安全的纯文本,不引。
 		"1.1.1.1":     "1.1.1.1",
 		"MATCH,PROXY": "MATCH,PROXY",
