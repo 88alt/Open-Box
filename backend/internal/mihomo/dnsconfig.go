@@ -513,7 +513,8 @@ func BuildDNSConfig(fs FS, rulesDir string, in DNSBuildInput) (*DNSBuildResult, 
 	cfg.Set("nameserver", serversFor(fallback))
 	cfg.Set("nameserver-policy", policy)
 	cfg.SetIf(openboxParam || in.IPv6Mode == "bypass" || platform == "container", "openbox-upstream-dns", true)
-	cfg.SetIf(platform == "container", "openbox-lan-dns-listen", "0.0.0.0:53")
+	// 容器部署一直监听 53;systemd 部署由档案 dns.listen53 === true 打开(上游 v0.1.485,DNS 页「监听 53 端口」)
+	cfg.SetIf(platform == "container" || (platform == "systemd" && dns["listen53"] == true), "openbox-lan-dns-listen", "0.0.0.0:53")
 	cfg.SetIf(in.IPv6Mode == "bypass", "openbox-real-ipv6", true)
 	// 上游这里是 `...admitDns?{...}:{}`,而 admitDns 就是 vt(dns) 的返回(永远是个对象),
 	// 所以这两个键在非 container 平台上一直在。照上游写,不改语义。

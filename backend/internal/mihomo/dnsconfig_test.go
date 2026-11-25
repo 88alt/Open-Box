@@ -250,6 +250,45 @@ func TestBuildDNSConfigSplitRules(t *testing.T) {
 	}
 }
 
+// 上游 v0.1.485(DNS 页「监听 53 端口」):systemd 部署且档案 dns.listen53 === true 才写 openbox-lan-dns-listen;
+// 没开、值不是布尔 true、或不是 systemd(openwrt 的 53 归 dnsmasq)都不写。container 一直写,见下一个测试。
+func TestBuildDNSConfigSystemdListen53(t *testing.T) {
+	cases := []struct {
+		name     string
+		platform string
+		listen53 any
+		want     bool
+	}{
+		{"systemd 开", "systemd", true, true},
+		{"systemd 关", "systemd", false, false},
+		{"systemd 没写", "systemd", nil, false},
+		{"systemd 写成字符串", "systemd", "true", false},
+		{"openwrt 开也不写", "openwrt", true, false},
+		{"没有 platform 开也不写", "", true, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dns := map[string]any{"split": true, "mode": "hijack"}
+			if c.listen53 != nil {
+				dns["listen53"] = c.listen53
+			}
+			r, err := BuildDNSConfig(newMemFS(), "/d/mihomo/rules", DNSBuildInput{
+				Profile:   map[string]any{"dns": dns},
+				Upstreams: dnsTestUpstreams(),
+				Platform:  c.platform,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg := dnsConfigMap(t, r)
+			got, has := cfg["openbox-lan-dns-listen"]
+			if has != c.want || (has && got != "0.0.0.0:53") {
+				t.Fatalf("openbox-lan-dns-listen = %v(存在 %v),想要存在 %v", got, has, c.want)
+			}
+		})
+	}
+}
+
 func TestBuildDNSConfigTerminalDNSAndContainer(t *testing.T) {
 	fs := newMemFS()
 	terminal := []any{map[string]any{"sources": []any{"192.168.1.10/32"}}}

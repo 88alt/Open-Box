@@ -65,7 +65,7 @@ Go 静态编译(backend/go.mod 现为 go 1.25.4,core/go.mod 是 1.25.12,统一�
       (OpenWrt 上按 netifd 的逻辑网络判 lan / wan);第 7 步发布包带 `bin/mihomo`(`packaging/build-kernels.sh` 现编补丁内核)也已做。设计见 `docs/DESIGN.md` 第 9 节,细项与「需真机」见 STATUS。
     - 前后端对账缺口(STATUS 同名一节):全部做完,最后一组 kernel/switch 随双内核完成。
     - 上游 v0.1.481 / v0.1.482 新增三项(前端、后端、core 三头一起):带宽「按天测试指定开始时刻」(`bandwidth.startHour`)、
-      DNS 页「FakeIP 网段」(`dns.fakeIpRange`)、DNS 页「指定域名 DNS」(`dns.domainUpstreams`,规则在配置里的位置是推断);
+      DNS 页「FakeIP 网段」(`dns.fakeIpRange`)、DNS 页「指定域名 DNS」(`dns.domainUpstreams`,规则在配置里的位置是推断);DNS 页「监听 53 端口」(`dns.listen53`,仅 systemd 部署;v0.1.485,位置与显示条件是推断,见 STATUS);
       细项见 STATUS 对应条目(旧日志已归档,见 STATUS「日志」一节的归档摘要)。
 
 [ ] 未做(都只能真机或维护者做):

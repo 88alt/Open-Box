@@ -1406,6 +1406,9 @@ const zh: LANG_MESSAGE = {
   dnsModeUpstreamHint:
     'AdGuard Home / Pi-hole 上游可填 {addr}。',
   dnsModeSaved: 'DNS 劫持方式已保存。',
+  dnsListen53Title: '监听 DNS 53 端口',
+  dnsListen53Note:
+    '在保留 7853 端口的同时额外监听 53 端口，便于旁路由终端直接将本机 IP 设为 DNS；若本机已有 systemd-resolved / dnsmasq 等占用 53 端口，需先停用。',
   dnsUpstreamTitle: 'DNS 上游',
   dnsUpstreamDescription:
     '直连和代理分别设置，测试通过后保存。',

@@ -152,6 +152,9 @@ export interface OpenboxProfileDns {
   // FakeIP 的 v4 地址池(留空 = 内核默认:sing-box 198.19.0.0/16 / Mihomo 198.18.0.0/16)。
   // 与别的 TUN / 虚拟网卡网段冲突时改成 /15~/24 的 IPv4 CIDR,改完要重启内核
   fakeIpRange?: string
+  // 监听 53 端口(仅 systemd 部署;上游 v0.1.485):在保留 7853 的同时额外监听 0.0.0.0:53,旁路由终端可直接把本机 IP 设为 DNS。
+  // 容器部署一直监听、openwrt 的 53 归 dnsmasq,都不看这个字段;改完要重启内核
+  listen53?: boolean
   // 指定域名 DNS(面板「域名分流上游」):为特定域名 / 通配子域指定直连上游,匹配后不进 FakeIP 与代理侧解析
   domainUpstreams?: { enabled?: boolean; rules: OpenboxDnsDomainUpstreamRule[] }
   // DNS 重写:initialized 记「默认规则补过了」,rules 是整份规则表(空数组 = 用户不要任何重写)

@@ -1474,6 +1474,9 @@ const en = {
   dnsModeUpstreamHint:
     'AdGuard Home / Pi-hole can use {addr}.',
   dnsModeSaved: 'DNS hijack mode saved.',
+  dnsListen53Title: 'Listen on DNS port 53',
+  dnsListen53Note:
+    'Listen on port 53 alongside 7853 so LAN clients can use this host IP directly as their DNS server. Stop systemd-resolved, dnsmasq, or any other service using port 53 first.',
   dnsUpstreamTitle: 'DNS upstreams',
   dnsUpstreamDescription:
     'Set direct and proxy DNS. Saving requires a test.',

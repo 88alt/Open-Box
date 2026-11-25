@@ -95,6 +95,64 @@ func TestPlatformContainerDNSLan(t *testing.T) {
 	}
 }
 
+// 上游 v0.1.485(DNS 页「监听 53 端口」):systemd 部署且档案 dns.listen53 === true 时,和容器一样多一个
+// 0.0.0.0:53 的 dns-in-lan 及它的 hijack-dns;没开、值不是布尔 true、或不是 systemd(openwrt 的 53 归 dnsmasq)都不该有。
+func TestPlatformSystemdListen53(t *testing.T) {
+	cases := []struct {
+		name     string
+		platform any
+		listen53 any
+		want     bool
+	}{
+		{"systemd 开", "systemd", true, true},
+		{"systemd 关", "systemd", false, false},
+		{"systemd 没写", "systemd", nil, false},
+		{"systemd 写成字符串", "systemd", "true", false},
+		{"openwrt 开也不监听", "openwrt", true, false},
+		{"没有 platform 开也不监听", nil, true, false},
+		{"container 没写也监听(老行为)", "container", nil, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			args := baseArgs(t)
+			if c.platform == nil {
+				delete(args, "platform")
+			} else {
+				args["platform"] = c.platform
+			}
+			profile, _ := args["profile"].(map[string]any)
+			if profile == nil {
+				profile = map[string]any{}
+				args["profile"] = profile
+			}
+			dns, _ := profile["dns"].(map[string]any)
+			if dns == nil {
+				dns = map[string]any{}
+				profile["dns"] = dns
+			}
+			delete(dns, "listen53")
+			if c.listen53 != nil {
+				dns["listen53"] = c.listen53
+			}
+			cfg := buildConfig(t, args)
+			got := false
+			for _, tag := range inboundTags(cfg) {
+				if tag == DNSLanInboundTag {
+					got = true
+				}
+			}
+			if got != c.want {
+				t.Fatalf("dns-in-lan 存在 = %v,想要 %v", got, c.want)
+			}
+			first := asList(cfg["route"].(map[string]any)["rules"])[0].(map[string]any)
+			hijack := first["action"] == "hijack-dns" && len(asList(first["inbound"])) == 1 && asList(first["inbound"])[0] == DNSLanInboundTag
+			if hijack != c.want {
+				t.Fatalf("route.rules[0] 是 dns-in-lan 的 hijack-dns = %v,想要 %v", hijack, c.want)
+			}
+		})
+	}
+}
+
 func TestRulesetDirNullIsEmpty(t *testing.T) {
 	args := baseArgs(t)
 	args["rulesetDir"] = nil

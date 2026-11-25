@@ -59,7 +59,7 @@ openbox-core 交接笔记(第 7 版,只管 core;后端另见 backend/HANDOFF.md)
     - 带宽择优(core 层):组的 bandwidth 开关 → urltest / loadbalance 出站写 bandwidth:true;选项 disableBandwidth(客户端配置)不写。测速调度、校验、接口在后端。
     - 节点评分权重:档案 nodeScoreWeights {latency, download, jitter} 写成出站的 node_score_weights(只在开着带宽择优时写),对齐上游 v0.1.472。
     - groups 排除关键词 excludeKeywords / excludeKeywordMode(v0.1.472);动态组的订阅范围 subscriptionIds 与链式代理来源(v0.1.476)。
-    - dns.fakeIpRange(FakeIP 的 v4 地址池可配,IPv4 CIDR、掩码 /15~/24,v0.1.481)、dns.domainUpstreams(指定域名的上游 DNS,v0.1.482);DNS 上游与节点专用解析支持 DoT(v0.1.422)。
+    - dns.fakeIpRange(FakeIP 的 v4 地址池可配,IPv4 CIDR、掩码 /15~/24,v0.1.481)、dns.domainUpstreams(指定域名的上游 DNS,v0.1.482)、dns.listen53(systemd 部署额外监听 0.0.0.0:53 的 dns-in-lan,和容器同一套入站与 hijack-dns,v0.1.485);DNS 上游与节点专用解析支持 DoT(v0.1.422)。
     - 前置自定义分流里网段写错的 ipCidr 行整理时丢掉(2026-11-08 已定,与基线的有意差异)。
 [x] mihomo 五个方法(双内核,对齐上游 v0.1.477):mihomoProxies、mihomoGroups、mihomoTargetRules、mihomoCompatibility、mihomoDnsUpstreams。**两处是推断,待真机核对**:mihomoTargetRules 的规则表分段;mihomoCompatibility 的检查范围(自研按「能不能生成」定,与上游逐条是否一致没法核对)。
 [x] 授权三个方法(checkActivationCode、activationState、authorizationState):固定的「未限制」返回,新后端不调用

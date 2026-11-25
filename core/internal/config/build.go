@@ -505,8 +505,12 @@ func BuildDetailed(args any) (map[string]any, error) {
 		listen = "::"
 	}
 	inbounds = append(inbounds, map[string]any{"type": "direct", "tag": "dns-in", "listen": listen, "listen_port": DNSInboundPort})
-	if jsx.Get(args, "platform") == "container" {
-		// 容器部署:额外监听 0.0.0.0:53 的 dns-in-lan,和 dns-in 一样当 DNS 劫持(对官方 v0.1.353 差分核对)
+	// 53 端口的 LAN 入站:容器部署一直开;systemd 部署由档案 dns.listen53 === true 打开(上游 v0.1.485,
+	// DNS 页「监听 53 端口」)。openwrt 的 53 归 dnsmasq,不开。
+	lanDNS53 := jsx.Get(args, "platform") == "container" ||
+		(jsx.Get(args, "platform") == "systemd" && jsx.Get(jsx.Get(profile, "dns"), "listen53") == true)
+	if lanDNS53 {
+		// 额外监听 0.0.0.0:53 的 dns-in-lan,和 dns-in 一样当 DNS 劫持(容器部分对官方 v0.1.353 差分核对)
 		inbounds = append(inbounds, map[string]any{"type": "direct", "tag": DNSLanInboundTag, "listen": "0.0.0.0", "listen_port": DNSLanInboundPort})
 	}
 	if admitDirect {
@@ -519,7 +523,7 @@ func BuildDetailed(args any) (map[string]any, error) {
 		shareTags = append(shareTags, jsx.Get(i, "tag"))
 	}
 	route["rules"] = clientroutes.GuardTerminalRules(route["rules"], shareTags)
-	if jsx.Get(args, "platform") == "container" {
+	if lanDNS53 {
 		route["rules"] = append([]any{map[string]any{"action": "hijack-dns", "inbound": []any{DNSLanInboundTag}}}, asList(route["rules"])...)
 	}
 	if jsx.Truthy(dns["rules"]) {

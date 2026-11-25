@@ -268,7 +268,7 @@ func checkDNS(p map[string]any) error {
 	if err := wantRegion(dns, "region", "dns.region"); err != nil {
 		return err
 	}
-	for _, k := range []string{"split", "fakeIpForProxy"} {
+	for _, k := range []string{"split", "fakeIpForProxy", "listen53"} {
 		if err := wantBool(dns, k, "dns."+k); err != nil {
 			return err
 		}

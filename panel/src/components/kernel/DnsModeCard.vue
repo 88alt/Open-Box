@@ -4,7 +4,7 @@
     <div class="card-body gap-3 p-4 text-sm">
       <div class="flex items-center justify-between gap-2">
         <div class="flex flex-col gap-1">
-          <h2 class="text-base font-semibold">{{ $t('dnsModeTitle') }}（{{ $t('dnsModePort', { port: KERNEL_DNS_PORT }) }}）</h2>
+          <h2 class="text-base font-semibold">{{ $t('dnsModeTitle') }}（{{ $t('dnsModePort', { port: listenPortText }) }}）</h2>
         </div>
         <select
           class="select select-sm w-40 shrink-0"
@@ -25,6 +25,24 @@
       <p class="text-base-content/50 text-xs">{{ $t(NOTE_KEY[mode]) }}</p>
       <!-- 内核 DNS 入站三种模式都开:局域网里的 AdGuard Home / Pi-hole 把上游指到这里就能用分流解析 -->
       <p class="text-base-content/50 text-xs">{{ $t('dnsModeUpstreamHint', { addr: kernelDnsAddr }) }}</p>
+      <!-- 监听 53 端口:只有 systemd 部署能选(容器一直监听,openwrt 的 53 归 dnsmasq);开了以后旁路由终端可直接把本机 IP 设为 DNS -->
+      <div
+        v-if="platform === 'systemd'"
+        class="border-base-300/60 flex items-start gap-3 border-t pt-3"
+      >
+        <input
+          type="checkbox"
+          class="toggle toggle-sm mt-0.5 cursor-pointer"
+          :aria-label="$t('dnsListen53Title')"
+          :checked="listen53"
+          :disabled="saving"
+          @change="onListen53"
+        >
+        <span class="flex flex-col gap-1">
+          <span>{{ $t('dnsListen53Title') }}</span>
+          <span class="text-base-content/50 text-xs">{{ $t('dnsListen53Note') }}</span>
+        </span>
+      </div>
       <!-- FakeIP:走代理的域名不在本地解析,内核发占位地址,连接时把域名交给选中的节点 -->
       <div
         v-if="mode !== 'off'"
@@ -127,6 +145,11 @@ const fakeIp = computed(() => props.profile.dns?.fakeIpForProxy === true)
 // 面板就在路由器上,当前打开面板的主机名就是路由器地址
 const KERNEL_DNS_PORT = 7853
 const kernelDnsAddr = `${location.hostname}:${KERNEL_DNS_PORT}`
+// 标题里的 DNS 端口:容器一直同时监听 53 / 7853,systemd 在打开「监听 53 端口」后也是,其余只有 7853
+const listen53 = computed(() => props.profile.dns?.listen53 === true)
+const listenPortText = computed(() =>
+  platform.value === 'container' || (platform.value === 'systemd' && listen53.value) ? `53 / ${KERNEL_DNS_PORT}` : String(KERNEL_DNS_PORT),
+)
 
 const save = async (patch: Record<string, unknown>) => {
   saving.value = true
@@ -141,6 +164,7 @@ const save = async (patch: Record<string, unknown>) => {
 }
 
 const onFakeIp = (event: Event) => save({ fakeIpForProxy: (event.target as HTMLInputElement).checked })
+const onListen53 = (event: Event) => save({ listen53: (event.target as HTMLInputElement).checked })
 
 // FakeIP 网段:留空 = 用内核默认。档案里存的是用户改过的值(与默认值相同时存空串,和上游一样)。
 const defaultRange = computed(() => (kernel.value === 'mihomo' ? '198.18.0.0/16' : '198.19.0.0/16'))
