@@ -365,6 +365,30 @@ body:has(.sortable-chosen) * {
   box-shadow: none !important;
 }
 
+/* 按钮字重与边框对齐上游 v0.1.487:字重 400(daisyUI 默认 600 偏粗),非 link 按钮带 1px 卡片描边;
+   方形 / 圆形 / 紧凑图标 ghost 按钮和侧栏折叠按钮不描边,静止时无底色。 */
+#app-content .btn {
+  font-weight: 400;
+}
+
+#app-content .btn:not(.btn-link) {
+  border: 1px solid var(--app-card-border);
+}
+
+#app-content .btn.btn-ghost:is(.btn-square, .btn-circle, .app-compact-action),
+#app-content .btn.btn-ghost.sidebar-toggle-btn {
+  box-shadow: none;
+  border-color: #0000;
+}
+
+#app-content
+  .btn.btn-ghost:is(.btn-square, .btn-circle, .app-compact-action):not(:hover, :active, :focus-visible),
+#app-content
+  .btn.btn-ghost:is(.btn-square, .btn-circle, .app-compact-action):is(:disabled, [aria-disabled='true']),
+#app-content .btn.btn-ghost.sidebar-toggle-btn:not(:hover, :active, :focus-visible) {
+  background-color: #0000;
+}
+
 @utility badge {
   @apply bg-base-200/80;
 }
