@@ -380,6 +380,9 @@ export interface OpenboxSubscriptionAccount {
   resetDays?: number | null
   resetKnown?: boolean
   expiryKnown?: boolean
+  // 登录密码已经在服务端加密存下来了(定期更新要用它自动登录),只有登录来源才可能为 true。
+  // 后端还没做登录来源(DESIGN 里按 501 处理),现在恒为 undefined,面板按「没存」显示。
+  hasSavedPassword?: boolean
 }
 
 export interface OpenboxSubscriptionUrlEntry {
@@ -492,6 +495,9 @@ export interface OpenboxSubscriptionSaveResult {
   changed?: boolean
   // 变了之后内核用上没有:ok=false 且 pendingRestart.pending=true 时提示"部分变更需重启内核后生效"。节点没变时不带
   applied?: { ok?: boolean; pendingRestart?: { pending: boolean; reasons?: string[] } }
+  // 降级说明:登录来源的定期更新先自动登录、登录失败时退回用原链接刷新,这时带着失败原因。
+  // 有它就按「降级」提示(文案 subscriptionRefreshDegraded),不再说「刷新成功」
+  warning?: string
 }
 
 export interface OpenboxDeployResult {

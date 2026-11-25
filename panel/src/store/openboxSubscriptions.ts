@@ -40,10 +40,19 @@ export const notifySubscriptionSaved = async (
   kind: 'saved' | 'refreshed' = 'saved',
   skipped?: OpenboxSkippedNode[],
   applied?: SubscriptionApplied,
+  degraded?: string,
 ) => {
   if (changed === undefined) return
   const needRestart = !!(applied && !applied.ok && applied.pendingRestart?.pending)
-  if (changed) {
+  // 降级(登录来源自动登录失败,退回用原链接刷新)优先于其它提示:这时说「刷新成功」会误导
+  if (degraded) {
+    showNotification({
+      content: 'subscriptionRefreshDegraded',
+      params: { message: degraded },
+      type: 'alert-warning',
+      timeout: 10000,
+    })
+  } else if (changed) {
     const done = kind === 'refreshed' ? 'subscriptionRefreshedDone' : 'subscriptionSavedDone'
     const restart = kind === 'refreshed' ? 'subscriptionRefreshedRestartRequired' : 'subscriptionSavedRestartRequired'
     showNotification({ content: needRestart ? restart : done, type: needRestart ? 'alert-warning' : 'alert-success' })
@@ -87,6 +96,15 @@ export const refreshAllOpenboxSubscriptions = async () => {
       const res = await refreshSubscription(sub.id)
       if (res.changed) changed = true
       if (res.applied && !res.applied.ok && res.applied.pendingRestart?.pending) applied = res.applied
+      // 降级按条提示(带订阅名),哪一条登录失败看得出来(与上游一致:最后那条汇总提示照旧)
+      if (res.warning) {
+        showNotification({
+          content: 'subscriptionRefreshDegraded',
+          params: { message: `「${sub.name}」${res.warning}` },
+          type: 'alert-warning',
+          timeout: 10000,
+        })
+      }
       notifyDroppedNodes(res.skipped)
     } catch {
       // 单条失败不中断整体;具体原因在订阅设置页逐条刷新时会显示出来

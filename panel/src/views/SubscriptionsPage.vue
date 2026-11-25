@@ -328,7 +328,7 @@ const handleRefresh = async (id: string) => {
   try {
     const res = await refreshSubscription(id)
     await loadSubscriptions()
-    notifySubscriptionSaved(res.changed, 'refreshed', res.skipped, res.applied)
+    notifySubscriptionSaved(res.changed, 'refreshed', res.skipped, res.applied, res.warning)
   } catch (error) {
     showNotification({
       content: 'subscriptionRefreshFailed',

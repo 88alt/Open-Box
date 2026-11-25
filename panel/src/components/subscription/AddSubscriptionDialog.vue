@@ -178,7 +178,13 @@
                   <PasswordInput
                     v-model="loginForm.password"
                     class="w-full"
-                    :placeholder="loginId ? $t('subscriptionLoginPasswordSaved') : ''"
+                    :placeholder="
+                      loginId
+                        ? account?.hasSavedPassword || loginPasswordFresh
+                          ? $t('subscriptionLoginPasswordStored')
+                          : $t('subscriptionLoginPasswordSaved')
+                        : ''
+                    "
                     :disabled="loggingIn"
                     autocomplete="current-password"
                   />
@@ -269,7 +275,7 @@
             <p
               v-if="autoUpdate.enabled"
               class="text-base-content/50 text-xs"
-            >{{ $t('subscriptionAutoUpdateHint') }}</p>
+            >{{ $t(sourceMode === 'login' ? 'subscriptionAutoUpdateLoginHint' : 'subscriptionAutoUpdateHint') }}</p>
           </div>
 
           <div
@@ -537,6 +543,9 @@ const initialLoginForm = () => ({
 const loginForm = reactive(initialLoginForm())
 const loginUrlRef = ref<HTMLInputElement | null>(null)
 const loginId = ref(props.subscription?.account?.id || '')
+// 这次会话里刚登录成功(或刚用 loginId 预览过)= 密码在服务端手上,占位符说「已保存密码」;
+// 只是编辑一条老的登录订阅、又没有 hasSavedPassword 时,说「重新登录时填写」
+const loginPasswordFresh = ref(false)
 const account = ref<OpenboxSubscriptionAccount | null>(props.subscription?.account || null)
 const usage = ref<OpenboxSubscriptionUsage | null>(props.subscription?.usage || null)
 const loggingIn = ref(false)
@@ -581,6 +590,7 @@ watch(
     loginId.value = ''
     account.value = null
     usage.value = null
+    loginPasswordFresh.value = false
   },
   { flush: 'sync' },
 )
@@ -742,6 +752,7 @@ const runPreviewNow = async () => {
     if (result.account) {
       account.value = result.account
       usage.value = result.usage || null
+      loginPasswordFresh.value = true
     }
   } catch (error) {
     if (seq !== previewSeq) return
@@ -788,6 +799,7 @@ const handleLogin = async () => {
     loginId.value = result.loginId
     account.value = result.account
     usage.value = result.usage || null
+    loginPasswordFresh.value = true
     loginForm.password = ''
     preview.value = result
     previewErrorMessage.value = ''
@@ -825,6 +837,7 @@ const resetForm = () => {
   autoUpdate.value = initialAutoUpdate()
   bandwidthCheck.value = props.subscription?.bandwidthCheck === true
   bandwidthHelpOpen.value = false
+  loginPasswordFresh.value = false
   Object.assign(nodeDnsDraft, createDnsDraft(props.subscription?.nodeDns))
   content.value = props.subscription?.content ?? ''
   overrides.value = { ...(props.subscription?.renameOptions?.overrides || {}) }
@@ -870,8 +883,28 @@ onBeforeUnmount(() => {
   debouncedPreview.cancel()
 })
 
+// 登录来源开定期更新时,到点要自动登录:密码必须先落到服务端(加密保存)。
+// 已经存过(hasSavedPassword)或者这条订阅本来就开着定期更新的,不用再拦。
+const loginPasswordStored = computed(
+  () =>
+    loginPasswordFresh.value ||
+    !!(loginId.value && loginId.value === props.subscription?.account?.id && account.value?.hasSavedPassword),
+)
+
 const handleSave = async () => {
   if (saving.value || !canSave.value) return
+
+  if (
+    sourceMode.value === 'login' &&
+    autoUpdate.value.enabled &&
+    !loginPasswordStored.value &&
+    props.subscription?.autoUpdate?.enabled !== true &&
+    !loginForm.password
+  ) {
+    activeTab.value = 'source'
+    showNotification({ content: 'subscriptionLoginAutoUpdateNeedPassword', type: 'alert-warning' })
+    return
+  }
 
   saving.value = true
 

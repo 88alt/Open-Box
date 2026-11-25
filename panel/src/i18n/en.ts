@@ -1150,6 +1150,7 @@ const en = {
   subscriptionListFailed: "Couldn't load subscriptions: {message}",
   subscriptionOrderSaved: 'Subscription order saved; node pickers and kernel outbounds follow it.',
   subscriptionRefreshFailed: "Couldn't refresh: {message}",
+  subscriptionRefreshDegraded: '{message}',
   subscriptionDeleteTitle: 'Delete subscription',
   subscriptionDeleteConfirm:
     'Delete "{name}"? Its nodes will be removed too. This can\'t be undone.',
@@ -1194,6 +1195,8 @@ const en = {
   subscriptionLoginPassword: 'Password',
   subscriptionLoginUaPlaceholder: 'Leave blank for the default UA',
   subscriptionLoginPasswordSaved: 'Enter to sign in again',
+  subscriptionLoginPasswordStored: 'Password saved; enter to sign in again',
+  subscriptionLoginAutoUpdateNeedPassword: 'Enter your password before enabling scheduled updates in login mode so it can be stored encrypted locally for automatic sign-in.',
   subscriptionLoginHint: 'Supports Xboard / V2Board accounts: nodes, rates, plan and traffic usage.',
   subscriptionLoginFetch: 'Log in and fetch',
   subscriptionLoginFetched: 'Fetched {count} nodes and account information',
@@ -1228,6 +1231,7 @@ const en = {
   subscriptionExpired: 'Expired on {date}',
   subscriptionAutoUpdateHint:
     'Re-fetched on schedule; changed nodes go straight into the running kernel, no restart.',
+  subscriptionAutoUpdateLoginHint: 'Encrypts and stores the password locally; on schedule, signs in first to refresh the subscription link and nodes (falls back if login fails). Changed nodes apply live without restarting.',
   subscriptionAutoUpdateDaily: 'Auto-updates daily at {time}',
   subscriptionAutoUpdateEvery: 'Auto-updates every {days} days at {time}',
   subscriptionAutoUpdateHourly: 'Auto-updates every {hours} hours',
