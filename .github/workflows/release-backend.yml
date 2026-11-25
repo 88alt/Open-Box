@@ -1,0 +1,281 @@
+name: Release (backend)
+
+# 自研后端的发布工作流(M6 第六节)。
+#
+# 上游自 v0.1.463 起闭源,只有编译后的 panel/dist。本仓库不再重新封装上游产物,而是自己构建:
+#   1. prepare  从 backend/packaging/versions.env 取上游号,拼出版本号 v0.1.<上游号>-main.<run_number>,
+#               并确认这个 tag 还没被用过(发布不可覆盖,重复跑请用 --version 指定新号)。
+#   2. panel    在 panel/ 里 pnpm install --frozen-lockfile + pnpm build,产出 panel/dist(与架构无关,只做一次)。
+#   3. package  按 amd64 / arm64 各跑一次 backend/packaging/build-package.sh:
+#               后端、openbox-core、sing-box(补丁源码自己编)、Mihomo(同上)、panel/dist、
+#               同步来的 openwrt / debian、后端服务脚本 -> manifest.json + tar.gz + SHA256SUMS。
+#   4. release  把两个架构的包、合并后的 SHA256SUMS、install.sh / uninstall.sh 附到**草稿**发布上。
+#               草稿对 update 的 check 不可见,所以没手动点发布前用户不会被推送升级。
+#
+# 规则库(M6 第十二节第 4 条):versions.env 里 INCLUDE_GEODATA=0,所以默认不随包。维护者核过许可后
+# 把 INCLUDE_GEODATA 改成 1,并在这里给 build-package.sh 加 --geodata <目录>(要先有摆规则库的步骤)。
+#
+# 可选的仓库变量(Settings → Secrets and variables → Actions → Variables):
+#   OPENBOX_UPDATE_MIRROR  只写进 release notes 的镜像前缀示例,构建不用
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号(留空 = v0.1.<versions.env 里的上游号>-main.<本次 run number>)'
+        required: false
+      draft:
+        description: '建草稿发布(推荐;确认无误后在 GitHub 页面手动点发布)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-backend-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      upstream: ${{ steps.v.outputs.upstream }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: v
+        name: Resolve version
+        run: |
+          set -eu
+          # shellcheck source=/dev/null
+          . backend/packaging/versions.env
+          version='${{ inputs.version }}'
+          if [ -z "$version" ]; then
+            version="v0.1.${OPENBOX_UPSTREAM}-main.${{ github.run_number }}"
+          fi
+          case "$version" in
+            v[0-9]*) ;;
+            *) echo "版本号必须以 v 开头并跟数字,收到:$version" >&2; exit 1 ;;
+          esac
+          # 发布不覆盖:同名 tag 已经存在就停,别把已发出去的包悄悄换掉
+          if git ls-remote --exit-code --tags origin "refs/tags/$version" >/dev/null 2>&1; then
+            echo "tag $version 已经存在。重跑请用 Run workflow 的 version 输入指定一个新号。" >&2
+            exit 1
+          fi
+          echo "版本号:$version(上游 v0.1.$OPENBOX_UPSTREAM)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "upstream=$OPENBOX_UPSTREAM" >> "$GITHUB_OUTPUT"
+
+  panel:
+    name: Build panel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: panel/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: panel/pnpm-lock.yaml
+      - name: Install
+        working-directory: panel
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        working-directory: panel
+        run: pnpm build
+      - name: Check output
+        run: |
+          set -eu
+          test -f panel/dist/index.html || { echo "panel/dist 里没有 index.html" >&2; exit 1; }
+          du -sh panel/dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: panel-dist
+          path: panel/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    name: Package (${{ matrix.arch }})
+    needs: [prepare, panel]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: false
+
+      # build-package.sh 默认从 <仓库>/panel/dist 取前端;这里把上一步的产物放到那个位置
+      - uses: actions/download-artifact@v4
+        with:
+          name: panel-dist
+          path: panel/dist
+
+      # 内核要现编:两个都是打过 open-box 补丁的源码(地址与 sha256 钉在 versions.env),
+      # 不能用 SagerNet / MetaCubeX 的官方二进制(见 docs/M6.md 第六节 c)。
+      - name: Build package
+        run: |
+          set -eu
+          sh backend/packaging/build-package.sh '${{ matrix.arch }}' pkg \
+            --version '${{ needs.prepare.outputs.version }}'
+
+      - name: Show what got built
+        run: |
+          set -eu
+          ls -l pkg
+          cat pkg/SHA256SUMS
+          # 包里该有的东西一个都不能少:两个内核、后端、core、前端、服务脚本
+          tar -tzf pkg/*.tar.gz > /tmp/files.txt
+          for f in bin/openbox-backend bin/openbox-core bin/sing-box bin/mihomo \
+                   bin/openbox-backend-run panel/dist/index.html manifest.json \
+                   service/openwrt/openbox-backend service/systemd/openbox-backend.service; do
+            grep -qx "openbox-${{ needs.prepare.outputs.version }}-linux-${{ matrix.arch }}/$f" /tmp/files.txt \
+              || { echo "包里缺 $f" >&2; exit 1; }
+          done
+          echo "文件数:$(wc -l < /tmp/files.txt)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openbox-linux-${{ matrix.arch }}
+          path: |
+            pkg/*.tar.gz
+            pkg/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Draft release
+    needs: [prepare, package]
+    runs-on: ubuntu-latest
+    permissions:
+      # 只有这个任务需要写权限
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: openbox-linux-*
+          path: dist
+
+      - name: Merge checksums
+        run: |
+          set -eu
+          # 每个架构各有一份 SHA256SUMS(只有一行,指自己的包);合并成一份,按文件名排序
+          cat dist/*/SHA256SUMS | sort -k2 > SHA256SUMS
+          # 包挪到当前目录,合并后的 SHA256SUMS 才对得上(里面写的是不带目录的文件名)
+          mv dist/*/*.tar.gz .
+          rm -rf dist
+          cat SHA256SUMS
+          # 合并后必须两个架构都在,且每行都能对上文件
+          test "$(wc -l < SHA256SUMS)" -eq 2
+          sha256sum -c SHA256SUMS
+
+      - name: Add install / uninstall scripts
+        run: |
+          set -eu
+          # 路由器上装包用的脚本就在仓库里,原样附上,并给各自的 sha256 便于用户先核对再执行
+          for s in install uninstall; do
+            test -s "backend/packaging/$s.sh"
+            cp "backend/packaging/$s.sh" "$s.sh"
+            sha256sum "$s.sh" > "$s.sh.sha256"
+          done
+          ls -l ./*.tar.gz ./*.sh ./*.sha256 SHA256SUMS
+
+      - name: Compose release notes
+        run: |
+          set -eu
+          # shellcheck source=/dev/null
+          . backend/packaging/versions.env
+          version='${{ needs.prepare.outputs.version }}'
+          # manifest.json 的字段见 backend/internal/release/manifest.go:
+          # 组件都在 components 下(只有 backend / core / singbox / panel / geodata),files 是数组。
+          # 没有 mihomo 组件,所以 Mihomo 版本从 versions.env 取(与打进去的是同一个值)。
+          fields=$(tar -xzOf "openbox-${version}-linux-amd64.tar.gz" manifest.json | python3 -c '
+          import json, sys
+          m = json.load(sys.stdin)
+          c = m.get("components", {})
+          def v(name, key="version"):
+              return (c.get(name) or {}).get(key, "")
+          for line in (
+              m.get("version", ""),
+              m.get("builtAt", ""),
+              v("core"),
+              v("singbox"),
+              v("geodata"),
+              v("geodata", "date"),
+              str(len(m.get("files") or [])),
+          ):
+              print(line)')
+          core=$(printf '%s\n' "$fields" | sed -n 3p)
+          singbox=$(printf '%s\n' "$fields" | sed -n 4p)
+          geo=$(printf '%s\n' "$fields" | sed -n 5p)
+          geodate=$(printf '%s\n' "$fields" | sed -n 6p)
+          count=$(printf '%s\n' "$fields" | sed -n 7p)
+          {
+            echo "## Open-Box ${version}"
+            echo ""
+            echo "自研后端 + 自研 core + 同步的前端面板,不依赖上游闭源服务端。"
+            echo ""
+            echo "- 上游对齐版本:\`v0.1.${OPENBOX_UPSTREAM}\`"
+            echo "- 构建时间(UTC):\`$(printf '%s\n' "$fields" | sed -n 2p)\`"
+            echo "- openbox-core:\`${core:-未标注}\`"
+            echo "- sing-box:\`${singbox:-未标注}\`(补丁源码 \`${SINGBOX_SOURCE_ASSET}\` 自己编)"
+            echo "- Mihomo:\`${MIHOMO_BUILD_VERSION}\`(补丁源码 \`${MIHOMO_SOURCE_ASSET}\` 自己编)"
+            if [ -n "$geo" ]; then
+              echo "- 规则库:\`${geo}\`${geodate:+(数据日期 ${geodate})}"
+            else
+              echo "- 规则库:本包**未包含**(来源与许可待核对,见 docs/M6.md 第十二节第 4 条);装好后在面板里按需下载"
+            fi
+            echo "- 包内文件数:\`${count}\`"
+            echo ""
+            echo "### 安装包"
+            echo ""
+            echo '```'
+            echo "openbox-${version}-linux-amd64.tar.gz"
+            echo "openbox-${version}-linux-arm64.tar.gz"
+            echo "SHA256SUMS"
+            echo '```'
+            echo ""
+            echo "### 安装"
+            echo ""
+            echo '```bash'
+            echo "# 直连"
+            echo "sh install.sh --version ${version}"
+            echo ""
+            echo "# 镜像(把 <镜像前缀> 换成你信任的加速站点)"
+            echo "sh install.sh --version ${version} --mirror <镜像前缀>"
+            echo ""
+            echo "# 卸载(默认保留 etc / data;加 --purge 才删)"
+            echo "sh uninstall.sh"
+            echo '```'
+            echo ""
+            echo "安装布局在 \`/opt/open-box\`;后端服务名 \`openbox-backend\`,内核服务名 \`openbox\`。"
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Open-Box ${{ needs.prepare.outputs.version }}
+          tag_name: ${{ needs.prepare.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          body_path: release-notes.md
+          draft: ${{ inputs.draft }}
+          fail_on_unmatched_files: true
+          files: |
+            *.tar.gz
+            *.sh
+            *.sha256
+            SHA256SUMS
