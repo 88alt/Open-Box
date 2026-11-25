@@ -26,13 +26,13 @@
       footer-class="flex-wrap"
       @update:model-value="onDialogToggle"
     >
-      <div class="flex flex-col gap-2">
+      <div class="flex flex-col">
         <p v-if="selected">
           {{ $t('routerKernelConfirm', { kernel: KERNEL_NAMES[selected] }) }}
         </p>
         <p
           v-if="failed"
-          class="text-error text-sm"
+          class="text-error mt-2 text-sm"
         >
           {{ $t('routerKernelPreflightError') }}
           <span
