@@ -1230,8 +1230,8 @@ const en = {
   subscriptionExpireAt: 'Expires {date} ({left} left)',
   subscriptionExpired: 'Expired on {date}',
   subscriptionAutoUpdateHint:
-    'Re-fetched on schedule; changed nodes go straight into the running kernel, no restart.',
-  subscriptionAutoUpdateLoginHint: 'Encrypts and stores the password locally; on schedule, signs in first to refresh the subscription link and nodes (falls back if login fails). Changed nodes apply live without restarting.',
+    'Re-fetched on schedule to update nodes and node DNS; hot-reloadable changes apply to the running kernel without restarting.',
+  subscriptionAutoUpdateLoginHint: 'Encrypts and stores the password locally; on schedule, signs in first to refresh the subscription link, then updates nodes and node DNS (falls back if login fails). Hot-reloadable changes apply without restarting.',
   subscriptionAutoUpdateDaily: 'Auto-updates daily at {time}',
   subscriptionAutoUpdateEvery: 'Auto-updates every {days} days at {time}',
   subscriptionAutoUpdateHourly: 'Auto-updates every {hours} hours',
