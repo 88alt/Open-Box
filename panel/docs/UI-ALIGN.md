@@ -14,7 +14,7 @@
 | 页面 | 路由 | 上游对应块 | 状态 |
 | --- | --- | --- | --- |
 | 代理 | `#/proxies` | `ProxiesPage` | 已对齐 |
-| 概览 | `#/overview` | `OverviewPage` | 待做 |
+| 概览 | `#/overview` | `OverviewPage` | 已对齐(例外 B/C 有意不同) |
 | 连接(含日志 / 规则页签) | `#/connections` | `ConnectionWorkspacePage` | 待做 |
 | 设置(含订阅 / 分流 / 内核页签) | `#/settings` | `SettingsPage` | 待做 |
 | 登录 | `#/login` | `LoginPage` | 待做 |
@@ -52,3 +52,13 @@
   - 分组卡片图标(直连 `misc:dart` / 拒绝 `misc:cross`)与上游**一致**——两边都是后端返回的 `icon` 字段,`core/internal/groups/group.go` 补的正是这两个值,不是前端缺图标。
   - 侧栏顶部标识、侧栏底部资源块:与上游结构一致(同一张 `logo.png`、同样的 `alt="Open-Box"`、同样的「收起侧边栏」按钮)。
   - 未覆盖:三语 × 深浅主题 × 桌面/窄屏的组合矩阵,这一页只在中简体 + 浅色 + 1440 宽下逐项验过。
+
+- 2026-11-25 **概览页**:DOM 对照。
+  - 卡片顺序与标题两边一致:`硬件负载 / 网络状态 / 流量洞察 / 节点评分`(侧栏里的系统资源块也在)。
+  - 月份页签(`2026年10月 / 11月 / 12月`)、统计块(连接数 / 活跃终端 / 进站速率 / 进出站流量 / 运行时长)一致。
+  - **有意差异(不改)**:
+    - 上游多一张「业务优选」卡片 → 例外 C,main 整体不做;
+    - 上游顶栏是「机场、VPS 安格超市 | 原生住宅 IP TOPIP」这类市场外链 → 例外 B,main 改成两个版本号。
+      实测 main 显示「Open-Box v0.1.486」+「sing-box 1.14.4-openbox-60」;
+      其中 `v0.1.486` 是**官方面板后端** `/api/openbox/activation` 自己给的 `defaults.left`,不是 main 写死的,所以版本号跟着后端走(当前真机是 v0.1.486 官方包)。
+      按预设决策,这里应取「main 最新 release tag」;main 现在取的是构建时注入的 tag(`dev` 构建只显示「Open-Box Latest」),要改成查线上 release 只在 `internal/api/activation` 一处,已记在 STATUS 的推断点里。
