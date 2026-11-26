@@ -188,10 +188,7 @@
   根本不存在,于是图标从未落到 `REJECT` 上。
   已补:`outboundKindOf()`(Direct→direct;Block/Reject/RejectDrop→block)+ 按 kind 批量写 `icon` / `iconScale`。
   验证:两页「拒绝」标签各 83 个、**带图标的各 83 个**,逐项一致;`cross` 83↔83、`dart` 34↔34。
-  **仍未对齐的 1 项(本页继续保持「有差异待做」)**:上游连接页里有 `.latency-tag` 元素(带 `role="group"`,共 81 个),
-  main 的连接页**完全没有这个元素**——不是缺一个属性,而是这条延迟标签在这页没渲染。我试过给 `proxies/LatencyTag.vue`
-  与 `common/LatencyPill.vue` 加 `role="group"`,但这两个组件都不在连接页的渲染路径上,所以改动无效、已全部撤回,
-  没有留在提交里。下一批继续查连接页延迟列的实现。
+  **仍未对齐的 1 项(本页继续保持「有差异待做」)**:上游连接页 / 路由比对里有 `.latency-tag` 元素(带 `role="group"`,共 81 个),main 完全没有——不是缺一个属性,而是这条延迟标签在这页没渲染。**2026-11-27 已补齐(代码层面验证,浏览器比对受阻)**:根因是 `ProxyName` 少一个上游的 `showLatency` prop。上游的 `ProxyName` 有它,路由比对**出口阶段**传 `show-latency`,于是链路每一项名字后面都渲染一枚 `.latency-tag`;main 的 `ProxyName` 只有等价的 `hideBandwidth`,`RouteChainHops` 也没透传,所以整页一个都没有。**改动**:① `ProxyName` 补 `showLatency`(与 `hideBandwidth` 等价,任一为真即带);② `RouteChainHops` 新增同名 prop 并透传到三处 `ProxyName`;③ `RouteComparison` 出口阶段传 `show-latency`;④ `LatencyPill` / `LatencyTag` 补 `role="group"`(与上游同款)。**验证到哪一步**:`vue-tsc --build` 与 `vite build` 通过,构建产物 `dist/assets/index-*.js` 里能查到 `showLatency`;**DOM 比对没跑成**——本机 Playwright 的 Chromium 未安装,`npx playwright install chromium` 在本网络下反复超时(136.9 MiB 下到 100% 后仍卡住,连续三次),按「不无限重试」停在这里。**本页仍标「有差异待做」**,等浏览器可用时按 `compare.mjs --route "#/rules"` 复跑一次再改成已对齐。
 
 - 2026-11-26 **设置页全部 10 个页签的 DOM 比对**(zh/light/1440;`#/settings?tab=<t>`):
   | 页签 | 结构行数(上/下) | 侧独有 / main 独有 | 计算样式 | 结论 |
