@@ -216,7 +216,10 @@ html.apple-mobile-ui {
 }
 
 #app-content .tabs-box .tab {
-  border-radius: max(calc(var(--app-radius-nav, 0.875rem) - 0.25rem), 0px) !important;
+  border-radius: var(
+    --tab-corner-radius,
+    max(calc(var(--app-radius-field, 0.5rem) - 0.25rem), 0px)
+  ) !important;
 }
 
 #app-content .ctrls-bar .input,
@@ -389,6 +392,19 @@ body:has(.sortable-chosen) * {
   .btn.btn-ghost:is(.btn-square, .btn-circle, .app-compact-action):is(:disabled, [aria-disabled='true']),
 #app-content .btn.btn-ghost.sidebar-toggle-btn:not(:hover, :active, :focus-visible) {
   background-color: #0000;
+}
+
+/* `.app-compact-action` 是上游给「文字 + 小图标」这种紧凑按钮(如订阅 DNS、链式代理的 DNS 展开)的类,
+   管两件事:图标前的 4px 间距、图标固定 16px 不跟着行高变。上方几条规则已经在引用它,但 main 一直没有定义,
+   于是各调用点只能手写 `gap-1` + `h-3.5 w-3.5`,图标比上游小 2px、按钮窄 2px。 */
+#app-content .app-compact-action {
+  gap: 0.25rem;
+}
+
+#app-content .app-compact-action > svg {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
 }
 
 @utility badge {
@@ -887,8 +903,10 @@ div::-webkit-scrollbar-thumb:hover {
   padding: var(--app-card-space, 12px) var(--app-card-space, 12px) 0;
 }
 
+/* 上游是 column-gap(只横向):纵向间距交给调用点的 gap-y-*,main 原来写成 gap 双轴,
+   调用点再写 gap-y 时会有覆盖关系不一致的隐患。main 现有三个使用点都是 flex-nowrap 单行,改过来无影响。 */
 .app-inline-gap {
-  gap: var(--app-space, 0.5rem) !important;
+  column-gap: var(--app-space, 0.5rem) !important;
 }
 
 .app-inline-offset {
@@ -963,12 +981,20 @@ div::-webkit-scrollbar-thumb:hover {
 }
 
 /* ===== v0.1.326-align-connections: 切换条 / join 组按钮 / 滚动条(规则取自 v0.1.326 实测) ===== */
-/* 切换条:导航档圆角 + neutral 9% 底色 + 无阴影 */
+/* 切换条:字段档圆角 + neutral 9% 底色 + 无阴影。
+   --tab-corner-radius 定义在切换条自己身上(对齐上游 v0.1.488):页签和 v-segmented 滑动高亮
+   (--seg-r 取这个变量)共用同一个圆角,高亮不会比页签更圆 */
 #app-content .tabs-box,
 #app-content .ctrls-bar .tabs-box {
-  border-radius: var(--app-radius-nav, 0.875rem) !important;
+  --tab-corner-radius: max(calc(var(--app-radius-field, 0.5rem) - 0.25rem), 0px);
+  border-radius: var(--app-radius-field, 0.5rem) !important;
   background-color: color-mix(in oklab, var(--color-base-content) 9%, transparent);
   box-shadow: none;
+}
+/* 切换条外圈 1px 描边(上游 v0.1.488 与卡片同一条 outline 规则;seg-copy 是滑动高亮的副本,不描边) */
+#app-content .tabs-box:not(.seg-copy) {
+  outline: 1px solid var(--app-card-border);
+  outline-offset: -1px;
 }
 /* join 组:子项先归零圆角,首尾项再带回两端圆角(特异性高于 .ctrls-bar .join-item) */
 #app-content .join.join > .join-item.join-item {
