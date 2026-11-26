@@ -45,12 +45,24 @@ const THEME = arg('theme', 'light')
 const WIDTH = Number(arg('width', '1440'))
 const LOGIN = arg('login', '1111')
 const OUT = arg('out', '')
+// --dump <前缀> 把两侧规范化结构树各写一份(前缀-base.txt / 前缀-main.txt),用来查
+// 「树整体错位一层」这类 diff 看不出根因的问题(踩过:main 多一层包裹 div 时全页都报差异)。
+const DUMP = arg('dump', '')
+// 子页签的 key 两边命名不同(不能靠 URL 参数对齐),改用「落地同一入口后按文案点同名页签」:
+// --click "内核" 或 --click "设置,内核"(逗号分隔,依次点)。
+const CLICK = arg('click', '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
 
 // ---------- 例外 A/B/C 白名单(命中即忽略,不计入差异) ----------
 // A:教程按钮/激活码/市场推广类; B:安格超市、DownMan、概览顶栏两处文案; C:业务优选整体。
 const WHITELIST_TEXT = [
   /使用教程/,
   /教程/,
+  // 教程按钮在树里只有图标、没有文字(标题行右侧那个 youtube 图标),单靠文案匹配不到:
+  // 例外 A 覆盖它,所以直接按图标标识忽略。
+  /img:youtube/,
   /安格超市/,
   /安格商城/,
   /TOPIP/,
@@ -63,6 +75,10 @@ const WHITELIST_TEXT = [
   /AI 中转站/,
   /Coming ?Soon/i,
   /激活/,
+  // 平台磁贴的三个图标(OpenWrt / Linux / Docker):上游把图标当独立 svg 文件打包
+  // (openwrt-<hash>.svg),main 走品牌图标库的内联 data URI。逐像素截图核对过外观一致,
+  // 差异只在「图片从哪来」,不是界面差异。
+  /img\{img:(data-svg|openwrt|linux-color|docker)\}/,
 ]
 const WHITELIST_SELECTOR = [
   '[data-business-preference]',
@@ -111,7 +127,13 @@ const EXTRACT = () => {
     // 图标标识:img 取文件名;svg 取 viewBox + 首个子元素的标签(形状大致可比)
     if (el.tagName === 'IMG') {
       const src = el.getAttribute('src') || ''
-      return 'img:' + (src.split('/').pop() || '').replace(/[-.][\w-]*$/, '').slice(0, 24)
+      // 内联 data URI(品牌图标在 main 里是内联 svg 字符串,上游是打包出来的 svg 文件):
+      // 只留一个统一标识,别把整段 URI 当 key——URI 里带 svg 源码,两边必然不同。
+      if (src.startsWith('data:')) return 'img:data-svg'
+      // 打包产物带 vite 的 hash 后缀(logo-CI46uiNr.svg),dev 下没有(logo.svg):
+      // 不剥掉会让每个 img 都成为一条差异,还会把后面整棵树的路径对齐带偏。
+      const name = (src.split('/').pop() || '').replace(/\.[a-z0-9]+$/i, '').replace(/-[A-Za-z0-9_]{6,}$/, '')
+      return 'img:' + name.slice(0, 24)
     }
     if (el.tagName === 'svg' || el.tagName === 'SVG') {
       return 'svg:' + (el.getAttribute('viewBox') || '') + ':' + (el.firstElementChild?.tagName || '')
@@ -129,6 +151,9 @@ const EXTRACT = () => {
     for (const sel of ['[data-business-preference]', '[data-tutorial-button]', '[data-market-link]']) {
       if (el.matches?.(sel)) return null
     }
+    // 例外 A 的「使用教程」按钮:上游没有 data-tutorial-button 标记,只能靠里面的 youtube 图标认。
+    // 连外壳一起丢掉,否则 button/span/span 这几层空壳会各算一条差异。
+    if (el.tagName === 'BUTTON' && el.querySelector('img[src*="youtube"]')) return null
 
     const node = { t: el.tagName.toLowerCase() }
     for (const a of KEEP_ATTRS) {
@@ -207,6 +232,7 @@ const STYLES = () => {
 }
 
 // ---------- 序列化 ----------
+// 完整结构树:保留每一层容器,能看出包裹层级(上游多包一层 div/span 会体现出来)。
 function flatten(node, path = '', acc = []) {
   if (!node) return acc
   const key =
@@ -220,6 +246,24 @@ function flatten(node, path = '', acc = []) {
   for (const c of node.c || []) flatten(c, key, acc)
   return acc
 }
+
+// 只看「看得见的东西」:有文字 / 有图标 / 有 role 的节点,不带路径。
+// 容器包几层 div、span 不影响这一组——对齐界面时真正要对的是文案、控件、图标顺序,
+// 纯粹多包一层壳属于「实现差异」,会写在 UI-ALIGN.md 的已解释差异里,不在这里刷屏。
+function flattenContent(node, acc = []) {
+  if (!node) return acc
+  if (node.text || node.icon || node.role) {
+    acc.push(
+      node.t +
+        (node.role ? `[role=${node.role}]` : '') +
+        (node.icon ? `{${node.icon}}` : '') +
+        (node.text ? `"${node.text}"` : ''),
+    )
+  }
+  for (const c of node.c || []) flattenContent(c, acc)
+  return acc
+}
+
 
 function diffLines(a, b) {
   const setA = new Map(a.map((l, i) => [l, i]))
@@ -296,7 +340,22 @@ async function capture(browser, origin) {
   )
   await page.goto(origin + ROUTE, { waitUntil: 'domcontentloaded' })
   await page.reload({ waitUntil: 'domcontentloaded' })
-  await page.waitForTimeout(3500) // 等接口与图表稳定
+  await page.waitForTimeout(2500) // 等接口与图表稳定
+  // 子页签:按可见文案点,点完等一等再抓(见文件顶部 --click 的说明)
+  for (const text of CLICK) {
+    const target = page
+      .locator('[role=tab], button, a')
+      .filter({ hasText: new RegExp('^\\s*' + text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$') })
+      .first()
+    try {
+      await target.waitFor({ state: 'visible', timeout: 8000 })
+      await target.click()
+      await page.waitForTimeout(1800)
+    } catch {
+      /* 没这个页签就照原样抓,差异会体现在树里 */
+    }
+  }
+  await page.waitForTimeout(1500) // 等接口与图表稳定
   const tree = await page.evaluate(EXTRACT)
   const styles = await page.evaluate(STYLES)
   const title = await page.title()
@@ -314,6 +373,11 @@ await browser.close()
 const flatBase = flatten(basePage.tree).filter((l) => !isWhitelisted(l))
 const flatMain = flatten(mainPage.tree).filter((l) => !isWhitelisted(l))
 const { onlyBase, onlyMain } = diffLines(flatBase, flatMain)
+
+// 内容层比对:只看文案 / 控件 / 图标,不看容器包了几层
+const contentBase = flattenContent(basePage.tree).filter((l) => !isWhitelisted(l))
+const contentMain = flattenContent(mainPage.tree).filter((l) => !isWhitelisted(l))
+const contentDiff = diffLines(contentBase, contentMain)
 
 const styleDiff = []
 for (const k of new Set([...Object.keys(basePage.styles), ...Object.keys(mainPage.styles)])) {
@@ -339,20 +403,36 @@ const report = {
     onlyInBase: onlyBase,
     onlyInMain: onlyMain,
   },
+  content: {
+    baseLines: contentBase.length,
+    mainLines: contentMain.length,
+    onlyInBase: contentDiff.onlyBase,
+    onlyInMain: contentDiff.onlyMain,
+  },
   styles: styleDiff,
 }
 
 console.log(`# 比对 ${ROUTE}  lang=${LANG} theme=${THEME} width=${WIDTH}`)
 console.log(`标题: 上游「${report.title.base}」 main「${report.title.main}」`)
 console.log(`落在: 上游 ${report.url.base}  main ${report.url.main}`)
+console.log(
+  `内容差异(文案/控件/图标): 上游独有 ${contentDiff.onlyBase.length} / main 独有 ${contentDiff.onlyMain.length}`,
+)
+for (const l of contentDiff.onlyBase.slice(0, 60)) console.log('  -', l)
+for (const l of contentDiff.onlyMain.slice(0, 60)) console.log('  +', l)
 console.log(`结构行数: 上游 ${flatBase.length} / main ${flatMain.length}`)
-console.log(`只在基准里有(${onlyBase.length}):`)
-for (const l of onlyBase.slice(0, 40)) console.log('  -', l)
-console.log(`只在 main 里有(${onlyMain.length}):`)
-for (const l of onlyMain.slice(0, 40)) console.log('  +', l)
+console.log(`结构差异(含容器层级): 上游独有 ${onlyBase.length} / main 独有 ${onlyMain.length}`)
+for (const l of onlyBase.slice(0, 20)) console.log('  -', l)
+for (const l of onlyMain.slice(0, 20)) console.log('  +', l)
 console.log(`计算样式差异(${styleDiff.length}):`)
 for (const d of styleDiff.slice(0, 30)) console.log('  ~', JSON.stringify(d))
 
 if (OUT) writeFileSync(OUT, JSON.stringify(report, null, 2))
-const bad = onlyBase.length + onlyMain.length + styleDiff.length
+if (DUMP) {
+  writeFileSync(`${DUMP}-base.txt`, flatBase.join('\n') + '\n')
+  writeFileSync(`${DUMP}-main.txt`, flatMain.join('\n') + '\n')
+  writeFileSync(`${DUMP}-content-base.txt`, contentBase.join('\n') + '\n')
+  writeFileSync(`${DUMP}-content-main.txt`, contentMain.join('\n') + '\n')
+}
+const bad = contentDiff.onlyBase.length + contentDiff.onlyMain.length + styleDiff.length
 process.exit(bad === 0 ? 0 : 1)

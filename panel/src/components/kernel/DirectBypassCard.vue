@@ -13,12 +13,6 @@
           />
         </div>
         <p class="text-base-content/60 text-xs">{{ $t('directBypassDescription') }}</p>
-        <p
-          v-if="needsFakeIp"
-          class="text-warning text-xs"
-        >
-          {{ $t('directBypassNeedsFakeIp') }}
-        </p>
       </div>
     </div>
   </div>
@@ -27,17 +21,11 @@
 <script setup lang="ts">
 import type { OpenboxProfile } from '@/api/openbox'
 import { showNotification } from '@/helper/notification'
-import { computed } from 'vue'
 
 const props = defineProps<{
   profile: OpenboxProfile
   patchProfile: (patch: Record<string, unknown>) => Promise<OpenboxProfile>
 }>()
-
-// 开着,但 FakeIP 没开(或 DNS 接管关闭):入口只能走「默认进内核」那一档,放行范围比默认小
-const needsFakeIp = computed(
-  () => props.profile.directBypass !== false && (props.profile.dns?.fakeIpForProxy !== true || props.profile.dns?.mode === 'off'),
-)
 
 const onToggle = async (event: Event) => {
   try {

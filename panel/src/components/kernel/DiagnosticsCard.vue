@@ -5,16 +5,17 @@
     <div class="card-body gap-3 p-4">
       <div>
         <h2 class="text-base font-semibold">{{ $t('diagnosticsTitle') }}</h2>
-        <!-- 说明里的「GitHub issue」做成指向仓库 issue 页的链接(主题色混 30% 正文色、半粗体,与 v0.1.337 一致)(按文案里出现的位置切开,各语言通用) -->
+        <!-- 说明里的「GitHub issue」做成指向仓库 issue 页的链接。上游 v0.1.488 的样子是
+             半粗体 + 主题色混 30% 正文色,文字包一层 span,后面跟一个小箭头(chevron-right) -->
         <p class="text-base-content/60 text-xs">
           {{ descParts[0] }}<a
             v-if="descParts[1]"
             href="https://github.com/timeflysoon/Open-Box/issues"
             target="_blank"
             rel="noopener noreferrer"
-            class="link link-hover font-semibold"
+            class="link link-hover inline-flex items-center gap-0.5 font-semibold"
             style="color: color-mix(in srgb, var(--color-primary) 70%, var(--color-base-content) 30%)"
-          >{{ descParts[1] }}</a>{{ descParts[2] }}
+          ><span>{{ descParts[1] }}</span><ChevronRightIcon class="h-3.5 w-3.5 shrink-0" /></a>{{ descParts[2] }}
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-3">
@@ -43,7 +44,7 @@
 <script setup lang="ts">
 import { fetchDiagnostics } from '@/api/openbox'
 import { showNotification } from '@/helper/notification'
-import { ArrowDownTrayIcon } from '@heroicons/vue/24/outline'
+import { ArrowDownTrayIcon, ChevronRightIcon } from '@heroicons/vue/24/outline'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 

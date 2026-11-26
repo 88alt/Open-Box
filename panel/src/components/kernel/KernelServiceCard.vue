@@ -79,15 +79,24 @@
         <span class="text-xs leading-relaxed">{{ $t(conflictToastKey, { names: conflictNamesText }) }}</span>
       </div>
 
-      <!-- 内核切换 + 当前内核版本 + 内核项目链接,合成一行(对齐上游 v0.1.487:
-           「内核切换:[选择框] [芯片图标][内核图标] 版本号 [GitHub 链接]」,不再单独一行「内核版本:」) -->
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <!-- 内核切换 + 当前内核版本 + 内核项目链接。上游 v0.1.488 的样子是:一行 flex-wrap,
+           里面依次是「内核切换:[选择框] 未包含 Mihomo。」「(图标) 未知」「sing-box GitHub」;
+           「内核版本:」这行标签在上游是给读屏用的(sr-only),界面上不显示——这一点 v0.1.488 的
+           发布包实测过,只看得见图标和版本号。 -->
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5">
         <!-- 内核切换(sing-box / Mihomo),由内核页传进来 -->
         <slot name="kernel-controls" />
-        <span class="flex items-center gap-2">
+        <span class="inline-flex items-center gap-2">
           <CpuChipIcon class="text-base-content/60 h-4 w-4 shrink-0" />
-          <KernelIcon :kernel="kernelName" />
-          <span class="font-medium">{{ kernelText }}</span>
+          <span class="sr-only">{{ $t('kernelVersionLabel') }}:</span>
+          <span class="inline-flex items-center gap-1.5 font-medium">
+            <!-- 内核读不到版本时上游不画内核图标(只留 CPU 图标 + 「未知」),这里跟着不画 -->
+            <KernelIcon
+              v-if="kernelIconVisible"
+              :kernel="kernelName"
+            />
+            {{ kernelText }}
+          </span>
         </span>
         <a
           :href="kernelGithubUrl"
@@ -102,31 +111,28 @@
         </a>
       </div>
 
-      <!-- Geo 数据:份数、数据日期、数据来源 -->
-      <div
-        v-if="updateInfo?.geoCounts || updateInfo?.geoDate"
-        class="flex flex-wrap items-center gap-x-4 gap-y-1"
-      >
+      <!-- Geo 数据链接:上游这一行常显(没有份数/日期时也照常显示链接),单独占一行 -->
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
         <span
-          v-if="updateInfo.geoCounts"
+          v-if="updateInfo?.geoCounts"
           class="flex items-center gap-2"
         >
           <MapIcon class="text-base-content/60 h-4 w-4 shrink-0" />
           <span class="text-base-content/60">{{ $t('geoSiteCount', { count: updateInfo.geoCounts.geosite }) }}</span>
         </span>
         <span
-          v-if="updateInfo.geoCounts"
+          v-if="updateInfo?.geoCounts"
           class="flex items-center gap-2"
         >
           <CircleStackIcon class="text-base-content/60 h-4 w-4 shrink-0" />
           <span class="text-base-content/60">{{ $t('geoIpCount', { count: updateInfo.geoCounts.geoip }) }}</span>
         </span>
         <span
-          v-if="updateInfo.geoDate"
+          v-if="updateInfo?.geoDate"
           class="text-base-content/60"
         >{{ updateInfo.geoDate }}</span>
         <a
-          href="https://github.com/MetaCubeX/meta-rules-dat"
+          href="https://github.com/MetaCubeX/meta-rules-dat/tree/sing/geo"
           target="_blank"
           rel="noopener noreferrer"
           class="text-base-content/60 hover:text-primary inline-flex items-center gap-1.5 rounded-md px-1 py-0.5"
@@ -305,10 +311,14 @@ const runKernelAction = async (action: Parameters<typeof run>[0]) => {
   emit('refresh')
 }
 
-// Open-Box 自己的版本号(来自更新状态,标题行显示成 v0.1.317 这种)
+// Open-Box 自己的版本号(来自更新状态,发布版显示成 v0.1.488 这种)。
+// 上游只在版本号以数字开头时补 v:源码构建报的是 "dev",界面上就原样显示 dev(实测 v0.1.488
+// 的发布包 + version=dev 的后端,标题行是 "dev" 而不是 "vdev")。
 const openboxVersion = computed(() => {
-  const raw = updateInfo.value?.version || ''
-  return raw ? `v${raw.replace(/^v/i, '')}` : ''
+  const raw = (updateInfo.value?.version || '').trim()
+  if (!raw) return ''
+  const bare = raw.replace(/^v/i, '')
+  return /^\d/.test(bare) ? `v${bare}` : bare
 })
 
 // 内核版本:不管服务端读到的是「1.14.1-xxx」「sing-box version 1.14.1-xxx」还是「sing-box-1.14.1-xxx」,
@@ -327,6 +337,9 @@ const kernelText = computed(() => {
 })
 // 内核项目链接:当前内核是 mihomo 就指向 MetaCubeX/mihomo,否则指向 sing-box;没报内核名按 sing-box
 const kernelName = computed(() => props.kernelVersion?.kernel || 'sing-box')
+// 内核版本是否真的读到了:读不到时上游连内核图标都不画(v0.1.488 发布包实测:只有一个 CPU
+// 图标 + 「未知」)
+const kernelIconVisible = computed(() => props.kernelVersion?.ok !== false && Boolean(props.kernelVersion?.version))
 const kernelGithubUrl = computed(() =>
   kernelName.value === 'mihomo' ? 'https://github.com/MetaCubeX/mihomo' : 'https://github.com/SagerNet/sing-box',
 )

@@ -60,7 +60,7 @@
           aria-hidden="true"
         />
         <span>{{ $t(seg.label) }}</span>
-        <span class="font-semibold">{{ round(model[seg.key]) }}%</span>
+        <strong class="font-semibold">{{ round(model[seg.key]) }}%</strong>
       </li>
     </ul>
   </div>

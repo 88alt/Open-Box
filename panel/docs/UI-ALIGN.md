@@ -325,3 +325,27 @@
   main 已按同一判据实现(`NodeGroupsPanel.vue` 的 `toleranceTip`),**四种状态在 main 侧逐个复测,文案与上游逐字相同**。
   **推断点 / 待维护者复核**:「开了带宽择优就整项跳过容差」依赖上游 `/groups` 里那份 `bandwidth` 布尔,main 侧同一个开关由 core 的
   `normalizeGroups` 原样保存(本轮先用旧二进制踩了坑,重新编译后确认能存住);判据里「自动/手动页签」取的是 `lane.manual`。
+- 2026-11-26 **设置页「后端设置」页签(内核总卡片那一屏)**:用 `compare.mjs --click 后端设置` 逐轮收敛。修掉的真实差异:
+  1. 版本号前缀:`dev` 构建显示 `dev` 而不是 `vdev`。上游只在版本号以数字开头时补 `v`(发布包 `0.1.488` → `v0.1.488`),
+     main 的 `openboxVersion` 原来无条件补 `v`;
+  2. 「内核版本:」这行标签上游是 **`sr-only`(只给读屏)**,界面上看不到,main 原来显示成可见文字;
+  3. 内核读不到版本时上游**不画内核图标**(只留 CPU 图标 + 「未知」),main 会画 sing-box 标志;
+  4. 「Geo 数据 GitHub」上游**常显**且单独占一行(没有份数/日期也显示),main 原来挂在 `v-if="geoCounts || geoDate"` 里,
+     dev 环境没有 Geo 数据就整行消失;链接地址上游指向 `meta-rules-dat/tree/sing/geo`;
+  5. 评分权重里三个百分比上游是 `<strong class="font-semibold">`(字重 600),main 是 `<span>`;
+  6. 诊断说明里的 `GitHub issue` 上游是 `<a><span>…</span> + chevron-right 图标</a>`,main 少了内层 span 和箭头;
+  7. 「DNSmasq 转发」只在 `openwrt` 平台出现(上游非 openwrt 不给这个选项);
+  8. 「直连不进内核」不再多一条 FakeIP 告警(该键上游保留但不引用)。
+  复核结果(zh / light / 1440):**内容层差异 5 vs 2,全部可解释**——上游独有的 4 条是「业务优选」的
+  `可靠性衰减 / 可信度效期 / 分钟 / 秒`(例外 C),剩下 1 条 `div[role=button]` 和 main 独有的
+  `UTC+08:00 / 路由器时间…` 是**同一个时区下拉的加载态差异**(基准页读不到 `/api/openbox/timezone`,
+  卡片停在「正在读取…」),不是界面差异。
+- 2026-11-26 **`compare.mjs` 这轮加的三个东西**(比对工具本身也是对齐的一部分,踩过的坑都写在注释里):
+  - `--dump <前缀>`:把两侧规范化结构树各写一份,查「整页都报差异」这类错位;
+  - **内容层比对**(默认一起输出):只比有文字/图标/role 的节点、不带路径,专治「上游多包一层 div/span」把
+    整页刷成 112 条差异——容器层级放到「结构差异」里另外报,不再淹没真正的文案/控件差异;
+    `process.exit` 只按内容层 + 样式判定,结构差异仅作参考;
+  - 噪声归因:img 的 vite hash 后缀剥掉(`logo-CI46uiNr.svg` → `logo`)、data URI 统一成 `img:data-svg`、
+    平台磁贴三个图标(上游是独立 svg 文件、main 走品牌图标库内联)按例外 A 忽略、例外 A 的「使用教程」按钮
+    按里面的 youtube 图标整块丢掉(上游没有 `data-tutorial-button` 标记)。
+  **仍需维护者留意**:内容层比对看不到「多加了一层壳」这种实现差异,结构差异那一段要一起看。

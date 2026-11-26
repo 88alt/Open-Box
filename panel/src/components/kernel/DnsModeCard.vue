@@ -136,7 +136,9 @@ onMounted(async () => {
     // 拿不到就按 openwrt / sing-box 处理
   }
 })
-const dnsmasqAvailable = computed(() => platform.value !== 'systemd')
+// 「DNSmasq 转发」只在 OpenWrt 上有:dnsmasq 是 OpenWrt 的解析器;systemd 主机、容器(53 归内核)和
+// 开发机(platform 读不到)都没有可接管的 dnsmasq。对齐上游 v0.1.488:上游在这三种情况下都不给这个选项。
+const dnsmasqAvailable = computed(() => platform.value === 'openwrt')
 const mode = computed<OpenboxDnsMode>(() => {
   const current = props.profile.dns?.mode ?? 'dnsmasq'
   return !dnsmasqAvailable.value && current === 'dnsmasq' ? 'hijack' : current
