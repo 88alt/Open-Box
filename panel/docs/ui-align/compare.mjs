@@ -351,6 +351,9 @@ async function capture(browser, origin) {
       .locator('[role=tab], button, a')
       .filter({ hasText: new RegExp('^\\s*' + text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$') })
     const total = await candidates.count()
+    // 点之前记一份正文指纹:点完没变化说明这次点击是无效的(点到了当前已选中的项、
+    // 或者点到的是顶部分段控件而不是真正的页签),不能当成「这个页签没差异」。
+    const before = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 400))
     let clicked = false
     for (let i = 0; i < total; i += 1) {
       const el = candidates.nth(i)
@@ -360,7 +363,13 @@ async function capture(browser, origin) {
       clicked = true
       break
     }
-    if (clicked) continue
+    if (clicked) {
+      const after = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 400))
+      if (after === before) {
+        console.log(`! 点了「${text}」但页面没变化(${origin})——这次点击无效,抓到的是原页`)
+      }
+      continue
+    }
     {
       // 找不到/点不动就照原样抓,但必须喊一声:否则两侧抓的是同一个页签,
       // 结果看起来「零差异」,其实是压根没切过去。
