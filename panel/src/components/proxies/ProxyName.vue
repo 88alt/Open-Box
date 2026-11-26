@@ -16,7 +16,7 @@
          这两处只要延迟、不要带宽段;其余地方(代理页等)保持原样。
          LatencyTag 自己按 name / groupName 去查延迟,这里不用再传值。 -->
     <LatencyTag
-      v-if="hideBandwidth || showLatency"
+      v-if="(hideBandwidth || showLatency) && showPill"
       class="ml-1"
       :name="name"
       :group-name="groupName"
@@ -54,6 +54,18 @@ const props = withDefaults(
 const node = computed(() => proxyMap.value[props.name])
 // 故障转移的内部子组 tag(__fo:组id:页签id)不是产品名称:显示成页签名,没起名就显示「主用 / 备用 N」
 const displayName = computed(() => outboundDisplayName(props.name))
+// 内置出站(DIRECT / REJECT 等)不挂延迟药丸:上游只给真节点挂。
+// 真机实测 main 曾给 REJECT 画 83 枚、DIRECT 画 28 枚,而上游 81 枚全是某个真实节点名。
+const NON_NODE_TYPES = new Set(['direct', 'reject', 'block', 'dns', 'pass', 'compatible', 'rejectdrop', 'selector', 'urltest', 'fallback', 'loadbalance', 'smart'])
+const showPill = computed(() => {
+  // 只排除「明确是内置出站 / 组」的:proxyMap 里查不到这个名字时**仍然显示**,
+  // 因为规则页的节点名来自内核代理表,proxyMap 未必加载到那一条
+  // (踩过:按 infoNode 那样要求必须查到,结果 main 一枚药丸都不画)。
+  const node = proxyMap.value[props.name]
+  if (!node) return true
+  if (node.all?.length) return false
+  return !NON_NODE_TYPES.has(String(node.type || '').toLowerCase())
+})
 const icon = computed(() => {
   return node.value?.icon
 })

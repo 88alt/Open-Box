@@ -73,6 +73,8 @@
               <ProxyName
                 :name="routeName"
                 class="text-base-content/80 text-xs md:text-sm"
+                :show-latency="routeIndex === routeNames.length - 1"
+                :bandwidth-only="routeIndex === routeNames.length - 1"
               />
             </template>
           </div>
