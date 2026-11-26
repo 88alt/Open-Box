@@ -177,9 +177,9 @@ func TestEvaluateScoreAndProvisional(t *testing.T) {
 	if ev.State != "healthy" || ev.Score == nil || *ev.Score != 84 || ev.Provisional {
 		t.Fatalf("%+v score=%v", ev, ev.Score)
 	}
-	// 没下载:只按延时 + 波动归一,(90×40 + 90×30) / 70 = 90,且是暂估
+	// 没下载:v0.1.490 起分母恒为 100,缺测项按 0 分计入,(90×40 + 0×30 + 90×30) / 100 = 63,且是暂估
 	ev = evaluate(okSummary(100, 10, 10, 10), nil, now, period, fresh, scoreweights.Default())
-	if ev.Score == nil || *ev.Score != 90 || !ev.Provisional || ev.Download != nil {
+	if ev.Score == nil || *ev.Score != 63 || !ev.Provisional || ev.Download != nil {
 		t.Fatalf("无下载:%+v score=%v", ev, ev.Score)
 	}
 	// 样本数不足 10 个 → 暂估
@@ -599,10 +599,11 @@ func TestEvaluateCustomWeights(t *testing.T) {
 	if got := score(scoreweights.Weights{Latency: 0, Download: 100, Jitter: 0}); got != 70 {
 		t.Fatalf("只看下载应是 70,得 %d", got)
 	}
-	// 测到的项权重都是 0:退成等权重,不出 NaN
+	// 权重全压在下载上、却没有下载数据:v0.1.490 起分母恒为 100、缺测项按 0 分计入 → 0 分。
+	// 旧版会「退成等权重」把延时的 90 拿上来,那正是上游 490 要消除的虚高。
 	nodl := evaluate(sm, nil, now, period, fresh, scoreweights.Weights{Latency: 0, Download: 100, Jitter: 0})
-	if nodl.Score == nil || *nodl.Score != 90 {
-		t.Fatalf("测到的项权重全 0 应按等权重算 90: %+v", nodl.Score)
+	if nodl.Score == nil || *nodl.Score != 0 {
+		t.Fatalf("带宽权重 100%% 但缺带宽时应为 0 分: %+v", nodl.Score)
 	}
 }
 

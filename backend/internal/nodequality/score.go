@@ -140,31 +140,33 @@ func evaluate(sm summary, dl *download, nowMs, periodMs, freshMs int64, w scorew
 	}
 
 	if ev.State == "healthy" && ev.Latency != nil {
-		var sw, sv float64
-		add := func(v *float64, w float64, k []knot) {
-			if v != nil {
-				sw += w
-				sv += w * interp(*v, k)
+		// v0.1.490 起口径固定:分母恒为总权重(三项之和 = 100),**缺测项按 0 分计入**,
+		// 不再像旧版那样跳过缺测项、把其余维度的权重归一化放大。
+		// 为什么这样改:旧口径下「只测到延时、没测带宽」的节点会因为分母变小而虚高,
+		// 反超真正实测过的节点,选路时把流量引到没验证过的节点上(上游 490 的 release notes
+		// 与面板文案都是这个说法,见 i18n 的 nodeScoreWeightsHelpIntro / bandwidthHealthFirst)。
+		// 只有一项权重为 0% 时该项才真正「不参与」——权重是 0 就不影响分母,与旧版一致。
+		total := w.Latency + w.Download + w.Jitter
+		var sv float64
+		add := func(v *float64, wt float64, k []knot) {
+			if wt <= 0 {
+				return // 权重 0%:该项被排除,不计入分母也不计分
 			}
+			if v != nil {
+				sv += wt * interp(*v, k)
+			}
+			// v 为 nil(缺测 / 测速失败):这一项按 0 分计入,分母仍然包含它
 		}
 		add(ev.Latency, w.Latency, latencyKnots)
 		add(ev.Download, w.Download, downloadKnots)
 		add(ev.Jitter, w.Jitter, jitterKnots)
-		// 权重可以被调成 0:有测到的项权重全是 0 时,按等权重算,避免 0/0。
-		if sw == 0 {
-			sw, sv = 0, 0
-			add2 := func(v *float64, k []knot) {
-				if v != nil {
-					sw++
-					sv += interp(*v, k)
-				}
+		if total > 0 {
+			sc := int(math.Floor(sv/total + 0.5))
+			if sc < 0 {
+				sc = 0
 			}
-			add2(ev.Latency, latencyKnots)
-			add2(ev.Download, downloadKnots)
-			add2(ev.Jitter, jitterKnots)
+			ev.Score = &sc
 		}
-		sc := int(math.Floor(sv/sw + 0.5))
-		ev.Score = &sc
 		ev.Provisional = ev.Download == nil || ev.Jitter == nil ||
 			sm.LatencyCount < fullSamples || sm.JitterCount < fullSamples ||
 			dl == nil || dl.Count < fullSamples
