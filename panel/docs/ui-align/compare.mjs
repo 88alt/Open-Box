@@ -74,8 +74,12 @@ const WHITELIST_TEXT = [
   /DownMan/,
   /极速下载用/,
   /业务优选/,
+  /業務優選/,
+  /Business preference/i,
   // 例外 C 的概览卡:内核状态读不到时它自己有一句提示,main 整块卡都没有
   /暂时无法读取内核状态/,
+  /暫時無法讀取核心狀態/,
+  /Kernel status unavailable/i,
   // 例外 C 的组设置字段(综合评分):main 没有这一组开关
   /可靠性衰减/,
   /可信度效期/,

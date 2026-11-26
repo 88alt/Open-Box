@@ -503,3 +503,28 @@
   (另按上游补上 `prefix` 插槽 + `pl-9`、`ariaLabel` / `inputClass` 两个 prop;`beforeClose` 是 main 自己的变体、
   日志搜索在用,保留,但同样按 `canClear` 收口)。改完连接页那个 `input.padding` 差异消失,
   代理 / 订阅 / DNS 设置页回归比对仍是 0 / 0,`vue-tsc` 无报错。
+- 2026-11-26 **面板字体与按钮/徽标描边:两处系统性差异(都不是某一页写错)**。这两处是在概览页那句
+  `button.margin` 差 17px 上顺出来的,常规 DOM 比对看不到(工具只采样圆角/背景/文字色/内边距这些),
+  所以单独记一节:
+  1. **字体**:上游把面板字体固定成 SystemUI——`config/font` 这个键还存着,但取的时候永远返回
+     `"SystemUI"`,设置里没有字体选项,发布包里也没有任何 MiSans / Sarasa / PingFang / Fira 的字体资源
+     (`document.fonts` 里只有 NotoEmoji,而 main 有 MiSans-VF 等 10 多个 face)。main 原来默认 MiSans,
+     于是**每一段文字都比上游窄约 9%**(概览那个日期 `2026-11-26`:main 74px / 上游 81px),
+     连带图表头部那个 `ml-auto` 按钮的 margin 差 17px。已在 `store/settings.ts` 按上游口径固定 SystemUI
+     (`build:misans-only` 这类显式模式仍然可用),改后字体族、字号、字重、宽度与上游逐项相同;
+     同时 `assets/load-fonts.ts` 的默认分支不再 import 四个字体 CSS,默认构建的 `assets` 从 **15 MB 降到 7.3 MB**
+     (上游 5.6 MB),`vite build` 通过、`vue-tsc` 无报错。
+  2. **按钮与徽标描边**:`main.css` 里 `#app-content .btn:not(.btn-link){border:1px solid var(--app-card-border)}`
+     这条规则是上一批为了对齐 v0.1.487 加的,但 **`--app-card-border` 从来没有定义过**——`border` 简写里引用
+     不存在的自定义属性会让整条声明变成「无效的计算值」,浏览器把 `border-style` 回退成 `none`、宽度回退成 0,
+     结果所有非 link 按钮**一点描边都没有**(比上游窄 2px),徽标用的还是 daisyUI 自带的浅灰描边(上游是
+     base-content 14%)。已按上游 CSS 补上:`:root{--app-card-border:#cbd2dc}`、`[data-theme=emerald]` 与
+     `[data-theme=forest]` 下改成 `color-mix(in srgb, var(--color-base-content) 14%, transparent)`,
+     并把规则扩成上游那条 `#app-content .badge, #app-content .btn:not(.btn-link)`。改后:概览页那个
+     `button.margin` 差异消失,按钮宽度 **147.953px 与上游逐位相同**,徽标描边色
+     `color(srgb 0.200037 0.235309 0.301836 / 0.14)` 也与上游一致,深色主题下同样对齐(两侧都是 base-content 14%)。
+  复核(zh 与 en、light 与 dark,1440):概览内容 **0 / 0**、连接 **0 / 0**、订阅 **0 / 0**;剩下的是
+  `card.radius`(用户设置项)、代理页「上游把页签渲染两份」、概览图例上游多包一层 div、以及 `.tab` 的底色/文字色
+  (daisyUI 版本口径)——都在本文件里记过,不是本轮引入的。白名单同时补了**例外 C 的英 / 繁文案**
+  (`Business preference`、`Kernel status unavailable`、`業務優選`、`暫時無法讀取核心狀態`),以后跑 en / zh-tw
+  不会再刷这两条。

@@ -67,6 +67,7 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 - **陌生提交对账**:本轮 `git fetch` 时 `origin/main` 从 `a01fd0e2` 前进到 `27fa7d2c`(23 个提交,全部是本次任务上一轮继续跑出来的 `docs(backend)` / `panel(...)` 提交:真机验证、CI 结果补记、连接页与设置页对齐),逐条看过,没有不是本任务产生的提交,也没有维护者新推的 `ci:` 提交。
 - **工作流**:`origin/main` 上 `.github/workflows/backend.yml` 与 `release-backend.yml` 都在,本轮未删除、未改动,无需恢复。
 - **停止条件**:未触发(没有连续 3 批验证失败,没有陌生提交,没有触碰红线)。
+- **面板发布体积(跨区,与打包有关)**:2026-11-26 对齐字体时发现 main 的面板一直把 MiSans / Sarasa / PingFang / Fira 四套字体打进默认构建,而上游 v0.1.488 的发布包里一套自字体都没有(上游把面板字体固定成 SystemUI)。按上游口径改完后默认构建的 `panel/dist/assets` 从 **15 MB 降到 7.3 MB**(上游 5.6 MB),`backend/packaging/build-package.sh` 与发布工作流都只是 `cp -R` 面板产物,不用改;细节见 `panel/docs/UI-ALIGN.md` 2026-11-26 那一节。
 
 ## M0 骨架
 - [x] `go.mod`、`cmd/openbox-backend`、参数 / 环境变量 / 路径(`internal/system/paths.go`)

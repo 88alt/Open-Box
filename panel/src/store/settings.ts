@@ -76,7 +76,11 @@ export const font = computed({
     if (Object.values(FONTS).includes(mode as FONTS)) {
       return mode as FONTS
     }
-    return fontConfig.value
+    // 对齐上游 v0.1.488:上游把面板字体固定成 SystemUI(`config/font` 存着但取的时候永远返回
+    // "SystemUI"),设置里也没有字体选项,发布包里更没有任何 MiSans / Sarasa / PingFang / Fira 的
+    // 字体资源。main 原来默认 MiSans,于是同一段文字比上游窄将近 9%(概览日期 74px vs 81px),
+    // 整个面板的字宽都对不上。这里跟着上游走系统字体;`build:misans-only` 这类显式模式仍然可用。
+    return FONTS.SYSTEM_UI
   },
   set: (val) => {
     fontConfig.value = val

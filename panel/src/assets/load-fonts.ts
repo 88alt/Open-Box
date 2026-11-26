@@ -25,9 +25,8 @@ export const loadFonts = () => {
     import('@fontsource/fira-sans/index.css')
   } else if (import.meta.env.MODE === 'SystemUI') {
   } else {
-    import('@fontsource/fira-sans/index.css')
-    import('subsetted-fonts/MiSans-VF/MiSans-VF.css')
-    import('subsetted-fonts/SarasaUiSC-Regular/SarasaUiSC-Regular.css')
-    import('subsetted-fonts/PingFangSC-Regular/PingFangSC-Regular.css')
+    // 默认构建不加载任何自带字体,与上游 v0.1.488 的发布包一致:上游把面板字体固定成 SystemUI、
+    // 设置里没有字体选项,包里也没有这些字体资源(上游 assets 5.6 MB,main 带字体时 15 MB)。
+    // 要 MiSans / Sarasa / PingFang / Fira 的构建用 build:misans-only 这类显式模式。
   }
 }

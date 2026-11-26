@@ -371,6 +371,8 @@ body:has(.sortable-chosen) * {
   font-weight: 400;
 }
 
+/* 徽标与按钮共用同一条描边(上游就是一条规则同时管 `.badge` 和 `.btn`)。 */
+#app-content .badge,
 #app-content .btn:not(.btn-link) {
   border: 1px solid var(--app-card-border);
 }
@@ -1016,6 +1018,16 @@ dialog .overflow-y-scroll,
   --app-latency-medium: #f0b83f;
   --app-latency-high: #f4606c;
   --color-orange-500: var(--app-latency-medium);
+  /* 卡片 / 按钮 / 徽标的描边色。上游在 :root 里给了实色 #cbd2dc,浅色主题(emerald)、森林主题再改用
+     base-content 14%。main 原来只在规则里 var(--app-card-border) 却从没定义过它:整条 border 简写
+     变成「无效的计算值」,浏览器把 border-style 回退成 none、宽度回退成 0,于是所有非 link 按钮都没有
+     描边(比上游窄 2px),徽标用的还是 daisyUI 自己的浅灰描边。 */
+  --app-card-border: #cbd2dc;
+}
+
+[data-theme='emerald'],
+[data-theme='forest'] {
+  --app-card-border: color-mix(in srgb, var(--color-base-content) 14%, transparent);
 }
 
 /* 浅色主题(emerald)的 neutral 换成浅蓝灰,按钮 / 胶囊 / 页签 / 客户端顶栏文字更清楚(对齐上游 v0.1.396) */
