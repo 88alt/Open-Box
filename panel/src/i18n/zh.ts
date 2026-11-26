@@ -982,6 +982,8 @@ const zh: LANG_MESSAGE = {
   groupTolerance: '延时容差',
   groupUrltestHint:
     '按延时选择时，新节点快出设定的容差才切换。启用节点评分且健康候选有有效带宽时，改用综合评分。',
+  groupToleranceDisabledByScoring:
+    '已开启节点评分：存在有效评分时按综合评分择优，延时容差不参与比较（无可用评分时自动回退生效）。',
   groupMembersLabel: '成员',
   groupFilterAllSubscriptions: '全部',
   groupSubscriptionMissing: '已删除的订阅',
@@ -1040,6 +1042,8 @@ const zh: LANG_MESSAGE = {
   failoverToleranceHint:
     '仅在自动页签按延时选节点时使用。开启节点评分且该页签有有效带宽数据时跳过此项，主备顺序照常生效。',
   failoverToleranceUnused: '所有页签都只有一个有效节点,组内没有可择优的对象,这项暂时用不上',
+  failoverAutoLaneRequiredHint:
+    '仅当至少一个页签设为「自动优选」且包含多个有效节点时生效',
   failoverTimeout: '单次检测超时',
   failoverRestore: '主用恢复后切回',
   failoverRestoreHint:
@@ -2349,9 +2353,9 @@ const zh: LANG_MESSAGE = {
   bandwidthOff_loadbalance:
     '每个新连接优先分配给健康且连接/拨号较少的节点；占用相同时在低延时范围内轮换。',
   bandwidthOn_loadbalance:
-    '新连接按后端设置中的权重计算质量分。先用空闲节点，占用相同时优先质量更高的节点。各组共享活动连接与正在拨号的占用。没有可用评分时，沿用原分配规则。',
+    '新连接按后端设置中的权重计算综合评分，先剔除明显低于组内最优水平的劣质慢节点（仅在优质节点均不可用时作为兜底），再在合格优质子集内按评分拉开连接权重。各组共享活动连接与正在拨号的占用。没有可用评分时，沿用原分配规则。',
   bandwidthExample_loadbalance:
-    'A 得 93 分、B 得 64 分。都空闲时先选 A，A 仍有活动连接时下一条先给空闲的 B。A 确认故障后，新连接交给 B。',
+    'A 得 95 分、B 得 82 分，限速节点 C 仅得 45 分。正常流量在 A、B 间按权重倾斜分配（A 承担更多并发连接），C 被剔除不参与日常分流；仅当 A、B 均故障时才由 C 兜底。',
   bandwidthSharedHelp:
     '同一实际节点跨订阅和分组共用一次带宽测试。带宽取最近最多 10 次成功结果的均值。最新结果达到两个周期时，整组样本停止参与评分。缺测候选暂用其他候选实测带宽的中位数。计算评分无需增加探测。',
   bandwidthClientDisabled:

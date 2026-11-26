@@ -983,6 +983,8 @@ const zhTW: LANG_MESSAGE = {
   groupTolerance: '延遲容差',
   groupUrltestHint:
     '按延遲選擇時，新節點快出設定的容差才切換。啟用節點評分且健康候選有有效帶寬時，改用綜合評分。',
+  groupToleranceDisabledByScoring:
+    '已開啟節點評分：存在有效評分時按綜合評分擇優，延遲容差不參與比較（無可用評分時自動回退生效）。',
   groupMembersLabel: '成員',
   groupFilterAllSubscriptions: '全部',
   groupSubscriptionMissing: '已刪除的訂閱',
@@ -1041,6 +1043,8 @@ const zhTW: LANG_MESSAGE = {
   failoverToleranceHint:
     '僅在自動頁籤按延遲選節點時使用。啟用節點評分且該頁籤有有效帶寬資料時跳過此項，主備順序照常生效。',
   failoverToleranceUnused: '所有頁籤都只有一個有效節點,組內沒有可擇優的對象,這項暫時用不上',
+  failoverAutoLaneRequiredHint:
+    '僅當至少一個頁籤設為「自動優選」且包含多個有效節點時生效',
   failoverTimeout: '單次檢測逾時',
   failoverRestore: '主用恢復後切回',
   failoverRestoreHint:
@@ -2350,9 +2354,9 @@ const zhTW: LANG_MESSAGE = {
   bandwidthOff_loadbalance:
     '每個新連接優先分配給健康且連接/撥號較少的節點；佔用相同時在低延時範圍內輪換。',
   bandwidthOn_loadbalance:
-    '新連線按後端設定中的權重計算品質分。先用空閒節點，佔用相同時優先品質更高的節點。各組共享活動連線與正在撥號的佔用。沒有可用評分時，沿用原分配規則。',
+    '新連線按後端設定中的權重計算綜合評分，先剔除明顯低於組內最優水準的劣質慢節點（僅在優質節點均不可用時作為兜底），再於合格優質子集內按評分拉開連線權重。各組共享活動連線與正在撥號的佔用。沒有可用評分時，沿用原分配規則。',
   bandwidthExample_loadbalance:
-    'A 得 93 分、B 得 64 分。都空閒時先選 A，A 仍有活動連線時下一條先給空閒的 B。A 確認故障後，新連線交給 B。',
+    'A 得 95 分、B 得 82 分，限速節點 C 僅得 45 分。正常流量在 A、B 間按權重傾斜分配（A 承擔更多並行連線），C 被剔除不參與日常分流；僅當 A、B 均故障時才由 C 兜底。',
   bandwidthSharedHelp:
     '同一實際節點跨訂閱和群組共用一次頻寬測試。頻寬取最近最多 10 次成功結果的平均值。最新結果達到兩個週期時，整組樣本停止參與評分。缺測候選暫用其他候選實測頻寬的中位數。計算評分無需增加探測。',
   bandwidthClientDisabled:

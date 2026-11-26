@@ -1017,6 +1017,8 @@ const en = {
   groupTolerance: 'Latency tolerance',
   groupUrltestHint:
     'Latency selection switches only when the new node is faster by the tolerance. Node scoring uses the combined score when a healthy candidate has valid bandwidth data.',
+  groupToleranceDisabledByScoring:
+    'Node scoring is enabled: healthy candidates are ranked by combined score instead of latency tolerance (restored automatically when no score is available).',
   groupMembersLabel: 'Members',
   groupFilterAllSubscriptions: 'All subscriptions',
   groupSubscriptionMissing: 'Deleted subscription',
@@ -1079,6 +1081,8 @@ const en = {
     'Applies to latency selection inside automatic lanes. Skip it when node scoring is enabled and a healthy candidate in the lane has valid bandwidth data. Lane priority is preserved.',
   failoverToleranceUnused:
     'Every lane has a single valid node, so there is nothing to pick between inside a lane; not used for now',
+  failoverAutoLaneRequiredHint:
+    'Takes effect only when at least one lane uses Auto mode with multiple nodes.',
   failoverTimeout: 'Probe timeout',
   failoverRestore: 'Return to primary once recovered',
   failoverRestoreHint:
@@ -2482,9 +2486,9 @@ const en = {
   bandwidthOff_loadbalance:
     'Each new connection goes to a healthy node with fewer active connections/pending dials. Among equally loaded nodes, prefer the low-latency range and rotate ties.',
   bandwidthOn_loadbalance:
-    'Use the configured scores to weight new connections. Prefer idle nodes first. Among equally busy nodes, favor higher quality. Groups share active connections and pending dials. Without usable scores, use the original distribution rule.',
+    'Filter out slow nodes that score significantly below the group’s best (retaining them only as a fallback if all top-tier nodes fail), and skew connection weights toward higher-scoring nodes within the qualified subset. Groups share active connections and pending dials. Without usable scores, use the original distribution rule.',
   bandwidthExample_loadbalance:
-    'A scores 93 and B scores 64. Both idle, the first connection goes to A and the next goes to B if A is still busy. If A fails, B receives new connections regardless of past bandwidth.',
+    'A scores 95, B scores 82 and throttled C scores 45. Normal connections are distributed across A and B with higher weight on A, while C is excluded unless both A and B fail.',
   bandwidthSharedHelp:
     'Each effective node shares one test across subscriptions and groups. The score uses the average of up to ten successful samples, which expires when the newest sample is two intervals old. An unmeasured candidate temporarily uses the median of the other measured candidates. Reading scores adds no probes.',
   bandwidthClientDisabled:

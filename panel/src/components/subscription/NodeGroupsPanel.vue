@@ -849,7 +849,7 @@
           </span>
         </label>
         <label
-          v-tip="allLanesSingle ? $t('failoverToleranceUnused') : $t('failoverToleranceHint')"
+          v-tip="toleranceTip"
           class="flex flex-col gap-1"
         >
           <span class="text-xs font-medium">{{ $t('failoverTolerance') }}</span>
@@ -1449,6 +1449,16 @@ const laneLabelOf = (lane: OpenboxFailoverLane) => {
 }
 // 页签全是单节点(或空)时容差没有用武之地:容差只给多节点页签的内部自动择优用
 const allLanesSingle = computed(() => (draft.value?.lanes ?? []).every((l) => validCount(l) <= 1))
+// 有多节点、且那个页签是「自动优选」的页签:容差只在这种页签里参与比较(对齐上游 v0.1.488 的四态提示)
+const anyAutoLaneMulti = computed(() =>
+  (draft.value?.lanes ?? []).some((l) => !l.manual && validCount(l) > 1),
+)
+// 容差项的悬浮说明:开了带宽择优(综合评分)→ 容差不参与比较;否则按「全单节点 / 有自动多节点页签 / 只有手动多节点页签」分三种
+const toleranceTip = computed(() => {
+  if (draft.value?.bandwidth) return t('groupToleranceDisabledByScoring')
+  if (allLanesSingle.value) return t('failoverToleranceUnused')
+  return anyAutoLaneMulti.value ? t('failoverToleranceHint') : t('failoverAutoLaneRequiredHint')
+})
 // 切换页签时清掉两栏的勾选:上一个页签勾的东西不能误搬到下一个
 const selectLane = (id: string) => {
   if (activeLaneId.value === id) return

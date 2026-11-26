@@ -27,6 +27,22 @@
 
 **状态**:`待做` = 还没比过;`有差异待做` = 比过、发现差异还没改;`已对齐` = 比过、一致或差异已修;`有意例外` = 按 A/B/C 故意不同。
 
+## 键集对齐(2026-11-26,v0.1.488)
+
+- **基准**:上游 `liandu2024/Open-Box` 已发 **v0.1.488**(2026-11-26T06:17Z)。把 release 包 `open-box-v0.1.488-linux-x64.tar.gz` 解出来当基准
+  (上游 git 仓库里没有 `panel/`,只有发布包里有 `panel/dist`)。
+- **三语键集**:上游 en / zh / zh-tw 各 **2333** 键,main **2295** 键;**缺 38 全是例外 C**(`business*` 前缀),
+  扣除后缺 **0**、多 **0**;值不同只有 `chainProxyEmptyHint`(例外 B)。
+- **v0.1.488 新增的 2 个键**(已按上游逐字补三语):`groupToleranceDisabledByScoring`、`failoverAutoLaneRequiredHint`;
+  另有 2 条文案改口径:`bandwidthOn_loadbalance`、`bandwidthExample_loadbalance`(负重均摊 → 综合评分择优,先剔除劣质慢节点)。
+- **引用**:上游引用而 main 未引用 **50** = 例外 C 28 + 例外 A 19(`comingSoon` / `activation*` / `tutorial*`)+ 例外 B 2;
+  真缺口只剩 **1** 个:`kernelVersionLabel`(上游 `KernelPage` 用它拼「内核版本:」,main 内核页用的是另一处写法)——记在内核页那一条,由内核页批次处理。
+  main 引用而上游未引用 2 个,仍是 Vue 模板虚警(`manageHiddenGroup` / `customIcon`)。
+- 复核命令(基准在仓库外,不入库):
+  `gunzip -c <包内 assets>/en-*.js.gz > /tmp/en.js` 后跑
+  `python panel/scripts/cmp-upstream-i18n.py /tmp/en.js /tmp/zh.js /tmp/zh-tw.js`;
+  引用比对要把 `assets/*.js.gz` 全部解开成 `.js` 再跑 `cmp-upstream-refs.py`(大页面 chunk 只有 gz,不解开会漏一大半引用)。
+
 ## 页面清单
 
 | 页面 | 路由 | 上游对应块 | 状态 |
@@ -288,3 +304,24 @@
 `span`/`div` 容器层级差异、1px 圆角、输入框右内边距策略、选中态颜色画在高亮层还是元素自身。
 
 **口径说明**:本次是基于上游 `panel/dist` 反推与文档口径做的**功能等价对齐**,不保证与闭源上游逐行一致。
+
+## 进度日志(2026-11-26,v0.1.488 起的续跑)
+
+- 2026-11-26 **调试环境换了**:真机 `192.168.2.5:3036` 能连(200),但**面板访问密码已不是本轮已知的那个**(`1111` 回 `ACCESS_PASSWORD_INVALID`),
+  拿不到密码就没法让两个面板都登进去比对。改成**本地自建后端**当两侧共同的后端(这正是 DOM 比对最想要的口径:两边同一份数据、同一个进程):
+  `backend` 现编(Windows,`-listen 127.0.0.1:3036 -core <自己编的 openbox-core>`)+ 一个 Python 静态服务把 488 的 `panel/dist` 跑起来(`/api` 反代到 3036),
+  main 侧用 `npm run dev`(`ZASHBOARD_DEV_PROXY_TARGET=http://127.0.0.1:3036`)。数据用 `POST /api/openbox/subscriptions` 的内联 `content`
+  灌一份 3 节点的 Clash 订阅,再 `PUT /api/openbox/groups` 加一个 2 页签的故障转移组(页签分别为「2 节点自动」「1 节点」)。
+  **注意**:`ob-run/` 下原有的 `openbox-backend.exe` / `openbox-core.exe` 是旧构建,拿它比对会把「字段没存住」误判成前端缺陷
+  (本轮就踩了:旧 core 的 `normalizeGroups` 把 `bandwidth` 丢了,让人以为组带宽开关失效),比对前必须按当前 main 重新 `go build`。
+- 2026-11-26 **订阅页的容差提示(v0.1.488 新增 2 键)**:上游把故障转移「组内延时容差」的悬浮说明从两态改成四态,
+  四个状态都用**真机行为**核过(在基准页上悬停 `.tippy-content` 读文案,不是看代码猜):
+  | 状态 | 上游文案键 | 实测 |
+  | --- | --- | --- |
+  | 组开了带宽择优(综合评分) | `groupToleranceDisabledByScoring` | 「已开启节点评分…延时容差不参与比较」 |
+  | 未开、有「自动优选 + 多节点」页签 | `failoverToleranceHint` | 「仅在自动页签按延时选节点时使用…」 |
+  | 未开、所有页签都只有 1 个有效节点 | `failoverToleranceUnused` | 「所有页签都只有一个有效节点…」 |
+  | 未开、只有「手动选择 + 多节点」页签 | `failoverAutoLaneRequiredHint` | 「仅当至少一个页签设为『自动优选』且包含多个有效节点时生效」 |
+  main 已按同一判据实现(`NodeGroupsPanel.vue` 的 `toleranceTip`),**四种状态在 main 侧逐个复测,文案与上游逐字相同**。
+  **推断点 / 待维护者复核**:「开了带宽择优就整项跳过容差」依赖上游 `/groups` 里那份 `bandwidth` 布尔,main 侧同一个开关由 core 的
+  `normalizeGroups` 原样保存(本轮先用旧二进制踩了坑,重新编译后确认能存住);判据里「自动/手动页签」取的是 `lane.manual`。
