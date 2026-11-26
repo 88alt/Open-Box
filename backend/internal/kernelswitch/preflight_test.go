@@ -73,6 +73,47 @@ func TestPreflightTargetIsCurrent(t *testing.T) {
 	}
 }
 
+// 回归:真实内核交出来的是「解析后的版本号」(sing-box 是 "1.14.4-openbox-61",不带前缀),
+// 预检不能再拿「匹配整行输出」的正则去套它,否则切到 sing-box 永远失败(2026-11-26 真机上就是这样)。
+func TestPreflightAcceptsParsedSingBoxVersion(t *testing.T) {
+	for _, v := range []string{"1.14.4-openbox-61", "1.14.4", "1.15.0-openbox-1"} {
+		e, dir := newEngine(t, "sing-box", func(d *Deps) {
+			d.Version = func(_ context.Context, k string) (string, bool) {
+				if k == "mihomo" {
+					return "Mihomo Meta v1.19.0 linux amd64", true
+				}
+				return v, true
+			}
+			d.Conflicts = func(context.Context) ([]string, error) { return nil, nil }
+		})
+		// 当前内核写成 mihomo,目标才是 sing-box(否则 target 会报「已经是当前内核」)
+		if err := os.WriteFile(filepath.Join(dir, "router-kernel"), []byte("mihomo\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		checks := e.Preflight(context.Background(), "sing-box", nil)
+		if checks[0].Status != StatusPassed {
+			t.Fatalf("版本 %q 应通过 target,得到 %+v", v, checks[0])
+		}
+	}
+}
+
+// 反面:读不到版本号(ok=false 或空串)仍然要拦下,不能因为放宽判据就放行。
+func TestPreflightRejectsUnreadableVersion(t *testing.T) {
+	for _, c := range []struct {
+		v  string
+		ok bool
+	}{{"", false}, {"", true}, {"  ", true}} {
+		e, _ := newEngine(t, "mihomo", func(d *Deps) {
+			d.Version = func(_ context.Context, _ string) (string, bool) { return c.v, c.ok }
+			d.Conflicts = func(context.Context) ([]string, error) { return nil, nil }
+		})
+		checks := e.Preflight(context.Background(), "sing-box", nil)
+		if checks[0].Status != StatusFailed {
+			t.Fatalf("版本 %q/ok=%v 应被拦下,得到 %+v", c.v, c.ok, checks[0])
+		}
+	}
+}
+
 func TestPreflightConflictsBlockLaterChecks(t *testing.T) {
 	e, _ := newEngine(t, "mihomo", func(d *Deps) {
 		d.Conflicts = func(context.Context) ([]string, error) { return []string{"Nikki", "ShellCrash"}, nil }

@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
+	"strings"
 
 	"github.com/timeflysoon/Open-Box/backend/internal/kernelgen"
 	"github.com/timeflysoon/Open-Box/backend/internal/mihomo"
@@ -123,7 +123,10 @@ func (e *Engine) Preflight(ctx context.Context, kernel string, onCheck func(Chec
 				return nil, "", fmt.Errorf("当前安装包没有 mihomo 内核")
 			}
 			v, ok := e.version(ctx, kernel)
-			if !ok || !mihomoVersionRe.MatchString(v) {
+			// e.version 交出来的是**解析后的版本号**(mihomo 交整行 "Mihomo Meta v1.19.34-…",
+			// sing-box 交 "1.14.4-openbox-61"),不是命令的原始输出,所以不能拿「匹配整行输出」的
+			// 正则去套它。判据是:命令成功、且读到了非空版本号。
+			if !ok || strings.TrimSpace(v) == "" {
 				return []string{v}, "", fmt.Errorf("mihomo 内核无法运行")
 			}
 			return []string{v}, "", nil
@@ -132,7 +135,7 @@ func (e *Engine) Preflight(ctx context.Context, kernel string, onCheck func(Chec
 			return nil, "", fmt.Errorf("当前安装包没有 sing-box 内核")
 		}
 		v, ok := e.version(ctx, kernel)
-		if !ok || !singboxVersionRe.MatchString(v) {
+		if !ok || strings.TrimSpace(v) == "" {
 			return []string{v}, "", fmt.Errorf("sing-box 内核无法运行")
 		}
 		return []string{v}, "", nil
@@ -289,11 +292,6 @@ func (e *Engine) Preflight(ctx context.Context, kernel string, onCheck func(Chec
 	}
 	return out
 }
-
-var (
-	mihomoVersionRe  = regexp.MustCompile(`(?i)^Mihomo\s`)
-	singboxVersionRe = regexp.MustCompile(`^sing-box\s+version\s`)
-)
 
 // version 读目标内核的版本行;测试里用 Deps.Version 换掉。
 func (e *Engine) version(ctx context.Context, kernel string) (string, bool) {
