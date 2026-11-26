@@ -1341,3 +1341,45 @@ body[data-theme='forest'] #app-content .mobile-bottom-nav {
     transform: none;
   }
 }
+
+/* 下拉框的箭头:细线条的 V 形(与上游 v0.1.488 一致),位置由 --app-select-chevron-inset 控制,
+   窄屏的排序菜单会把它收紧。多选框和禁用状态沿用各自的颜色 */
+#app-content select.select:not([multiple]) {
+  --app-select-chevron-color: var(--app-text-subtle, currentColor);
+}
+@supports (color: color-mix(in lab, red, red)) {
+  #app-content select.select:not([multiple]) {
+    --app-select-chevron-color: var(
+      --app-text-subtle,
+      color-mix(in oklab, currentColor 40%, transparent)
+    );
+  }
+}
+#app-content select.select:not([multiple]) {
+  --app-select-chevron-half: 0.275rem;
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent 40%,
+      var(--app-select-chevron-color) 45% 55%,
+      transparent 60%
+    ),
+    linear-gradient(
+      -45deg,
+      transparent 40%,
+      var(--app-select-chevron-color) 45% 55%,
+      transparent 60%
+    );
+  background-size: var(--app-select-chevron-half) var(--app-select-chevron-half);
+  background-position:
+    right calc(var(--app-select-chevron-inset, 0.75rem) + var(--app-select-chevron-half)) center,
+    right var(--app-select-chevron-inset, 0.75rem) center;
+}
+#app-content select.select:disabled:not([multiple]) {
+  --app-select-chevron-color: currentColor;
+}
+@supports (color: color-mix(in lab, red, red)) {
+  #app-content select.select:disabled:not([multiple]) {
+    --app-select-chevron-color: color-mix(in oklab, currentColor 40%, transparent);
+  }
+}

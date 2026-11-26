@@ -870,7 +870,9 @@ th:hover .resizer {
 .connection-table-shell {
   --connection-table-button: calc(var(--size-field, 0.25rem) * 6);
   --connection-table-actions: var(--connection-table-button);
-  --connection-table-action-column: calc(var(--connection-table-actions) + 1rem);
+  --connection-table-action-column: calc(
+    var(--connection-table-actions) + 2 * var(--app-card-space, 12px)
+  );
 }
 .connection-table-shell.connection-table-extra-action {
   --connection-table-actions: calc(2 * var(--connection-table-button) + var(--spacing));
@@ -878,7 +880,12 @@ th:hover .resizer {
 
 .connection-table-shell th,
 .connection-table-shell td {
-  padding-inline: 0.5rem;
+  padding-inline: var(--app-card-space, 12px);
+}
+
+/* 组头第一格的展开箭头与「关闭」按钮居中对齐 */
+.connection-table-shell td:first-child > svg {
+  margin-inline: calc((var(--connection-table-button) - 1rem) / 2) 0;
 }
 
 /* 自动列宽:单元格不换行,收缩列才能缩到刚好放下内容 */

@@ -146,6 +146,7 @@ const handleTabClick = (key: string) => {
 @media screen and (max-width: 768px) {
   .connection-workspace :deep(.settings-menu > div) {
     flex-wrap: wrap;
+    gap: 0.5rem !important;
   }
   .connection-workspace :deep(.settings-menu-list) {
     flex: 0 1 auto;

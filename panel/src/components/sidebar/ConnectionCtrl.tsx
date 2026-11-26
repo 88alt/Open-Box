@@ -1,6 +1,11 @@
 import { disconnectAllAPI, disconnectByIdAPI } from '@/api'
 import { useCtrlsBar } from '@/composables/useCtrlsBar'
-import { SORT_DIRECTION, SORT_TYPE, SORT_TYPE_COLUMN } from '@/constant'
+import {
+  CONNECTION_COLUMN_LABEL_MAP,
+  SORT_DIRECTION,
+  SORT_TYPE,
+  SORT_TYPE_COLUMN,
+} from '@/constant'
 import { useTooltip } from '@/helper/tooltip'
 import { isMiddleScreen } from '@/helper/utils'
 import {
@@ -42,6 +47,13 @@ import SourceIPLabels from '../settings/SourceIPLabels.vue'
 import TableSettings from '../settings/TableSettings.vue'
 import ConnectionTabs from './ConnectionTabs.vue'
 import SourceIPFilter from './SourceIPFilter.vue'
+
+// 排序菜单的选项名和表头一致:主机叫「目标」,源 IP 叫「设备」,其余用列名(与上游 v0.1.488 一致)
+const sortOptionLabel = (type: SORT_TYPE) => {
+  const column = SORT_TYPE_COLUMN[type]
+
+  return CONNECTION_COLUMN_LABEL_MAP[column] ?? column
+}
 
 const handlerClickCloseAll = () => {
   if (renderConnections.value.length === connections.value.length) {
@@ -85,22 +97,14 @@ export default defineComponent({
       const sortControls = (
         <div
           class={[
-            'flex items-center gap-1 text-sm',
-            isMiddleScreen.value
-              ? 'min-w-0 flex-1 max-[360px]:gap-0.5 max-[360px]:text-xs'
-              : isLargeCtrlsBar.value
-                ? 'w-auto'
-                : 'min-w-0 flex-1',
+            'flex min-w-0 items-center gap-1 text-sm max-[360px]:text-xs',
+            !isLargeCtrlsBar.value && 'flex-1',
           ]}
         >
           <span class="shrink-0">{sortLabel}</span>
-          <div class={`join min-w-0 flex-1 ${isLargeCtrlsBar.value ? 'min-w-46' : ''}`}>
+          <div class="join min-w-0 flex-1">
             <select
-              class={[
-                'join-item select select-sm min-w-0 flex-1',
-                isMiddleScreen.value &&
-                  'px-2 max-[360px]:ps-1 max-[360px]:pe-5 max-[360px]:text-xs!',
-              ]}
+              class="join-item select select-sm min-w-0 flex-1 truncate max-[360px]:ps-1 max-[360px]:pe-5 max-[360px]:text-xs! max-[360px]:[--app-select-chevron-inset:0.55rem]"
               aria-label={sortLabel}
               value={activeSortType.value}
               onChange={(e) =>
@@ -112,12 +116,12 @@ export default defineComponent({
                   key={opt}
                   value={opt}
                 >
-                  {t(opt) || opt}
+                  {t(sortOptionLabel(opt))}
                 </option>
               ))}
             </select>
             <button
-              class={['btn join-item btn-sm shrink-0', isMiddleScreen.value && 'btn-square']}
+              class="btn join-item btn-square btn-sm shrink-0"
               aria-label={sortDirectionLabel}
               title={sortDirectionLabel}
               onClick={() => {
@@ -129,9 +133,9 @@ export default defineComponent({
               }}
             >
               {activeSortDesc.value ? (
-                <ArrowDownCircleIcon class="h-4 w-4" />
+                <ArrowDownCircleIcon class="size-4" />
               ) : (
-                <ArrowUpCircleIcon class="h-4 w-4" />
+                <ArrowUpCircleIcon class="size-4" />
               )}
             </button>
           </div>

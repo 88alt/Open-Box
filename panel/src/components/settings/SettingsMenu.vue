@@ -8,7 +8,7 @@
   >
     <!-- 页签靠左、各自按内容取宽,不两端拉伸;右侧 #settings-header-actions 是各页签
          把自己的操作按钮(添加订阅、自动分组…)Teleport 过来的位置,位置固定在右上角 -->
-    <div class="app-card-gap flex w-full items-center">
+    <div class="app-inline-gap flex w-full items-center">
       <ul
         ref="listRef"
         v-segmented="{ active: '.menu-active', variant: 'menu' }"
