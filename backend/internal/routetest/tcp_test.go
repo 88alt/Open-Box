@@ -3,6 +3,7 @@ package routetest
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
 	"strconv"
@@ -21,9 +22,12 @@ type fakeSocks struct {
 	rep      byte
 	greeting []byte
 	silent   bool // 握手完成后不回应答(模拟内核还在连目标)
-	mu       sync.Mutex
-	ports    []string
-	reqs     []socksReq
+	// 模拟 mihomo:先把 0x00 发出去(并把入站自己的地址填在 BND.ADDR 上),过一会儿才关连接表示连不上。
+	// closeAfter 为 0 表示不启用(照常是 sing-box 的「连上了才应答」)。
+	closeAfter time.Duration
+	mu         sync.Mutex
+	ports      []string
+	reqs       []socksReq
 }
 
 type socksReq struct {
@@ -117,6 +121,16 @@ func (f *fakeSocks) serve(c net.Conn) {
 	if f.silent {
 		_, _ = io.Copy(io.Discard, c)
 		return
+	}
+	if f.closeAfter > 0 {
+		// mihomo 的形状:BND.ADDR 填入站自己的地址,应答之后才去连,连不上就把连接关掉
+		h, p, _ := net.SplitHostPort(f.ln.Addr().String())
+		var pn int
+		_, _ = fmt.Sscanf(p, "%d", &pn)
+		ip := net.ParseIP(h).To4()
+		_, _ = c.Write([]byte{5, f.rep, 0, 1, ip[0], ip[1], ip[2], ip[3], byte(pn >> 8), byte(pn)})
+		time.Sleep(f.closeAfter)
+		return // 关连接 = 连不上
 	}
 	// 应答:VER REP RSV ATYP(IPv4) BND.ADDR(出站的本地地址) BND.PORT
 	_, _ = c.Write([]byte{5, f.rep, 0, 1, 127, 0, 0, 1, 0x30, 0x39})
@@ -285,6 +299,125 @@ func TestTCPRunDoesFlushAndResolveAndExit6(t *testing.T) {
 		t.Errorf("两次 CONNECT 的地址不对: %+v", f.reqs)
 	}
 	_ = strconv.Itoa
+}
+
+// 内核先把 0x00 发出来、之后才连目标(mihomo)时,0x00 不算证据:它随后关连接就说明没连上。
+// 回归自 2026-11-26 真机:修复前对关着的端口和黑洞地址都判成功(耗时 1~4ms,内核其实还在连)。
+func TestTCPDeferredReplyClosedMeansFailure(t *testing.T) {
+	f := newFakeSocks(t)
+	f.closeAfter = 150 * time.Millisecond
+	res, err := (&Service{ProxyAddr: f.addr(), Timeout: 3 * time.Second}).Run(context.Background(),
+		Input{Target: "192.0.2.1", Port: 443, Method: "TCP"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Exit.OK || res.Exit.Error == "" {
+		t.Fatalf("应答之后被关掉连接,应该判失败: %+v", res.Exit)
+	}
+	if !strings.Contains(res.Exit.Error, "没有连上") {
+		t.Errorf("失败原因应该说清楚是「内核报告目标没有连上」: %q", res.Exit.Error)
+	}
+	if res.Exit.MS != nil {
+		t.Errorf("失败时不该给耗时: %v", *res.Exit.MS)
+	}
+}
+
+// 同一形状但连接一直开着(mihomo 连上的情形):等满确认窗口后按成功报。
+func TestTCPDeferredReplyStaysOpenMeansSuccess(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	h, p, _ := net.SplitHostPort(ln.Addr().String())
+	var pn int
+	_, _ = fmt.Sscanf(p, "%d", &pn)
+	ip := net.ParseIP(h).To4()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				var h2 [2]byte
+				if _, err := io.ReadFull(c, h2[:]); err != nil {
+					return
+				}
+				_, _ = io.ReadFull(c, make([]byte, h2[1]))
+				_, _ = c.Write([]byte{5, 0})
+				buf := make([]byte, 300)
+				if _, err := c.Read(buf); err != nil {
+					return
+				}
+				// 0x00 + BND.ADDR 填入站自己的地址,然后保持连接
+				_, _ = c.Write([]byte{5, 0, 0, 1, ip[0], ip[1], ip[2], ip[3], byte(pn >> 8), byte(pn)})
+				_, _ = io.Copy(io.Discard, c)
+			}(c)
+		}
+	}()
+	res, err := (&Service{ProxyAddr: ln.Addr().String(), Timeout: 10 * time.Second}).Run(context.Background(),
+		Input{Target: "192.0.2.1", Port: 443, Method: "TCP"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Exit.OK || res.Exit.Error != "" {
+		t.Fatalf("连接一直开着应该判成功: %+v", res.Exit)
+	}
+}
+
+// mihomo 下「先应答后连」时,判据是内核连接表:出现这条连接(按本地端口认)才算连上。
+// 回归自 2026-11-26 真机:黑洞地址 192.0.2.1:443 在连接表里始终不出现,不能判成功。
+func TestTCPDeferredReplyRequiresConnectionInTable(t *testing.T) {
+	f := newFakeSocks(t)
+	f.closeAfter = 6 * time.Second // 比确认窗口长:让判定完全落在连接表上
+	// 连接表里始终没有这条连接
+	empty := func(context.Context) (singbox.KernelSnapshot, error) { return singbox.KernelSnapshot{}, nil }
+	res, err := (&Service{ProxyAddr: f.addr(), Snapshot: empty, Timeout: 5 * time.Second}).Run(context.Background(),
+		Input{Target: "192.0.2.1", Port: 443, Method: "TCP"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Exit.OK {
+		t.Fatalf("连接表里没有这条连接,不能判成功: %+v", res.Exit)
+	}
+	// 反过来:连接表里出现这条连接就是成功
+	seen := func(context.Context) (singbox.KernelSnapshot, error) {
+		return singbox.KernelSnapshot{Conns: []singbox.KernelConn{
+			{SourcePort: f.lastPort(), Source: "127.0.0.1", Chains: []string{"DIRECT", "国内"}, Rule: "RuleSet"},
+		}}, nil
+	}
+	res, err = (&Service{ProxyAddr: f.addr(), Snapshot: seen, Timeout: 8 * time.Second}).Run(context.Background(),
+		Input{Target: "223.109.82.16", Port: 443, Method: "TCP"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Exit.OK || res.Exit.Error != "" {
+		t.Fatalf("连接表里出现了这条连接,应该判成功: %+v", res.Exit)
+	}
+	if strings.Join(res.Exit.Chains, ",") != "国内,DIRECT" || res.Exit.Rule != "RuleSet" {
+		t.Errorf("线路应该按连接表补上: %+v", res.Exit)
+	}
+}
+
+// sing-box 的形状(BND.ADDR 是真实出站的本地地址,不等于入口)不该触发二次确认:
+// 它的 0x00 本身就有证据力,探测应当立刻返回,而不是等确认窗口。
+func TestTCPImmediateReplyNeedsNoConfirmation(t *testing.T) {
+	f := newFakeSocks(t) // 默认:回 127.0.0.1:12345,与入口不同
+	start := time.Now()
+	// 用 IP 作目标:不触发 DNS 解析(解析要问本机没有的内核 DNS 入站,会白等)
+	res, err := (&Service{ProxyAddr: f.addr(), Timeout: 8 * time.Second}).Run(context.Background(),
+		Input{Target: "1.2.3.4", Port: 443, Method: "TCP"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Exit.OK {
+		t.Fatalf("%+v", res.Exit)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Errorf("sing-box 形状不应等确认窗口,实际耗时 %v", d)
+	}
 }
 
 func TestSocksReplyTextNeverEmpty(t *testing.T) {
