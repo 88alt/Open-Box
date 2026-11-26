@@ -77,12 +77,16 @@ func meanOf(in []float64) *float64 {
 	return &r
 }
 
-// download 是一个节点最近的下载测速汇总(最近最多 10 次成功测速的平均)。
+// download 是一个节点最近的下载测速汇总。
+// v0.1.491 起:Mbps 是成功样本的 0.65 衰减加权值,Fails 是窗口内的失败次数,
+// Failed 表示「已判为带宽失败」(无成功样本 / 累计 5 次失败)。
 type download struct {
 	At         int64
 	Mbps       float64
 	Count      int
 	LowerBound bool
+	Fails      int
+	Failed     bool
 }
 
 // evaluated 是一个节点按上游口径算出的结果。
@@ -160,6 +164,31 @@ func evaluate(sm summary, dl *download, nowMs, periodMs, freshMs int64, w scorew
 		add(ev.Latency, w.Latency, latencyKnots)
 		add(ev.Download, w.Download, downloadKnots)
 		add(ev.Jitter, w.Jitter, jitterKnots)
+		// v0.1.491:窗口内的带宽测速失败次数按 1.5 倍几何阶梯**扣减下载单项分**
+		// (默认 30% 权重下依次扣 3 / 7.5 / 14.25 / 24.375 / 30 分),按带宽权重等比折算,
+		// **不倒扣延时与抖动**——所以这里是从 sv 里减掉「下载那一项已有的分」,
+		// 而不是直接把总分压低。下载分扣到 0 即视为带宽失败(标记由 downloadOf 给出)。
+		if downloadDroppedOut := ev.Download != nil && dl != nil && dl.Fails > 0 && w.Download > 0; downloadDroppedOut {
+			// 上游文案给的是「依次扣 3 / 7.5 / 14.25 / 24.375 / 30 分」。这串数字**不是**等比序列
+			// (7.5/3=2.5、14.25/7.5=1.9、24.375/14.25≈1.71),单靠「1.5 倍阶梯」推不出来,
+			// 所以这里直接按文案的字面值查表,权重不是 30% 时再等比缩放。
+			// 推断点 / 待维护者复核:闭源实现的具体递推式不可见,若后续拿到准确公式,替换本表即可。
+			drop := bwDropTable[len(bwDropTable)-1]
+			if dl.Fails-1 < len(bwDropTable) {
+				drop = bwDropTable[dl.Fails-1]
+			}
+			if drop > 30 {
+				drop = 30
+			}
+			// 折算:扣的是「下载项分数 ×(权重/100)」,再乘 (100/权重) 还原成下载项自己的分,
+			// 等价于下载项分数减去 drop*(30/权重) 的分,保证按权重等比缩放。
+			scaled := drop * (bwDropBaseWeight / w.Download)
+			cur := interp(*ev.Download, downloadKnots)
+			sv -= w.Download * (cur - math.Max(cur-scaled, 0))
+			if cur <= scaled {
+				ev.DownloadFailed = true
+			}
+		}
 		if total > 0 {
 			sc := int(math.Floor(sv/total + 0.5))
 			if sc < 0 {

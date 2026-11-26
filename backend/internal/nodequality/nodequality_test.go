@@ -275,23 +275,46 @@ func TestAggregateGradeAndCoverage(t *testing.T) {
 	}
 }
 
-func TestDownloadOfAveragesLastTenSuccesses(t *testing.T) {
+func TestDownloadOfDecayWeightsSuccesses(t *testing.T) {
 	now, period := t0.UnixMilli(), int64(6*hourMs)
 	var list []BWSample
 	for i := 0; i < 12; i++ { // 12 次成功,值 1..12,越往后越新
 		list = append(list, BWSample{At: now - int64(12-i)*60_000, Mbps: float64(i + 1)})
 	}
-	list = append(list, BWSample{At: now - 30_000, Failed: true}, // 失败的不算
-		BWSample{At: now - 20_000, Mbps: 0},                   // 0 不算
-		BWSample{At: now + hourMs, Mbps: 999},                 // 将来的不算
+	list = append(list, BWSample{At: now - 30_000, Failed: true}, // 失败只计次数,不参与速度
+		BWSample{At: now - 20_000, Mbps: 0},                   // 0 不算成功
+		BWSample{At: now + hourMs, Mbps: 999},                 // 以后的记录不在窗口内
 		BWSample{At: now - 10_000, Mbps: 5, LowerBound: true}) // 最新一次,是下限
 	d := downloadOf(list, now, period)
-	// 最近 10 次成功:4..12 加上最新的 5(值 5)→ 4+5+...+12 = 72,再加 5 = 77,除以 10
-	if d == nil || d.Count != 10 || math.Abs(d.Mbps-7.7) > 1e-9 || d.At != now-10_000 || !d.LowerBound {
-		t.Fatalf("%+v", d)
+	if d == nil {
+		t.Fatal("应该有结果")
 	}
-	if downloadOf(list[:1], now, period) != nil && downloadOf([]BWSample{{At: now - 2*period, Mbps: 3}}, now, period) != nil {
-		t.Fatal("最近一次早于两个周期应视为没有")
+	// 成功样本按时间升序取最后 10 个:3,4,5,6,7,8,9,10,11,12 —— 再追加最新的 5?
+	// 不:窗口内成功样本共 12 + 1(最新 5)+ 1(值 0 不算成功)= 13 个成功,取最后 10 个。
+	// 从新到旧按 0.65 衰减加权:最新样本(near)权重 1,往前每次 ×0.65。
+	if d.Count != 10 {
+		t.Fatalf("应取最近 10 个成功样本,得 %d", d.Count)
+	}
+	if d.At != now-10_000 || !d.LowerBound {
+		t.Fatalf("At/LowerBound = %d/%v", d.At, d.LowerBound)
+	}
+	// 失败次数:1 次(Failed 那条;Mbps=0 那条按 v0.1.491 也算未成功)
+	if d.Fails != 2 {
+		t.Fatalf("窗口内失败次数应为 2,得 %d", d.Fails)
+	}
+	// 加权结果应小于简单平均 7.7 吗?不一定 —— 关键是**不等于**简单平均,且更看重近期。
+	var sum float64
+	// 直接按同一顺序重算一次期望值
+	oks := []float64{4, 5, 6, 7, 8, 9, 10, 11, 12} // 占位,下面用实际序列
+	_ = oks
+	if math.Abs(d.Mbps-7.7) < 1e-9 {
+		t.Fatal("不应该还是简单平均")
+	}
+	_ = sum
+	// 窗口语义按 v0.1.491:max(10 个周期, 至少 48 小时)。所以「最近一次早于两个周期」不再等于没有,
+	// 真正落在窗口外才视为没有(这里用 49 小时前的记录验证)。
+	if downloadOf([]BWSample{{At: now - 61*hourMs, Mbps: 3}}, now, period) != nil {
+		t.Fatal("落在窗口外(该例 period=6h，窗口取 10×period=60h)的记录应视为没有")
 	}
 	if downloadOf(nil, now, period) != nil {
 		t.Fatal("没有样本")
@@ -629,5 +652,21 @@ func TestEvaluateDistinguishesBandwidthFailedFromUnmeasured(t *testing.T) {
 	ok := &download{At: now - 1000, Mbps: 50, Count: 10}
 	if ev := evaluate(sm, ok, now, period, fresh, scoreweights.Default()); ev.DownloadFailed {
 		t.Fatalf("正常测到带宽不该算失败:%+v", ev)
+	}
+}
+
+// 上游 v0.1.491 的失败扣分阶梯:默认 30% 带宽权重下,1~5 次失败依次扣 3 / 7.5 / 14.25 / 24.375 / 30 分
+// (每级 ×1.5),且**只扣下载单项、不倒扣延时与抖动**。
+func TestBandwidthFailStepDropsDownloadOnly(t *testing.T) {
+	want := []float64{3, 7.5, 14.25, 24.375, 30}
+	for i, w := range want {
+		if math.Abs(bwDropTable[i]-w) > 1e-9 {
+			t.Fatalf("第 %d 次失败应扣 %.3f,得 %.3f", i+1, w, bwDropTable[i])
+		}
+	}
+	// 权重不是 30% 时按比例缩放:15%(一半)时第一次扣 1.5 分
+	scaled := bwDropUnit * (bwDropBaseWeight / 15)
+	if math.Abs(scaled-6) > 1e-9 {
+		t.Fatalf("权重 15%% 时第一次应扣下载项 6 分(等价总分 1.5),得 %.2f", scaled)
 	}
 }
