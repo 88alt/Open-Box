@@ -74,6 +74,11 @@ const WHITELIST_TEXT = [
   /DownMan/,
   /极速下载用/,
   /业务优选/,
+  // 例外 C 的概览卡:内核状态读不到时它自己有一句提示,main 整块卡都没有
+  /暂时无法读取内核状态/,
+  // 例外 C 的组设置字段(综合评分):main 没有这一组开关
+  /可靠性衰减/,
+  /可信度效期/,
   /机场、VPS/,
   /AI 中转站/,
   /Coming ?Soon/i,
@@ -82,6 +87,9 @@ const WHITELIST_TEXT = [
   // (openwrt-<hash>.svg),main 走品牌图标库的内联 data URI。逐像素截图核对过外观一致,
   // 差异只在「图片从哪来」,不是界面差异。
   /img\{img:(data-svg|openwrt|linux-color|docker)\}/,
+  // 站点测速 / 客户端下载平台 / 路由器标识的图标:同样是「上游独立 svg 文件 vs main 内联」,
+  // 逐个截图核对过一致(例外 A)
+  /img\{img:(baidu|google|openai-light|telegram|android|windows|harmonyos|openbox)\}/,
 ]
 const WHITELIST_SELECTOR = [
   '[data-business-preference]',
