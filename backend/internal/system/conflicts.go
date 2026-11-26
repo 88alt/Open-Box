@@ -103,7 +103,10 @@ func (d *ConflictDetector) Find(ctx context.Context) ([]Conflict, error) {
 					}
 					continue
 				}
-				running[n] = res.Code == 0
+				// 返回 0 还不够:有些不走 procd 的老脚本不认识 running 这个子命令,
+				// 会把用法帮助打印出来并以 0 退出(设备上的 ShadowSocksR Plus+ 就是这样),
+				// 只看退出码会把它当成「一直正在运行」,从而永久挡住内核启动。
+				running[n] = res.Code == 0 && !looksLikeUsage(res.Stdout, res.Stderr)
 			}
 		}
 	case InitSystemd:
@@ -138,4 +141,18 @@ func (d *ConflictDetector) Find(ctx context.Context) ([]Conflict, error) {
 		}
 	}
 	return out, firstErr
+}
+
+// looksLikeUsage 判断输出是不是「不认识这个子命令,这是用法」那种。
+// procd 的 `<脚本> running` 成功时不输出任何东西,失败时只有退出码;所以只要输出里带用法特征,
+// 就不能把它当成「正在运行」。宁可判成没在跑(漏报冲突),也不要因为一个不认识子命令的脚本
+// 让内核永远起不来——后者会让整个面板看起来像坏了。
+func looksLikeUsage(stdout, stderr string) bool {
+	text := stdout + "\n" + stderr
+	for _, marker := range []string{"Syntax:", "Available commands", "Usage:", "usage:", "unknown command"} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }

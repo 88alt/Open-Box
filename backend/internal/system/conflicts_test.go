@@ -41,6 +41,31 @@ func TestFindConflictsOpenWrt(t *testing.T) {
 	}
 }
 
+// 不认识 running 子命令的老脚本(设备上的 ShadowSocksR Plus+ 就是这样)会打印用法并以 0 退出。
+// 只看退出码会把它当成「一直正在运行」,从而永久挡住内核启动;这里要求判成「没在跑」。
+func TestFindConflictsOpenWrtIgnoresUsageOutput(t *testing.T) {
+	installed := map[string]bool{"/etc/init.d/shadowsocksr": true, "/etc/init.d/openclash": true}
+	usage := "Syntax: x [command] Available commands: start"
+	run := func(_ context.Context, name string, _ ...string) (RunResult, error) {
+		if name == "/etc/init.d/shadowsocksr" {
+			return RunResult{Code: 0, Stdout: usage}, nil
+		}
+		return RunResult{Code: 0}, nil
+	}
+	d := &ConflictDetector{
+		Svc:     &Services{Kind: InitOpenWrt, Run: run},
+		Exists:  func(p string) bool { return installed[p] },
+		Exclude: []string{"sing-box", "openbox-backend"},
+	}
+	got, err := d.Find(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ID != "openclash" {
+		t.Fatalf("只应报出真正在跑的 openclash: %+v", got)
+	}
+}
+
 func TestFindConflictsOpenWrtErrorsAreBestEffort(t *testing.T) {
 	run := func(_ context.Context, name string, _ ...string) (RunResult, error) {
 		if name == "/etc/init.d/openclash" {
