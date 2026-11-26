@@ -312,7 +312,11 @@ async function login(page, origin) {
   await input.first().fill(LOGIN)
   // 登录按钮的文案随语言变(简体「登录」/ 繁体「登入」/ 英文「Login」),用表单里的 submit 按钮定位,
   // 不靠文案(踩过:繁体下按「登录」找不到按钮,超时)。
-  const btn = page.locator('button[type=submit], form button, button:has-text("登录"), button:has-text("登入"), button:has-text("Login")').first()
+  // 顺序很重要:先找真正提交表单的按钮;main 的登录页有个空内容的普通 button 排在前面,
+  // 用 `.first()` 会点到它(踩过:规则页比对一直卡在登录超时)。
+  const submit = page.locator('button[type=submit], form button[type=submit]')
+  const byText = page.locator('button:has-text("登录"), button:has-text("登入"), button:has-text("Login")')
+  const btn = (await submit.count()) ? submit.first() : byText.first()
   await btn.click()
   // 登录成功后路由会跳到默认页;等它离开 /login 再继续,否则抓到的是登录页
   for (let i = 0; i < 20; i++) {
