@@ -596,3 +596,27 @@
   上游是给超出一行的牌子加 `invisible`(所以它的 `innerText` 里没有尾部关键词),我们的 `TagInput` 同款实现,
   不要改成「靠 `overflow-hidden` 裁切」——裁切会让尾部文字仍被 `innerText` 读到,对比工具会报一堆假差异。
   `vue-tsc` / `eslint` 无报错。
+- 2026-11-26 **弹窗层对比:设置 → 订阅管理 → 节点管理 →「添加分组」弹窗(静态组 / 动态组两屏)**。
+  **先修对比环境**:8802 那个基准静态服务(`ob-up/serve-dist.mjs`)的 `BACKEND` 默认是
+  **真机 `http://192.168.2.5:3036`**,而 5174 开发服务代理的是**本机 3036**——两边根本不是一个数据源,
+  于是同一个弹窗左侧「可选」一边 7 条、一边 68 条,签名 diff 全被数据噪声淹没,还差点被当成「候选节点算错了」。
+  现在基准服务用 `BACKEND=http://127.0.0.1:3036` 起,两侧同数据后差异立刻收敛到 11 行。
+  **发现的差异与修法**(都在 `NodeGroupsPanel.vue` / `BulkPick.vue`):
+  1. 「节点评分」开关行:上游是 `flex min-w-min flex-1 flex-wrap items-center gap-3`,且每个开关各包一层
+     `div.flex.gap-1.items-center.shrink-0`;说明按钮是 `app-compact-action btn btn-circle btn-ghost btn-xs shrink-0`
+     (main 原来是 `btn-sm`,32×32,比上游大一圈)。「展开」按钮同理去掉 `h-8`、补 `app-compact-action`(32 → 24 高)。
+  2. 「动态组 / 静态组」页签:上游是 `<button type="button" role="tab">`,main 用的是 `<a role="tab">`
+     (没有 `href` 的 `a` 键盘不可聚焦)——语义和可访问性都不对,已改;故障转移那条页签栏里的 `<a>` 一起改掉。
+  3. 左右两栏的过滤框:上游外面包一层 `div.relative.min-w-0.flex-1`、输入框是 `input input-xs join-item w-full`
+     (留给输入时的清除按钮定位),main 是裸的 `input flex-1`;已按上游包一层。
+  4. 两栏的批量操作行(`BulkPick`):上游根节点是 `app-inline-gap flex items-center`(列间距 8px),
+     main 是 `flex items-center gap-1`(4px);已改。
+  5. 动态组「关键词」行:上游 `flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs` +
+     `span.font-medium`;main 是 `gap-1` + `label`。右边「排除关键词」按钮上游用 `app-compact-action` +
+     **右箭头**(`ChevronRightIcon`),main 用的是铅笔图标(`size-3.5`);已按上游换掉(图标 import 一起换)。
+  6. 「关键词匹配方式」的 OR/AND 页签:上游 `tabs-box tabs tabs-xs w-fit`,main 少了 `w-fit`。
+  7. 弹窗底栏:上游把「取消 / 保存」包在 `div.flex.justify-end.gap-2` 里,main 是直接两个按钮;已补容器。
+  **结果**:静态组一屏 main 161 行 / 上游 168 行,动态组一屏 108 / 115——差异**只剩 7 行**,就是上游多出来的
+  「业务优选」开关(例外 C:整体不做),连带的只有开关行宽度 331 vs 458;文案差异也只有 `业务优选` 三个字。
+  逐行剔除该块后两侧结构签名**完全一致**。交互冒烟(打开弹窗 → 切动态组 → 切回静态组 → 勾一条右移 → 取消):
+  「可选 (7)」正确变成「可选 (6)」,页签高亮跟随,无新增报错;`vue-tsc` / `eslint` 无报错。

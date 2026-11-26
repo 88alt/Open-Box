@@ -274,29 +274,31 @@
             <!-- 带宽择优:selector 是手动选,没有这项;周期是所有启用的组共用的,在「内核」页统一改 -->
             <div
               v-if="draft.type !== 'selector'"
-              class="flex min-h-8 min-w-0 flex-wrap items-center gap-2"
+              class="flex min-w-min flex-1 flex-wrap items-center gap-3"
             >
-              <label class="flex min-h-8 cursor-pointer items-center gap-2 text-xs font-medium">
-                <span>{{ $t('bandwidthEnable') }}</span>
-                <input
-                  v-model="draft.bandwidth"
-                  type="checkbox"
-                  class="toggle toggle-sm"
-                />
-              </label>
-              <button
-                type="button"
-                class="btn btn-circle btn-ghost btn-sm"
-                :aria-label="$t('bandwidthHelpTitle')"
-                @click.stop="showBandwidthHelp = true"
-              >
-                <QuestionMarkCircleIcon class="h-4 w-4" />
-              </button>
+              <div class="flex shrink-0 items-center gap-1">
+                <label class="flex min-h-8 cursor-pointer items-center gap-2 text-xs font-medium">
+                  <span>{{ $t('bandwidthEnable') }}</span>
+                  <input
+                    v-model="draft.bandwidth"
+                    type="checkbox"
+                    class="toggle toggle-sm"
+                  />
+                </label>
+                <button
+                  type="button"
+                  class="app-compact-action btn btn-circle btn-ghost btn-xs shrink-0"
+                  :aria-label="$t('bandwidthHelpTitle')"
+                  @click.stop="showBandwidthHelp = true"
+                >
+                  <QuestionMarkCircleIcon class="h-4 w-4" />
+                </button>
+              </div>
             </div>
             <button
               v-if="draft.type !== 'selector'"
               type="button"
-              class="btn btn-ghost btn-xs ml-auto h-8 shrink-0 font-normal"
+              class="app-compact-action btn btn-ghost btn-xs ml-auto shrink-0 font-normal"
               :aria-controls="customTestUrlId"
               :aria-expanded="showCustomTestUrl"
               @click="showCustomTestUrl = !showCustomTestUrl"
@@ -364,20 +366,22 @@
               v-segmented
               class="tabs-box tabs tabs-xs w-fit shrink-0"
             >
-              <a
+              <button
+                type="button"
                 role="tab"
                 :class="['tab', draft.mode === 'dynamic' && 'tab-active']"
                 @click="draft.mode = 'dynamic'"
               >
                 {{ $t('groupModeDynamic') }}
-              </a>
-              <a
+              </button>
+              <button
+                type="button"
                 role="tab"
                 :class="['tab', draft.mode === 'static' && 'tab-active']"
                 @click="draft.mode = 'static'"
               >
                 {{ $t('groupModeStatic') }}
-              </a>
+              </button>
             </div>
             <!-- 动态组:关键词 OR / AND(静态组没有) -->
             <div
@@ -395,7 +399,7 @@
                 role="tablist"
                 :aria-label="$t('groupKeywordsMode')"
                 v-segmented
-                class="tabs-box tabs tabs-xs shrink-0"
+                class="tabs-box tabs tabs-xs w-fit shrink-0"
               >
                 <button
                   type="button"
@@ -422,25 +426,27 @@
       </template>
       <!-- 取消 / 保存放在底栏:内容再长也只滚中间那块,按钮始终在弹窗底部 -->
       <template #footer>
-        <button
-          type="button"
-          class="btn btn-sm"
-          @click="showEditor = false"
-        >
-          {{ $t('cancel') }}
-        </button>
-        <button
-          type="button"
-          class="btn btn-primary btn-sm"
-          :disabled="saving"
-          @click="saveDraft()"
-        >
-          <span
-            v-if="saving"
-            class="loading loading-spinner loading-xs"
-          />
-          {{ $t('subscriptionSave') }}
-        </button>
+        <div class="flex justify-end gap-2">
+          <button
+            type="button"
+            class="btn btn-sm"
+            @click="showEditor = false"
+          >
+            {{ $t('cancel') }}
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary btn-sm"
+            :disabled="saving"
+            @click="saveDraft()"
+          >
+            <span
+              v-if="saving"
+              class="loading loading-spinner loading-xs"
+            />
+            {{ $t('subscriptionSave') }}
+          </button>
+        </div>
       </template>
       <div
         v-if="draft"
@@ -461,12 +467,14 @@
                 <span class="text-xs font-medium whitespace-nowrap">
                   {{ $t('groupAvailable') }} ({{ availableCandidates.length }})
                 </span>
-                <input
-                  v-model="memberFilter"
-                  type="text"
-                  class="input input-xs min-w-0 flex-1"
-                  :placeholder="$t('groupMemberFilter')"
-                />
+                <div class="relative min-w-0 flex-1">
+                  <input
+                    v-model="memberFilter"
+                    type="text"
+                    class="input input-xs join-item w-full"
+                    :placeholder="$t('groupMemberFilter')"
+                  />
+                </div>
               </div>
               <BulkPick
                 v-model:subscription="memberSub"
@@ -557,7 +565,8 @@
                     class="tabs-box tabs tabs-xs min-w-0 flex-nowrap overflow-x-auto overflow-y-hidden"
                   >
                     <template #item="{ element: lane, index }">
-                      <a
+                      <button
+                        type="button"
                         role="tab"
                         :class="['tab shrink-0 cursor-move whitespace-nowrap', lane.id === activeLaneId && 'tab-active']"
                         @click="selectLane(lane.id)"
@@ -565,7 +574,7 @@
                         <!-- 页签栏只标角色和有效节点数;自定义名在下面当前页签那行改,不占页签栏的宽度 -->
                         {{ laneRoleLabel(index) }}
                         <span class="opacity-70 tabular-nums">· {{ validCount(lane) }}</span>
-                      </a>
+                      </button>
                     </template>
                   </Draggable>
                   <!-- 最多 3 个页签(主用 + 备用 1 + 备用 2),满了加号置灰 -->
@@ -626,12 +635,14 @@
                     <option value="auto">{{ $t('failoverLaneModeAuto') }}</option>
                     <option value="manual">{{ $t('failoverLaneModeManual') }}</option>
                   </select>
-                  <input
-                    v-model="selectedFilter"
-                    type="text"
-                    class="input input-xs min-w-0 flex-1"
-                    :placeholder="$t('groupMemberFilter')"
-                  />
+                  <div class="relative min-w-0 flex-1">
+                    <input
+                      v-model="selectedFilter"
+                      type="text"
+                      class="input input-xs join-item w-full"
+                      :placeholder="$t('groupMemberFilter')"
+                    />
+                  </div>
                 </div>
                 <BulkPick
                   v-model:subscription="selectedSub"
@@ -689,8 +700,8 @@
           class="grid min-h-0 flex-1 grid-rows-[minmax(0,max-content)_minmax(4rem,1fr)] gap-2"
         >
           <div class="flex min-h-0 flex-col gap-1 overflow-y-auto overscroll-contain [&>*]:shrink-0">
-            <div class="flex min-w-0 flex-wrap items-baseline gap-1 text-xs">
-              <label class="font-medium">{{ $t('groupKeywordsLabel') }}</label>
+            <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs">
+              <span class="font-medium">{{ $t('groupKeywordsLabel') }}</span>
               <div class="ms-auto flex min-w-0 flex-wrap items-baseline justify-end gap-1">
                 <span
                   v-if="excludeSummary"
@@ -698,12 +709,11 @@
                 >{{ $t('groupExcludeKeywordsSummary', { keywords: excludeSummary }) }}</span>
                 <button
                   type="button"
-                  class="btn btn-ghost btn-xs shrink-0 font-normal"
+                  class="app-compact-action btn btn-ghost btn-xs shrink-0 font-normal"
                   @click="showExclude = true"
                 >
                   {{ $t(excludeSummary ? 'groupExcludeKeywordsEdit' : 'groupExcludeKeywords') }}
-                  <PencilSquareIcon
-                    class="size-3.5"
+                  <ChevronRightIcon
                     aria-hidden="true"
                   />
                 </button>

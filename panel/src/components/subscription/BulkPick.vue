@@ -2,7 +2,7 @@
   <!-- 全选 / 反选 / 清空选择 + 右端的订阅多选筛选。三个按钮作用于「当前筛选与过滤框
        框出来的那一批」(范围由父组件算好传进事件里),所以筛选和它们放在同一行:
        选中一条订阅再按「全选」,加进来的正好是那条订阅的节点。 -->
-  <div class="flex items-center gap-1">
+  <div class="app-inline-gap flex items-center">
     <button
       type="button"
       class="btn btn-ghost btn-xs"
