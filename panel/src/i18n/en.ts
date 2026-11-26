@@ -2403,7 +2403,7 @@ const en = {
     'Match devices by MAC, which survives IP changes; "Bypass the kernel" and the allowlist by MAC are handled natively by the kernel and do not affect multi-WAN.',
   chainProxyTab: 'Chain proxy',
   chainProxyAdd: 'Add chain proxy',
-  chainProxyEmptyHint: 'No chain proxies yet.',
+  chainProxyEmptyHint: 'No residential IP yet? Get one from',
   chainProxyEmptyHintSuffix: '',
   chainUpstreamLayer: 'Upstream',
   chainUpstreamLayerTip: 'Upstream layer: the target node dials out through this route',

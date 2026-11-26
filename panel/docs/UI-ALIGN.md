@@ -362,3 +362,27 @@
     `<img src="*.svg">`,main 走 `constant/brands.ts` 内联 `<svg>`(例外 A,已纳入白名单思路);
   - 样式差异 `card.radius` 上游 19px / main 18px:这是**用户设置项 `globalRadius` 的当前取值不同**
     (两侧 localStorage 各自保存),不是样式写错。核对方法是把两侧圆角滑块拖到同一档再比。
+- 2026-11-26 **设置页子页签逐页复核**(zh/light/1440,main=dev 5174,base=488 发布包 8802):
+  | 子页签 | 内容差异 | 结论 |
+  |---|---|---|
+  | 订阅管理 | 上游 4 / main 0 | 站点图标(例外 A)+ 圆角(用户设置),无代码差异 |
+  | 出站节点 | 0 / 0 | 一致 |
+  | 目标分流 | 0 / 0 | 一致(修了工具把 `earth-meridians` 误当 hash 截成 `earth` 的假差异) |
+  | 终端分流 | 0 / 0 | 文案控件一致;残留 `btn-primary` 文字色(见下) |
+  | 链式代理 | 0 / 0 | **已修**:空态文案对齐上游「没有住宅 IP？去 + 市场链接 + 买一个」 |
+  | 共享网络 | 0 / 0 | 一致 |
+  | 客户端 | 上游 12 / main 4 | **未做**,见下 |
+  | DNS 设置 | — | `--click 'DNS设置'` 点击失败,仍是未比对状态 |
+- 2026-11-26 **链式代理空态**:上游是 `chainProxyEmptyHint:"没有住宅 IP？去"` + `<MarketLink/>` + `chainProxyEmptyHintSuffix:"买一个"`
+  (繁体「沒有住宅 IP？去」/「買一個」,英文「No residential IP yet? Get one from」+ 空后缀)。main 原来只渲染
+  `chainProxyEmptyHint:"还没有链式代理。"`、后缀键存在但没用上。已按上游拆成 hint + 市场链接 + 后缀三件套。
+- 2026-11-26 **未做:客户端页(`ClientAppsPage`)** 差异清单,留给下一批:
+  - 标题层级:上游「客户端下载 / 路由器标识 / 地区分流 / 节点分流（客户端）/ 本地分流（客户端）」都是 `<h2>`,main 用 `<span>`;
+  - 缺平台图标 `android / windows / harmonyos` 与 `openbox` 标识图(上游是 `<img src=*.svg>`,main 走品牌图标库);
+  - 上游下载卡片里有 `{VER}` 占位符原样渲染(上游自身把版本占位没替换就输出了),main 直接不显示这一段,需要按上游结构补齐再判断是否跟随该占位;
+  - 结构行数 316 vs 286,差 30 行,主要是下载卡片的分层。
+- 2026-11-26 **残留:`btn-primary` 文字色**。终端分流页的「添加终端规则」:上游 `oklch(0% 0 0)`(黑),
+  main `oklch(33.387% 0.04 162.24)`。两侧 `--color-primary`/背景/`--btn-fg` 表达式一致,差异来自
+  daisyUI `emerald` 主题里 `--color-primary-content` 的取值不同(上游是旧版 emerald 的黑色,main 是
+  新版 emerald 的深青)。属依赖版本差异,不是本仓库样式写错;要跟就得显式钉 `[data-theme='emerald']
+  { --color-primary-content: oklch(0% 0 0) }`,需先确认其它用 `text-primary-content` 的地方(分段控件)不受影响。

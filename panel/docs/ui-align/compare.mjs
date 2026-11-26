@@ -131,8 +131,10 @@ const EXTRACT = () => {
       // 只留一个统一标识,别把整段 URI 当 key——URI 里带 svg 源码,两边必然不同。
       if (src.startsWith('data:')) return 'img:data-svg'
       // 打包产物带 vite 的 hash 后缀(logo-CI46uiNr.svg),dev 下没有(logo.svg):
-      // 不剥掉会让每个 img 都成为一条差异,还会把后面整棵树的路径对齐带偏。
-      const name = (src.split('/').pop() || '').replace(/\.[a-z0-9]+$/i, '').replace(/-[A-Za-z0-9_]{6,}$/, '')
+      // 不剥掉会让每个 img 都成为一条差异。但只能剥「像 hash 的」——纯小写单词
+      // (earth-meridians.svg)不是 hash,剥了会变成 earth,和 upstream 的 earth-meridians 对不上。
+      const stem = (src.split('/').pop() || '').replace(/\.[a-z0-9]+$/i, '')
+      const name = stem.replace(/-([A-Za-z0-9_]{6,})$/, (m, tail) => (/[A-Z0-9]/.test(tail) ? '' : m))
       return 'img:' + name.slice(0, 24)
     }
     if (el.tagName === 'svg' || el.tagName === 'SVG') {
