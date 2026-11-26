@@ -49,7 +49,7 @@
 | --- | --- | --- | --- |
 | 代理 | `#/proxies` | `ProxiesPage` | 已对齐(DOM 比对,zh/light/1440;另有 zh/dark 一次) |
 | 概览 | `#/overview` | `OverviewPage` | 已对齐(例外 B/C 有意不同) |
-| 连接(含日志 / 规则页签) | `#/connections` | `ConnectionWorkspacePage` | 有差异待做(节点名缺延迟标签) |
+| 连接(含日志 / 规则页签) | `#/connections` | `ConnectionWorkspacePage` | 已对齐(DOM 比对,zh/light/1440;连接 / 日志 / 规则三个页签内容 0 / 0、结构 0 / 0) |
 | 设置(含订阅 / 分流 / 内核页签) | `#/settings` | `SettingsPage` | 已对齐(DOM 比对,zh/light/1440) |
 | 登录 | `#/login` | `LoginPage` | 已对齐(结构一致,见下) |
 | 设置访问密码 | `#/setup` | `SetupPasswordPage` | 已对齐 |
@@ -494,3 +494,12 @@
   (后端 `internal/kernelswitch/preflight.go` 只发 passed / failed / blocked / notApplicable,waiting / pending 是前端本地态;
   `OpenboxGroupType` 四值、`OpenboxQualityState` 四值、质量模式三值、列数 `[1,2,3]` / `[1,2]` 都与上游相同)。
   这批**不需要改代码**,只留下核对结论备查。
+- 2026-11-26 **连接页(含日志 / 规则页签)复核 + `TextInput` 与上游口径对齐**:连接页三个页签内容差异 **0 / 0**、
+  结构差异 **0 / 0**(连接 107 行、日志 135 行,行数都一样),样式里只剩 `card.radius`(用户设置项)与已知的
+  `.tab` 未选中底色(daisyUI 版本口径)。原先清单里记的「节点名缺延迟标签」已不存在,清单那一行改为已对齐。
+  复核时发现一处真差异,成因不在页面上而在公共组件:上游的 `TextInput` 里「清除按钮」和「右侧内边距」都是
+  `clearable && !!modelValue` 才算数(空输入框里既没有 × 也没有 `pr-8`),main 的 `TextInput` 只看 `clearable`,
+  于是空搜索框里常驻一个 × 号、还白留 32px 右侧内边距。已在 `components/common/TextInput.vue` 按上游口径改
+  (另按上游补上 `prefix` 插槽 + `pl-9`、`ariaLabel` / `inputClass` 两个 prop;`beforeClose` 是 main 自己的变体、
+  日志搜索在用,保留,但同样按 `canClear` 收口)。改完连接页那个 `input.padding` 差异消失,
+  代理 / 订阅 / DNS 设置页回归比对仍是 0 / 0,`vue-tsc` 无报错。
