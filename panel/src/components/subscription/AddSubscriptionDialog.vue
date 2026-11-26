@@ -190,7 +190,7 @@
                   />
                 </label>
               </div>
-              <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center justify-between gap-3">
                 <p class="text-base-content/50 text-xs">{{ $t('subscriptionLoginHint') }}</p>
                 <button
                   type="submit"
@@ -221,8 +221,8 @@
 
             <!-- 定期更新:每隔几天、几点自动重新拉取。控件和后端设置里 Geo / 自身升级的计划一样。
                  右边是「订阅 DNS 解析」的展开开关,输入框在下面,三种来源模式共用 -->
-            <div class="flex items-start gap-x-3 gap-y-2 pt-1">
-              <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
+            <div class="app-inline-gap flex items-start gap-y-2 pt-1">
+              <div class="app-inline-gap flex min-w-0 flex-1 flex-wrap items-center gap-y-2">
                 <span class="text-xs font-medium">{{ $t('subscriptionAutoUpdate') }}</span>
                 <input
                   v-model="autoUpdate.enabled"
@@ -261,13 +261,13 @@
               </div>
               <button
                 type="button"
-                class="btn btn-ghost btn-xs shrink-0 gap-1 font-normal"
+                class="app-compact-action btn btn-ghost btn-xs shrink-0 font-normal"
                 :aria-expanded="nodeDnsOpen"
                 @click="nodeDnsOpen = !nodeDnsOpen"
               >
                 {{ $t('subscriptionNodeDnsToggle') }}
                 <ChevronDownIcon
-                  class="h-3.5 w-3.5 transition-transform"
+                  class="transition-transform"
                   :class="nodeDnsOpen ? 'rotate-180' : ''"
                 />
               </button>
@@ -286,13 +286,13 @@
               <label class="text-xs font-medium">{{ $t('subscriptionContentLabel') }}</label>
               <button
                 type="button"
-                class="btn btn-ghost btn-xs ml-auto gap-1 font-normal"
+                class="app-compact-action btn btn-ghost btn-xs ml-auto font-normal"
                 :aria-expanded="nodeDnsOpen"
                 @click="nodeDnsOpen = !nodeDnsOpen"
               >
                 {{ $t('subscriptionNodeDnsToggle') }}
                 <ChevronDownIcon
-                  class="h-3.5 w-3.5 transition-transform"
+                  class="transition-transform"
                   :class="nodeDnsOpen ? 'rotate-180' : ''"
                 />
               </button>
@@ -323,7 +323,7 @@
               </label>
               <button
                 type="button"
-                class="btn btn-ghost btn-circle btn-xs"
+                class="app-compact-action btn btn-ghost btn-circle btn-xs shrink-0"
                 :aria-label="$t('subscriptionBandwidthHelpTitle')"
                 @click="bandwidthHelpOpen = true"
               >
@@ -380,9 +380,10 @@
         class="flex min-h-0 flex-1 flex-col"
       >
         <RenameRulesEditor
+          ref="renameEditor"
           :key="subscription?.id || 'new'"
           :initial="subscription?.renameOptions"
-          :subscription-name="name"
+          :subscription-name="effectiveName"
           @change="handleRenameOptionsChange"
         />
       </div>
@@ -670,6 +671,7 @@ watch(nodeDnsError, (error) => {
 // 实际发出去的值:地址留空或校验没过就是 null(服务端存成没有)
 const effectiveNodeDns = computed<{ url: string; bootstrap?: string } | null>(() => dnsDraftValue(nodeDnsDraft))
 
+const renameEditor = ref<InstanceType<typeof RenameRulesEditor> | null>(null)
 const renameOptions = ref<OpenboxRenameOptions>({})
 const handleRenameOptionsChange = (value: OpenboxRenameOptions) => {
   renameOptions.value = value
@@ -909,6 +911,9 @@ const handleSave = async () => {
   saving.value = true
 
   try {
+    // 规则编辑器里「打了字但没回车」的关键词先收进标签再取快照
+    const committed = renameEditor.value?.commitAll()
+    if (committed) renameOptions.value = committed
     // 保存哪一路由当前模式决定,和预览用的是同一个来源
     const payload = {
       ...(effectiveSource.value || {}),

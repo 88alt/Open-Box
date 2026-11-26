@@ -150,14 +150,14 @@
           <label class="text-xs font-medium">{{ $t('clientRouteOutboundLabel') }}</label>
           <button
             type="button"
-            class="btn btn-ghost btn-xs shrink-0 gap-1 font-normal"
+            class="app-compact-action btn btn-ghost btn-xs shrink-0 font-normal"
             :aria-controls="dnsPanelId"
             :aria-expanded="dnsOpen"
             @click="dnsOpen = !dnsOpen"
           >
             {{ $t('clientRouteDnsLabel') }}
             <ChevronDownIcon
-              class="h-3.5 w-3.5 transition-transform"
+              class="transition-transform"
               :class="{ 'rotate-180': dnsOpen }"
               aria-hidden="true"
             />

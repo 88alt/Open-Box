@@ -4,32 +4,36 @@
        与上游 v0.1.382 一致。第一行 minmax(0,max-content):控制区矮时按内容高度,太高时自己也能滚;
        第二行至少留 4rem,不会被挤没。 -->
   <div class="grid min-h-0 flex-1 grid-rows-[minmax(0,max-content)_minmax(4rem,1fr)] gap-4">
-    <div class="rename-controls flex min-h-0 flex-col gap-4 overflow-y-auto overscroll-contain [&>*]:shrink-0">
-      <!-- 前缀存的是开关而不是文本:存文本的话,用户改了订阅名,前缀还留着旧名字。
-           它和重命名规则无关(关了重命名也能加前缀),所以放在规则标题前面 -->
-      <label class="flex cursor-pointer items-center gap-2 text-xs">
-        <input
-          v-model="usePrefix"
-          type="checkbox"
-          class="checkbox checkbox-xs"
-        />
-        {{ $t('subscriptionRenamePrefixLabel') }}
-      </label>
-
-      <!-- 重命名规则:标题后面是总开关,关掉时下面的规则整块收起、节点保留机场原始名字 -->
-      <div class="flex items-center justify-between gap-2">
-        <label class="flex cursor-pointer items-center gap-2">
-          <h3 class="text-sm font-semibold">{{ $t('subscriptionRenameEditorTitle') }}</h3>
-          <input
-            v-model="enabled"
-            type="checkbox"
-            class="toggle toggle-xs toggle-primary"
-          />
-        </label>
+    <div class="flex flex-col gap-4 overflow-y-auto">
+      <!-- 两个开关并排(上游 488 的结构):左边「节点名前加订阅名」、紧跟「重命名节点」,恢复默认推到最右。
+           前缀存的是开关而不是文本:存文本的话,用户改了订阅名,前缀还留着旧名字。
+           它和重命名规则无关(关了重命名也能加前缀),所以放在重命名总开关前面。 -->
+      <div class="app-inline-gap flex flex-wrap items-center gap-y-2">
+        <div class="app-inline-gap flex min-w-0 items-center">
+          <label class="flex cursor-pointer items-center gap-2 text-sm">
+            <span>{{ $t('subscriptionRenamePrefixLabel') }}</span>
+            <input
+              v-model="usePrefix"
+              type="checkbox"
+              class="toggle toggle-primary toggle-xs shrink-0"
+              role="switch"
+            >
+          </label>
+          <!-- 重命名总开关:关掉时下面的规则整块收起、节点保留机场原始名字 -->
+          <label class="flex cursor-pointer items-center gap-2 text-sm">
+            <span>{{ $t('subscriptionRenameEditorTitle') }}</span>
+            <input
+              v-model="enabled"
+              type="checkbox"
+              class="toggle toggle-primary toggle-xs shrink-0"
+              role="switch"
+            >
+          </label>
+        </div>
         <button
           v-if="enabled"
           type="button"
-          class="btn btn-ghost btn-xs"
+          class="btn btn-ghost btn-xs ml-auto shrink-0"
           @click="resetToDefaults"
         >
           <ArrowUturnLeftIcon class="h-3.5 w-3.5" />
@@ -73,45 +77,72 @@
           </Draggable>
 
           <!-- 序号位数收成一行、推到最右:它是给序号补零的位数(不补零时 美国-10 会
-               排在 美国-2 前面,因为节点名到处都按文本排序)。原先它和「无法识别地区
-               时的标签」并排各占半格,一个只填 1 位数字的框占那么大一块并不划算。 -->
-          <label class="ml-auto flex items-center gap-1.5 text-xs">
-            <span class="text-base-content/50">{{ $t('subscriptionRenameSeqPadLabel') }}:</span>
-            <input
-              v-model.number="seqPad"
-              type="number"
-              min="1"
-              max="4"
-              class="input input-xs w-14"
-              :title="$t('subscriptionRenameSeqPadHint')"
-            />
-          </label>
+               排在 美国-2 前面,因为节点名到处都按文本排序)。
+               控件与上游 488 一致:label + join 步进器(减按钮 / 数字框 / 加按钮),只在一个
+               1~4 的小范围里选,单独一个数字框还不如给两个按钮。 -->
+          <div class="ml-auto flex items-center gap-1.5 text-xs">
+            <label
+              :for="seqPadId"
+              class="text-base-content/50"
+            >{{ $t('subscriptionRenameSeqPadLabel') }}:</label>
+            <div class="join inline-flex max-w-full items-stretch">
+              <button
+                type="button"
+                class="btn btn-sm join-item w-10 shrink-0 px-0"
+                :aria-label="$t('numberDecrease', { label: $t('subscriptionRenameSeqPadLabel') })"
+                @click="bumpSeqPad(-1)"
+              >
+                −
+              </button>
+              <label class="input input-sm join-item flex w-20 min-w-0 justify-center gap-0">
+                <input
+                  :id="seqPadId"
+                  v-model.number="seqPad"
+                  type="number"
+                  min="1"
+                  max="4"
+                  class="tabular-nums text-center"
+                  :aria-label="$t('subscriptionRenameSeqPadLabel')"
+                  :title="$t('subscriptionRenameSeqPadHint')"
+                >
+              </label>
+              <button
+                type="button"
+                class="btn btn-sm join-item w-10 shrink-0 px-0"
+                :aria-label="$t('numberIncrease', { label: $t('subscriptionRenameSeqPadLabel') })"
+                @click="bumpSeqPad(1)"
+              >
+                +
+              </button>
+            </div>
+          </div>
         </div>
+        <!-- 效果示例:重命名关着时显示机场原始名字的样子,前缀开着时带上订阅名 -->
+        <p class="text-base-content text-xs">
+          {{ $t('subscriptionRenameTemplateExample', { example: templateExample }) }}
+        </p>
       </div>
-      <!-- 效果示例:重命名关着时显示机场原始名字的样子,前缀开着时带上订阅名 -->
-      <p class="text-base-content/60 text-xs">
-        {{ $t('subscriptionRenameTemplateExample', { example: templateExample }) }}
-      </p>
 
-      <!-- Region dictionary:关了重命名也要留着——地区识别给国旗和按地区选成员的节点组用 -->
-      <div class="flex flex-col gap-2">
-        <div class="flex items-center justify-between">
-          <label class="text-xs font-medium">{{ $t('subscriptionRenameRegionDictLabel') }}</label>
-          <button
-            type="button"
-            class="btn btn-ghost btn-xs"
-            @click="addRegionRow"
-          >
-            <PlusIcon class="h-3.5 w-3.5" />
-            {{ $t('subscriptionRenameAddRow') }}
-          </button>
-        </div>
-        <p class="text-base-content/50 text-xs">{{ $t('subscriptionRenameRegionDictHint') }}</p>
-      </div>
     </div>
 
-    <div class="rename-details min-h-0 flex-1 overflow-y-auto overscroll-contain">
+    <div class="min-h-0 flex-1 overflow-y-auto">
       <div class="flex flex-col gap-4">
+        <!-- Region dictionary:关了重命名也要留着——地区识别给国旗和按地区选成员的节点组用。
+             上游 488 把它放在下面这块可滚动区的最上面(控制区只留开关、命名模板和效果)。 -->
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <h3 class="font-medium text-xs">{{ $t('subscriptionRenameRegionDictLabel') }}</h3>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs"
+              @click="addRegionRow"
+            >
+              <PlusIcon class="h-3.5 w-3.5" />
+              {{ $t('subscriptionRenameAddRow') }}
+            </button>
+          </div>
+          <p class="text-base-content/50 text-xs">{{ $t('subscriptionRenameRegionDictHint') }}</p>
+        </div>
         <div class="flex flex-col gap-2">
           <!-- 顺序即优先级:matchRegion 返回第一个命中的地区,所以排在前面的先生效。
                比如「香港」排在「中国」前面,节点名「中国香港 01」才会被认成香港。
@@ -128,7 +159,7 @@
             class="flex flex-col gap-1.5"
           >
             <template #item="{ element: row }">
-              <div class="flex items-center gap-1.5">
+              <div class="app-inline-gap flex items-center">
                 <Bars3Icon class="drag-handle text-base-content/40 h-4 w-4 shrink-0 cursor-move" />
                 <!-- 一行 = 一个国家/地区。绑到具体国家(而不是随手写的名字)之后,才谈得上
                      配一面对应的国旗,匹配出来的节点也才有国别可言。还没绑上的(老档案里
@@ -140,19 +171,22 @@
                     @update:model-value="pickCountry(row, $event)"
                   />
                 </div>
-                <input
-                  v-model="row.keywordsText"
-                  type="text"
-                  class="input input-sm min-w-0 flex-1"
+                <!-- 关键词是标签集合而不是一行逗号文本(上游 488):每个词一个可点的牌子,
+                     回车 / 逗号新增,点牌子移除;放不下一行时右侧出现展开按钮 -->
+                <TagInput
+                  :ref="(el: unknown) => setRowInput(row.id, el)"
+                  v-model="row.keywords"
+                  class="min-w-0 flex-1"
+                  :label="[row.name, $t('subscriptionRenameRegionDictLabel')].filter(Boolean).join(' · ')"
                   :placeholder="$t('subscriptionRenameKeywordsPlaceholder')"
                 />
                 <button
                   type="button"
-                  class="btn btn-ghost btn-circle btn-xs shrink-0"
+                  class="btn btn-ghost btn-square btn-sm shrink-0 hover:text-error"
                   :aria-label="$t('subscriptionRenameRemoveRow')"
                   @click="removeRegionRow(row.id)"
                 >
-                  <XMarkIcon class="h-3.5 w-3.5" />
+                  <TrashIcon class="h-4 w-4" />
                 </button>
               </div>
             </template>
@@ -190,11 +224,12 @@
         >
           <label class="text-xs font-medium">{{ $t('subscriptionRenameFeatureDictLabel') }}</label>
           <p class="text-base-content/50 text-xs">{{ $t('subscriptionRenameFeatureDictHint') }}</p>
-          <input
-            v-model="featureKeywordsText"
-            type="text"
-            class="input input-sm w-full"
+          <TagInput
+            ref="featureInput"
+            :model-value="featureKeywords"
+            :label="$t('subscriptionRenameFeatureDictLabel')"
             :placeholder="$t('subscriptionRenameKeywordsPlaceholder')"
+            @update:model-value="featureKeywords = $event"
           />
         </div>
 
@@ -203,11 +238,12 @@
         <div class="flex flex-col gap-1">
           <label class="text-xs font-medium">{{ $t('subscriptionRenameExcludeLabel') }}</label>
           <p class="text-base-content/50 text-xs">{{ $t('subscriptionRenameExcludeHint') }}</p>
-          <input
-            v-model="excludeKeywordsText"
-            type="text"
-            class="input input-sm w-full"
+          <TagInput
+            ref="excludeInput"
+            :model-value="excludeKeywords"
+            :label="$t('subscriptionRenameExcludeLabel')"
             :placeholder="$t('subscriptionRenameKeywordsPlaceholder')"
+            @update:model-value="excludeKeywords = $event"
           />
         </div>
       </div>
@@ -226,8 +262,9 @@ import {
   DEFAULT_UNKNOWN_LABEL,
 } from './rename-defaults'
 import CountrySelect from '@/components/common/CountrySelect.vue'
+import TagInput from '@/components/common/TagInput.vue'
 import { countryName, findCountry, findCountryByName } from '@/constant/countries'
-import { ArrowUturnLeftIcon, Bars3Icon, PlusIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { ArrowUturnLeftIcon, Bars3Icon, PlusIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Draggable from 'vuedraggable'
@@ -248,7 +285,8 @@ interface RegionRow {
   // ISO 3166-1 alpha-2;空 = 这一行还没绑定国家(老档案里手写的名字)
   code: string
   name: string
-  keywordsText: string
+  // 关键词是数组(TagInput 的模型),保存时直接当 keywords 发出去
+  keywords: string[]
 }
 
 const makeId = () =>
@@ -265,7 +303,7 @@ const toRegionRows = (dict: { code?: string; name: string; keywords: string[] }[
     // ——存的就是「香港」「美国」这些,正好能对上目录。两条都认不出才留空(自定义地区)。
     code: findCountry(entry.code || '')?.code || findCountryByName(entry.name)?.code || '',
     name: entry.name,
-    keywordsText: entry.keywords.join(','),
+    keywords: [...entry.keywords],
   }))
 
 // 选中一个国家:名字跟着走,关键词在"还看得出是上一个国家的"时一并换掉。
@@ -277,13 +315,13 @@ const pickCountry = (row: RegionRow, code: string) => {
   const country = findCountry(code)
   if (!country) return
   const previous = findCountry(row.code)
-  const current = splitKeywords(row.keywordsText).map((k) => k.toLowerCase())
+  const current = row.keywords.map((k) => k.toLowerCase())
   const previousKeywords = new Set((previous?.keywords || []).map((k) => k.toLowerCase()))
   const fromPreviousCountry =
     !current.length || (previous !== undefined && current.every((k) => previousKeywords.has(k)))
   row.code = country.code
   row.name = countryName(country, locale.value)
-  if (fromPreviousCountry) row.keywordsText = country.keywords.join(',')
+  if (fromPreviousCountry) row.keywords = [...country.keywords]
 }
 
 // 兼容旧档案:老的 featureDict 是 [{label, keywords}],扁平化成一条关键词表。
@@ -307,6 +345,12 @@ const toFeatureKeywords = (input: unknown): string[] => {
 const init = props.initial
 const unknownLabel = ref(init?.unknownLabel || DEFAULT_UNKNOWN_LABEL)
 const seqPad = ref(init?.seqPad ?? DEFAULT_SEQ_PAD)
+// 序号位数步进器的 label/for 关联(与上游一样:id 挂在 input 上,label 用 for 指过来)
+const seqPadId = 'subscription-rename-seq-pad'
+const bumpSeqPad = (delta: number) => {
+  const current = Number.isFinite(seqPad.value) ? Number(seqPad.value) : DEFAULT_SEQ_PAD
+  seqPad.value = Math.min(4, Math.max(1, Math.floor(current) + delta))
+}
 // 必须是 ref 而不是 reactive:vuedraggable 的 v-model 在拖放结束时会**整体赋一个新
 // 数组**,reactive 数组没法被重新赋值,拖了不会生效。
 const regionRows = ref<RegionRow[]>(
@@ -320,19 +364,13 @@ const initialFeatureKeywords =
     : toFeatureKeywords(init?.featureDict).length
       ? toFeatureKeywords(init?.featureDict)
       : [...DEFAULT_FEATURE_KEYWORDS]
-const featureKeywordsText = ref(initialFeatureKeywords.join(','))
+const featureKeywords = ref<string[]>([...initialFeatureKeywords])
 
 // 过滤关键词。显式给了空数组就尊重"不过滤",只有整个字段缺失才回落到默认值——
 // 否则用户清空这一栏、保存、再打开,默认词又自己冒回来了。
-const excludeKeywordsText = ref(
-  (Array.isArray(init?.excludeKeywords) ? init.excludeKeywords : DEFAULT_EXCLUDE_KEYWORDS).join(','),
-)
-
-const splitKeywords = (text: string) =>
-  text
-    .split(/[,，]/)
-    .map((kw) => kw.trim())
-    .filter(Boolean)
+const excludeKeywords = ref<string[]>([
+  ...(Array.isArray(init?.excludeKeywords) ? init.excludeKeywords : DEFAULT_EXCLUDE_KEYWORDS),
+])
 
 // Rows the user left completely blank (never typed a name/label or any keyword) are dropped
 // from what gets sent — they're just an empty slot mid-edit, not a real (and invalid) dict entry.
@@ -373,11 +411,11 @@ const options = computed<OpenboxRenameOptions>(() => ({
   unknownLabel: unknownLabel.value.trim() || DEFAULT_UNKNOWN_LABEL,
   seqPad: Number.isFinite(seqPad.value) && seqPad.value > 0 ? Math.floor(seqPad.value) : DEFAULT_SEQ_PAD,
   regionDict: regionRows.value
-    .filter((row) => row.name.trim() || row.keywordsText.trim())
+    .filter((row) => row.name.trim() || row.keywords.length > 0)
     // code 是国家代码(没挑国家的行留空),不再是行号:节点的国别归属就是靠它带出去的
-    .map((row) => ({ code: row.code, name: row.name.trim(), keywords: splitKeywords(row.keywordsText) })),
-  featureKeywords: splitKeywords(featureKeywordsText.value),
-  excludeKeywords: splitKeywords(excludeKeywordsText.value),
+    .map((row) => ({ code: row.code, name: row.name.trim(), keywords: row.keywords.filter((k) => k.trim()) })),
+  featureKeywords: [...featureKeywords.value],
+  excludeKeywords: [...excludeKeywords.value],
 }))
 
 watch(
@@ -388,8 +426,28 @@ watch(
   { immediate: true, deep: true },
 )
 
+// 保存前把各标签输入里「打了字但还没回车」的那段也收进去。
+// TagInput 在失焦时会自己 commit,点保存按钮本来也会触发失焦;但键盘回车 + 立刻点保存、
+// 或者用鼠标中键之类的情况下提交顺序不保证,这里显式收一次最稳。
+const rowInputs = new Map<string, InstanceType<typeof TagInput> | null>()
+const setRowInput = (id: string, el: unknown) => {
+  if (el) rowInputs.set(id, el as InstanceType<typeof TagInput>)
+  else rowInputs.delete(id)
+}
+const featureInput = ref<InstanceType<typeof TagInput> | null>(null)
+const excludeInput = ref<InstanceType<typeof TagInput> | null>(null)
+
+const commitAll = (): OpenboxRenameOptions => {
+  for (const input of rowInputs.values()) input?.commit()
+  featureInput.value?.commit()
+  excludeInput.value?.commit()
+  return options.value
+}
+
+defineExpose({ commitAll })
+
 const addRegionRow = () => {
-  regionRows.value.push({ id: makeId(), code: '', name: '', keywordsText: '' })
+  regionRows.value.push({ id: makeId(), code: '', name: '', keywords: [] })
 }
 const removeRegionRow = (id: string) => {
   const index = regionRows.value.findIndex((row) => row.id === id)
@@ -419,7 +477,7 @@ const resetToDefaults = () => {
   seqPad.value = DEFAULT_SEQ_PAD
   regionRows.value = toRegionRows(DEFAULT_REGION_DICT)
   usePrefix.value = true
-  featureKeywordsText.value = DEFAULT_FEATURE_KEYWORDS.join(',')
-  excludeKeywordsText.value = DEFAULT_EXCLUDE_KEYWORDS.join(',')
+  featureKeywords.value = [...DEFAULT_FEATURE_KEYWORDS]
+  excludeKeywords.value = [...DEFAULT_EXCLUDE_KEYWORDS]
 }
 </script>

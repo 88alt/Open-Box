@@ -560,3 +560,39 @@
   说明分隔符与 `commit()` 都工作正常。
   **有意保留的差异**:这张卡不编辑上游那个「加密引导 DNS」(bootstrap)输入框——`DnsDomainUpstreamCard.vue`
   里的注释写明了原因(改备注时不希望把解析地址弄丢),属于有意差异,不是漏做。
+- 2026-11-26 **弹窗层对比:设置 → 订阅管理 →「添加订阅」弹窗的三个页签(基础 / 登录 / 规则)**。
+  **工具先修**:`dlg-sig.mjs` 之前一直报「没点到 添加订阅」,不是页面问题——`#/subscriptions` 不是规范路由
+  (真正的是 `#/settings?tab=subscriptions`),而登录成功后应用还会自己 push 一次默认路由,固定 `sleep` 常常
+  在跳转没完成时就 `goto` 别的 hash,结果停在登录页、后面所有点击都落空。现在改成:登录后轮询 `hash` 离开
+  `#/login` → 导航后校验 hash、不对就重来 → 点击前先 `waitFor({state:'visible'})`;失败时打印当前 URL 和首屏
+  文字,免得再猜。类名白名单同时纳入 `app-[\w-]+`(否则 `app-compact-action` 这类自定义类在签名里根本看不见)。
+  **发现的差异与修法**:
+  1. **基础页签**:「带宽定期检查」右侧那个说明按钮(`btn btn-ghost btn-circle btn-xs`)少了上游的
+     `app-compact-action`。补之前先发现 `main.css` 里 `.app-compact-action` 只有选择器、**从来没定义过**
+     (`.app-compact-action{...}` 与 `.app-compact-action > svg{...}` 都缺),已按上游口径补上
+     (`gap:.25rem`;子 svg `flex-shrink:0;width/height:1rem`),否则光加类名不产生任何效果。
+  2. **登录页签**:表单行间距 `gap-2` → 上游是 `gap-3`。
+  3. **规则页签(`RenameRulesEditor.vue`,本批改动最大)**:重写成上游的版式——
+     · 顶部两个开关改成 `label > span + input.toggle.toggle-primary.toggle-xs[role=switch]`(上游是「文字在左、
+       开关在右」的 `label` 包裹),「恢复默认」按钮 `ml-auto shrink-0`;
+     · 「序号位数」从裸 `input` 变成上游的 `join` 组:`button.btn.btn-sm.join-item.w-10`(− / +,
+       aria 为 `numberDecrease` / `numberIncrease` 带 label)+ `label.input.input-sm.join-item.w-20` 里的
+       `input.tabular-nums.text-center`,值 clamp 在 1~4;
+     · 地区关键词从「一行逗号文本」换成公共 `TagInput`(一词一个牌子,回车/逗号新增、点牌子移除),
+       行标签是「地区名 · 关键词字典」,删除按钮统一 `btn btn-ghost btn-square btn-sm shrink-0 hover:text-error`
+       且图标是 `TrashIcon h-4 w-4`(原来错用 `XMarkIcon h-3.5`);
+     · 特征关键词、过滤关键词同样换成 `TagInput`;
+     · 布局:控制区 `flex flex-col gap-4 overflow-y-auto`,「地区关键词」标题块移进滚动区最上面,效果预览行
+       挪到命名模板组末尾,滚动区 `min-h-0 flex-1 overflow-y-auto`。
+  4. **默认词表**(面板 `rename-defaults.ts` 与后端 `internal/subs/rename.go` 两份):特征关键词从 6 个补到上游的
+     **15 个**(`iepl iplc ipv6 专线 家宽 2x tud vm ALi AnGe zo org yy RN 0.5`),过滤关键词从 3 个补到上游的
+     **14 个**(多出 `下载 失效 复制 客户端 如果 网站 剩余 套餐 重置 到期 流量`),顺序照抄(越靠前越优先命中)。
+     这条会让**首次打开编辑器时的预填内容、以及没存过规则的订阅的节点命名 / 过滤结果**与上游一致,属于行为对齐,
+     不只是文案;`go test ./internal/subs/...` 全绿(原有用例都显式传词表,不受默认值影响)。
+  5. **`TagInput` 的一处重复类名**:组件内部已有 `w-full`,调用点又传了一次 `class="w-full"`,类名列表里出现两个
+     `w-full`;已删掉调用点那两处(`RenameRulesEditor` 的特征/过滤两行),组件不再重复。
+  **结果**:三个页签的结构签名(标签 + 类名 + 文案 + 控件属性)**逐行一致**——基础 **73 / 73**、
+  登录 **77 / 77**、规则 **646 / 646**,「文案只在某一侧」的差异列表为空。溢出标签的隐藏方式也确认过了:
+  上游是给超出一行的牌子加 `invisible`(所以它的 `innerText` 里没有尾部关键词),我们的 `TagInput` 同款实现,
+  不要改成「靠 `overflow-hidden` 裁切」——裁切会让尾部文字仍被 `innerText` 读到,对比工具会报一堆假差异。
+  `vue-tsc` / `eslint` 无报错。

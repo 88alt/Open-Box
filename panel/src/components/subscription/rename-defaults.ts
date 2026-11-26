@@ -32,8 +32,16 @@ export const DEFAULT_REGION_DICT: OpenboxRenameRegionEntry[] = [
 
 // 特征改成扁平关键词表:命中哪个词就把那个词本身(转大写)写进节点名,
 // 不再折叠成一个统一标签(见 server/engine/dictionaries.mjs 的同名常量)。
-export const DEFAULT_FEATURE_KEYWORDS: string[] = ['iepl', 'iplc', 'ipv6', '专线', '家宽', '2x']
+// 词表照抄上游 v0.1.488(SubscriptionsPage 里的默认特征词),顺序也一致:
+// 越靠前越优先命中,所以「2x」这类弱词必须排在后面。
+export const DEFAULT_FEATURE_KEYWORDS: string[] = [
+  'iepl', 'iplc', 'ipv6', '专线', '家宽', '2x',
+  'tud', 'vm', 'ALi', 'AnGe', 'zo', 'org', 'yy', 'RN', '0.5',
+]
 
-// 过滤关键词:机场订阅里混着的公告/广告条目。默认只放最没歧义的三个词——这是个
-// "会让节点消失"的功能,默认值宁可保守(见 server/engine/dictionaries.mjs 同名常量)。
-export const DEFAULT_EXCLUDE_KEYWORDS: string[] = ['官网', '工单', '客服']
+// 过滤关键词:机场订阅里混着的公告/广告条目。词表与上游 v0.1.488 一致(14 个),
+// 后端 rename.go 的 defaultExcludeKeywords 是同一份。
+export const DEFAULT_EXCLUDE_KEYWORDS: string[] = [
+  '官网', '工单', '客服', '下载', '失效', '复制', '客户端',
+  '如果', '网站', '剩余', '套餐', '重置', '到期', '流量',
+]
