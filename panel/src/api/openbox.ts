@@ -2258,6 +2258,9 @@ export type OpenboxQualityStats = {
   down: number
   lastAt: number | string | null
   checks?: number
+  // 上游 v0.1.490:最近一次带宽测速失败(与「从未测过」分开)。
+  // 两者带宽项都按 0 分计入,但前者显示「带宽失败」、后者显示「未测带宽」。
+  downloadFailed?: boolean
 }
 export type OpenboxQualityNode = OpenboxQualityStats & {
   tag: string

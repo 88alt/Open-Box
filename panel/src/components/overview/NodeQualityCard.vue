@@ -106,7 +106,15 @@
                     >{{ $t('qualityPreviousScore') }}</span>
                     <template v-else>
                       {{ gradeLabel(sub) }}
-                      <span v-if="sub.provisional"> · {{ $t('qualityProvisional') }}</span>
+                      <span
+                        v-if="bandwidthState(sub)"
+                        v-tip="bandwidthStateTip(sub)"
+                        :class="bandwidthStateClass(sub)"
+                      > · {{ bandwidthStateLabel(sub) }}</span>
+                      <span
+                        v-else-if="sub.provisional"
+                        v-tip="bandwidthStateTip(sub)"
+                      > · {{ $t('qualityProvisional') }}</span>
                     </template>
                   </div>
                 </template>
@@ -342,6 +350,7 @@ import {
   fetchNodeQuality,
   type OpenboxNodeQuality,
   type OpenboxQualityNode,
+  type OpenboxQualityStats,
   type OpenboxQualitySubscription,
 } from '@/api/openbox'
 import CountryFlag from '@/components/common/CountryFlag.vue'
@@ -395,6 +404,47 @@ const nodeScoreClass = (n: OpenboxQualityNode) =>
       ? 'text-base-content/70'
       : 'text-high-latency'
     : getColorForNodeScore(n.score, n.scoreStale)
+
+// 带宽状态三态(上游 v0.1.490):测速失败 / 从未测过 / 只有暂估样本。
+// 前两者带宽项都按 0 分计入,但含义不同——失败要提示去重测,未测要说明这是暂估。
+// 这里不额外拉档案判断「带宽权重是不是 0%」:默认权重 30% 非零,权重为 0 的部署下
+// 失败提示措辞略有差异(上游 qualityBandwidthFailedUnweightedTip),属措辞级差异。
+type QualityRow = OpenboxQualityStats & {
+  state?: OpenboxQualityNode['state']
+  score?: number | null
+  provisional?: boolean
+  downloadFailed?: boolean
+}
+const bandwidthState = (s: QualityRow): 'failed' | 'unmeasured' | 'provisional' | null => {
+  if (s.state !== 'healthy' || s.score === null) return null
+  if (s.downloadFailed) return 'failed'
+  if (s.provisional) return s.download === null ? 'unmeasured' : 'provisional'
+  return null
+}
+const bandwidthStateLabel = (s: QualityRow) => {
+  switch (bandwidthState(s)) {
+    case 'failed':
+      return t('qualityBandwidthFailed')
+    case 'unmeasured':
+      return t('qualityBandwidthUnmeasured')
+    default:
+      return ''
+  }
+}
+const bandwidthStateTip = (s: QualityRow) => {
+  switch (bandwidthState(s)) {
+    case 'failed':
+      return t('qualityBandwidthFailedTip')
+    case 'unmeasured':
+      return t('qualityBandwidthUnmeasuredTip')
+    case 'provisional':
+      return t('qualityProvisionalTip')
+    default:
+      return ''
+  }
+}
+const bandwidthStateClass = (s: QualityRow) =>
+  bandwidthState(s) === 'failed' ? 'text-high-latency' : 'text-base-content/60'
 
 const summary = computed(() => {
   const subs = data.value?.subscriptions || []

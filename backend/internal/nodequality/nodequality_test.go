@@ -605,3 +605,28 @@ func TestEvaluateCustomWeights(t *testing.T) {
 		t.Fatalf("测到的项权重全 0 应按等权重算 90: %+v", nodl.Score)
 	}
 }
+
+// 上游 v0.1.490 把「带宽测速失败」与「从未测过带宽」分成两态:
+// 前者的 downloadFailed 为真(带宽项按 0 分计入),后者为假(带宽项也是 0 分,但标「暂估」)。
+func TestEvaluateDistinguishesBandwidthFailedFromUnmeasured(t *testing.T) {
+	now, period, fresh := int64(1_000_000), int64(3_600_000), int64(36_000_000)
+	sm := okSummary(100, 10, 10, 10)
+	// 从没测过:dl == nil
+	if ev := evaluate(sm, nil, now, period, fresh, scoreweights.Default()); ev.DownloadFailed {
+		t.Fatalf("从没测过带宽不该算失败:%+v", ev)
+	}
+	// 测过但失败:Mbps 为 0
+	failed := &download{At: now - 1000, Mbps: 0, Count: 1}
+	ev := evaluate(sm, failed, now, period, fresh, scoreweights.Default())
+	if !ev.DownloadFailed {
+		t.Fatalf("测过但 Mbps=0 应该算带宽失败:%+v", ev)
+	}
+	if ev.Download != nil {
+		t.Fatalf("失败的样本不该当成当前带宽:%+v", ev.Download)
+	}
+	// 正常测到:不算失败
+	ok := &download{At: now - 1000, Mbps: 50, Count: 10}
+	if ev := evaluate(sm, ok, now, period, fresh, scoreweights.Default()); ev.DownloadFailed {
+		t.Fatalf("正常测到带宽不该算失败:%+v", ev)
+	}
+}

@@ -59,14 +59,16 @@ type Node struct {
 	DownloadAt    *int64   `json:"downloadAt"`
 	LowerBound    bool     `json:"lowerBound"`
 	DownloadStale bool     `json:"downloadStale"`
-	ActiveMs      int64    `json:"activeMs"`
-	Up            int64    `json:"up"`
-	Down          int64    `json:"down"`
-	Tag           string   `json:"tag"`
-	Protocol      string   `json:"protocol"`
-	Region        string   `json:"region"`
-	Inactive      bool     `json:"inactive"`
-	Charts        *Charts  `json:"charts,omitempty"`
+	// DownloadFailed 对上游 v0.1.490 的 downloadFailed:最近一次带宽测速失败(与「从未测过」分开)。
+	DownloadFailed bool    `json:"downloadFailed"`
+	ActiveMs       int64   `json:"activeMs"`
+	Up             int64   `json:"up"`
+	Down           int64   `json:"down"`
+	Tag            string  `json:"tag"`
+	Protocol       string  `json:"protocol"`
+	Region         string  `json:"region"`
+	Inactive       bool    `json:"inactive"`
+	Charts         *Charts `json:"charts,omitempty"`
 }
 
 // SubscriptionQuality 对应 OpenboxQualitySubscription(字段与上游一致)。
@@ -302,7 +304,7 @@ func (s *Service) Query(ctx context.Context, q Query) (Result, error) {
 				Availability: ev.Availability, Latency: ev.Latency, Jitter: ev.Jitter, Download: ev.Download,
 				State: ev.State, Score: ev.Score, Provisional: ev.Provisional, Checks: ev.Checks,
 				FirstAt: sm.FirstAt, LastAt: sm.LastAt, DownloadAt: ev.DownloadAt,
-				LowerBound: ev.LowerBound, DownloadStale: ev.DownloadStale,
+				LowerBound: ev.LowerBound, DownloadStale: ev.DownloadStale, DownloadFailed: ev.DownloadFailed,
 				ActiveMs: sm.ActiveMs, Up: sm.Up, Down: sm.Down,
 				Tag: ni.Tag, Protocol: ni.Protocol, Region: ni.Region, Inactive: !sub.Enabled,
 			}

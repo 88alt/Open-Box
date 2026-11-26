@@ -98,6 +98,9 @@ type evaluated struct {
 	DownloadAt    *int64
 	LowerBound    bool
 	DownloadStale bool
+	// DownloadFailed 对上游 v0.1.490 的 downloadFailed:最近一次带宽测速失败(测过但没拿到正数)。
+	// 与「从未测过」(dl == nil)分开:两者带宽项都按 0 分计入,但前者标「带宽失败」、后者标「未测带宽」。
+	DownloadFailed bool
 }
 
 // evaluate 把一个节点 24 小时的统计和下载汇总折成状态与分数。nowMs 是现在,periodMs 是测速周期,freshMs 是新鲜时限。
@@ -126,6 +129,8 @@ func evaluate(sm summary, dl *download, nowMs, periodMs, freshMs int64, w scorew
 		age = nowMs - dl.At
 		ev.DownloadAt = &dl.At
 		ev.LowerBound = dl.LowerBound
+		// 测过但没拿到正数 Mbps(超时 / 失败)算「带宽失败」;从没测过(dl == nil)不算。
+		ev.DownloadFailed = dl.Mbps <= 0
 		// 下载样本超过两个周期不再算「当前」
 		if dl.Mbps > 0 && age >= 0 && age < 2*periodMs {
 			m := dl.Mbps
