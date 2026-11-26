@@ -68,7 +68,7 @@ openbox-core 交接笔记(第 7 版,只管 core;后端另见 backend/HANDOFF.md)
 [~] 真机验证:真实路由器上经后端调用 core、sing-box 启动成功(由维护者做,记在 backend/STATUS.md 的真机条目)
 [ ] 第四节第 3 ~ 6 条里还没结的事
 
-面板文案(2026-11-23 起反复核对):main 与上游三语键集一致,差异只有例外 C 的键和 chainProxyEmptyHint(例外 B);结论见 backend/STATUS.md「最终差异清单」。
+面板文案(2026-11-23 起反复核对,2026-11-26 按 v0.1.488 复跑):main 与上游三语键集一致,差异只有例外 C 的 38 个键(业务优选);`chainProxyEmptyHint` 那条例外 B 的差异复跑后已不存在,值不同为 0;结论见 backend/STATUS.md「最终差异清单」与 panel/docs/UI-ALIGN.md。
 
 
 # 四、后续工作(按顺序)

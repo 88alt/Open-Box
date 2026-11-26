@@ -268,20 +268,24 @@
 
 ## 最终差异清单(2026-11-26 收尾核对)
 
-**对齐基准**:上游 v0.1.487(`catch-up-upstream` `a2368215`)。
+**对齐基准**:上游 **v0.1.488**(2026-11-26T06:17Z;`catch-up-upstream` 的纯上游备份停在 v0.1.487 的 `a2368215`,
+面板差异按 **488 发布包里的 `panel/dist`** 比对——上游自 v0.1.463 起 `panel/` 不入 git,只能按发布包对)。
 
 ### 键集(三语,`cmp-upstream-i18n.py`)
 
-- **缺失**:上游三语各 **2331** 键,main **2293** 键,缺 **38** 个——**全部是例外 C(业务优选)**:
+- **缺失**:上游三语各 **2333** 键,main **2295** 键,缺 **38** 个——**全部是例外 C(业务优选)**:
   `businessPreference`、`businessOverview*`(25 个)、`businessReliabilityHalfLife`、`businessPerformanceTtl`、
   `businessPreferenceMinutes`、`bandwidthHelpCurrentBusiness`、`businessSettingsHelp*`(8 个)。**扣除例外 C 后缺失 0**。
 - **多出**:**无**。
-- **三语不一致**:只有 `chainProxyEmptyHint`(例外 B:main 有意不显示「安格超市」链接);其余共有键三语齐全。
+- **三语不一致**:**无**(共有键 `值不同 0`;`chainProxyEmptyHint` 早前那条例外 B 的差异本轮复跑已不存在,
+  main 与上游现在逐字相同)。上游 zh / zh-tw 相对 en 也没有缺键或多键(脚本一并核过)。
 
 ### 引用(`cmp-upstream-refs.py`)
 
-- 上游引用、main 未引用:**49** = 例外 C 28 + 例外 A 19 + 例外 B 2,**真缺口 0**。
-- main 引用、上游未引用:2 个(`manageHiddenGroup`、`customIcon`),是 Vue 模板属性写法造成的虚警。
+- 上游引用、main 未引用:**49** = 例外 C 28 + 例外 A 19 + 例外 B 2,**真缺口 0**(本批之前是 50,
+  多出来的 `dnsDomainUpstreamServerHint` 已在「指定域名 DNS」弹窗里补上,数量回到 49)。
+- main 引用、上游未引用:**0**(早前那条「2 个(`manageHiddenGroup`、`customIcon`)」是 Vue 模板属性写法的虚警,
+  把 488 的 dist 全量解开后复跑已不再出现)。
 - 动态拼接键(13 组:`httpStatus_` / `obUpdateStage_` / `routeTermMissing_` / `qualityGrade_` / `qualityState_` /
   `qualityMode_` / `groupType_` / `bandwidthOn_` / `bandwidthOff_` / `bandwidthExample_` / `themeMode_` /
   `routerKernelCheck*` / `proxyGroupColumns`)逐组核对,main 键全齐、引用都在。
@@ -292,16 +296,23 @@
 | --- | --- | --- |
 | 代理 | 已对齐 | zh/zh-tw/en × light/dark × 1440,另加 420 窄屏三组 |
 | 概览 | 已对齐 | 仅例外 B/C 有意不同(业务优选卡、市场外链) |
-| 连接(含日志/路由页签) | **有差异待做** | 节点名后的延迟药丸结构已按上游实现,但两实例均 0 条连接,无法端到端验证 |
+| 连接(含日志/规则页签) | 已对齐 | 三个页签内容 0 / 0、结构 0 / 0(连接 107 行 / 日志 135 行,行数一致);「节点名后的延迟药丸」那条早前的疑虑本轮复核已不存在 |
 | 设置(10 个页签) | 已对齐 | kernel 页差异属例外 A/C;clientApp 的 6 项经复核为参数误用造成的假差异 |
 | 登录 / 设置密码 | 已对齐 | 结构一致 |
 
 **已修的真实差异(本轮)**:① 穿透按钮 hover 底色与不换行;② 圆角基数 26→16 及派生规则;③ 深色底 `#263449` 等;
 ④ 页签间距 `app-card-gap`→`app-inline-gap`;⑤ 折叠态预览恢复成一排排小圆点(维护者指出的回归);
-⑥ 节点评分滑块端点改「0 分 / 100 分」;⑦ 内置分组图标按 `kind` 铺给同类出站;⑧ 侧栏「内核图标 + 内核名」行。
+⑥ 节点评分滑块端点改「0 分 / 100 分」;⑦ 内置分组图标按 `kind` 铺给同类出站;⑧ 侧栏「内核图标 + 内核名」行;
+⑨ 设置页 10 个页签的 `data-key` 与上游对齐(`clientApp` → `apps`,深链与缓存页签都按它走);
+⑩ DNS 设置页结构(标题 id + 表格 `role=region`、搜索框改回上游的 `div.relative > input`)与 FakeIP 分组(网段并入同一个 `border-t` 分组);
+⑪ 窄屏下当前页签展开成「图标 + 文案」;⑫ 带宽测速默认值 6 小时 / 50 MB → **12 小时 / 64 MB**(后端默认值,对齐上游面板缺省显示);
+⑬ `TextInput` 清除按钮与右侧内边距改成「有内容才出现」;**⑭ 面板字体固定 SystemUI、默认构建不再打包字体(assets 15 MB → 7.3 MB)**;
+**⑮ 补上 `--app-card-border`,按钮与徽标恢复 1px 描边**;**⑯ 「指定域名 DNS」编辑弹窗按上游重做**(见进度日志)。
 
 **不可消除噪音**(脚本已归因,不计入差异):图标文件名哈希、dev 模式下 Vite 把 `.svg` 内联成 data URI、
-`span`/`div` 容器层级差异、1px 圆角、输入框右内边距策略、选中态颜色画在高亮层还是元素自身。
+`span`/`div` 容器层级差异、1px 圆角、选中态颜色画在高亮层还是元素自身。(「输入框右内边距策略」那条已经不再是噪音:
+`TextInput` 已按上游改成「有内容才留右内边距、才出清除按钮」;字体与按钮/徽标描边这两条系统性差异也已按上游修好,
+见进度日志 2026-11-26 那一节。)
 
 **口径说明**:本次是基于上游 `panel/dist` 反推与文档口径做的**功能等价对齐**,不保证与闭源上游逐行一致。
 
