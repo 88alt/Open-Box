@@ -1,7 +1,7 @@
-import { NOT_CONNECTED, PROXY_CHAIN_DIRECTION, PROXY_TYPE, ROUTE_NAME } from '@/constant'
+import { NOT_CONNECTED, PROXY_TYPE, ROUTE_NAME } from '@/constant'
 import { timeSaved } from '@/store/overview'
 import { hiddenGroupMap, proxyMap } from '@/store/proxies'
-import { bandwidthAdequateThreshold, bandwidthPoorThreshold, lowLatency, mediumLatency, nodeScoreThresholds, proxyChainDirection } from '@/store/settings'
+import { bandwidthAdequateThreshold, bandwidthPoorThreshold, lowLatency, mediumLatency, nodeScoreThresholds } from '@/store/settings'
 import type { Connection, Proxy } from '@/types'
 import dayjs from 'dayjs'
 import * as ipaddr from 'ipaddr.js'
@@ -91,16 +91,6 @@ export const getDestinationTypeFromConnection = (connection: Connection) => {
   } else {
     return 'FQDN'
   }
-}
-
-export const getChainsStringFromConnection = (connection: Connection) => {
-  const chains = [...connection.chains]
-
-  if (proxyChainDirection.value === PROXY_CHAIN_DIRECTION.NORMAL) {
-    chains.reverse()
-  }
-
-  return chains.join('')
 }
 
 export const getNetworkTypeFromConnection = (connection: Connection) => {

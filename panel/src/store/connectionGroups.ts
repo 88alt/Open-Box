@@ -13,13 +13,14 @@ import { computed, reactive, shallowRef, watch } from 'vue'
 import {
   activeSortDesc,
   activeSortType,
+  compareSortValues,
   connectionFilter,
   connectionGroupMode,
   hideDnsConnections,
   quickFilterEnabled,
   quickFilterRegex,
   renderConnections,
-  sortFunctionMap,
+  sortValueMap,
   sourceIPFilter,
 } from './connections'
 
@@ -125,15 +126,15 @@ const buildGroups = (conns: Connection[], mode: CONNECTION_SUBGROUP_MODE): Conne
     (sortType === SORT_TYPE.HOST && mode === CONNECTION_GROUP_MODE.TARGET) ||
     (sortType === SORT_TYPE.SOURCE_IP && isDevice)
 
-  return [...groups.values()].sort((a, b) => {
-    const diff = metric
-      ? a[metric] - b[metric]
-      : byLabel
-        ? a.label.localeCompare(b.label)
-        : sortFunctionMap[sortType](a.connections[0], b.connections[0])
+  const getValue = (group: ConnectionGroup) => {
+    if (metric) return group[metric]
 
-    return diff * direction || a.key.localeCompare(b.key)
-  })
+    return byLabel ? group.label : sortValueMap[sortType](group.connections[0])
+  }
+
+  return [...groups.values()].sort(
+    (a, b) => compareSortValues(getValue(a), getValue(b)) * direction || a.key.localeCompare(b.key),
+  )
 }
 
 const groupId = (group: ConnectionGroup) => JSON.stringify([connectionGroupMode.value, group.key])

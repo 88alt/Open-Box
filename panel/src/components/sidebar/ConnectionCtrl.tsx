@@ -1,11 +1,6 @@
 import { disconnectAllAPI, disconnectByIdAPI } from '@/api'
 import { useCtrlsBar } from '@/composables/useCtrlsBar'
-import {
-  CONNECTION_COLUMN_LABEL_MAP,
-  SORT_DIRECTION,
-  SORT_TYPE,
-  SORT_TYPE_COLUMN,
-} from '@/constant'
+import { CONNECTION_COLUMN_LABEL_MAP, SORT_TYPE, SORT_TYPE_COLUMN } from '@/constant'
 import { useTooltip } from '@/helper/tooltip'
 import { isMiddleScreen } from '@/helper/utils'
 import {
@@ -13,20 +8,15 @@ import {
   activeSortType,
   connectionFilter,
   connections,
-  connectionSortDirection,
-  connectionSortType,
   hideDnsConnections,
   isPaused,
   quickFilterEnabled,
   renderConnections,
+  sortTypeOptions,
+  toggleSortDirection,
 } from '@/store/connections'
 import { normalizeRuleTarget } from '@/store/rules'
-import {
-  connectionTableColumns,
-  useConnectionCard,
-  useConnectionCardMobile,
-  useConnectionCardPC,
-} from '@/store/settings'
+import { useConnectionCard, useConnectionCardMobile, useConnectionCardPC } from '@/store/settings'
 import {
   ArrowDownCircleIcon,
   ArrowUpCircleIcon,
@@ -82,19 +72,12 @@ export default defineComponent({
     return () => {
       // 排序标签宽窄屏都用「排序」(connectionSort),与上游 v0.1.476 一致;sortBy 键保留但不引用
       const sortLabel = t('connectionSort')
-      // 排序菜单的选项:卡片视图列全部排序项;表格视图只列表格里显示着的那几列
-      // (没有显示的列排不出来,表头上也看不到箭头),至少留「目标」一项(与上游 v0.1.488 一致)
-      const sortOptions = (Object.values(SORT_TYPE) as SORT_TYPE[]).filter(
-        (opt) =>
-          useConnectionCard.value ||
-          opt === SORT_TYPE.HOST ||
-          connectionTableColumns.value.includes(SORT_TYPE_COLUMN[opt]),
-      )
       // 按钮点一下会切到的方向:当前升序 → 提示「降序」,反之亦然(与上游一致)
       const sortDirectionLabel = t(
         activeSortDesc.value ? 'connectionSortAscending' : 'connectionSortDescending',
       )
-      const sortControls = (
+      // 当前视图里一个能排序的列都没有时,整个排序控件不显示
+      const sortControls = sortTypeOptions.value.length > 0 && (
         <div
           class={[
             'flex min-w-0 items-center gap-1 text-sm max-[360px]:text-xs',
@@ -108,10 +91,10 @@ export default defineComponent({
               aria-label={sortLabel}
               value={activeSortType.value}
               onChange={(e) =>
-                (connectionSortType.value = (e.target as HTMLSelectElement).value as SORT_TYPE)
+                (activeSortType.value = (e.target as HTMLSelectElement).value as SORT_TYPE)
               }
             >
-              {sortOptions.map((opt) => (
+              {sortTypeOptions.value.map((opt) => (
                 <option
                   key={opt}
                   value={opt}
@@ -121,16 +104,11 @@ export default defineComponent({
               ))}
             </select>
             <button
+              type="button"
               class="btn join-item btn-square btn-sm shrink-0"
               aria-label={sortDirectionLabel}
-              title={sortDirectionLabel}
-              onClick={() => {
-                // 表格视图里当前生效的排序项可能是退回来的「目标」:先把它定下来再翻方向
-                connectionSortType.value = activeSortType.value
-                connectionSortDirection.value = activeSortDesc.value
-                  ? SORT_DIRECTION.ASC
-                  : SORT_DIRECTION.DESC
-              }}
+              onMouseenter={(e) => showTip(e, sortDirectionLabel)}
+              onClick={toggleSortDirection}
             >
               {activeSortDesc.value ? (
                 <ArrowDownCircleIcon class="size-4" />

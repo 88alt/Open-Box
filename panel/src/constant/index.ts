@@ -89,6 +89,7 @@ export enum PROXY_TAB_TYPE {
 export enum SORT_TYPE {
   HOST = 'host',
   CHAINS = 'chains',
+  OUTBOUND = 'outbound',
   RULE = 'rule',
   TYPE = 'type',
   CONNECT_TIME = 'connectTime',
@@ -105,10 +106,11 @@ export enum SORT_DIRECTION {
   DESC = 'desc',
 }
 
-// 表头点击排序:排序项 → 它对应的表格列(没有对应列的排序项,表格里选不到)
+// 排序项 → 它对应的列:排序菜单只列当前视图里显示着的列,表头在这一列上画升 / 降序箭头
 export const SORT_TYPE_COLUMN: Record<SORT_TYPE, CONNECTIONS_TABLE_ACCESSOR_KEY> = {
   [SORT_TYPE.HOST]: CONNECTIONS_TABLE_ACCESSOR_KEY.Host,
   [SORT_TYPE.CHAINS]: CONNECTIONS_TABLE_ACCESSOR_KEY.Chains,
+  [SORT_TYPE.OUTBOUND]: CONNECTIONS_TABLE_ACCESSOR_KEY.Outbound,
   [SORT_TYPE.RULE]: CONNECTIONS_TABLE_ACCESSOR_KEY.Rule,
   [SORT_TYPE.TYPE]: CONNECTIONS_TABLE_ACCESSOR_KEY.Type,
   [SORT_TYPE.CONNECT_TIME]: CONNECTIONS_TABLE_ACCESSOR_KEY.ConnectTime,
