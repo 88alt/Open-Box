@@ -14,6 +14,7 @@
  *     --theme  light         # light | dark
  *     --width  1440          # 桌面 1440,窄屏 420
  *     --login  1111          # 两边共用同一个密码,脚本自己登录
+ *     --click  "key:panel"   # 可选:落地后切页签;文案 "内核" 或 data-key "key:panel"
  *
  * 输出:差异摘要(标准输出)+ 完整差异写入 --out 指定的文件(默认不写)。
  * 退出码:0 = 无差异或只剩白名单/噪音;1 = 有需要处理的差异。
@@ -48,8 +49,10 @@ const OUT = arg('out', '')
 // --dump <前缀> 把两侧规范化结构树各写一份(前缀-base.txt / 前缀-main.txt),用来查
 // 「树整体错位一层」这类 diff 看不出根因的问题(踩过:main 多一层包裹 div 时全页都报差异)。
 const DUMP = arg('dump', '')
-// 子页签的 key 两边命名不同(不能靠 URL 参数对齐),改用「落地同一入口后按文案点同名页签」:
-// --click "内核" 或 --click "设置,内核"(逗号分隔,依次点)。
+// 子页签的对齐:默认「落地同一入口后按文案点同名页签」,--click "内核" 或 --click "设置,内核"
+// (逗号分隔,依次点)。个别分类页两侧文案相同、按文案点却「点了没变化」(它本来就是默认页),
+// 这时用 key:<data-key> 直接按 data-key 点,侧边栏/抽屉两个实例也能精确选中:
+// --click "key:panel"。
 const CLICK = arg('click', '')
   .split(',')
   .map((s) => s.trim())
@@ -191,6 +194,9 @@ const STYLES = () => {
   const pick = (el) => {
     const s = getComputedStyle(el)
     return {
+      // 抽到的是哪个元素:同名元素在页面上可能有好几个(小图标按钮 vs 主按钮),
+      // 只报 key 的话差异出来了也没法定位,带上标签和开头几个字
+      hint: el.tagName.toLowerCase() + '|' + (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 18),
       fontSize: s.fontSize,
       color: s.color,
       bg: s.backgroundColor,
@@ -343,37 +349,54 @@ async function capture(browser, origin) {
   await page.goto(origin + ROUTE, { waitUntil: 'domcontentloaded' })
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(2500) // 等接口与图表稳定
-  // 子页签:按可见文案点,点完等一等再抓(见文件顶部 --click 的说明)
-  for (const text of CLICK) {
+  // 子页签:按可见文案点(key:<data-key> 时按 data-key 点),点完等一等再抓
+  for (const spec of CLICK) {
+    const byKey = spec.startsWith('key:') ? spec.slice(4).trim() : ''
+    const text = byKey ? '' : spec
     // 同一个文案往往有两个实例(桌面菜单 + 手机抽屉/顶部横滑),.first() 可能挑到隐藏的那个,
     // 于是 waitFor(visible) 超时、页面没切,却看起来「零差异」。逐个试,点第一个可见的。
-    const candidates = page
-      .locator('[role=tab], button, a')
-      .filter({ hasText: new RegExp('^\\s*' + text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$') })
+    const candidates = byKey
+      ? page.locator(`[data-key="${byKey}"]`)
+      : page
+          .locator('[role=tab], button, a')
+          .filter({
+            hasText: new RegExp('^\\s*' + text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$'),
+          })
     const total = await candidates.count()
     // 点之前记一份正文指纹:点完没变化说明这次点击是无效的(点到了当前已选中的项、
     // 或者点到的是顶部分段控件而不是真正的页签),不能当成「这个页签没差异」。
-    const before = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 400))
+    const before = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '))
     let clicked = false
+    let didClick = false
     for (let i = 0; i < total; i += 1) {
       const el = candidates.nth(i)
       if (!(await el.isVisible().catch(() => false))) continue
+      // 已经是当前选中项就没必要点,更不该因此告警:抓到的页面本来就是目标页
+      const alreadyActive = await el
+        .evaluate((n) => n.classList.contains('menu-active') || n.getAttribute('aria-selected') === 'true')
+        .catch(() => false)
+      if (alreadyActive) {
+        clicked = true
+        break
+      }
       await el.click()
       await page.waitForTimeout(1800)
       clicked = true
+      didClick = true
       break
     }
     if (clicked) {
-      const after = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 400))
+      if (!didClick) continue
+      const after = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '))
       if (after === before) {
-        console.log(`! 点了「${text}」但页面没变化(${origin})——这次点击无效,抓到的是原页`)
+        console.log(`! 点了「${spec}」但页面没变化(${origin})——这次点击无效,抓到的是原页`)
       }
       continue
     }
     {
       // 找不到/点不动就照原样抓,但必须喊一声:否则两侧抓的是同一个页签,
       // 结果看起来「零差异」,其实是压根没切过去。
-      console.log(`! 页签没有点到:「${text}」(${origin})——抓到的仍是当前页`)
+      console.log(`! 页签没有点到:「${spec}」(${origin})——抓到的仍是当前页`)
     }
   }
   await page.waitForTimeout(1500) // 等接口与图表稳定
@@ -409,7 +432,8 @@ for (const k of new Set([...Object.keys(basePage.styles), ...Object.keys(mainPag
     continue
   }
   for (const p of Object.keys(a)) {
-    if (a[p] !== b[p]) styleDiff.push({ key: k, prop: p, base: a[p], main: b[p] })
+    if (p === 'hint') continue
+    if (a[p] !== b[p]) styleDiff.push({ key: k, prop: p, base: a[p], main: b[p], what: a.hint })
   }
 }
 

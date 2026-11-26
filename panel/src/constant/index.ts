@@ -360,7 +360,8 @@ export enum SETTINGS_TAB {
   dns = 'dns',
   kernel = 'kernel',
   share = 'share',
-  clientApp = 'clientApp',
+  // 上游这个页签的 data-key / ?tab= 取值是 `apps`(不是 clientApp),深链和缓存状态都按它走
+  apps = 'apps',
 }
 
 export enum SETTINGS_MENU_KEY {

@@ -402,3 +402,40 @@
 - 2026-11-26 **未做:前端面板/概览设置/连接设置 三个分类页**。设置页的菜单里每个分类有两个实例(桌面 + 抽屉克隆),
   点「前端面板」不切页(疑似分段控件只切分组、真正内容靠左侧子项或锚点滚动),需要给 `compare.mjs` 换成
   「按 data-key 点 + 断言正文变化」的方式再做。这三页目前**没有有效比对结果**,不要当成已对齐。
+- 2026-11-26 **页签改用 data-key 对齐(`compare.mjs --click key:xxx`)**:之前按文案点,两侧都停在「前端面板」时
+  也算「点到了」,输出「零差异」的假通过。现在:
+  - `--click "key:panel"` 直接按 `data-key` 点,不受文案/两个实例影响;
+  - 目标本来就是当前选中项(`menu-active`)时**跳过点击也不告警**——之前会把这种正常情况报成「点了没变化」;
+  - 「点了没变化」的指纹从前 400 字改成**整页正文**:原来只截到顶部导航,页面真变了也比不出来;
+  - 样式差异带上元素标识(`what`:标签名 + 前 18 个字),不再是孤零零一个 `tab` 键。
+  用 data-key 重跑设置页全部页签的结论见下一条。
+- 2026-11-26 **设置页一级页签 key 对齐**:上游「客户端」页签的 key 是 **`apps`**,main 用的是 `clientApp`
+  (`SETTINGS_TAB.clientApp = 'clientApp'`),`?tab=` 深链和 `cache/settings-active-tab` 缓存值都对不上。
+  已改成 `SETTINGS_TAB.apps = 'apps'`(唯一引用点 `SettingsPage.vue` 的 `tabItems` / `TAB_COMPONENTS` 已同步)。
+- 2026-11-26 **设置页全页签复核**(zh / light / 1440,`--click key:<上游 key>`):
+  | 页签(key) | 内容差异 | 结构差异 | 结论 |
+  |---|---|---|---|
+  | 订阅管理 `subscriptions` | 0 / 0 | 0 / 0 | 一致(只剩 `card.radius`,用户设置项 `globalRadius`) |
+  | 出站节点 `groups` | 0 / 0 | 20 / 14 | 上游每行多包一层 div,无内容差 |
+  | 目标分流 `routing` | 0 / 0 | 9 / 9 | 同上(容器层级) |
+  | 终端分流 `clients` | 0 / 0 | 0 / 0 | 一致;`btn-primary` 文字色见旧记录 |
+  | 链式代理 `chain` | 0 / 0 | 2 / 3 | 空态已对齐,容器层级差 |
+  | 共享网络 `share` | 0 / 0 | 0 / 0 | 一致 |
+  | 客户端 `apps` | 4 / 0 | 101 / 72 | 4 条全是平台图标(例外 A);另见下条「下载磁贴」 |
+  | DNS 设置 `dns` | **0 / 0** | **0 / 0** | 本批修完(见下条) |
+  | 前端面板 `panel` | 4 / 0 | 16 / 14 | 4 条是站点测速图标(例外 A);结构差在 `CountrySelect` 的按钮嵌套 |
+  | 后端设置 `kernel` | 5 / 2 | 112 / 95 | 5 条例外 C(业务优选)+ 时区下拉加载态;2 条为时区只读行 |
+- 2026-11-26 **DNS 设置页(本批修)**:
+  1. 查询日志表格的容器补上 `role="region"` + `aria-labelledby`(指向卡片标题,新增 `id="dns-query-log-title"`)
+     + `tabindex="0"` + `focus-visible:outline-*`:上游把这层做成可聚焦的 region,键盘能聚焦后横向滚动;
+  2. `DnsModeCard` 结构按上游重排:FakeIP 开关 + 网段输入放进**同一个**
+     `border-t pt-3 flex flex-col gap-3` 分组,FakeIP 在前、「监听 53 端口」在后。
+     main 原来是每个开关各自带一条 `border-t`,两个开关同时出现(systemd)时会多画一条分隔线;
+  3. 网段标签补 `font-medium`(上游是 `text-xs font-medium`);
+  4. 「域名解析查询」的搜索框按上游改成 `div.relative.w-52 > input.input.join-item.input-sm.w-full`,
+     并由 `type=search` 改回 `type=text`——Chrome 的 `search` 输入框会自带一个清除 ✕,上游没有。
+  复核:内容 0/0、结构 0/0,只剩 `card.radius`(用户设置)。
+- 2026-11-26 **深色主题下 `.tab`(未选中)文字色不同**:上游 `color(srgb 0.673 0.695 0.731)`(约等于
+  base-content 与 base-200 的混合),main 是 `oklab(0.928 … / 0.5)`(base-content 50% 透明)。两侧 DOM 类名、
+  祖先链完全一致,差异来自 daisyUI 版本自带的 `.tabs-box > .tab` 颜色口径,和 `--color-primary-content`
+  是同一类问题。属依赖版本差异,暂不改(要改就在 `main.css` 里显式钉一条 `.tabs-box > .tab:not(.tab-active)` 的颜色)。

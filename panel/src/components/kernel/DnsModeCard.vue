@@ -3,9 +3,7 @@
   <div class="card bg-base-100 border-base-300/60 border">
     <div class="card-body gap-3 p-4 text-sm">
       <div class="flex items-center justify-between gap-2">
-        <div class="flex flex-col gap-1">
-          <h2 class="text-base font-semibold">{{ $t('dnsModeTitle') }}（{{ $t('dnsModePort', { port: listenPortText }) }}）</h2>
-        </div>
+        <h2 class="text-base font-semibold">{{ $t('dnsModeTitle') }}（{{ $t('dnsModePort', { port: listenPortText }) }}）</h2>
         <select
           class="select select-sm w-40 shrink-0"
           :value="mode"
@@ -25,6 +23,70 @@
       <p class="text-base-content/50 text-xs">{{ $t(NOTE_KEY[mode]) }}</p>
       <!-- 内核 DNS 入站三种模式都开:局域网里的 AdGuard Home / Pi-hole 把上游指到这里就能用分流解析 -->
       <p class="text-base-content/50 text-xs">{{ $t('dnsModeUpstreamHint', { addr: kernelDnsAddr }) }}</p>
+      <!-- FakeIP 与「监听 53 端口」都归到一根分隔线下面的一组(上游 v0.1.488 的结构:外层
+           flex-col gap-3 + 顶部一条 border-t,FakeIP 在前、监听 53 在后),这样两个开关同时出现时
+           只有一条分隔线,而不是各画一条 -->
+      <div
+        v-if="mode !== 'off'"
+        class="border-base-300/60 flex flex-col gap-3 border-t pt-3"
+      >
+        <!-- FakeIP:走代理的域名不在本地解析,内核发占位地址,连接时把域名交给选中的节点 -->
+        <div class="flex items-start gap-3">
+          <input
+            type="checkbox"
+            class="toggle toggle-sm mt-0.5 cursor-pointer"
+            :aria-label="$t('dnsFakeIpTitle')"
+            :checked="fakeIp"
+            :disabled="saving"
+            @change="onFakeIp"
+          >
+          <span class="flex flex-col gap-1">
+            <span>{{ $t('dnsFakeIpTitle') }}</span>
+            <span class="text-base-content/50 text-xs">{{ $t('dnsFakeIpNote') }}</span>
+          </span>
+        </div>
+        <!-- FakeIP 网段:留空用内核默认(sing-box 198.19.0.0/16,Mihomo 198.18.0.0/16);和本机别的 TUN / 虚拟网卡冲突时改这里 -->
+        <div
+          class="flex flex-col gap-1.5"
+          :class="!fakeIp && 'opacity-50'"
+        >
+          <div class="flex flex-wrap items-center gap-2">
+            <label
+              class="text-xs font-medium"
+              for="dns-fake-ip-range"
+            >{{ $t('dnsFakeIpRangeLabel') }}</label>
+            <input
+              id="dns-fake-ip-range"
+              v-model="rangeInput"
+              type="text"
+              class="input input-sm w-44 font-mono"
+              :placeholder="defaultRange"
+              :disabled="saving || !fakeIp"
+              @keyup.enter="saveRange"
+            >
+            <button
+              type="button"
+              class="btn btn-sm btn-primary"
+              :disabled="saving || !fakeIp || !rangeDirty"
+              @click="saveRange"
+            >
+              {{ $t('dnsFakeIpRangeSave') }}
+            </button>
+            <button
+              v-if="rangeCurrent !== ''"
+              type="button"
+              class="btn btn-sm btn-ghost"
+              :disabled="saving || !fakeIp"
+              @click="resetRange"
+            >
+              {{ $t('dnsFakeIpRangeReset') }}
+            </button>
+          </div>
+          <p class="text-base-content/50 text-xs">
+            {{ $t('dnsFakeIpRangeNote', { defaultRange }) }}
+          </p>
+        </div>
+      </div>
       <!-- 监听 53 端口:只有 systemd 部署能选(容器一直监听,openwrt 的 53 归 dnsmasq);开了以后旁路由终端可直接把本机 IP 设为 DNS -->
       <div
         v-if="platform === 'systemd'"
@@ -42,66 +104,6 @@
           <span>{{ $t('dnsListen53Title') }}</span>
           <span class="text-base-content/50 text-xs">{{ $t('dnsListen53Note') }}</span>
         </span>
-      </div>
-      <!-- FakeIP:走代理的域名不在本地解析,内核发占位地址,连接时把域名交给选中的节点 -->
-      <div
-        v-if="mode !== 'off'"
-        class="border-base-300/60 flex items-start gap-3 border-t pt-3"
-      >
-        <input
-          type="checkbox"
-          class="toggle toggle-sm mt-0.5 cursor-pointer"
-          :aria-label="$t('dnsFakeIpTitle')"
-          :checked="fakeIp"
-          :disabled="saving"
-          @change="onFakeIp"
-        >
-        <span class="flex flex-col gap-1">
-          <span>{{ $t('dnsFakeIpTitle') }}</span>
-          <span class="text-base-content/50 text-xs">{{ $t('dnsFakeIpNote') }}</span>
-        </span>
-      </div>
-      <!-- FakeIP 网段:留空用内核默认(sing-box 198.19.0.0/16,Mihomo 198.18.0.0/16);和本机别的 TUN / 虚拟网卡冲突时改这里 -->
-      <div
-        v-if="mode !== 'off'"
-        class="flex flex-col gap-1.5"
-        :class="!fakeIp && 'opacity-50'"
-      >
-        <div class="flex flex-wrap items-center gap-2">
-          <label
-            class="text-xs"
-            for="dns-fake-ip-range"
-          >{{ $t('dnsFakeIpRangeLabel') }}</label>
-          <input
-            id="dns-fake-ip-range"
-            v-model="rangeInput"
-            type="text"
-            class="input input-sm w-44 font-mono"
-            :placeholder="defaultRange"
-            :disabled="saving || !fakeIp"
-            @keyup.enter="saveRange"
-          >
-          <button
-            type="button"
-            class="btn btn-sm btn-primary"
-            :disabled="saving || !fakeIp || !rangeDirty"
-            @click="saveRange"
-          >
-            {{ $t('dnsFakeIpRangeSave') }}
-          </button>
-          <button
-            v-if="rangeCurrent !== ''"
-            type="button"
-            class="btn btn-sm btn-ghost"
-            :disabled="saving || !fakeIp"
-            @click="resetRange"
-          >
-            {{ $t('dnsFakeIpRangeReset') }}
-          </button>
-        </div>
-        <p class="text-base-content/50 text-xs">
-          {{ $t('dnsFakeIpRangeNote', { defaultRange }) }}
-        </p>
       </div>
     </div>
   </div>

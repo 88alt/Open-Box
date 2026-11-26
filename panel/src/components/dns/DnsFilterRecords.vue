@@ -3,18 +3,27 @@
     <div class="card-body gap-3 p-4 text-sm">
       <div class="flex flex-col gap-1">
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <h2 class="text-base font-semibold">{{ $t('dfRecords') }}</h2>
+          <h2
+            id="dns-query-log-title"
+            class="text-base font-semibold"
+          >
+            {{ $t('dfRecords') }}
+          </h2>
           <form
             class="flex flex-wrap gap-2"
             @submit.prevent="searchRecords"
           >
-            <input
-              v-model="search"
-              type="search"
-              class="input input-sm w-52"
-              :placeholder="$t('dfSearch')"
-              :aria-label="$t('dfSearch')"
-            />
+            <!-- 上游是「relative 容器 + join-item w-full 的 text 输入框」:宽度还是 w-52,
+                 但 type=text 不会带浏览器自带的搜索清除按钮(Chrome 的 search 输入框会多一个 ✕) -->
+            <div class="relative w-52">
+              <input
+                v-model="search"
+                type="text"
+                class="input join-item input-sm w-full"
+                :placeholder="$t('dfSearch')"
+                :aria-label="$t('dfSearch')"
+              />
+            </div>
             <select
               v-model="result"
               class="select select-sm w-32"
@@ -53,7 +62,14 @@
       >
         {{ $t(!enabled ? 'dfCollectDisabled' : 'dfDisconnected') }}
       </p>
-      <div class="app-plain-table overflow-x-auto">
+      <!-- 表格可横向滚动,给一个可聚焦的 region(和上游一致):读屏能按「域名解析查询」定位,
+           键盘也能聚焦后用方向键横向滚动 -->
+      <div
+        class="app-plain-table focus-visible:outline-primary overflow-x-auto focus-visible:outline-2 focus-visible:-outline-offset-2"
+        role="region"
+        aria-labelledby="dns-query-log-title"
+        tabindex="0"
+      >
         <table class="table-sm table">
           <thead>
             <tr>
