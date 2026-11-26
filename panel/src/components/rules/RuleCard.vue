@@ -81,6 +81,7 @@
             :name="rule.proxy"
             class="text-base-content/80 text-xs md:text-sm"
             show-latency
+            bandwidth-only
           />
         </div>
       </div>

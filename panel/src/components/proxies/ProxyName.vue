@@ -20,6 +20,7 @@
       class="ml-1"
       :name="name"
       :group-name="groupName"
+      :bandwidth-only="bandwidthOnly"
     />
   </div>
 </template>
@@ -39,6 +40,8 @@ const props = withDefaults(
     hideBandwidth?: boolean
     // 同 hideBandwidth,是上游 v0.1.490 的 prop 名(路由比对出口阶段传 show-latency)
     showLatency?: boolean
+    // 对齐上游:按带宽模式渲染延迟药丸(不等 measurements 里有条目)
+    bandwidthOnly?: boolean
     // 查延迟用的组名(链路里的出站可能挂在某个组下;不传就按出站名查)
     groupName?: string
   }>(),

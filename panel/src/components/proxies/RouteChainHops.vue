@@ -11,6 +11,7 @@
       :name="name"
       :class="nameClass"
       :show-latency="showLatency"
+      :bandwidth-only="bandwidthOnly"
     />
   </template>
   <template v-if="split.target">
@@ -34,6 +35,7 @@
         :name="name"
         :class="nameClass"
         :show-latency="showLatency"
+        :bandwidth-only="bandwidthOnly"
       />
     </template>
     <template v-if="!hideTarget">
@@ -45,6 +47,7 @@
         :name="split.target"
         :class="nameClass"
         :show-latency="showLatency"
+        :bandwidth-only="bandwidthOnly"
       />
     </template>
   </template>
@@ -66,8 +69,9 @@ const props = withDefaults(
     hideTarget?: boolean
     // 对齐上游 v0.1.490:链路里每一项名字后面带一枚延迟药丸(路由比对出口阶段会传)
     showLatency?: boolean
+    bandwidthOnly?: boolean
   }>(),
-  { nameClass: '', arrowClass: 'h-4 w-4 shrink-0', hideTarget: false, showLatency: false },
+  { nameClass: '', arrowClass: 'h-4 w-4 shrink-0', hideTarget: false, showLatency: false, bandwidthOnly: false },
 )
 const split = computed(() => splitChainHops(props.chain))
 </script>
