@@ -10,6 +10,7 @@
     <ProxyName
       :name="name"
       :class="nameClass"
+      :show-latency="showLatency"
     />
   </template>
   <template v-if="split.target">
@@ -32,6 +33,7 @@
       <ProxyName
         :name="name"
         :class="nameClass"
+        :show-latency="showLatency"
       />
     </template>
     <template v-if="!hideTarget">
@@ -42,6 +44,7 @@
       <ProxyName
         :name="split.target"
         :class="nameClass"
+        :show-latency="showLatency"
       />
     </template>
   </template>
@@ -56,8 +59,15 @@ import ProxyName from './ProxyName.vue'
 // 一条路由链(站点集 → 节点组 → 节点)。链式代理节点在目标节点前面多一层「前置」上游,
 // 这里把它单独标出来:... → [前置] 上游 → 目标。hideTarget:嵌在别的行里时不重复写目标
 const props = withDefaults(
-  defineProps<{ chain: string[]; nameClass?: string; arrowClass?: string; hideTarget?: boolean }>(),
-  { nameClass: '', arrowClass: 'h-4 w-4 shrink-0', hideTarget: false },
+  defineProps<{
+    chain: string[]
+    nameClass?: string
+    arrowClass?: string
+    hideTarget?: boolean
+    // 对齐上游 v0.1.490:链路里每一项名字后面带一枚延迟药丸(路由比对出口阶段会传)
+    showLatency?: boolean
+  }>(),
+  { nameClass: '', arrowClass: 'h-4 w-4 shrink-0', hideTarget: false, showLatency: false },
 )
 const split = computed(() => splitChainHops(props.chain))
 </script>

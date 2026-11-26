@@ -7,6 +7,7 @@
     :is="testLabel ? 'button' : 'span'"
     :type="testLabel ? 'button' : undefined"
     :disabled="testLabel ? disabled || loading : undefined"
+    role="group"
     :aria-label="testLabel"
     :aria-busy="loading || undefined"
     :class="

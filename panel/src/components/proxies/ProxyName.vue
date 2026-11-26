@@ -10,10 +10,12 @@
     {{ displayName }}
     <template v-if="dialerProxy"> ({{ dialerProxy }}) </template>
     <!-- 延迟药丸(对齐上游:连接页「策略 / 出站」列、详情弹窗、日志链路都会带上)。
-         只在 hideBandwidth 时出现——那几处只要延迟、不要带宽段;其余地方(代理页等)保持原样。
+         hideBandwidth / showLatency 两个开关等价,任一个为真就带——前者是 main 原来的写法,
+         后者对齐上游 v0.1.490 的 ProxyName prop 名(路由比对出口阶段会传 show-latency)。
+         这两处只要延迟、不要带宽段;其余地方(代理页等)保持原样。
          LatencyTag 自己按 name / groupName 去查延迟,这里不用再传值。 -->
     <LatencyTag
-      v-if="hideBandwidth"
+      v-if="hideBandwidth || showLatency"
       class="ml-1"
       :name="name"
       :group-name="groupName"
@@ -34,6 +36,8 @@ const props = withDefaults(
     iconMargin?: number
     // 为真时在名字后面带一枚只显示延迟的药丸(对齐上游 connection 列的写法)
     hideBandwidth?: boolean
+    // 同 hideBandwidth,是上游 v0.1.490 的 prop 名(路由比对出口阶段传 show-latency)
+    showLatency?: boolean
     // 查延迟用的组名(链路里的出站可能挂在某个组下;不传就按出站名查)
     groupName?: string
   }>(),
