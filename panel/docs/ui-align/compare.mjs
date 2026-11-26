@@ -289,11 +289,48 @@ function flattenContent(node, acc = []) {
 }
 
 
+// 行对齐的关键:直接按「整行文本」做集合比对时,只要两边的行序不同(比如表格按命中数排序、
+// 或某个节点在某侧还没测出延迟),整片行都会被算成「独有」——这不是界面差异,是比对方法的问题
+// (踩过:规则页报 1268/875 条结构差异,实际逐项核对两边 img 都 210 个、TikTok 都出现 2 次)。
+//
+// 所以这里先给每行算一个「结构签名」:去掉行号前缀、把数字/百分比/大小占位统一成 {N},
+// 再按签名做**多重集**比对(同一签名出现几次就要对几次),这样顺序不再影响结论。
+// 签名相同但次数不同的,按差额报出来;签名完全对不上的才是真的结构差异。
+const NUM_RE = /\d+(?:[.,]\d+)*/g
+function signature(line) {
+  return line
+    // 去掉路径里的行号前缀序号(例如 "32." / "12)"),那是列表顺序,不是界面结构
+    .replace(/^\s*\d+[.)]\s*/, '')
+    .replace(NUM_RE, '{N}')
+    .replace(/\{N\}+/g, '{N}')
+}
+
 function diffLines(a, b) {
-  const setA = new Map(a.map((l, i) => [l, i]))
-  const setB = new Map(b.map((l, i) => [l, i]))
-  const onlyBase = a.filter((l) => !setB.has(l))
-  const onlyMain = b.filter((l) => !setA.has(l))
+  const sigA = a.map(signature)
+  const sigB = b.map(signature)
+  // 多重集:同签名出现几次就算几次
+  const count = (arr) => {
+    const m = new Map()
+    for (const s of arr) m.set(s, (m.get(s) || 0) + 1)
+    return m
+  }
+  const ca = count(sigA)
+  const cb = count(sigB)
+  const onlyBase = []
+  const onlyMain = []
+  // 上游独有:签名在 main 里出现次数不够的部分
+  for (let i = 0; i < sigA.length; i++) {
+    const s = sigA[i]
+    const left = cb.get(s) || 0
+    const usedBefore = sigA.slice(0, i).filter((x) => x === s).length
+    if (usedBefore >= left) onlyBase.push(a[i])
+  }
+  for (let i = 0; i < sigB.length; i++) {
+    const s = sigB[i]
+    const left = ca.get(s) || 0
+    const usedBefore = sigB.slice(0, i).filter((x) => x === s).length
+    if (usedBefore >= left) onlyMain.push(b[i])
+  }
   return { onlyBase, onlyMain }
 }
 
