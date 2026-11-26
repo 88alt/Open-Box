@@ -957,6 +957,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 模拟 LAN 终端的真实路由测试:POST 现在做到「建虚拟终端 + DHCP 取址」(命名空间 + veth,探测还没做);
 	// 清理接在下面的 Guard——启动清上次遗留、退出拆掉,另有空闲 5 分钟自动拆(terminaltest.Deps.IdleAfter)。
 	// 记账文件 terminal-net.json 是撤销用的,恢复出厂设置不删(见 factoryWipes)
+	// 当前内核:推算类接口(terminal-test 的 firstLayer、penetration)按它选已部署的配置文件
+	kernelOf := func() (string, error) { return system.ReadRouterKernel(cfg.RouterKernelFile()) }
 	terminalProbe := system.RealTerminalProbe()
 	vterm := &system.VTermNet{Run: system.ExecRunner, StateFile: filepath.Join(cfg.StateDir(), "terminal-net.json")}
 	dnsFwd := &dnsforward.Service{
@@ -966,7 +968,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	}
 	terminaltestapi.Register(srv.Mux(), terminaltestapi.Deps{Capability: terminalProbe.Capability, Terminal: vterm, Prober: &nsprobe.Exec{}, Conntrack: &conntrack.Reader{}, DNSForward: dnsFwd.Describe,
 		FirstLayer: terminaltestapi.NewFirstLayer(func() (map[string]any, error) {
-			return routetest.ReadConfig(filepath.Join(cfg.ConfigDir, "config.json"))
+			return routetest.ReadDeployedConfig(cfg.ConfigDir, kernelOf)
 		}, dnsFwd.Mode, dnsFwd.Describe),
 		Kernel: func(ctx context.Context) (singbox.KernelSnapshot, error) {
 			return singbox.KernelConnections(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
@@ -1001,7 +1003,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	penetrationSets := &dnsdecide.FileSets{SingBox: cfg.SingBox, TmpDir: probeDir}
 	penetrationapi.Register(srv.Mux(), penetrationapi.Deps{Service: &penetration.Service{
 		Config: func() (map[string]any, error) {
-			return routetest.ReadConfig(filepath.Join(cfg.ConfigDir, "config.json"))
+			return routetest.ReadDeployedConfig(cfg.ConfigDir, kernelOf)
 		},
 		Sets: func(c map[string]any) routedecide.Sets { return penetrationSets.Bind(dnsdecide.SetDefsFromConfig(c)) },
 		DNS:  dnsPredictor,
