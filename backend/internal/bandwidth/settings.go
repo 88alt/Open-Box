@@ -35,8 +35,10 @@ const (
 )
 
 // DefaultSettings 默认测速参数。
+// 12 小时 / 64 MB 对齐上游 v0.1.488 面板的缺省值(它读不到档案里的 bandwidth 时按 12 / 64 显示);
+// 4 点对齐上游按天测试的默认开始时刻。
 func DefaultSettings() Settings {
-	return Settings{IntervalHours: 6, IntervalUnit: UnitHours, MaxDownloadMB: 50, StartHour: DefaultStartHour}
+	return Settings{IntervalHours: 12, IntervalUnit: UnitHours, MaxDownloadMB: 64, StartHour: DefaultStartHour}
 }
 
 // NormalizeSettings 规整档案里的 bandwidth;非法返回错误信息(400)。
