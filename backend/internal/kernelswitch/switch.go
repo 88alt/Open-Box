@@ -68,6 +68,29 @@ func (d SwitchDeps) Switch(ctx context.Context, kernel string) Result {
 	if d.Engine == nil || d.Gen == nil || d.Sbx == nil || d.Services == nil || d.ServiceName == "" {
 		return Result{Code: 1, Stderr: "内核切换没有配置完整"}
 	}
+	// 切到 sing-box 之前,先把 sing-box 那份配置引用的本地规则集写到磁盘。
+	// 为什么必须在预检之前:这些产物平时只有「部署 sing-box」时才写,而设备一直在跑 mihomo,
+	// 所以 data/rules 里可能一个文件都没有;预检的 rulesets / config 两项会因此稳定失败,
+	// 而预检不过就永远走不到 stage() 里那段写文件的代码 —— 死锁,真机上切 sing-box 因此不可能成功
+	// (2026-11-26 真机:预检报 geosite-cn / geoip-cn 不可用,而 data/rules 整个目录都不存在)。
+	// 写产物这一步是幂等的,而且此时还没停旧内核、没动 router-kernel,失败就直接返回、不影响现状。
+	if kernel == system.KernelSingBox && d.GeoDir != "" {
+		pre, err := d.Gen.SingboxBuild(ctx, d.Sbx)
+		if err != nil {
+			return Result{Code: 1, Stderr: "生成 sing-box 配置失败: " + err.Error()}
+		}
+		rep, err := (singbox.Files{SingBox: d.SbxBin, GeoDir: d.GeoDir}).WriteLocalSetsFlip(ctx, pre.Config, pre.DirectHosts, pre.FlipFlags)
+		if err != nil {
+			return Result{Code: 1, Stderr: "准备规则集文件被中断: " + err.Error()}
+		}
+		if !rep.OK() {
+			var why []string
+			for _, m := range rep.Missing {
+				why = append(why, m.Tag+"("+m.Reason+")")
+			}
+			return Result{Code: 1, Stderr: "规则集还没准备好,未切换: " + strings.Join(why, "、")}
+		}
+	}
 	if msg := failedReason(d.Engine.Preflight(ctx, kernel, nil)); msg != "" {
 		return Result{Code: 1, Stderr: msg}
 	}
