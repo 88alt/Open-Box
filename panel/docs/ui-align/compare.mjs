@@ -343,16 +343,26 @@ async function capture(browser, origin) {
   await page.waitForTimeout(2500) // 等接口与图表稳定
   // 子页签:按可见文案点,点完等一等再抓(见文件顶部 --click 的说明)
   for (const text of CLICK) {
-    const target = page
+    // 同一个文案往往有两个实例(桌面菜单 + 手机抽屉/顶部横滑),.first() 可能挑到隐藏的那个,
+    // 于是 waitFor(visible) 超时、页面没切,却看起来「零差异」。逐个试,点第一个可见的。
+    const candidates = page
       .locator('[role=tab], button, a')
       .filter({ hasText: new RegExp('^\\s*' + text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$') })
-      .first()
-    try {
-      await target.waitFor({ state: 'visible', timeout: 8000 })
-      await target.click()
+    const total = await candidates.count()
+    let clicked = false
+    for (let i = 0; i < total; i += 1) {
+      const el = candidates.nth(i)
+      if (!(await el.isVisible().catch(() => false))) continue
+      await el.click()
       await page.waitForTimeout(1800)
-    } catch {
-      /* 没这个页签就照原样抓,差异会体现在树里 */
+      clicked = true
+      break
+    }
+    if (clicked) continue
+    {
+      // 找不到/点不动就照原样抓,但必须喊一声:否则两侧抓的是同一个页签,
+      // 结果看起来「零差异」,其实是压根没切过去。
+      console.log(`! 页签没有点到:「${text}」(${origin})——抓到的仍是当前页`)
     }
   }
   await page.waitForTimeout(1500) // 等接口与图表稳定
