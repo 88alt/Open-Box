@@ -35,7 +35,12 @@
               :is="item.icon"
               class="h-5 w-5 shrink-0"
             />
-            <span class="hidden truncate text-sm md:block">
+            <!-- 窄屏上只画图标,但**当前选中的那一项要把字显示出来**(上游就是这样:选中的页签展开成
+                 图标 + 文案,其余保持 44px 正方形),不然手机上只剩一排图标,不知道自己在哪一页 -->
+            <span
+              class="truncate text-sm"
+              :class="activeMenuKey === item.key ? 'block' : 'hidden md:block'"
+            >
               {{ $t(item.label) }}
             </span>
           </button>
