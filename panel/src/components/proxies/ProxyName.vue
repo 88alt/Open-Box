@@ -7,7 +7,8 @@
       :size="iconSize"
       :scale="node?.iconScale"
     />
-    {{ displayName }}
+    <!-- 名字用 span 包住(对齐上游 v0.1.490 的 ProxyName):上游是<span class="min-w-0 truncate">,裸文本在长名字时不会截断,DOM 比对里这一层也一直被算成容器差异 -->
+    <span class="min-w-0 truncate">{{ displayName }}</span>
     <template v-if="dialerProxy"> ({{ dialerProxy }}) </template>
     <!-- 延迟药丸(对齐上游:连接页「策略 / 出站」列、详情弹窗、日志链路都会带上)。
          hideBandwidth / showLatency 两个开关等价,任一个为真就带——前者是 main 原来的写法,
