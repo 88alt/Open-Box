@@ -1,5 +1,11 @@
 import { disconnectByIdAPI, fetchConnectionsAPI } from '@/api'
-import { CONNECTION_GROUP_MODE, SORT_DIRECTION, SORT_TYPE, SORT_TYPE_COLUMN } from '@/constant'
+import {
+  CONNECTION_GROUP_MODE,
+  SORT_DIRECTION,
+  SORT_TYPE,
+  SORT_TYPE_COLUMN,
+  type CONNECTION_VIEW_MODE,
+} from '@/constant'
 import { getChainsStringFromConnection, getInboundUserFromConnection } from '@/helper'
 import { showNotification } from '@/helper/notification'
 import type { Connection, ConnectionRawMessage } from '@/types'
@@ -15,7 +21,7 @@ import {
 } from './settings'
 
 // 分组方式只在本次打开页面期间有效(换方式会收起已展开的组)
-export const connectionGroupMode = ref<CONNECTION_GROUP_MODE>(CONNECTION_GROUP_MODE.DEVICE)
+export const connectionGroupMode = ref<CONNECTION_VIEW_MODE>(CONNECTION_GROUP_MODE.DEVICE)
 export const connectionSortType = useStorage<SORT_TYPE>(
   'config/connection-sort-type',
   SORT_TYPE.HOST,

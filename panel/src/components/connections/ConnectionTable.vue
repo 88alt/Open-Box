@@ -2,6 +2,7 @@
   <div class="app-card-inset flex min-h-0 flex-1">
     <div
       class="connection-table-shell border-base-300/60 bg-base-100 flex min-h-0 flex-1 overflow-hidden rounded-lg border"
+      :class="{ 'connection-table-extra-action': hasExtraAction }"
     >
       <div
         ref="parentRef"
@@ -12,11 +13,11 @@
             :class="sharedTableClass"
             :style="tableStyle"
           >
-            <colgroup v-if="isManualTable">
+            <colgroup>
               <col
                 v-for="column in visibleColumns"
                 :key="column.id"
-                :style="getColumnStyle(column.id, column.getSize())"
+                :style="getColgroupStyle(column.id, column.getSize())"
               />
             </colgroup>
             <thead
@@ -34,14 +35,11 @@
                   :aria-sort="getAriaSort(header.column.id)"
                   class="relative"
                   :class="[
-                    isSortableColumn(header.column.id) ? 'cursor-pointer select-none' : '',
-                    header.column.id === CONNECTIONS_TABLE_ACCESSOR_KEY.Close ? 'px-1' : '',
                     header.column.getIsPinned && header.column.getIsPinned() === 'left'
                       ? 'pinned-td bg-base-100 sticky left-0 z-20'
                       : '',
                   ]"
                   :style="getColumnStyle(header.column.id, header.getSize())"
-                  @click="toggleSort(header.column.id)"
                 >
                   <div class="flex items-center gap-1">
                     <FlexRender
@@ -81,7 +79,9 @@
                     </div>
                   </div>
                   <div
-                    v-if="isManualTable"
+                    v-if="
+                      isManualTable && header.column.id !== CONNECTIONS_TABLE_ACCESSOR_KEY.Close
+                    "
                     @dblclick="() => header.column.resetSize()"
                     @click.stop
                     @mousedown.stop="(e) => header.getResizeHandler()(e)"
@@ -220,7 +220,6 @@
                     v-for="cell in rowsById[item.connection.id]?.getVisibleCells() ?? []"
                     :key="cell.id"
                     :class="[
-                      cell.column.id === CONNECTIONS_TABLE_ACCESSOR_KEY.Close ? 'px-1' : '',
                       isManualTable
                         ? 'cursor-pointer truncate text-sm select-text'
                         : 'cursor-pointer text-sm whitespace-nowrap select-text',
@@ -263,8 +262,6 @@ import {
   CONNECTION_COLUMN_LABEL_MAP,
   CONNECTIONS_TABLE_ACCESSOR_KEY,
   PROXY_CHAIN_DIRECTION,
-  SORT_DIRECTION,
-  SORT_TYPE,
   SORT_TYPE_COLUMN,
   TABLE_SIZE,
   TABLE_WIDTH_MODE,
@@ -288,13 +285,7 @@ import {
   type ConnectionGroup,
   type ConnectionGroupItem,
 } from '@/store/connectionGroups'
-import {
-  activeSortDesc,
-  activeSortType,
-  connectionSortDirection,
-  connectionSortType,
-  renderConnections,
-} from '@/store/connections'
+import { activeSortDesc, activeSortType, renderConnections } from '@/store/connections'
 import {
   connectionTableColumns,
   proxyChainDirection,
@@ -327,8 +318,8 @@ import { computed, h, ref, type VNode } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProxyName from '../proxies/ProxyName.vue'
 import ConnectionDeviceRenameButton from './ConnectionDeviceRenameButton.vue'
-import ConnectionTargetRoutingButton from './ConnectionTargetRoutingButton.vue'
 import ConnectionSubgroupTabs from './ConnectionSubgroupTabs.vue'
+import ConnectionTargetRoutingButton from './ConnectionTargetRoutingButton.vue'
 
 // 表格里的行:组头 / 子组头 / 连接(和卡片视图同一份分组数据),外加展开的组下面单独一行的子分组页签
 type TableItem =
@@ -361,7 +352,8 @@ const emit = defineEmits<{ renameDevice: [group: ConnectionGroup] }>()
 const { t } = useI18n()
 const columns: ColumnDef<Connection>[] = [
   {
-    header: () => t(CONNECTIONS_TABLE_ACCESSOR_KEY.Close),
+    // 「关闭」列表头不写字(与上游 v0.1.488 一致),列里只有按钮
+    header: '',
     enableSorting: false,
     id: CONNECTIONS_TABLE_ACCESSOR_KEY.Close,
     cell: ({ row }) => {
@@ -724,17 +716,12 @@ const totalSize = computed(() => rowVirtualizer.value.getTotalSize() + headerHei
 const sharedTableClass = computed(() => {
   return [
     'table rounded-none',
-    isManualTable.value ? 'table-fixed' : 'table-auto',
+    isManualTable.value ? 'table-fixed' : 'table-auto connection-table-auto',
     sizeOfTable.value,
   ]
 })
-const resolvedTableWidth = computed(() => {
-  if (!isManualTable.value) {
-    return null
-  }
-
-  return visibleColumns.value.reduce((total, column) => total + column.getSize(), 0)
-})
+// 「关闭」列宽由按钮宽度决定(--connection-table-action-column),不跟列宽设置走
+const CLOSE_COLUMN_WIDTH = 'var(--connection-table-action-column)'
 const tableStyle = computed(() => {
   if (!isManualTable.value) {
     return {
@@ -742,12 +729,18 @@ const tableStyle = computed(() => {
       minWidth: '100%',
     }
   }
+  const dataWidth = visibleColumns.value
+    .filter((column) => column.id !== CONNECTIONS_TABLE_ACCESSOR_KEY.Close)
+    .reduce((total, column) => total + column.getSize(), 0)
 
   return {
-    width: `${resolvedTableWidth.value}px`,
+    width: `calc(${CLOSE_COLUMN_WIDTH} + ${dataWidth}px)`,
   }
 })
 const getColumnStyle = (columnId: string, width: number) => {
+  if (columnId === CONNECTIONS_TABLE_ACCESSOR_KEY.Close) {
+    return { width: CLOSE_COLUMN_WIDTH, minWidth: CLOSE_COLUMN_WIDTH, maxWidth: CLOSE_COLUMN_WIDTH }
+  }
   if (!isManualTable.value) {
     return undefined
   }
@@ -758,6 +751,26 @@ const getColumnStyle = (columnId: string, width: number) => {
     maxWidth: `${width}px`,
   }
 }
+// 自动列宽时:这几列吃掉剩余宽度,其它列收缩到刚好放下内容(速度 / 流量 / 时间等靠右挤在一起,与上游 v0.1.488 一致)
+const FLEXIBLE_COLUMNS = new Set<string>([
+  CONNECTIONS_TABLE_ACCESSOR_KEY.Outbound,
+  CONNECTIONS_TABLE_ACCESSOR_KEY.Chains,
+  CONNECTIONS_TABLE_ACCESSOR_KEY.Host,
+  CONNECTIONS_TABLE_ACCESSOR_KEY.Destination,
+  CONNECTIONS_TABLE_ACCESSOR_KEY.SniffHost,
+  CONNECTIONS_TABLE_ACCESSOR_KEY.RemoteAddress,
+])
+const getColgroupStyle = (columnId: string, width: number) => {
+  if (isManualTable.value || columnId === CONNECTIONS_TABLE_ACCESSOR_KEY.Close) {
+    return getColumnStyle(columnId, width)
+  }
+
+  return FLEXIBLE_COLUMNS.has(columnId) ? undefined : { width: '1px' }
+}
+// 有连接带「降级」按钮时,「关闭」列要放得下两个按钮
+const hasExtraAction = computed(() =>
+  renderConnections.value.some((conn) => conn.metadata.smartBlock === 'normal'),
+)
 
 const classMap = {
   [TABLE_SIZE.SMALL]: 'table-xs',
@@ -767,37 +780,13 @@ const sizeOfTable = computed(() => {
   return classMap[tableSize.value]
 })
 
-// 表头点击排序:点的是哪一列就按哪个排序项排,再点一次反向(和卡片视图的排序菜单共用同一个设置)。
-// 没有对应排序项的列(进程、嗅探域名、源端口……)不能排
-const sortTypeOfColumn = new Map<string, SORT_TYPE>(
-  Object.entries(SORT_TYPE_COLUMN).map(([type, column]) => [column, type as SORT_TYPE]),
-)
-const DESC_FIRST_SORT_TYPES = new Set<SORT_TYPE>([
-  SORT_TYPE.DOWNLOAD,
-  SORT_TYPE.DOWNLOAD_SPEED,
-  SORT_TYPE.UPLOAD,
-  SORT_TYPE.UPLOAD_SPEED,
-])
+// 排序在工具栏的排序菜单里选(与上游 v0.1.488 一致),表头不再点击排序;
+// 当前排序项对应的那一列表头上显示升 / 降序箭头
 const sortColumnId = computed(() => SORT_TYPE_COLUMN[activeSortType.value])
-const isSortableColumn = (columnId: string) => sortTypeOfColumn.has(columnId)
 const getAriaSort = (columnId: string) => {
   if (columnId !== sortColumnId.value) return undefined
 
   return activeSortDesc.value ? 'descending' : 'ascending'
-}
-const toggleSort = (columnId: string) => {
-  const type = sortTypeOfColumn.get(columnId)
-
-  if (!type) return
-
-  if (activeSortType.value === type) {
-    connectionSortDirection.value = activeSortDesc.value ? SORT_DIRECTION.ASC : SORT_DIRECTION.DESC
-  } else {
-    connectionSortDirection.value = DESC_FIRST_SORT_TYPES.has(type)
-      ? SORT_DIRECTION.DESC
-      : SORT_DIRECTION.ASC
-  }
-  connectionSortType.value = type
 }
 
 const getRowClass = (item: TableItem) => {
@@ -878,18 +867,32 @@ th:hover .resizer {
   @apply opacity-100;
 }
 
+.connection-table-shell {
+  --connection-table-button: calc(var(--size-field, 0.25rem) * 6);
+  --connection-table-actions: var(--connection-table-button);
+  --connection-table-action-column: calc(var(--connection-table-actions) + 1rem);
+}
+.connection-table-shell.connection-table-extra-action {
+  --connection-table-actions: calc(2 * var(--connection-table-button) + var(--spacing));
+}
+
 .connection-table-shell th,
 .connection-table-shell td {
   padding-inline: 0.5rem;
+}
+
+/* 自动列宽:单元格不换行,收缩列才能缩到刚好放下内容 */
+.connection-table-auto :is(th, td) {
+  white-space: nowrap;
 }
 
 .connection-table-shell thead th {
   border-bottom: 1px solid color-mix(in srgb, var(--color-base-300) 60%, transparent) !important;
 }
 
-.connection-table-shell thead th:first-child,
-.connection-table-shell tbody td:first-child {
-  padding-left: 0.75rem !important;
+/* 「关闭」列后面紧跟的第一个数据列贴着它,不再留左边距(与上游 v0.1.488 一致) */
+.connection-table-shell :is(th, td):nth-child(2) {
+  padding-inline-start: 0;
 }
 
 .connection-table-shell .connection-table-spacer td {

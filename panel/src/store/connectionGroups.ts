@@ -1,6 +1,11 @@
 // 连接页的分组:按终端或按目标把筛选、排序后的连接分成组,同一时刻只展开一个组,
 // 展开的组里还能再分子组(不分 / 按分流 / 按另一个维度)。结构对齐上游 v0.1.423,自己重写。
-import { CONNECTION_GROUP_MODE, SORT_TYPE, type CONNECTION_SUBGROUP_MODE } from '@/constant'
+import {
+  CONNECTION_GROUP_MODE,
+  SORT_TYPE,
+  type CONNECTION_SUBGROUP_MODE,
+  type CONNECTION_VIEW_MODE,
+} from '@/constant'
 import { getDeviceLabel } from '@/helper/sourceip'
 import type { Connection } from '@/types'
 import { last } from 'lodash'
@@ -161,7 +166,12 @@ watch(
   { flush: 'sync' },
 )
 
-const allGroups = computed(() => buildGroups(renderConnections.value, connectionGroupMode.value))
+// 不分组时没有组:连接按当前排序项平铺(renderConnections 已经排好序)
+const allGroups = computed(() =>
+  connectionGroupMode.value === 'none'
+    ? []
+    : buildGroups(renderConnections.value, connectionGroupMode.value),
+)
 
 // 筛选条件变了之后,展开的组如果已经没有连接了就收起来
 watch(
@@ -183,7 +193,7 @@ const liveExpanded = computed(() => {
 
 // 展开着的时候组的顺序固定成「看到它们的先后」:速度在变,按速度排的列表会一直跳,点开的组就跟着跑了
 const seenKeys = new Set<string>()
-let lastFrozenMode: CONNECTION_GROUP_MODE | null = null
+let lastFrozenMode: CONNECTION_VIEW_MODE | null = null
 const stableGroups = shallowRef<ConnectionGroup[]>([])
 
 watch(
@@ -229,6 +239,12 @@ export const connectionGroupItems = computed<ConnectionGroupItem[]>(() => {
     for (const connection of conns) {
       items.push({ kind: 'connection', key: `connection:${connection.id}`, sectionKey, connection })
     }
+  }
+
+  if (connectionGroupMode.value === 'none') {
+    pushConnections(renderConnections.value, 'none')
+
+    return items
   }
 
   for (const group of connectionGroups.value) {

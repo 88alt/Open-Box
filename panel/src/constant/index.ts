@@ -126,6 +126,9 @@ export enum CONNECTION_GROUP_MODE {
   TARGET = 'connectionsByTarget',
 }
 
+// 连接页顶部的分组页签:不分组(平铺所有连接)/ 按终端 / 按目标(和上游 v0.1.488 一致)
+export type CONNECTION_VIEW_MODE = 'none' | CONNECTION_GROUP_MODE
+
 // 展开一个分组之后,组内还能再分:不分 / 按分流 / 按另一个维度(终端分组里是目标,目标分组里是终端)
 export type CONNECTION_SUBGROUP_MODE = 'none' | 'routing' | CONNECTION_GROUP_MODE
 
