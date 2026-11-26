@@ -655,18 +655,25 @@ func TestEvaluateDistinguishesBandwidthFailedFromUnmeasured(t *testing.T) {
 	}
 }
 
-// 上游 v0.1.491 的失败扣分阶梯:默认 30% 带宽权重下,1~5 次失败依次扣 3 / 7.5 / 14.25 / 24.375 / 30 分
-// (每级 ×1.5),且**只扣下载单项、不倒扣延时与抖动**。
-func TestBandwidthFailStepDropsDownloadOnly(t *testing.T) {
-	want := []float64{3, 7.5, 14.25, 24.375, 30}
-	for i, w := range want {
-		if math.Abs(bwDropTable[i]-w) > 1e-9 {
-			t.Fatalf("第 %d 次失败应扣 %.3f,得 %.3f", i+1, w, bwDropTable[i])
+// 上游 v0.1.491 的失败扣分:相邻差等比(公比 1.5)累加,封顶 30。
+// 逐点验证面板文案给的 3 / 7.5 / 14.25 / 24.375 / 30,并验证边界。
+func TestBwDropFormula(t *testing.T) {
+	for _, c := range []struct {
+		n    int
+		want float64
+	}{
+		{0, 0}, {1, 3}, {2, 7.5}, {3, 14.25}, {4, 24.375}, {5, 30}, {9, 30}, {-1, 0},
+	} {
+		if got := bwDrop(c.n); math.Abs(got-c.want) > 1e-9 {
+			t.Fatalf("bwDrop(%d) 应为 %.4f,得 %.4f", c.n, c.want, got)
 		}
 	}
-	// 权重不是 30% 时按比例缩放:15%(一半)时第一次扣 1.5 分
-	scaled := bwDropUnit * (bwDropBaseWeight / 15)
+}
+
+// 权重不是 30% 时按比例折算:15%(一半)时第一次扣下载项 6 分(等价总分 1.5)。
+func TestBwDropScalesWithWeight(t *testing.T) {
+	scaled := bwDrop(1) * (bwDropBaseWeight / 15)
 	if math.Abs(scaled-6) > 1e-9 {
-		t.Fatalf("权重 15%% 时第一次应扣下载项 6 分(等价总分 1.5),得 %.2f", scaled)
+		t.Fatalf("权重 15%% 时第一次应扣下载项 6 分,得 %.2f", scaled)
 	}
 }

@@ -169,17 +169,9 @@ func evaluate(sm summary, dl *download, nowMs, periodMs, freshMs int64, w scorew
 		// **不倒扣延时与抖动**——所以这里是从 sv 里减掉「下载那一项已有的分」,
 		// 而不是直接把总分压低。下载分扣到 0 即视为带宽失败(标记由 downloadOf 给出)。
 		if downloadDroppedOut := ev.Download != nil && dl != nil && dl.Fails > 0 && w.Download > 0; downloadDroppedOut {
-			// 上游文案给的是「依次扣 3 / 7.5 / 14.25 / 24.375 / 30 分」。这串数字**不是**等比序列
-			// (7.5/3=2.5、14.25/7.5=1.9、24.375/14.25≈1.71),单靠「1.5 倍阶梯」推不出来,
-			// 所以这里直接按文案的字面值查表,权重不是 30% 时再等比缩放。
-			// 推断点 / 待维护者复核:闭源实现的具体递推式不可见,若后续拿到准确公式,替换本表即可。
-			drop := bwDropTable[len(bwDropTable)-1]
-			if dl.Fails-1 < len(bwDropTable) {
-				drop = bwDropTable[dl.Fails-1]
-			}
-			if drop > 30 {
-				drop = 30
-			}
+			// 扣减量由 bwDrop 给出(封闭公式,见 query.go 里的推导:相邻差的公比 1.5)。
+			// 权重不是 30% 时按比例折算,保证等比缩放。
+			drop := bwDrop(dl.Fails)
 			// 折算:扣的是「下载项分数 ×(权重/100)」,再乘 (100/权重) 还原成下载项自己的分,
 			// 等价于下载项分数减去 drop*(30/权重) 的分,保证按权重等比缩放。
 			scaled := drop * (bwDropBaseWeight / w.Download)
