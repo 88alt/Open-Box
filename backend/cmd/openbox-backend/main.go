@@ -930,6 +930,19 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			on, _ := p["ipv6"].(bool)
 			return err == nil && on
 		},
+		// 认「内核自己的 fake-ip 池」:两个内核的默认段不同(sing-box 198.19.0.0/16、Mihomo 198.18.0.0/16),
+		// 档案 dns.fakeIpRange 还能改掉 v4 段。设备跑 mihomo 时固定按 sing-box 判会把 198.18.x.x 当成别处的池
+		// (2026-11-26 真机:fakeIpLocal 缺失、fakeIpFrom 补不上)。
+		Kernel: func() (string, error) { return system.ReadRouterKernel(cfg.RouterKernelFile()) },
+		FakeIPRange: func(ctx context.Context) string {
+			p, err := profileSvc.Get(ctx)
+			if err != nil {
+				return ""
+			}
+			dns, _ := p["dns"].(map[string]any)
+			v, _ := dns["fakeIpRange"].(string)
+			return v
+		},
 		// 请求带 sourceIp 时,按那台终端预测 DNS 判定(邻居表里有 MAC 就一起用来判断 source_mac_address)
 		NeighborMAC: func(ctx context.Context, ip string) string { return neighbors(ctx)[ip] },
 		// DNS 判定:读已部署的 config.json,按它的 DNS 规则预测这个域名问哪台服务器;规则集文件读不到、

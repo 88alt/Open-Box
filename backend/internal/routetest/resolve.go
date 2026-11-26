@@ -78,6 +78,7 @@ func (s *Service) ResolveName(ctx context.Context, name string) (fakeIP bool, ad
 // resolve 查 A,ipv6 为真时再查 AAAA。域名查不到不算接口错误,写在 error / error6 里。
 func (s *Service) resolve(ctx context.Context, name string, ipv6 bool) *Resolve {
 	r := &Resolve{Answers: []string{}}
+	own := s.ownFakePool()
 	start := time.Now()
 	a, err := s.query(ctx, name, qtypeA)
 	r.MS = *millis(time.Since(start))
@@ -88,7 +89,7 @@ func (s *Service) resolve(ctx context.Context, name string, ipv6 bool) *Resolve 
 		r.Status = &st
 		for _, ad := range a.addrs {
 			r.Answers = append(r.Answers, ad.String())
-			r.markFake(ad)
+			r.markFake(ad, own)
 		}
 		if a.ttl >= 0 {
 			t := a.ttl
@@ -114,7 +115,7 @@ func (s *Service) resolve(ctx context.Context, name string, ipv6 bool) *Resolve 
 			r.Status6 = &st
 			for _, ad := range a6.addrs {
 				r.Answers6 = append(r.Answers6, ad.String())
-				r.markFake(ad)
+				r.markFake(ad, own)
 			}
 			switch {
 			case a6.rcode != 0:
@@ -131,13 +132,37 @@ func (s *Service) resolve(ctx context.Context, name string, ipv6 bool) *Resolve 
 }
 
 // markFake 认出占位地址:内核自己的池 = fakeIp + fakeIpLocal;别处的池 = 只有 fakeIp(不是内核发的)。
-func (r *Resolve) markFake(a netip.Addr) {
+// own 是当前内核自己的 fake-ip 池(见 ownFakePool);为空时退回 fakeIPPools 里的默认值。
+func (r *Resolve) markFake(a netip.Addr, own []netip.Prefix) {
 	switch {
-	case inFakePool(a):
+	case inPools(own, a) || len(own) == 0 && inFakePool(a):
 		r.FakeIP, r.FakeIPLocal = true, true
 	case inPools(foreignFakePools, a):
 		r.FakeIP = true
 	}
+}
+
+// ownFakePool 是当前内核自己的 fake-ip 池。两个内核的默认段不一样——sing-box 是 198.19.0.0/16,
+// Mihomo 是 198.18.0.0/16(见 internal/mihomo/buildconfig.go 的注释)——而 arch 里还能把 v4 段改掉
+// (dns.fakeIpRange),所以固定用 sing-box 的默认段会在 mihomo 上判错:设备回 198.18.0.13 明明是内核自己
+// 发的占位地址(2026-11-26 真机),却被当成「别处的池」,于是 fakeIpLocal 缺失、fakeIpFrom 也补不上。
+// kernel 给出当前内核(空按 sing-box),rangeV4 是档案里的 fakeIpRange(空 = 用该内核的默认段)。
+func ownFakePool(kernel, rangeV4 string) []netip.Prefix {
+	p := make([]netip.Prefix, 0, 2)
+	if v := strings.TrimSpace(rangeV4); v != "" {
+		if pf, err := netip.ParsePrefix(v); err == nil {
+			p = append(p, pf.Masked())
+		}
+	} else {
+		// 默认段:两个内核不同;认不出内核时按 sing-box(与 system.ReadRouterKernel 的默认一致)
+		if kernel == "mihomo" {
+			p = append(p, netip.MustParsePrefix("198.18.0.0/16"))
+		} else {
+			p = append(p, netip.MustParsePrefix("198.19.0.0/16"))
+		}
+	}
+	// v6 只有 sing-box 有固定默认段;v4 段被改成别的时候 v6 仍然按这个认(没别的依据)
+	return append(p, netip.MustParsePrefix("fc00::/18"))
 }
 
 func inPools(pools []netip.Prefix, a netip.Addr) bool {

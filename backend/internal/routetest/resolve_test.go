@@ -410,3 +410,41 @@ func TestResolveNameForPenetration(t *testing.T) {
 		t.Fatalf("%v %v %q", fake, addrs, errText)
 	}
 }
+
+// 内核自己的 fake-ip 池要按当前内核认:sing-box 默认 198.19.0.0/16、Mihomo 默认 198.18.0.0/16,
+// 档案 dns.fakeIpRange 还能改掉 v4 段。回归自 2026-11-26 真机:设备跑 mihomo、回 198.18.0.13,
+// 固定按 sing-box 判会把它当成「别处的池」,于是 fakeIpLocal 缺失、fakeIpFrom 补不上。
+func TestOwnFakePoolFollowsKernel(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		kernel string
+		rng    string
+		addr   string
+		local  bool
+		fake   bool // 是否算占位地址(不在任何已知池里就不是)
+	}{
+		{"sing-box 默认段", "sing-box", "", "198.19.0.13", true, true},
+		{"sing-box 默认段里的高地址", "", "", "198.19.255.1", true, true},
+		{"mihomo 默认段", "mihomo", "", "198.18.0.13", true, true},
+		{"mihomo 段之外仍是别处", "mihomo", "", "198.19.0.13", false, false},
+		{"sing-box 不认 mihomo 的段", "sing-box", "", "198.18.0.13", false, true},
+		{"档案改了 v4 段", "sing-box", "198.20.0.0/16", "198.20.0.9", true, true},
+		{"档案改了段之后旧段不算", "sing-box", "198.20.0.0/16", "198.19.0.9", false, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s := &Service{
+				Kernel:      func() (string, error) { return c.kernel, nil },
+				FakeIPRange: func(context.Context) string { return c.rng },
+			}
+			own := s.ownFakePool()
+			var r Resolve
+			r.markFake(netip.MustParseAddr(c.addr), own)
+			if r.FakeIP != c.fake {
+				t.Fatalf("%s 的 fakeIp 想 %v,得到 %v", c.addr, c.fake, r.FakeIP)
+			}
+			if r.FakeIPLocal != c.local {
+				t.Fatalf("%s 的 fakeIpLocal 想 %v,得到 %v", c.addr, c.local, r.FakeIPLocal)
+			}
+		})
+	}
+}

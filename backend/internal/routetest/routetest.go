@@ -113,10 +113,28 @@ type Service struct {
 	NeighborMAC func(ctx context.Context, ip string) string
 	// IPv6 返回档案是否开了 IPv6(开了才再查一次 AAAA);nil 当作没开。
 	IPv6 func(ctx context.Context) bool
+	// Kernel 返回当前路由器内核(sing-box / mihomo),用来认「内核自己的 fake-ip 池」;nil 或读不出来按 sing-box。
+	Kernel func() (string, error)
+	// FakeIPRange 返回档案里的 dns.fakeIpRange(空 = 用该内核的默认段);nil 当作空。
+	FakeIPRange func(ctx context.Context) string
 	// Timeout 是整次探测的超时,0 = DefaultTimeout。
 	Timeout time.Duration
 	// TLSConfig 给 GET / HEAD / TLS 用,nil = 系统默认(只有测试会设)。
 	TLSConfig *tls.Config
+}
+
+// ownFakePool 取当前内核自己的 fake-ip 池(见 resolve.go 的 ownFakePool)。
+func (s *Service) ownFakePool() []netip.Prefix {
+	kernel, rangeV4 := "", ""
+	if s.Kernel != nil {
+		if k, err := s.Kernel(); err == nil {
+			kernel = k
+		}
+	}
+	if s.FakeIPRange != nil {
+		rangeV4 = s.FakeIPRange(context.Background())
+	}
+	return ownFakePool(kernel, rangeV4)
 }
 
 func (s *Service) timeout() time.Duration {
