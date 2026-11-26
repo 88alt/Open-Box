@@ -476,3 +476,21 @@
   改完 420 宽度复核:设置页各页签内容差异 **0 / 0**、结构差异 **0 / 0**(只剩 `card.radius` 这个用户设置项),
   「DNS 设置」那两个只在窄屏出现的假差异随之消失(它们就是上游选中态展开出来的文案)。
   顺带核对了底部移动导航:两侧都是图标 + 12px 文案,一致。
+- 2026-11-26 **模板字符串拼接键的覆盖核对**(任务书收尾清单里的一项):上游 `panel/dist` 里 `$t()` 的**动态写法只有
+  13 处**,全是反引号插值;没有「引号 + 拼接」的写法,也没有把变量直接当 key 的写法(`$t(c.label)` 这类,
+  `label` / `labelKey` 的值都是数据表里的字面量,已经被全量键集核对覆盖)。13 处展开成 24 个具体键:
+  | 站点 | 键 | 取值来源 |
+  |---|---|---|
+  | 内核切换预检 `RouterKernelSwitch` | `routerKernelChecks.{id}` | 后端 `kernelswitch.Order`:target / system / conflicts / compatibility / rulesets / config / firewall / dnsGuard(8) |
+  | 同上 | `routerKernelCheckStatus.{status}` | waiting / pending / passed / failed / blocked / notApplicable(6) |
+  | 质量卡 `NodeQualityCard` | `qualityMode_{mode}` | login / subscription / node(3) |
+  | 同上 | `qualityState_{state}` | healthy / down / unknown / stale(4) |
+  | 订阅分组 `NodeGroupsPanel` | `groupType_{type}` | urltest / selector / failover / loadbalance(4),另有 `groupType_failover_short` |
+  | 主题 `ZashboardSettings` | `themeMode_{mode}` | system / light / dark(3) |
+  | 常规设置 `GeneralSettings` | `proxyGroupColumns{n}` | PC `[1,2,3]`、移动端 `[1,2]`,键是 `proxyGroupColumns1~3`,与上游 `X([1,2,3])` / `X([1,2])` 一致 |
+  | 带宽评分帮助 `BandwidthSettingsHelpDialog` | `bandwidthOff_` / `bandwidthOn_` / `bandwidthExample_{mode}` | urltest / failover / loadbalance(9) |
+  | 业务优选(例外 C,main 整块不做) | `businessOverview_{state}`、`businessSettingsHelp_{mode}` | 跳过 |
+  逐键比对结果:**三语各 24 键,缺 0 / 多 0 / 文本不同 0**;后缀的取值域也和代码侧对得上
+  (后端 `internal/kernelswitch/preflight.go` 只发 passed / failed / blocked / notApplicable,waiting / pending 是前端本地态;
+  `OpenboxGroupType` 四值、`OpenboxQualityState` 四值、质量模式三值、列数 `[1,2,3]` / `[1,2]` 都与上游相同)。
+  这批**不需要改代码**,只留下核对结论备查。
