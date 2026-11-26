@@ -90,57 +90,61 @@
     >
       <div
         v-if="draft"
-        class="flex flex-col gap-3"
+        class="flex flex-col gap-4"
       >
         <div class="flex flex-col gap-1">
-          <label class="text-xs font-medium">{{ $t('dnsDomainUpstreamMatchType') }}</label>
-          <select
-            v-model="draft.matchType"
-            class="select select-sm w-full"
-          >
-            <option value="domain">{{ $t('ruleTypeDomain') }}</option>
-            <option value="domainSuffix">{{ $t('ruleTypeDomainSuffix') }}</option>
-          </select>
-        </div>
-        <div class="flex flex-col gap-1">
           <label class="text-xs font-medium">{{ $t('dnsDomainUpstreamDomains') }}</label>
-          <textarea
-            v-model="draft.domainsText"
-            class="textarea textarea-sm w-full font-mono"
-            rows="3"
-            :placeholder="draft.matchType === 'domain' ? $t('dnsDomainUpstreamDomainPlaceholder') : $t('dnsDomainUpstreamSuffixPlaceholder')"
-          />
+          <!-- 与上游一致:域名类型下拉(w-32)和域名标签输入在同一行,标签输入走公共 TagInput -->
+          <div class="flex items-start gap-1.5">
+            <select
+              v-model="draft.matchType"
+              class="select select-sm w-32 shrink-0"
+              :aria-label="$t('dnsDomainUpstreamMatchType')"
+            >
+              <option value="domain">{{ $t('routingPolicyDomain') }}</option>
+              <option value="domainSuffix">{{ $t('routingPolicyDomainSuffix') }}</option>
+            </select>
+            <div class="min-w-0 flex-1">
+              <TagInput
+                ref="domainsInput"
+                v-model="draft.domains"
+                v-model:pending="domainsPending"
+                unique
+                :separator="DOMAIN_SEPARATOR"
+                :label="$t('dnsDomainUpstreamDomains')"
+                :placeholder="draft.matchType === 'domain' ? $t('dnsDomainUpstreamDomainPlaceholder') : $t('dnsDomainUpstreamSuffixPlaceholder')"
+              />
+            </div>
+          </div>
           <p class="text-base-content/50 text-xs">
             {{ $t(draft.matchType === 'domain' ? 'dnsDomainUpstreamDomainHint' : 'dnsDomainUpstreamSuffixHint') }}
           </p>
         </div>
         <div class="flex flex-col gap-1">
           <label class="text-xs font-medium">{{ $t('dnsDomainUpstreamServer') }}</label>
+          <!-- 顺序与上游一致:协议 → 地址 → 端口;端口输入框宽度也是上游的 w-20 -->
           <div class="flex flex-wrap items-center gap-2">
+            <DnsProtocolSelect v-model="draft.protocol" />
             <input
               v-model="draft.server"
               type="text"
               class="input input-sm min-w-0 flex-1 font-mono"
-              placeholder="223.5.5.5 / tls://dns.google / https://dns.example/dns-query"
+              :aria-label="$t(draft.protocol === 'https' ? 'dnsUpstreamDohHost' : draft.protocol === 'tls' ? 'dnsUpstreamDotHost' : 'subscriptionNodeDnsIpPlaceholder')"
+              :placeholder="draft.protocol === 'tls' || draft.protocol === 'https' ? 'dns.example.net' : $t('subscriptionNodeDnsIpPlaceholder')"
+              autocomplete="off"
+              spellcheck="false"
             >
-            <select
-              v-model="draft.protocol"
-              class="select select-sm w-24 shrink-0"
-            >
-              <option value="udp">UDP</option>
-              <option value="tcp">TCP</option>
-              <option value="tls">DoT</option>
-              <option value="https">DoH</option>
-            </select>
             <input
               v-model="draft.port"
               type="number"
               min="1"
               max="65535"
-              class="input input-sm w-24 shrink-0 font-mono"
+              class="input input-sm w-20 shrink-0 font-mono"
+              :aria-label="$t('port')"
               :placeholder="String(defaultPort(draft.protocol))"
             >
           </div>
+          <p class="text-base-content/50 text-xs">{{ $t('dnsDomainUpstreamServerHint') }}</p>
         </div>
         <div class="flex flex-col gap-1">
           <label class="text-xs font-medium">{{ $t('dnsDomainUpstreamNote') }}</label>
@@ -148,30 +152,33 @@
             v-model="draft.note"
             type="text"
             class="input input-sm w-full"
+            maxlength="200"
             :placeholder="$t('dnsDomainUpstreamNotePlaceholder')"
           >
         </div>
       </div>
       <template #footer>
-        <button
-          type="button"
-          class="btn btn-sm"
-          @click="showEditor = false"
-        >
-          {{ $t('cancel') }}
-        </button>
-        <button
-          type="button"
-          class="btn btn-primary btn-sm"
-          :disabled="saving"
-          @click="saveDraft"
-        >
-          <span
-            v-if="saving"
-            class="loading loading-spinner loading-xs"
-          />
-          {{ $t('subscriptionSave') }}
-        </button>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            class="btn btn-sm"
+            @click="showEditor = false"
+          >
+            {{ $t('cancel') }}
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary btn-sm"
+            :disabled="saving"
+            @click="saveDraft"
+          >
+            <span
+              v-if="saving"
+              class="loading loading-spinner loading-xs"
+            />
+            {{ $t('subscriptionSave') }}
+          </button>
+        </div>
       </template>
     </DialogWrapper>
 
@@ -206,6 +213,8 @@
 <script setup lang="ts">
 import type { OpenboxDnsDomainUpstreamRule, OpenboxProfile } from '@/api/openbox'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
+import DnsProtocolSelect from '@/components/common/DnsProtocolSelect.vue'
+import TagInput from '@/components/common/TagInput.vue'
 import { showNotification } from '@/helper/notification'
 import { PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { useI18n } from 'vue-i18n'
@@ -218,6 +227,8 @@ const props = defineProps<{
 
 // 单条规则的域名上限,与上游面板一致
 const MAX_DOMAINS = 64
+// 域名之间可以写逗号、顿号、空格或换行(与上游同一个口径,提示文案也是这么写的)
+const DOMAIN_SEPARATOR = /[,，、\s]+/
 const rules = computed<OpenboxDnsDomainUpstreamRule[]>(() => props.profile.dns?.domainUpstreams?.rules ?? [])
 const enabled = computed(() => props.profile.dns?.domainUpstreams?.enabled !== false)
 const saving = ref(false)
@@ -264,7 +275,7 @@ const toggleMaster = (event: Event) => persist(rules.value, (event.target as HTM
 interface Draft {
   id: string
   matchType: 'domain' | 'domainSuffix'
-  domainsText: string
+  domains: string[]
   server: string
   protocol: 'udp' | 'tcp' | 'tls' | 'https'
   port: string
@@ -273,6 +284,9 @@ interface Draft {
 const showEditor = ref(false)
 const editing = ref<OpenboxDnsDomainUpstreamRule | null>(null)
 const draft = ref<Draft | null>(null)
+// 域名标签输入:还没回车提交的那半行文字放在 pending 里,保存前由 commit() 收进标签
+const domainsInput = ref<InstanceType<typeof TagInput> | null>(null)
+const domainsPending = ref('')
 
 const openEditor = (rule: OpenboxDnsDomainUpstreamRule | null) => {
   editing.value = rule
@@ -280,13 +294,14 @@ const openEditor = (rule: OpenboxDnsDomainUpstreamRule | null) => {
     ? {
         id: rule.id,
         matchType: rule.matchType === 'domainSuffix' ? 'domainSuffix' : 'domain',
-        domainsText: (rule.domains ?? []).join('\n'),
+        domains: [...(rule.domains ?? [])],
         server: rule.server,
         protocol: (rule.protocol as Draft['protocol']) || 'udp',
         port: rule.port ? String(rule.port) : '',
         note: rule.note || '',
       }
-    : { id: '', matchType: 'domain', domainsText: '', server: '', protocol: 'udp', port: '', note: '' }
+    : { id: '', matchType: 'domain', domains: [], server: '', protocol: 'udp', port: '', note: '' }
+  domainsPending.value = ''
   showEditor.value = true
 }
 
@@ -303,7 +318,8 @@ const saveDraft = async () => {
   const d = draft.value
   if (!d || saving.value) return
   const suffix = d.matchType === 'domainSuffix'
-  const raw = d.domainsText.split(/[\s,;，、]+/).filter(Boolean)
+  domainsInput.value?.commit()
+  const raw = d.domains.filter(Boolean)
   const hasStar = raw.some((x) => x.includes('*'))
   if (!suffix && hasStar) {
     showNotification({ content: 'dnsDomainUpstreamBadExactDomain', type: 'alert-error' })

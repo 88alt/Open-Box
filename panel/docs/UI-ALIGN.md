@@ -528,3 +528,24 @@
   (daisyUI 版本口径)——都在本文件里记过,不是本轮引入的。白名单同时补了**例外 C 的英 / 繁文案**
   (`Business preference`、`Kernel status unavailable`、`業務優選`、`暫時無法讀取核心狀態`),以后跑 en / zh-tw
   不会再刷这两条。
+- 2026-11-26 **弹窗层对比:设置 → DNS → 指定域名 DNS 的编辑弹窗**(DOM 比对工具只走页面,进不了弹窗,
+  这里用手工探针:打开弹窗后导出「标签 + 类名 + 文案」的结构签名,再逐协议读输入框的 placeholder / aria-label)。
+  **发现的差异与修法**:
+  1. 「匹配域名」原来是**域名类型单独一块**(`select` 占满整行)+ 下面一个 `textarea`;上游是同一行:
+     `select.select-sm.w-32`(域名 / 域名后缀)+ **标签输入**(`TagInput`)。已改用公共 `TextInput` 同款的
+     `TagInput`(分隔符取「逗号 / 顿号 / 空格 / 换行」,和提示文案一致;`unique`;保存前 `commit()` 把没回车的
+     那段也收进去),外层结构与上游一致(`flex items-start gap-1.5` + `div.min-w-0.flex-1` 包一层)。
+  2. 「上游 DNS」行:协议下拉原来在地址框**后面**、宽度 `w-24`,上游是**协议在前**、`w-20`;已换成公共
+     `DnsProtocolSelect`(本身就是 `select.select-sm.w-20` + `aria-label`)。
+  3. 少了上游那行提示(`dnsDomainUpstreamServerHint`,「支持 UDP / TCP(IP 地址)、DoT…」),已补。
+  4. 地址框的 placeholder 与 aria-label 上游是**按协议变**的(实测四种协议逐个读):UDP / TCP →
+     「DNS IP,如 223.5.5.5 或 …」;DoT → placeholder `dns.example.net` + aria「DoT 域名、IP 或 tls:// 地址」;
+     DoH → 同一个 placeholder + aria「DoH 域名或 IP 地址」。main 原来是一个写死的
+     「223.5.5.5 / tls://dns.google / https://dns.example/dns-query」,已按协议改好,四种协议下逐字相同。
+  5. 备注框补 `maxlength=200`;表单间距 `gap-3` → `gap-4`;底部两个按钮外面按上游包一层 `div.flex.gap-2`。
+  改完两侧弹窗的结构签名**逐行相同**(标签、类名、文案、顺序都一致);`vue-tsc` / `eslint` 无报错。
+  **端到端复核**:在 main 上一次性输入 `a.example.com, b.example.com c.example.com`(逗号 + 空格混用,
+  最后一段故意不回车的 `c.example.com`),保存后 `/api/openbox/profile` 里这条规则的 `domains` 是**三条**,
+  说明分隔符与 `commit()` 都工作正常。
+  **有意保留的差异**:这张卡不编辑上游那个「加密引导 DNS」(bootstrap)输入框——`DnsDomainUpstreamCard.vue`
+  里的注释写明了原因(改备注时不希望把解析地址弄丢),属于有意差异,不是漏做。
