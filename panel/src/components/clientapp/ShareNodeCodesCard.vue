@@ -2,7 +2,7 @@
   <!-- 节点分流(客户端):共享网络每台服务器一个码,点二维码在弹窗里看 -->
   <div class="app-card-inset flex flex-col gap-3">
     <div class="flex flex-col gap-1">
-      <span class="text-base font-semibold">{{ $t('shareAppCodesTitle') }}</span>
+      <h2 class="text-base font-semibold">{{ $t('shareAppCodesTitle') }}</h2>
       <p class="text-base-content/60 text-xs leading-relaxed">{{ $t('shareAppCodesDescription') }}</p>
     </div>
 

@@ -81,7 +81,6 @@
           </button>
         </div>
       </div>
-      <p class="text-base-content/50 text-xs">{{ $t('dnsDomainUpstreamServerHint') }}</p>
     </div>
 
     <DialogWrapper

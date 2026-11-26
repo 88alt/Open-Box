@@ -3,7 +3,7 @@
   <div class="card">
     <div class="app-card-inset flex flex-col gap-3">
       <div class="flex flex-col gap-1">
-        <span class="text-base font-semibold">{{ $t('serverInfoTitle') }}</span>
+        <h2 class="text-base font-semibold">{{ $t('serverInfoTitle') }}</h2>
         <p class="text-base-content/60 text-xs leading-relaxed">{{ $t('serverInfoDescription') }}</p>
       </div>
 

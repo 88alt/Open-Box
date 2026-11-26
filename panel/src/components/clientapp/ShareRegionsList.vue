@@ -3,7 +3,7 @@
   <div class="app-card-inset flex flex-col gap-3">
     <div class="flex flex-col gap-1">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <span class="text-base font-semibold">{{ $t('shareRegionsTitle') }}</span>
+        <h2 class="text-base font-semibold">{{ $t('shareRegionsTitle') }}</h2>
         <div class="flex shrink-0 items-center gap-1">
           <button
             type="button"

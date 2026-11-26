@@ -386,3 +386,13 @@
   daisyUI `emerald` 主题里 `--color-primary-content` 的取值不同(上游是旧版 emerald 的黑色,main 是
   新版 emerald 的深青)。属依赖版本差异,不是本仓库样式写错;要跟就得显式钉 `[data-theme='emerald']
   { --color-primary-content: oklch(0% 0 0) }`,需先确认其它用 `text-primary-content` 的地方(分段控件)不受影响。
+- 2026-11-26 **客户端页(设置 → 客户端)**:分区标题层级已对齐——上游「客户端下载 / 路由器标识 / 地区分流 /
+  节点分流（客户端）/ 本地分流（客户端）/ 内容过滤」都是 `<h2 class="text-base font-semibold">`,main 里中间四个写成了
+  `<span>`(类名相同、视觉一致,但语义与结构比对不一致)。已改 `RouterIdentityCard / LocalRoutingCard /
+  ShareNodeCodesCard / ShareRegionsList` 四处为 `<h2>`。复核后内容差异从 12 降到 4,剩下的都是平台图标
+  `img{android|windows|harmonyos|openbox}`(上游独立 svg 文件 vs main 品牌图标库内联,例外 A)。
+  另外上游在取不到版本时会把 `{VER}` 占位符原样渲染出来(它自己的 bug),main 显示「最新版」,**不为对齐复制这个 bug**。
+- 2026-11-26 **DNS 设置页签**:`--click` 要用 **`DNS 设置`(中间有空格)**,写 `DNS设置` 点不到(菜单里那段文案带空格)。
+  差异是 main 在「域名上游」卡片底部多了一行说明 `dnsDomainUpstreamServerHint`(支持 UDP/TCP、DoT、DoH…不支持填 wan),
+  上游**保留该键但不渲染**。已删掉这行 `<p>`,键留在语言包里。复核后只剩上游一个 `div[role=region]`(查询日志表格的
+  无障碍容器)main 没有对应 role,属 a11y 属性差异,记在这里待补。
