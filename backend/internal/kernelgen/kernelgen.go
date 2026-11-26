@@ -382,6 +382,10 @@ func (g *Generator) MihomoValidate(ctx context.Context, res *mihomo.BuildResult)
 	return []string{fmt.Sprintf("mihomo 配置已通过自检(%d 字节)", len(text))}, nil
 }
 
+// preflightNftTable 是校验入口规则时套的外层表名。只用于 `nft -c` 语法检查(不加载),
+// 所以不必与服务脚本实际建的那张表同名,取一个不会撞的名字。
+const preflightNftTable = "openbox-preflight"
+
 // MihomoFirewall 校验入口防火墙规则(`nft -c -f`)。没有入口 nft 就不适用。
 // 返回 applicable=false 表示这次切换不涉及入口防火墙。
 func (g *Generator) MihomoFirewall(ctx context.Context, res *mihomo.BuildResult) ([]string, bool, error) {
@@ -396,7 +400,13 @@ func (g *Generator) MihomoFirewall(ctx context.Context, res *mihomo.BuildResult)
 		return nil, true, err
 	}
 	path := filepath.Join(dir, "preflight-entry.nft")
-	if err := g.d.FS.WriteFile(path, []byte(res.Entry+"\n"), 0o600); err != nil {
+	// res.Entry 是**链正文片段,不含 table 外壳**(服务脚本 openbox_apply_nft 会自己
+	// `echo "table $NFT_TABLE {"` 包住再加载,见 openwrt/initd/openbox 的注释)。
+	// 所以这里也要照那个形状包一层再交给 `nft -c`,否则裸片段必然报
+	// `syntax error, unexpected '{', expecting string or last` —— 那是校验方式错了,不是规则错了
+	// (2026-11-26 真机:切回 mihomo 被 firewall 这一项拦住,原因就是拿裸片段去 -c)。
+	wrapped := "table inet " + preflightNftTable + " {\n" + res.Entry + "\n}\n"
+	if err := g.d.FS.WriteFile(path, []byte(wrapped), 0o600); err != nil {
 		return nil, true, err
 	}
 	defer os.Remove(path)
