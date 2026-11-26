@@ -69,6 +69,13 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 - **停止条件**:未触发(没有连续 3 批验证失败,没有陌生提交,没有触碰红线)。
 - **面板发布体积(跨区,与打包有关)**:2026-11-26 对齐字体时发现 main 的面板一直把 MiSans / Sarasa / PingFang / Fira 四套字体打进默认构建,而上游 v0.1.488 的发布包里一套自字体都没有(上游把面板字体固定成 SystemUI)。按上游口径改完后默认构建的 `panel/dist/assets` 从 **15 MB 降到 7.3 MB**(上游 5.6 MB),`backend/packaging/build-package.sh` 与发布工作流都只是 `cp -R` 面板产物,不用改;细节见 `panel/docs/UI-ALIGN.md` 2026-11-26 那一节。
 
+- 2026-11-26 面板「规则」页签对齐时同步了**重命名默认词表**:`internal/subs/rename.go` 的
+  `defaultFeatureKeywords` 从 6 个补到上游 v0.1.488 的 15 个(`iepl iplc ipv6 专线 家宽 2x tud vm ALi AnGe zo org yy RN 0.5`)、
+  `defaultExcludeKeywords` 从 3 个补到 14 个(多 `下载 失效 复制 客户端 如果 网站 剩余 套餐 重置 到期 流量`),顺序照抄,
+  与面板 `panel/src/components/subscription/rename-defaults.ts` 保持一致(注释里已互指)。影响面:**没存过 renameOptions
+  的调用方**拿到的默认命名/过滤结果随之变化(存过的订阅走自己那份,不受影响);`go test ./internal/subs/...` 全绿,
+  现有用例都显式传词表。面板侧细节见 `panel/docs/UI-ALIGN.md` 2026-11-26 那一节。
+
 ## M0 骨架
 - [x] `go.mod`、`cmd/openbox-backend`、参数 / 环境变量 / 路径(`internal/system/paths.go`)
 - [x] HTTP 服务、日志(slog)、优雅退出、统一错误响应 `{ "error": "..." }`

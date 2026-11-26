@@ -48,8 +48,11 @@ var (
 		// 回国 / 中转类排最后:带地区词的节点(「美国 CN2 GIA」)先命中前面的地区
 		{"CN", "中国", []string{"cn", "china", "中国", "中國", "回国", "回國", "back to china"}},
 	}
-	defaultFeatureKeywords = []string{"iepl", "iplc", "ipv6", "专线", "家宽", "2x"}
-	defaultExcludeKeywords = []string{"官网", "工单", "客服"}
+	// 与面板 rename-defaults.ts 同一份,词表和顺序都照上游 v0.1.488
+	defaultFeatureKeywords = []string{"iepl", "iplc", "ipv6", "专线", "家宽", "2x",
+		"tud", "vm", "ALi", "AnGe", "zo", "org", "yy", "RN", "0.5"}
+	defaultExcludeKeywords = []string{"官网", "工单", "客服", "下载", "失效", "复制", "客户端",
+		"如果", "网站", "剩余", "套餐", "重置", "到期", "流量"}
 )
 
 type renameOpts struct {
