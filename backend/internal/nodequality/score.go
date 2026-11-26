@@ -86,6 +86,8 @@ type download struct {
 	Count      int
 	LowerBound bool
 	Fails      int
+	// FailStreak 是窗口内「最新连续失败」的次数(v0.1.492 起:连续 3 次即判带宽失败)
+	FailStreak int
 	Failed     bool
 }
 

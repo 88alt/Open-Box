@@ -677,3 +677,39 @@ func TestBwDropScalesWithWeight(t *testing.T) {
 		t.Fatalf("权重 15%% 时第一次应扣下载项 6 分,得 %.2f", scaled)
 	}
 }
+
+// v0.1.492:失败按距今时间以 2 个周期为半衰期衰减计入等效失败次数(久远失败淡化),
+// 而「最新连续 3 次失败」直接判带宽失败。
+func TestDownloadOfFailuresDecayByHalfLife(t *testing.T) {
+	now, period := int64(1_000_000_000), int64(3_600_000)
+	mkFail := func(age int64) BWSample { return BWSample{At: now - age, Failed: true} }
+
+	// 三次失败都「很新」(半个周期内)→ 等效次数四舍五入到 3,连续 3 次 → 带宽失败
+	near := []BWSample{mkFail(period / 4), mkFail(period / 4), mkFail(period / 4)}
+	d := downloadOf(near, now, period)
+	if d == nil || !d.Failed || d.FailStreak != 3 {
+		t.Fatalf("三次新鲜失败应判带宽失败且 streak=3:%+v", d)
+	}
+
+	// 三次失败但都很久远(4 个半衰期 = 8 个周期前)→ 等效次数 ≈ 3×0.0625 ≈ 0.19,进位到 0
+	// 注意窗口是 max(10×周期, 48h)=48h,8 个周期(8h)仍在窗口内
+	far := []BWSample{mkFail(8 * period), mkFail(8 * period), mkFail(8 * period)}
+	d2 := downloadOf(far, now, period)
+	if d2 == nil {
+		// 窗口内全失败且无成功 → 直接判失败,这是「无成功样本」那条,不是衰减的问题
+		return
+	}
+	if d2.Fails >= 3 {
+		t.Fatalf("久远失败的等效次数应被衰减掉:%+v", d2)
+	}
+
+	// 一次成功之后只有 2 次失败 → streak=2,不因连续判失败
+	mixed := []BWSample{
+		{At: now - 5*period, Mbps: 50},
+		mkFail(period), mkFail(period / 2),
+	}
+	d3 := downloadOf(mixed, now, period)
+	if d3 == nil || d3.FailStreak != 2 || d3.Failed {
+		t.Fatalf("成功之后只连续失败 2 次,不该判带宽失败:%+v", d3)
+	}
+}

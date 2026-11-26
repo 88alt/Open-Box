@@ -186,19 +186,26 @@ func downloadOf(list []BWSample, nowMs, periodMs int64) *download {
 	sort.SliceStable(win, func(i, j int) bool { return win[i].At < win[j].At })
 
 	var ok []BWSample
-	fails := 0
-	for _, p := range win {
+	// v0.1.492:失败不再是简单计数,而是**按距今时间以 2 个周期为半衰期衰减**计入等效失败次数
+	// (久远的失败自然淡化)。等效次数用于扣分阶梯;另外单独记「最新连续失败次数」,
+	// 连续 3 次就判带宽失败(492 新增的判定条件,替代了原来的「累计 5 次」)。
+	var failWeight float64
+	streak := 0
+	for _, p := range win { // win 已按时间升序
 		if !p.Failed && p.Mbps > 0 {
 			ok = append(ok, p)
+			streak = 0
 		} else {
-			fails++
+			age := nowMs - p.At
+			failWeight += math.Pow(0.5, float64(age)/float64(2*periodMs))
+			streak++
 		}
 	}
-	// 失败次数最多按 5 次计(上游:累计 5 次失败即判带宽失败),多出来的不再增加扣分阶梯
+	fails := int(math.Round(failWeight))
 	if fails > bwMaxFails {
 		fails = bwMaxFails
 	}
-	d := &download{Count: len(ok), Fails: fails}
+	d := &download{Count: len(ok), Fails: fails, FailStreak: streak}
 	if len(win) > 0 {
 		d.At = win[len(win)-1].At
 	}
@@ -225,8 +232,9 @@ func downloadOf(list []BWSample, nowMs, periodMs int64) *download {
 		w *= bwDecay
 	}
 	d.Mbps = sv / sw
-	// 累计失败到上限,或扣分把下载分扣到 0,都判带宽失败(扣分本身在 score.go 按权重折算)
-	if fails >= bwMaxFails {
+	// v0.1.492 的判定:无成功样本(上面已返回)、**最新连续 3 次失败**、或扣分把下载分扣到 0
+	// 都判带宽失败。原来的「累计 5 次」已由「连续 3 次」替代。
+	if streak >= bwFailStreak {
 		d.Failed = true
 	}
 	return d
@@ -236,8 +244,10 @@ func downloadOf(list []BWSample, nowMs, periodMs int64) *download {
 const (
 	// bwDecay 是成功样本从新到旧的衰减系数
 	bwDecay = 0.65
-	// bwMaxFails 是「累计到这个次数就判带宽失败」
+	// bwMaxFails 是扣分阶梯的上限档数(等效失败次数超过它就不再增加扣分)
 	bwMaxFails = 5
+	// bwFailStreak 是「最新连续失败到这个次数就判带宽失败」(上游 v0.1.492)
+	bwFailStreak = 3
 	// bwFailStep 是失败扣分的几何阶梯底数(1.5 倍)
 	bwFailStep = 1.5
 	// bwDropUnit 是老代码里用过的首项,保留给按权重缩放的换算
