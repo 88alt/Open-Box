@@ -773,6 +773,9 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			return names, err
 		},
 		SaveSelections: selectionsStore.Set,
+		// 与 sing-box 那条同:部署成功后记下输入指纹,pendingRestart 才会清零。
+		// 之前 mihomo 这条漏了这个字段,真机上「改配置 → 部署」后 pendingRestart 一直为真。
+		Track: applied,
 	}
 	// 按 <ConfigDir>/router-kernel 选一条:sing-box 写 config.json,mihomo 写 mihomo.yaml
 	kernelDeployer := &deploykernel.Deployer{

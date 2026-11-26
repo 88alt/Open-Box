@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
 	"github.com/timeflysoon/Open-Box/backend/internal/store"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
 )
@@ -76,6 +77,10 @@ type Deployer struct {
 	AfterRunning func(ctx context.Context) string
 	// SaveSelections 非 nil:部署成功后存下这次装配出的选中项。
 	SaveSelections func(map[string]any) error
+	// Track 记录「这份配置是用哪些输入生成的」(与 sing-box 那条同义)。
+	// 之前 mihomo 这条完全没有它,于是在 mihomo 内核下部署成功后 pendingRestart 永远清不掉
+	// ——真机 2026-11-26:改 testUrl 后 pending:true,部署成功仍 pending:true(reasons:[nodes])。
+	Track singbox.Tracker
 
 	HealthTimeout time.Duration
 	StableFor     time.Duration
@@ -156,7 +161,9 @@ func (d *Deployer) Deploy(ctx context.Context) DeployResult {
 	}
 	hadPrev := err == nil
 
-	// 2. 生成 → 先在临时路径落盘 → mihomo -t 校验。到这里都没碰正式配置
+	// 2. 取指纹 → 生成 → 先在临时路径落盘 → mihomo -t 校验。到这里都没碰正式配置。
+	// 指纹必须在生成之前取:生成过程中会顺带刷新规则集等输入,事后再取就和这份配置对不上了。
+	fp := d.snapshot(ctx)
 	res, err := d.Build.BuildMihomo(ctx)
 	if err != nil {
 		return mihomoFail(MihomoStageValidate, "生成配置失败:"+err.Error(), nil)
@@ -243,6 +250,9 @@ func (d *Deployer) Deploy(ctx context.Context) DeployResult {
 	if note != "" {
 		msg += ";" + note
 	}
+	// 部署成功:记下这次的输入指纹,service/status 的 pendingRestart 据此清零。
+	// 之前 mihomo 这条完全没有这一步,真机上「改配置 → 部署」之后 pendingRestart 一直是真。
+	d.recordApplied(fp)
 	return DeployResult{OK: true, Stage: MihomoStageRunning, Message: msg, BadTags: []string{}}
 }
 
@@ -395,4 +405,25 @@ func mihomoActionName(a string) string {
 		return "重启"
 	}
 	return "启动"
+}
+
+// snapshot 在生成配置之前取「这次部署用到的输入」的指纹;取不到只当作没有,部署照常进行
+// (与 sing-box 那条同义:取不到就不判断 pendingRestart,而不是让部署失败)。
+func (d *Deployer) snapshot(ctx context.Context) singbox.Fingerprint {
+	if d.Track == nil {
+		return nil
+	}
+	fp, err := d.Track.Snapshot(ctx)
+	if err != nil {
+		return nil
+	}
+	return fp
+}
+
+// recordApplied 在部署成功后存指纹。存失败不影响部署结果(系统已经变了,调用方必须拿到真实结果)。
+func (d *Deployer) recordApplied(fp singbox.Fingerprint) {
+	if d.Track == nil || fp == nil {
+		return
+	}
+	_ = d.Track.Record(fp)
 }
