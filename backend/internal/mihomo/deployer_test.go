@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/timeflysoon/Open-Box/backend/internal/singbox"
 	"github.com/timeflysoon/Open-Box/backend/internal/system"
 )
 
@@ -279,4 +280,70 @@ func TestMihomoDeployBusy(t *testing.T) {
 	if !res.Busy {
 		t.Fatalf("第二次应回 Busy:%+v", res)
 	}
+}
+
+// 部署成功要调 SavePlan(把故障转移计划存下来)——sing-box 那条一直有,mihomo 这条漏过:
+// 真机上配了 failover 组、部署成功,failover.json 仍是空的、failover/status 的 groups 一直空。
+func TestMihomoDeploySavesFailoverPlan(t *testing.T) {
+	srv, addr := fakeController(t, "s3cret")
+	defer srv.Close()
+	var saved []any
+	d := newDep(t, &fakeSvc{}, testResult(addr, "s3cret"))
+	d.SavePlan = func(v any) error { saved = append(saved, v); return nil }
+	res := d.Deploy(context.Background())
+	if !res.OK {
+		t.Fatalf("%+v", res)
+	}
+	if len(saved) != 1 {
+		t.Fatalf("SavePlan 应该被调一次,实际 %d 次", len(saved))
+	}
+}
+
+// SavePlan 失败不改变部署结果(内核是好的),错误写进 Message。
+func TestMihomoDeploySavePlanFailureKeepsOK(t *testing.T) {
+	srv, addr := fakeController(t, "s3cret")
+	defer srv.Close()
+	d := newDep(t, &fakeSvc{}, testResult(addr, "s3cret"))
+	d.SavePlan = func(any) error { return errors.New("磁盘满了") }
+	res := d.Deploy(context.Background())
+	if !res.OK || !strings.Contains(res.Message, "磁盘满了") {
+		t.Fatalf("%+v", res)
+	}
+}
+
+// 部署成功要记录输入指纹(Track),否则 pendingRestart 永远清不掉。
+func TestMihomoDeployRecordsFingerprint(t *testing.T) {
+	srv, addr := fakeController(t, "s3cret")
+	defer srv.Close()
+	rec := &fakeTracker{fp: singbox.Fingerprint{"d:nodes": "abc"}}
+	d := newDep(t, &fakeSvc{}, testResult(addr, "s3cret"))
+	d.Track = rec
+	res := d.Deploy(context.Background())
+	if !res.OK {
+		t.Fatalf("%+v", res)
+	}
+	if rec.snapshotCalls != 1 || rec.recordCalls != 1 {
+		t.Fatalf("Snapshot/Record 应各调一次,实际 %d/%d", rec.snapshotCalls, rec.recordCalls)
+	}
+	if rec.recorded["d:nodes"] != "abc" {
+		t.Fatalf("记录的指纹不对:%v", rec.recorded)
+	}
+}
+
+type fakeTracker struct {
+	fp            singbox.Fingerprint
+	snapshotCalls int
+	recordCalls   int
+	recorded      singbox.Fingerprint
+}
+
+func (f *fakeTracker) Snapshot(context.Context) (singbox.Fingerprint, error) {
+	f.snapshotCalls++
+	return f.fp, nil
+}
+
+func (f *fakeTracker) Record(fp singbox.Fingerprint) error {
+	f.recordCalls++
+	f.recorded = fp
+	return nil
 }

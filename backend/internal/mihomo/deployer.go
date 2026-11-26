@@ -81,6 +81,11 @@ type Deployer struct {
 	// 之前 mihomo 这条完全没有它,于是在 mihomo 内核下部署成功后 pendingRestart 永远清不掉
 	// ——真机 2026-11-26:改 testUrl 后 pending:true,部署成功仍 pending:true(reasons:[nodes])。
 	Track singbox.Tracker
+	// SavePlan 非 nil:部署成功(内核健康)后调用,把这份配置对应的故障转移计划存下来
+	// (与 sing-box 那条同义)。之前 mihomo 这条也漏了它,导致在 mihomo 下配了 failover 组、
+	// 部署成功后 failover.json 仍是空的、failover/status 的 groups 也一直空
+	// ——真机 2026-11-26 用带 lanes 的 failover 组复现。
+	SavePlan func(failover any) error
 
 	HealthTimeout time.Duration
 	StableFor     time.Duration
@@ -246,13 +251,24 @@ func (d *Deployer) Deploy(ctx context.Context) DeployResult {
 			}
 		}
 	}
+	// 部署成功:记下这次的输入指纹,service/status 的 pendingRestart 据此清零。
+	// 之前 mihomo 这条完全没有这一步,真机上「改配置 → 部署」之后 pendingRestart 一直是真。
+	d.recordApplied(fp)
+	// 存故障转移计划(与 sing-box 那条同义)。漏了它,mihomo 下配了 failover 组也不会有计划。
+	if d.SavePlan != nil {
+		if err := d.SavePlan(res.Failover); err != nil {
+			m := "故障转移计划没保存成功,故障转移状态可能不准:" + err.Error()
+			if note == "" {
+				note = m
+			} else {
+				note += ";" + m
+			}
+		}
+	}
 	msg := "已应用并正常运行"
 	if note != "" {
 		msg += ";" + note
 	}
-	// 部署成功:记下这次的输入指纹,service/status 的 pendingRestart 据此清零。
-	// 之前 mihomo 这条完全没有这一步,真机上「改配置 → 部署」之后 pendingRestart 一直是真。
-	d.recordApplied(fp)
 	return DeployResult{OK: true, Stage: MihomoStageRunning, Message: msg, BadTags: []string{}}
 }
 
