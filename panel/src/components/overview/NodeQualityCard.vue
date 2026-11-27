@@ -348,6 +348,7 @@
 <script setup lang="ts">
 import {
   fetchNodeQuality,
+  fetchProfile,
   type OpenboxNodeQuality,
   type OpenboxQualityNode,
   type OpenboxQualityStats,
@@ -431,10 +432,15 @@ const bandwidthStateLabel = (s: QualityRow) => {
       return ''
   }
 }
+// 上游 v0.1.493:带宽权重为 0% 时,带宽失败不影响总分,这时提示措辞要换成「不参与计分」
+// (archive 里的 nodeScoreWeights,默认 40/30/30)
+const downloadWeight = ref<number | null>(null)
+
 const bandwidthStateTip = (s: QualityRow) => {
   switch (bandwidthState(s)) {
     case 'failed':
-      return t('qualityBandwidthFailedTip')
+      // 带宽权重为 0 时按「不参与计分」的说法,与后端「权重 0 不参与」的口径一致
+      return downloadWeight.value === 0 ? t('qualityBandwidthFailedUnweightedTip') : t('qualityBandwidthFailedTip')
     case 'unmeasured':
       return t('qualityBandwidthUnmeasuredTip')
     case 'provisional':
@@ -516,7 +522,19 @@ watch(search, () => {
   }, 250)
 })
 
+// 读一次档案里的带宽权重(只在「带宽失败」提示的措辞上用得到,失败就不改措辞)
+const loadWeights = async () => {
+  try {
+    const p = await fetchProfile()
+    const w = p.nodeScoreWeights
+    if (w && typeof w.download === 'number') downloadWeight.value = w.download
+  } catch {
+    // 读不到就按「参与计分」的默认措辞
+  }
+}
+
 onMounted(() => {
+  void loadWeights()
   void load()
   timer = setInterval(() => {
     if (!document.hidden && !loading.value) void load()

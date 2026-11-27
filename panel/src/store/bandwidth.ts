@@ -48,8 +48,9 @@ const settleWatching = (status: Awaited<ReturnType<typeof fetchBandwidthStatus>>
     if (m.error || m.failed || m.mbps == null) {
       notifyFailed(`${name} · ${latencyReasonText(m.reason || 'error')}`)
     } else {
+      // 上游 v0.1.493:测出正数 Mbps 但近期失败还在降权时,用「仍受降权影响,继续测速可恢复」的说法
       showNotification({
-        content: 'bandwidthManualComplete',
+        content: m.downloadFailed ? 'bandwidthManualCompleteRecovering' : 'bandwidthManualComplete',
         params: { name, value: String(Math.round(m.mbps)) },
         type: 'alert-success',
       })

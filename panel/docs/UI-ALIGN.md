@@ -776,3 +776,8 @@
   ③ `BandwidthSettingsHelpDialog` 的 `bandwidthSettingsTitle` 分支在 `dl` 之后加一行
   `bandwidthHelpCurrentEndpoint`(「测速站点:{endpoint}」),`endpointLabel` 用与卡片下拉同一套四语文案把 `cloudflare/apple/cachefly/custom` 翻成人话。
   验证:`vue-tsc` 与 `npm run build` 通过。
+- **第 10 批:补 2 处按引用核对出来的接线**(`bandwidthManualCompleteRecovering` / `qualityBandwidthFailedUnweightedTip`)
+  ① `bandwidthManualCompleteRecovering`(v0.1.493):`store/bandwidth.ts` 的 `settleWatching` 里,手动测出正数 Mbps 后按 `m.downloadFailed` 分流 —— 仍受近期失败降权时用「…(仍受近期失败降权影响,继续测速可恢复)」,否则用原来的 `bandwidthManualComplete`。
+  ② `qualityBandwidthFailedUnweightedTip`(v0.1.490 就引入、一直记着「未接」):`NodeQualityCard` 新增 `downloadWeight`,在 `onMounted` 用 `fetchProfile()` 读一次 `nodeScoreWeights.download`;带宽失败时若权重为 **0** 改用「不参与计分」的措辞,否则沿用 `qualityBandwidthFailedTip`。读不到权重就按参与计分处理(与默认 30% 一致)。
+  **顺带更正 STATUS 里一条旧推断**:那里写着「`NodeQualityCard` 拿不到档案权重…属措辞级差异」,本批已用 `fetchProfile()` 解决,不再需要维护者另做决定。
+  验证:`vue-tsc` 与 `npm run build` 通过。
