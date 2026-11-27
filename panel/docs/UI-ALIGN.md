@@ -718,3 +718,7 @@
   验证:`vue-tsc` 与 `npm run build` 通过;三语 2316 → **2325**,「多出」0、**「值不同」0**。
   **未做(下一批)**:刷新评分的按钮、评分排序、标签里「延迟 | 评分」的显示与悬浮窗那一行 —— 这些要动
   `LatencyTag.vue` / `ProxyNodeCard.vue` / 代理页排序,属功能改动,已单独排批。
+- **第 2 批:内核页把「检查更新」并入「重启」按钮后面**(对应 release notes「内核页将检查更新按钮并入重启按钮后方以分隔线展示,布局更紧凑」)
+  改动:`OpenboxUpdateCard` 加 `hideCheck` 属性 + `defineExpose({check, checking, latest})`;`KernelServiceCard` 在 `KernelRestartButton` 之后加一条竖分隔线(`bg-base-content/20 h-5 w-px`)与「检查更新」按钮,并把嵌入的更新卡设为 `hide-check`,避免同一个动作出现两个按钮。
+  验证:`vue-tsc` 与 `npm run build` 通过。
+  **推断点 / 待维护者复核**:分隔线的具体样式(高度 `h-5`、颜色 `base-content/20`)是按现有卡片里另一条分隔线(`h-px` 横线)的风格推的,上游 dist 里这段被混淆包住、取不到确切 class;若维护者觉得粗细不齐可改这一行。

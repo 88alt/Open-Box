@@ -230,13 +230,31 @@
           {{ $t('kernelActionStop') }}
         </button>
         <KernelRestartButton />
+        <!-- 上游 v0.1.494:把「检查更新」并到「重启」后面,用分隔线隔开,布局更紧凑 -->
+        <template v-if="profile && patchProfile">
+          <div class="bg-base-content/20 h-5 w-px" />
+          <button
+            type="button"
+            class="btn btn-sm"
+            :disabled="updateCard?.checking"
+            @click="updateCard?.check()"
+          >
+            <span
+              v-if="updateCard?.checking"
+              class="loading loading-spinner loading-xs"
+            />
+            {{ $t('obUpdateCheck') }}
+          </button>
+        </template>
       </div>
 
       <!-- Open-Box 更新:通道 / 检查更新 / 自动更新(档案还在加载时先不显示) -->
       <template v-if="profile && patchProfile">
         <div class="bg-base-content/10 h-px" />
         <OpenboxUpdateCard
+          ref="updateCard"
           embedded
+          hide-check
           :profile="profile"
           :patch-profile="patchProfile"
         />
@@ -276,7 +294,7 @@ import {
   PlayIcon,
   StopIcon,
 } from '@heroicons/vue/24/outline'
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -306,6 +324,10 @@ const emit = defineEmits<{
 // refreshSeq,旧响应能把新状态盖回去。
 
 const { runKernelAction: run } = useKernelActions()
+
+// 「检查更新」按钮挪到重启按钮旁边后,要拿到更新卡里的 checking / check()
+type UpdateCardApi = { checking?: boolean; check: () => void | Promise<void> }
+const updateCard = ref<UpdateCardApi | null>(null)
 const runKernelAction = async (action: Parameters<typeof run>[0]) => {
   await run(action)
   emit('refresh')

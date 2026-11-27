@@ -15,7 +15,7 @@
           {{ $t('obUpdateViewProgress') }}
         </button>
         <button
-          v-else
+          v-else-if="!hideCheck"
           type="button"
           class="btn btn-sm"
           :disabled="checking"
@@ -120,10 +120,15 @@ const props = defineProps<{
   profile: OpenboxProfile
   patchProfile: (patch: Record<string, unknown>) => Promise<OpenboxProfile>
   embedded?: boolean
+  // 上游 v0.1.494:内核页把「检查更新」并到「重启」按钮后面(用分隔线隔开),
+  // 这时卡片里不再重复渲染这个按钮,由 KernelServiceCard 自己放
+  hideCheck?: boolean
 }>()
 
 const latest = ref<{ current: string; latest: string; hasUpdate: boolean } | null>(null)
 const checking = ref(false)
+// hideCheck 时父组件要自己画按钮,所以把状态和方法暴露出去
+defineExpose({ check, checking, latest })
 const plan = computed(() => ({
   auto: props.profile.updates?.openbox?.auto === true,
   hour: props.profile.updates?.openbox?.hour ?? 4,

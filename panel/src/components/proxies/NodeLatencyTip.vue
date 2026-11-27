@@ -34,6 +34,14 @@
         <XMarkIcon class="h-4 w-4" />
       </button>
     </div>
+    <!-- 上游 v0.1.494:浮层里多一行节点评分(分数 + 按阈值着色) -->
+    <div
+      v-if="scoreText"
+      class="flex items-center gap-1 text-xs"
+    >
+      <span class="opacity-60">{{ $t('nodeScoreTipLabel') }}</span>
+      <span :class="['font-semibold', scoreClass]">{{ scoreText }}</span>
+    </div>
     <div class="h-64 w-full max-w-[calc(100vw-var(--app-card-space,12px)*4)] overflow-hidden">
       <div
         v-show="tab === 'latency'"

@@ -239,7 +239,8 @@ export const setCpuLoadThreshold = (index: 0 | 1, value: number) => {
   else cpuLoadMediumThreshold.value = clampInt(value, low + 1, 100)
 }
 // 节点评分着色/分档阈值(分):低于 poor 为「较低」红,低于 fair 为「一般」橙,更高为「优秀」绿;默认 30 / 80(与上游 v0.1.486 一致)
-const NODE_SCORE_DEFAULTS = [30, 80]
+// 上游 v0.1.494 把「评分较高」的阈值从 80 降到 70(30 分以下较低、70 分以上较高)
+const NODE_SCORE_DEFAULTS = [30, 70]
 export const nodeScorePoorThreshold = useStorage('config/node-score-poor-threshold', NODE_SCORE_DEFAULTS[0])
 export const nodeScoreFairThreshold = useStorage('config/node-score-fair-threshold', NODE_SCORE_DEFAULTS[1])
 // 读出来时保证 0 ≤ poor < fair ≤ 100;存的值不合法(被手改过)就退回默认
