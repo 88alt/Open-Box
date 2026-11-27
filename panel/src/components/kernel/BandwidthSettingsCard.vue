@@ -272,6 +272,22 @@ const saveBandwidth = async () => {
   const cappedMB = Number.isFinite(cap) ? Math.max(MIN_MB, Math.min(MAX_MB, cap)) : DEFAULT_MB
   period.value = toDisplay(intervalHours, unit.value)
   maxDownloadMB.value = cappedMB
+  // 选了自定义站点就必须填合法地址:前端先拦一道,免得存进去一个测不了的地址
+  if (endpoint.value === 'custom') {
+    const u = customUrl.value.trim()
+    let ok = false
+    try {
+      const parsed = new URL(u)
+      ok = parsed.protocol === 'https:' && !!parsed.hostname
+    } catch {
+      ok = false
+    }
+    if (!ok) {
+      showNotification({ content: t('bandwidthCustomUrlInvalid'), type: 'alert-error' })
+      resetBandwidthFields()
+      return
+    }
+  }
   saving.value = true
   try {
     await props.patchProfile({
@@ -282,9 +298,10 @@ const saveBandwidth = async () => {
         startHour: Math.min(23, Math.max(0, Math.round(Number(startHour.value)) || 0)),
         // 自定义站点要带地址;非自定义时不带(后端按预设选地址)
         endpoint: endpoint.value,
-        ...(endpoint.value === 'custom' ? { endpointCustomUrl: customUrl.value } : {}),
+        ...(endpoint.value === 'custom' ? { endpointCustomUrl: customUrl.value.trim() } : {}),
       },
     })
+    showNotification({ content: 'bandwidthEndpointSaved', type: 'alert-success' })
   } catch (e) {
     resetBandwidthFields()
     showNotification({ content: (e as Error).message, type: 'alert-error' })

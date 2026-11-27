@@ -65,6 +65,10 @@
             <dd class="text-base-content/75">{{ $t('bandwidthSettingsHelpEndpoint') }}</dd>
           </div>
         </dl>
+        <!-- 上游 v0.1.493:带上当前实际用的测速站点 -->
+        <p class="font-medium tabular-nums">
+          {{ $t('bandwidthHelpCurrentEndpoint', { endpoint: endpointLabel }) }}
+        </p>
         <div class="bg-base-200 rounded-lg p-3">
           <h3 class="mb-1 font-semibold">{{ $t('bandwidthSettingsHelpExampleHeading') }}</h3>
           <p>{{ $t('bandwidthSettingsHelpExample') }}</p>
@@ -213,6 +217,18 @@ const currentTestKey = computed(() =>
 )
 
 // 「当前设置」一行:档案里已保存的值(不是输入框里还没保存的草稿)
+// 当前测速站点的人类可读名(与卡片下拉的四个选项同一套文案)
+const ENDPOINT_KEYS: Record<string, string> = {
+  cloudflare: 'bandwidthEndpointCloudflare',
+  apple: 'bandwidthEndpointApple',
+  cachefly: 'bandwidthEndpointCachefly',
+  custom: 'bandwidthEndpointCustom',
+}
+const endpointLabel = computed(() => {
+  const e = props.profile?.bandwidth?.endpoint ?? 'cloudflare'
+  return t(ENDPOINT_KEYS[e] ?? ENDPOINT_KEYS.cloudflare)
+})
+
 const currentText = computed(() => {
   if (props.loading) return t('bandwidthHelpLoading')
   const p = props.profile

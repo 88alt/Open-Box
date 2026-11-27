@@ -769,3 +769,10 @@
   **验证后的键集终态**:上游 2369 / main **2331**,「多出」0、「值不同」0;
   剩余 38 个缺失键**逐个复查过,全部落在例外 C 的前缀里**(`business*` 与 `bandwidthHelpCurrentBusiness`)。
   `vue-tsc` 与 `npm run build` 通过。
+- **第 9 批:按引用核对补 3 处接线**(`bandwidthCustomUrlInvalid` / `bandwidthEndpointSaved` / `bandwidthHelpCurrentEndpoint`)
+  第 4 批补了测速站点的 12 个键,但**只接了 9 个**;用 `cmp-upstream-refs.py` 复查发现这 3 个「上游引用、main 没引用」,本批补上:
+  ① `BandwidthSettingsCard` 保存前校验自定义地址(必须是 `https://` 且有主机名),不合法弹 `bandwidthCustomUrlInvalid` 并回填字段、不提交;
+  ② 保存成功弹 `bandwidthEndpointSaved`(以前静默成功,用户不知道存上了);
+  ③ `BandwidthSettingsHelpDialog` 的 `bandwidthSettingsTitle` 分支在 `dl` 之后加一行
+  `bandwidthHelpCurrentEndpoint`(「测速站点:{endpoint}」),`endpointLabel` 用与卡片下拉同一套四语文案把 `cloudflare/apple/cachefly/custom` 翻成人话。
+  验证:`vue-tsc` 与 `npm run build` 通过。
