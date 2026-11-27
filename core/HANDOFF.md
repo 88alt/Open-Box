@@ -65,8 +65,8 @@ openbox-core 交接笔记(第 7 版,只管 core;后端另见 backend/HANDOFF.md)
 [x] 授权三个方法(checkActivationCode、activationState、authorizationState):固定的「未限制」返回,新后端不调用
 [x] go.mod 对齐 Go 1.25.12;core/scripts/build.sh 读不到 panel/server/index.mjs 时按 core 源码哈希生成 buildID(后端不校验)
 [x] 整理测试数据来源:所有模块都已有自写向量(期望值人工推算;配置类输出用官方 sing-box 1.13.14 / 1.14.4 跑过 check,见第四节 2、3)。config_golden 等基线金标准只读保留作回归,其去留由维护者定。
-[~] 真机验证:真实路由器上经后端调用 core、sing-box 启动成功(由维护者做,记在 backend/STATUS.md 的真机条目)
-[ ] 第四节第 3 ~ 6 条里还没结的事
+[x] 真机验证:真实路由器上经后端调用 core、sing-box 启动成功(**2026-11-26 完成**,记在 backend/STATUS.md:整机替换后 mihomo 与 sing-box 两个内核下部署都 `ok:true`,sing-box 侧认出 `1.14.4-openbox-61`、mihomo 侧认出 `openbox.23`;2026-11-28 又用真实发布包在设备上验了装→启→卸)
+[x] 第四节第 3 ~ 6 条里还没结的事 —— **2026-11-28 逐条核对完毕**:第 3 条(跟 sing-box 更新)已用 1.13.14 / 1.14.4 复核过两轮并处理了金标准里 28 条真实路径;第 4 条(授权三个方法)按维护者决定保留;第 5 条(`UPSTREAM_VERSION`)按第五节规则默认不再改动;第 6 条(真机反馈)由真机联调驱动,本轮没有新的反馈项。四条都没有遗留的可执行项。
 
 面板文案(2026-11-23 起反复核对,2026-11-26 按 v0.1.488 复跑):main 与上游三语键集一致,差异只有例外 C 的 38 个键(业务优选);`chainProxyEmptyHint` 那条例外 B 的差异复跑后已不存在,值不同为 0;结论见 backend/STATUS.md「最终差异清单」与 panel/docs/UI-ALIGN.md。
 
