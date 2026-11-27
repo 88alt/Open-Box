@@ -26,10 +26,10 @@ func TestConverterReusesDeployedMrs(t *testing.T) {
 	c := &Converter{
 		FS:       fsys,
 		RulesDir: "/data/mihomo/rules",
-		// 故意让 SrsPath 返回错误:走快路径时不该再去找 .srs
-		SrsPath: func(string) (string, error) { return "", errors.New("不该被调用") },
+		// 指向一个memFS 里不存在的 .srs:官方安装就是这个状态(只有 .mrs,没有 .srs)
+		SrsPath: func(string) (string, error) { return "/geo/geosite-cn.srs", nil },
 		Decompile: func(context.Context, string, string) error {
-			t.Error("复用已部署 provider 时不该反编译")
+			t.Error("源文件不存在、但有已部署 provider 时不该反编译")
 			return nil
 		},
 	}

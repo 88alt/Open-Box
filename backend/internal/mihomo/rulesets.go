@@ -214,13 +214,16 @@ func providerForFile(tag, name, behavior, _ string) (Provider, bool) {
 }
 
 func (c *Converter) convertOne(ctx context.Context, tag, kind string) (Provider, error) {
-	// 先看有没有已经部署好的 provider(官方 .mrs 或上一次生成的 yaml),有就复用,不去找 .srs
-	if p, ok := c.reuseDeployed(tag, kind); ok {
-		return p, nil
-	}
 	srs, err := c.SrsPath(tag)
 	if err != nil {
 		return Provider{}, err
+	}
+	// 源文件不在时(官方安装只落了 .mrs、没有 .srs)先看目录里有没有现成的 provider。
+	// 只在「源文件确实不存在」这一种情况下走快路径,不影响正常流程(有 .srs 时行为完全不变)。
+	if c.FS != nil && !c.FS.Exists(srs) {
+		if p, ok := c.reuseDeployed(tag, kind); ok {
+			return p, nil
+		}
 	}
 	tmp := filepath.Join(c.RulesDir, "."+randomHex(16)+".json")
 	defer func() { _ = c.FS.Remove(tmp) }()
