@@ -301,6 +301,9 @@
   `bandwidthHelpCurrentBusiness`、`businessSettingsHelp*`(8 个)。**扣除例外 C 后缺失 0**。
 - **多出**:**无**。
 - **值不同**:**无**。
+- **值不同**:**无**。
+
+**2026-11-28 补一个真缺口**:上面的键集核对漏了 4 个键——`obUpdateChannelAuto` / `obUpdateChannelDirect` / `obUpdateChannelMirror` / `obUpdateInstalledChannel`。它们**不属于任何例外**,上游在 `KernelPage` 里真实引用(内核页更新卡片上的通道下拉框 + 「安装时通道」提示),而 main 既没定义也没引用。已补齐:三语逐字取上游文案,`OpenboxUpdateCard.vue` 加通道下拉框(改动即把 `updates.openbox.checkChannel` 存进档案)并在升级时按所选通道 `startUpdate`,右上补「安装时通道」小字(取 `update/status` 的 `channel.mode`)。**补齐后重新核对**:上游候选键 2275、main 2319,**差 38 个全部是例外 C 的 `business*` 前缀**,真缺口 0。(`vue-tsc` 与 `npm run build` 均通过。)
 - 三语一致:上游 zh / zh-tw 相对 en 既不缺也不多。
 
 ### 引用(`cmp-upstream-refs.py`)
