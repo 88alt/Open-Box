@@ -393,6 +393,11 @@ async function capture(browser, origin) {
   })
   const page = await ctx.newPage()
   await login(page, origin)
+  // 登录后是 SPA 的二次跳转(离开 /login 还会再重定向一次),跳转途中取执行上下文会被销毁,
+  // 报 "Execution context was destroyed"。先等负载与网络都静下来,再写语言 / 主题。
+  // (2026-11-27 踩到:12 组里 11 组直接 -1。)
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await page.waitForTimeout(800)
   // 语言 / 主题必须在登录之后写再 reload:addInitScript 在每次导航前都跑,登录页会把它们
   // 覆盖回默认值,只在导航前写一次是无效的(踩过:深色主题比对时两边都是浅色)。
   await page.evaluate(

@@ -31,13 +31,22 @@ function proxy(req, res) {
     headers: { ...req.headers, host: t.host },
   }
   const up = http.request(opts, (ur) => {
+    // 上游或客户端中途断开会抛 ECONNRESET 之类的错误;不接住会让整个进程崩掉,
+    // 后面的比对组全都连不上(2026-11-27 实际踩到:12 组里 11 组 -1)。
+    ur.on('error', () => res.destroy())
+    res.on('error', () => ur.destroy())
     res.writeHead(ur.statusCode || 502, ur.headers)
     ur.pipe(res)
   })
   up.on('error', () => {
-    res.writeHead(502)
-    res.end('bad gateway')
+    if (!res.headersSent) {
+      res.writeHead(502)
+      res.end('bad gateway')
+    } else {
+      res.destroy()
+    }
   })
+  req.on('error', () => up.destroy())
   req.pipe(up)
 }
 
@@ -64,8 +73,15 @@ function proxyWs(req, socket, head) {
     socket.pipe(upsock)
   })
   up.on('error', () => socket.destroy())
+  socket.on('error', () => up.destroy())
   up.end()
 }
+
+// 兜底:代理链路上任何漏网的 socket 错误都不该让基准服务退出
+process.on('uncaughtException', (e) => {
+  if (e && (e.code === 'ECONNRESET' || e.code === 'EPIPE')) return
+  console.error('[serve-base] uncaught:', e && e.message)
+})
 
 const server = http.createServer((req, res) => {
   if (req.url.startsWith('/api')) return proxy(req, res)
