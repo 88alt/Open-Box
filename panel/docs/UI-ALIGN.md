@@ -704,3 +704,17 @@
   改动:三语各 10 条**逐字替换**为上游 493 的值(用脚本按 493 语言包取值后替换,避免手抄出错);含关键语义变化——未测带宽由「按 0 分计入」改为「按已测延时与抖动乘 0.85 保守估算」,而带宽测速失败仍严格计 0 分;`obUpdateStage_probing` 改为「正在自动选择最快下载源…」。
   验证:`vue-tsc` 与 `npm run build` 通过;**「值不同」从 10 清零**,「多出」保持 0,三语键数 2316。
   **推断点 / 待维护者复核**:这批只改了文案,后端 `internal/nodequality` 的评分实现没动 —— 如果上游 v5 曲线的算法除了措辞之外还有数值变化(例如 0.85 系数、分层规则),需要另行核对后端实现;本轮无 dist 源码可依据,只对齐了文案层。
+
+## 键集对齐:上游 v0.1.494(2026-11-27)
+
+上游 `v0.1.494`(`catch-up-upstream` = `44bf5bd4`,2026-11-27T09:59Z)三语各 **2369** 键,main 对齐前 **2316** 键。
+
+- **本批:9 个 `nodeScore*` 新键 + 2 处文案更新**
+  新增:`nodeScoreTipLabel`(节点评分:)、`nodeScoreRefresh`(刷新评分)、以及刷新过程的七条状态
+  (`nodeScoreRefreshStarted` / `Queued` / `Done` / `Unavailable` / `SubQueued` / `SubDone` / `Failed`)。
+  对应 release notes「代理页节点标签改为显示『延迟 | 节点评分』,悬浮详情窗增加节点评分…新增按评分升序/降序排序及右上角刷新评分按钮」。
+  更新:`nodeScoreExcellentShort` 「评分优秀」→ **「评分较高」**(excellent→High),因 release notes 把阈值从 80 改到 **70**;
+  `groupType_failover_short` 英文 `failover` → **`Fallback`**(对应「统一组类型在英文本地化显示」)。
+  验证:`vue-tsc` 与 `npm run build` 通过;三语 2316 → **2325**,「多出」0、**「值不同」0**。
+  **未做(下一批)**:刷新评分的按钮、评分排序、标签里「延迟 | 评分」的显示与悬浮窗那一行 —— 这些要动
+  `LatencyTag.vue` / `ProxyNodeCard.vue` / 代理页排序,属功能改动,已单独排批。
