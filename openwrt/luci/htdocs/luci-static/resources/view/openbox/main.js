@@ -64,14 +64,8 @@ var I18N = {
 		'Confirm update': '确认更新',
 		'This will stop services and replace program files. The panel will be briefly unavailable. Continue?':
 			'此操作会停止服务并替换程序文件,期间面板会短暂不可用。确定继续吗?',
-		'GitHub direct': 'GitHub 直连',
-		'Test all update channels': '一键检测可用升级渠道',
-		'Test': '检测',
-		'Testing...': '检测中…',
-		'Not tested yet': '未检测',
-		'Available %sms': '可用 %sms',
 		'Unavailable': '不可用',
-		'Updating to %s (%s)...': '正在更新到 %s(%s)…',
+		'Updating to %s...': '正在更新到 %s…',
 		'Starting update...': '正在启动更新…',
 		'Update started. This may take a few minutes (about 80MB to download).':
 			'更新已开始,可能需要几分钟(约需下载 80MB)。',
@@ -91,8 +85,10 @@ var I18N = {
 		'Recent update log:': '最近的更新日志:',
 		'Update script not found. Run it manually over SSH.': '未找到升级脚本,请通过 SSH 手动执行。',
 		'Preparing...': '正在准备…',
-		'Probing channels...': '正在探测渠道…',
+		'Selecting fastest download source...': '正在自动选择最快下载源…',
 		'Downloading...': '正在下载…',
+		'Source: %s': '下载源:%s',
+		'Source attempts: %s': '切源记录:%s',
 		'Verifying checksum...': '正在校验…',
 		'Extracting...': '正在解包…',
 		'Replacing program files (cannot cancel)...': '正在替换程序文件(无法取消)…',
@@ -192,14 +188,8 @@ var I18N = {
 		'Confirm update': '確認更新',
 		'This will stop services and replace program files. The panel will be briefly unavailable. Continue?':
 			'此操作會停止服務並替換程式檔案,期間面板會短暫無法使用。確定要繼續嗎?',
-		'GitHub direct': 'GitHub 直連',
-		'Test all update channels': '一鍵檢測可用升級渠道',
-		'Test': '檢測',
-		'Testing...': '檢測中…',
-		'Not tested yet': '未檢測',
-		'Available %sms': '可用 %sms',
 		'Unavailable': '不可用',
-		'Updating to %s (%s)...': '正在更新到 %s(%s)…',
+		'Updating to %s...': '正在更新到 %s…',
 		'Starting update...': '正在啟動更新…',
 		'Update started. This may take a few minutes (about 80MB to download).':
 			'更新已開始,可能需要幾分鐘(約需下載 80MB)。',
@@ -219,8 +209,10 @@ var I18N = {
 		'Recent update log:': '最近的更新日誌:',
 		'Update script not found. Run it manually over SSH.': '找不到升級腳本,請透過 SSH 手動執行。',
 		'Preparing...': '正在準備…',
-		'Probing channels...': '正在探測渠道…',
+		'Selecting fastest download source...': '正在自動選擇最快下載源…',
 		'Downloading...': '正在下載…',
+		'Source: %s': '下載源:%s',
+		'Source attempts: %s': '切源記錄:%s',
 		'Verifying checksum...': '正在校驗…',
 		'Extracting...': '正在解壓…',
 		'Replacing program files (cannot cancel)...': '正在替換程式檔案(無法取消)…',
@@ -777,16 +769,32 @@ var CANCELLABLE_STAGES = {
 // bytes/total 只有整数才采信,格式不对就当缺失,交给调用方退化处理,不强行拼出
 // 一个可能算错的百分比。
 function parseUpdateStatus(txt) {
-	var out = { pid: '', stage: '', bytes: null, total: null, message: '' };
+	var out = {
+		pid: '',
+		stage: '',
+		bytes: null,
+		total: null,
+		message: '',
+		source: '',
+		sourceLabel: '',
+		speed: null,
+		item: '',
+		attempts: ''
+	};
 	String(txt || '').split('\n').forEach(function (line) {
 		var i = line.indexOf('=');
 		if (i === -1) return;
-		var k = line.slice(0, i), v = line.slice(i + 1);
+		var k = line.slice(0, i), v = line.slice(i + 1).replace(/\r$/, '');
 		if (k === 'pid') out.pid = v;
 		else if (k === 'stage') out.stage = v;
 		else if (k === 'bytes') out.bytes = /^[0-9]+$/.test(v) ? parseInt(v, 10) : null;
 		else if (k === 'total') out.total = /^[0-9]+$/.test(v) ? parseInt(v, 10) : null;
 		else if (k === 'message') out.message = v;
+		else if (k === 'source') out.source = v;
+		else if (k === 'source_label') out.sourceLabel = v;
+		else if (k === 'speed') out.speed = /^[0-9]+$/.test(v) ? parseInt(v, 10) : null;
+		else if (k === 'item') out.item = v;
+		else if (k === 'attempts') out.attempts = v;
 	});
 	return out;
 }
@@ -818,7 +826,7 @@ function readUpdateStatus() {
 function stageText(status) {
 	switch (status && status.stage) {
 		case 'starting': return tr('Preparing...');
-		case 'probing': return tr('Probing channels...');
+		case 'probing': return tr('Selecting fastest download source...');
 		case 'downloading': return tr('Downloading...');
 		case 'verifying': return tr('Verifying checksum...');
 		case 'extracting': return tr('Extracting...');
@@ -830,7 +838,17 @@ function stageText(status) {
 	}
 }
 
-// downloading 阶段拼出 "12.3 / 78.1 MB (16%)" 这样的详情行;total 未知(HEAD
+function formatSpeed(bps) {
+	if (bps == null || bps < 0) return '';
+	if (bps >= 1048576) return (bps / 1048576).toFixed(1) + ' MB/s';
+	if (bps >= 1024) {
+		var kb = bps / 1024;
+		return (kb >= 10 ? Math.round(kb) : kb.toFixed(1)) + ' KB/s';
+	}
+	return bps + ' B/s';
+}
+
+// downloading 阶段拼出 "12.3 / 78.1 MB (16%) · 2.4 MB/s" 这样的详情行;total 未知(HEAD
 // 探测不到 Content-Length)时退化成只显示已下载的字节数,不编造百分比——与
 // update.sh 那边"拿不到 total 就传空字符串"的约定对应。failed/cancelled 阶段
 // 复述 update.sh 写的 message(它本来就是中文,不查 i18n 表——这和日志尾巴、
@@ -839,12 +857,16 @@ function progressDetail(status) {
 	if (!status) return '';
 	if (status.stage === 'downloading' && status.bytes != null) {
 		var mb = (status.bytes / (1024 * 1024)).toFixed(1);
+		var base;
 		if (status.total != null && status.total > 0) {
 			var totalMb = (status.total / (1024 * 1024)).toFixed(1);
 			var pct = Math.min(100, Math.floor(status.bytes / status.total * 100));
-			return mb + ' / ' + totalMb + ' MB (' + pct + '%)';
+			base = mb + ' / ' + totalMb + ' MB (' + pct + '%)';
+		} else {
+			base = mb + ' MB';
 		}
-		return mb + ' MB';
+		var spd = formatSpeed(status.speed);
+		return spd ? base + ' · ' + spd : base;
 	}
 	if ((status.stage === 'failed' || status.stage === 'cancelled') && status.message) {
 		return status.message;
@@ -885,7 +907,7 @@ function isUpdateStartStuck(status, elapsedMs) {
 
 // 取消一次正在运行的更新:调用 update.sh --cancel(协作式,不发任何信号——见该
 // 脚本对应小节的说明),解析 stdout 第一个词得到三种结局之一。exec 本身失败
-// (脚本不存在、ACL 拒绝等)走 reject,和 runUpdate()/probeChannel() 同样的
+// (脚本不存在、ACL 拒绝等)走 reject,和 runUpdate() 同样的
 // 错误处理方式(截取 stderr/stdout 最后几行拼进 Error)。
 function requestCancel() {
 	return fs.exec(UPDATE_PATH, [ '--cancel' ]).then(function (res) {
@@ -898,18 +920,9 @@ function requestCancel() {
 	});
 }
 
-// channel 是用户在"版本"卡片的渠道下拉框里选中的值:'direct' 强制直连 GitHub;
-// 其它值是一个镜像前缀(渠道选择器固定的三个内置镜像之一,见下方 CHANNELS,与
-// scripts/update.sh 的 BUILTIN_MIRRORS 保持一致),原样透传给 update.sh 的
-// --mirror <前缀>——用户已经在下拉框里显式选了具体渠道(通常还刚探测过连通性),
-// 不需要再让 update.sh 自己去挑一个。--detach 之外再带上路线参数透传给 update.sh。
-function runUpdate(channel, expectVersion) {
+// 后台更新全自动选择下载源(直连优先、不通或低速自动回退内置镜像),不再传 --direct/--mirror。
+function runUpdate(expectVersion) {
 	var args = [ '--detach' ];
-	if (channel === 'direct') {
-		args.push('--direct');
-	} else {
-		args.push('--mirror', channel);
-	}
 	// 把面板刚探到的版本号交给 update.sh(--expect):它据此下载带版本号的资产并在解包后
 	// 核对版本;不传的话 update.sh 只能自己探 releases/latest,没有 curl 的路由器上探不到
 	// 就退回稳定资产名——加速镜像缓存的上一版同名包会被当成新版装上(2026-09-03 真机踩过)。
@@ -933,43 +946,6 @@ function readUpdateLogTail() {
 		return { ok: true, text: String(txt || '').split('\n').slice(-12).join('\n').replace(/^\s+|\s+$/g, ''), error: null };
 	}).catch(function (err) {
 		return { ok: false, text: '', error: err };
-	});
-}
-
-// ---------------------------------------------------------------------------
-// 渠道探测
-//
-// 探测必须在路由器上做,不能在浏览器里做:浏览器这一端的网络状况和路由器的完全
-// 是两回事——真正要下载 76MB 安装包的是路由器,浏览器这边"通"不代表路由器那边也
-// "通"。而且浏览器直接 fetch 一个 gh-proxy 类地址会被 CORS 挡下:这类镜像站不会
-// 给 LuCI 页面的源开跨域头。所以探测走 fs.exec 调 update.sh 的 --probe <渠道>,
-// 复用它内部同一份"抓 .sha256 并校验内容格式"的判定逻辑(64 位十六进制哈希 + 匹配
-// 的资产名),而不是自己另写一套只看 HTTP 状态码的检测——那样会把"200 但是个
-// HTML 错误页"的假死镜像误判为可用,见 scripts/update.sh 里 probe_mirror_prefix()
-// 的注释。
-//
-// 一次只探测一个渠道:rpcd 的 fs.exec 本身有超时,4 个渠道放进一次 exec 里一起测
-// 有拖到超时的风险。所以"一键检测"改在页面这一层循环 4 个渠道、依次各发起一次
-// exec,每测完一个就更新那一行的状态(见 render() 里的 probeOneChannel())——这样
-// "一键检测"按钮和每个渠道行自己的「检测」按钮天然共用同一条代码路径,不用分别
-// 写两套逻辑。
-//
-// update.sh 的 --probe 无论探测成功还是失败都固定以 exit 0 退出,靠 stdout 第一个
-// 词(ok / fail)区分,这里照着解析;exec 本身失败(脚本不存在、ACL 拒绝等)才走
-// catch,同样折算成"不可用",不单独区分给用户看。
-function probeChannel(value) {
-	return fs.exec(UPDATE_PATH, [ '--probe', value ]).then(function (res) {
-		var line = String((res && res.stdout) || '').split('\n')[0] || '';
-		var sp = line.indexOf(' ');
-		var kind = sp === -1 ? line : line.slice(0, sp);
-		var rest = sp === -1 ? '' : line.slice(sp + 1).replace(/^\s+/, '');
-		if (kind === 'ok') {
-			var ms = parseInt(rest, 10);
-			return { ok: true, ms: isNaN(ms) ? null : ms };
-		}
-		return { ok: false, reason: rest || kind || 'failed' };
-	}).catch(function (err) {
-		return { ok: false, reason: String(err && err.message || err) };
 	});
 }
 
@@ -1078,8 +1054,7 @@ var STYLE_CSS =
 	// flex 容器:h2/h3 本身是 justify-content:space-between,平铺进去的话中间那项
 	// 会被摊到行正中,而不是紧跟标题。
 	'.ob-h2-left,.ob-h3-left{display:flex;flex-wrap:wrap;align-items:center;gap:.75em;min-width:0}' +
-	// 标题行右端那一组按钮(升级卡片的「一键检测可用升级渠道」+「检查更新」)。
-	// 同样得自成一个 flex 容器,否则 space-between 会把它们摊开成"标题…按钮…按钮"。
+	// 标题行右端按钮组(升级卡片的「检查更新」)。
 	'.ob-h3-right{margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px}' +
 	// 置灰不可点的兜底:Argon 自带 .cbi-button:disabled(opacity .5 + not-allowed),
 	// 但「没有更新时按钮必须是灰的、点不动」是这里的功能要求,不能指望每个主题都
@@ -1116,9 +1091,10 @@ var STYLE_CSS =
 	// 横线用 h3 自己的 border-bottom,而不是再插一个元素:它天然只有 h3 那么宽
 	// (卡片内容宽度,不含卡片左右 18px 内边距),不会通栏顶到卡片边缘。
 	'.ob-card h3{margin:0 0 12px;padding:0 0 10px;background:none;border:0;border-bottom:1px solid rgba(127,127,127,.22);border-radius:0;box-shadow:none;font-size:1.05em;font-weight:600;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.75em}' +
-	// 标题行右侧放按钮时(升级卡片的「一键检测可用升级渠道」)必须显式给字号,
+	// 标题行右侧放按钮时(升级卡片的「检查更新」)必须显式给字号,
 	// 否则它会继承 h3 的 1.05em 变成一颗大按钮,把标题行撑歪。
 	'.ob-card h3 .cbi-button{font-size:.875rem;font-weight:600;line-height:1.4}' +
+	'.ob-card-wide>h3:last-child{margin-bottom:0;padding-bottom:0;border-bottom:0}' +
 	'.ob-kernel-select{position:relative;display:inline-flex;max-width:100%}' +
 	'.ob-kernel-select select{appearance:none;-webkit-appearance:none;background-image:none;width:auto;max-width:100%;padding-inline-end:2rem}' +
 	'.ob-kernel-select select:enabled{cursor:pointer}' +
@@ -1149,32 +1125,7 @@ var STYLE_CSS =
 	'.ob-purge-box:checked + .ob-purge-mark{border-color:#5c6de0!important;background:#5c6de0!important}' +
 	'.ob-purge-box:checked + .ob-purge-mark:after{content:"";display:block!important;width:6px!important;height:11px!important;border:solid #fff!important;border-width:0 2px 2px 0!important;transform:translateY(-1px) rotate(45deg)!important}' +
 	'.ob-purge-box:focus-visible + .ob-purge-mark{outline:2px solid currentColor!important;outline-offset:2px!important}' +
-	'.ob-purge-text{display:inline-block!important;height:22px!important;line-height:22px!important}' +
-	// 升级卡片中段那条分隔线跟着标题线一起收进内容宽度:原来用负 margin 通栏
-	// (margin:14px -18px)顶到卡片边缘,现在同一张卡片里若一条线通栏、一条线
-	// 不通栏,会显得是没对齐的 bug。
-	// max-width:升级卡片横跨两列后,渠道行若跟着撑满整屏,行首的名字和行尾的
-	// 状态/按钮之间会拉开一大片空白,读起来要来回扫视。
-	// 4 个渠道各自成块、并排一行(升级卡片横跨整行,宽度够)。窄屏依次收成
-	// 两列、一列。旧版是一个带边框的竖直列表(.ob-chan 画框、行与行之间用
-	// border-top 分隔),4 行叠下来把卡片拉得很高,右边一大片空白却闲着。
-	'.ob-chan{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0 0}' +
-	'@media (max-width:1150px){.ob-chan{grid-template-columns:repeat(2,1fr)}}' +
-	'@media (max-width:640px){.ob-chan{grid-template-columns:1fr}}' +
-	'.ob-chan-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border:1px solid rgba(127,127,127,.2);border-radius:8px}' +
-	'.ob-chan-row:hover{background:rgba(127,127,127,.06)}' +
-	'.ob-chan-radio{display:flex;align-items:center;gap:.5em;min-width:0;cursor:pointer}' +
-	// 主题(Argon/Carbon 等)会给 input 加 padding/line-height/伪元素。不能用 position:static:
-	// Carbon 等主题使用 `input[type="radio"]:checked::after{position:absolute;inset:4px;border-radius:50%;background:#fff}`,
-	// 若改成 static 会让伪元素脱离单选框、放大成整屏白色椭圆遮住整页(#910)。这里保持 position:relative
-	// 归零偏移，同时恢复原生 radio 并屏蔽主题伪元素，兼容所有 LuCI 主题。
-	'.ob-chan-row .ob-chan-radio input{flex:none;-webkit-appearance:radio;appearance:radio;width:16px;height:16px;margin:0;padding:0;border:0;border-radius:50%;background:transparent;box-shadow:none;line-height:1;position:relative;top:auto;right:auto;bottom:auto;left:auto;transform:none;vertical-align:middle;cursor:pointer}' +
-	'.ob-chan-row .ob-chan-radio input::before,.ob-chan-row .ob-chan-radio input::after{content:none;display:none}' +
-	'.ob-chan-name{line-height:1.3}' +
-	'.ob-chan-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-	'.ob-chan-stat{margin-left:auto;font-size:.85em;opacity:.85;white-space:nowrap}' +
-	'.ob-chan-ok{color:#2e9e4f}' +
-	'.ob-chan-bad{color:#d04a4a}';
+	'.ob-purge-text{display:inline-block!important;height:22px!important;line-height:22px!important}';
 
 return view.extend({
 	load: function () {
@@ -1193,53 +1144,10 @@ return view.extend({
 		var panelUrl = 'http://' + window.location.hostname + ':' + panelPort;
 		var self = this;
 
-		// -------------------------------------------------------------------
-		// 渠道选择器
-		//
-		// 4 个渠道:GitHub 直连 + 3 个内置镜像,与 scripts/update.sh 的
-		// BUILTIN_MIRRORS 保持一致——两边都是各自独立铺开的文件(一个 curl|sh
-		// 单文件脚本,一个 LuCI 视图),没有可共享的公共库,只能分别维护同一份
-		// 内容。"立即更新"用的就是这里选中的渠道(见 showUpdateDialog()),不再
-		// 像旧版那样让 update.sh 自己从内置列表里自动挑一个。
-		// -------------------------------------------------------------------
-		var CHANNELS = [
-			{ value: 'direct', label: tr('GitHub direct') },
-			{ value: 'https://ghfast.top', label: 'ghfast.top' },
-			{ value: 'https://gh-proxy.com', label: 'gh-proxy.com' },
-			{ value: 'https://gh.llkk.cc', label: 'gh.llkk.cc' }
-		];
-
-		function channelLabel(value) {
-			for (var i = 0; i < CHANNELS.length; i++) {
-				if (CHANNELS[i].value === value) return CHANNELS[i].label;
-			}
-			return value;
-		}
-
-		// value -> null(未测试过)| 'pending'(正在测)| { ok: true, ms } | { ok: false, reason }
-		var channelResults = {};
-		CHANNELS.forEach(function (c) { channelResults[c.value] = null; });
-
-		function channelStatusSuffix(value) {
-			var r = channelResults[value];
-			if (r === 'pending') return tr('Testing...');
-			if (r == null) return tr('Not tested yet');
-			if (r.ok) return fmt('Available %sms', (r.ms != null ? r.ms : '?'));
-			return tr('Unavailable');
-		}
-
-		// 组合出类似 "GitHub 直连: 可用 320ms" / "ghfast.top: 不可用" 这样单行的
-		// 渠道状态,一键检测/单渠道检测的结果、以及"立即更新"按钮旁的选中渠道摘要
-		// 共用同一个格式,读起来始终一致。
-		function channelStatusText(value) {
-			return channelLabel(value) + ': ' + channelStatusSuffix(value);
-		}
-
 		// 每张卡片是一个自成一体的功能块:状态/控制在上,该组件自己的版本信息(如有)
 		// 在下,都装进同一个 .ob-card 容器里——而不是像旧版那样把「版本」拆成页面
 		// 末尾单独一张卡片,那样读者要在两张卡片之间来回对应"这个版本号说的是哪个
-		// 组件"。渠道选择/探测/升级操作篇幅较大、也不是"某个组件自己的版本信息",
-		// 所以单独成一张「Open-Box 升级」卡片,不塞进这里。
+		// 组件"。升级操作单独成一张「Open-Box 升级」卡片,不塞进这里。
 		//
 		// 内核卡片、面板卡片结构上只有两处不同(面板卡片的状态行多一个跳转链接、
 		// 内核卡片的按钮行下面多一句「停止」的说明文字),其余(状态/自启徽标、
@@ -1530,11 +1438,11 @@ return view.extend({
 		// 更新走本地脚本(随发布包铺下来的那份,与卸载同理),不依赖外网页面本身
 		// 的可用性;总是带 --detach,原因见 runUpdate() 定义处的说明。这里只负责
 		// 触发 + 轮询 + 展示进度/结果,真正的下载/校验/换文件全在 update.sh 里。
-		// channel 是用户在渠道选择器里选中的渠道('direct' 或某个镜像前缀,见下方
-		// CHANNELS),原样透传给 runUpdate()。
-		function startUpdate(latestVersion, channel) {
+		function startUpdate(latestVersion) {
 			var progressBody = E('p', { 'class': 'spinning' }, tr('Starting update...'));
+			var progressSourceEl = E('p', { 'style': 'margin:.2em 0 0 0;font-size:90%;opacity:.8;display:none' }, '');
 			var progressDetailEl = E('p', { 'style': 'margin:.2em 0 0 0;font-size:90%;opacity:.8' }, '');
+			var progressAttemptsEl = E('p', { 'style': 'margin:.2em 0 0 0;font-size:85%;opacity:.7;word-break:break-all;display:none' }, '');
 			var progressBarInner = E('div', {
 				'style': 'height:100%;width:0%;background:#2a9d2a;transition:width .3s linear'
 			});
@@ -1557,8 +1465,8 @@ return view.extend({
 				'style': 'max-height:12em;overflow:auto;background:rgba(127,127,127,.08);' +
 					'padding:.5em;font-size:85%;white-space:pre-wrap;margin-top:.6em;display:none'
 			}, '');
-			ui.showModal(fmt('Updating to %s (%s)...', latestVersion, channelLabel(channel)), [
-				progressBody, progressDetailEl, progressBarOuter,
+			ui.showModal(fmt('Updating to %s...', latestVersion), [
+				progressBody, progressSourceEl, progressDetailEl, progressAttemptsEl, progressBarOuter,
 				E('div', { 'style': BTNROW }, [ cancelBtn ]), cancelNote,
 				logBox
 			]);
@@ -1594,7 +1502,8 @@ return view.extend({
 				if (current === null) return false;
 				if (baseline === null) return true;
 				return current.stage !== baseline.stage || current.pid !== baseline.pid ||
-					current.message !== baseline.message || current.bytes !== baseline.bytes;
+					current.message !== baseline.message || current.bytes !== baseline.bytes ||
+					current.source !== baseline.source || current.attempts !== baseline.attempts;
 			}
 
 			function noteStatus(statusOrNull) {
@@ -1607,15 +1516,30 @@ return view.extend({
 				}
 			}
 
-			// 每秒把状态文件里的当前阶段/字节数映射到进度文案 + 进度条 + 取消按钮的
+			// 每秒把状态文件里的当前阶段/来源/字节数/速率映射到进度文案 + 进度条 + 取消按钮的
 			// 显示状态。committing 及之后的阶段(以及 done/failed/cancelled 这些终态)
 			// 都不在 CANCELLABLE_STAGES 里,一旦看到就隐藏取消按钮、露出说明文字——
 			// 这就是"取消按钮只在可安全取消的阶段可点"这条要求在页面这一侧的落地点。
 			function applyStatus(status) {
 				if (finished || !status || !status.stage) return;
 				progressBody.textContent = stageText(status);
+				var srcText = status.sourceLabel || status.source || '';
+				if (srcText) {
+					progressSourceEl.style.display = '';
+					progressSourceEl.textContent = fmt('Source: %s', srcText);
+				} else {
+					progressSourceEl.style.display = 'none';
+					progressSourceEl.textContent = '';
+				}
 				var detail = progressDetail(status);
 				progressDetailEl.textContent = detail;
+				if (status.attempts) {
+					progressAttemptsEl.style.display = '';
+					progressAttemptsEl.textContent = fmt('Source attempts: %s', status.attempts);
+				} else {
+					progressAttemptsEl.style.display = 'none';
+					progressAttemptsEl.textContent = '';
+				}
 				if (status.stage === 'downloading' && status.bytes != null && status.total) {
 					var pct = Math.min(100, Math.floor(status.bytes / status.total * 100));
 					progressBarOuter.style.display = '';
@@ -1775,7 +1699,7 @@ return view.extend({
 			// stage=starting 这一下),就把这次 exec 错误当噪音丢弃(典型即已经在真机
 			// 上确认过的"XHR request timed out"),交给上面已经独立跑着的两路轮询给出
 			// 真正的结论,永远不会把一次健康的更新报成"更新失败"。
-			runUpdate(channel, latestVersion).then(function () {
+			runUpdate(latestVersion).then(function () {
 				if (finished) return;
 				progressBody.textContent = tr('Update started. This may take a few minutes (about 80MB to download).');
 			}).catch(function (err) {
@@ -1835,13 +1759,7 @@ return view.extend({
 			});
 		}
 
-		// 渠道已经在「Open-Box 升级」卡片的下拉框里显式选好了(见下方 CHANNELS/selectedChannel),
-		// 这里不再像旧版那样在确认弹窗里二次选择路线,只是把选中渠道当前的探测状态
-		// 复述一遍——不然用户在确认这一步完全看不到"这个渠道到底测没测过、测出来
-		// 怎么样",容易在一个刚探测失败的渠道上误点确认,白白等一次必然失败的
-		// 76MB 下载。
 		function showUpdateDialog(latestVersion) {
-			var channel = selectedChannel;
 			ui.showModal(tr('Confirm update'), [
 				// 当前版本 / 新版本摆在最前面:这个弹窗现在是「检查更新」发现新版后
 				// 直接弹出来的,用户不再是"看清楚版本号之后自己按下立即更新",两个
@@ -1852,12 +1770,11 @@ return view.extend({
 					E('span', { 'style': 'font-weight:600' }, fmt('New version: %s', latestVersion))
 				]),
 				E('p', {}, tr('This will stop services and replace program files. The panel will be briefly unavailable. Continue?')),
-				E('p', { 'style': 'opacity:.8;font-size:90%;margin:.6em 0 0 0' }, channelStatusText(channel)),
 				E('div', { 'class': 'right', 'style': BTNROW }, [
 					E('button', { 'class': 'cbi-button',
 						'click': function () { ui.hideModal(); } }, tr('Cancel')),
 					E('button', { 'class': 'cbi-button cbi-button-apply',
-						'click': ui.createHandlerFn(self, function () { return startUpdate(latestVersion, channel); }) },
+						'click': ui.createHandlerFn(self, function () { return startUpdate(latestVersion); }) },
 						tr('Update now'))
 				])
 			]);
@@ -1867,153 +1784,24 @@ return view.extend({
 		// 同一套样式),不再单独占底部一行。
 		var versionResult = E('span', { 'class': 'ob-descr' }, '');
 
-		var latestAvailable = null;
-
 		var checkBtn = E('button', { 'class': 'cbi-button cbi-button-neutral',
 			'click': ui.createHandlerFn(self, function () {
 				versionResult.textContent = tr('Checking...');
-				latestAvailable = null;
 				return checkLatest().then(function (latest) {
 					// 读不到已装版本(meta.json 缺失或损坏)时无从比较,但这本身就说明
 					// 这套安装是坏的,重装一遍恰恰是修法——所以照样放行,而不是让人
 					// 对着一句"发现新版本"和一颗按不动的灰按钮干瞪眼。
 					if (!installed || cmpVersion(latest, installed) > 0) {
 						versionResult.textContent = fmt('New version available: %s', latest);
-						latestAvailable = latest;
-						refreshUpdateControls();
-						// 查到新版本就直接把确认框弹出来:原来还要再点一次「立即更新」,
-						// 而那一步没有任何可决策的内容——版本号、渠道、后果都在弹窗里,
-						// 决定权仍然在弹窗的「取消 / 立即更新」上,没有跳过任何确认。
+						// 查到新版本就直接把确认框弹出来:决定权在弹窗的「取消 / 立即更新」上。
 						showUpdateDialog(latest);
 						return;
 					}
 					versionResult.textContent = tr('Up to date.');
-					refreshUpdateControls();
 				}).catch(function () {
 					versionResult.textContent = tr('Could not check (network unreachable or blocked).');
-					refreshUpdateControls();
 				});
 			}) }, tr('Check for updates'));
-
-		// 一键检测 / 每行「检测」按钮共用的 DOM 挂接:每个渠道一行,exec 逐个发起、
-		// 逐个更新(见 probeChannel() 定义处的注释——不是一次 exec 探测全部)。
-		var channelRowEls = {};
-		// 探测期间要禁用的按钮集合:一键检测按钮本身,加上 4 个渠道各自的「检测」
-		// 按钮——不管是"一键检测"链式跑完 4 个,还是单独点某一行,都不希望这期间
-		// 还能再点出一次重叠的探测请求。
-		var channelBtnEls = {};
-		// 单选框本身也要留引用:一键检测跑完会程序化改选"最快的那个渠道",
-		// 光改 selectedChannel 变量不够,界面上的圆点也得跟着动。
-		var channelRadioEls = {};
-
-		// 渠道行自己一列(.ob-chan-name)已经放了渠道名,这里只再写状态本身——不复述
-		// "名称: 结果",那是旧版行挤在窄列里出现的"渠道名+结果"重复,拆宽之后不再需要。
-		function applyChanResultClass(el, r) {
-			el.classList.remove('ob-chan-ok', 'ob-chan-bad');
-			if (r && r.ok === true) el.classList.add('ob-chan-ok');
-			else if (r && r.ok === false) el.classList.add('ob-chan-bad');
-		}
-
-		function updateChannelRow(value) {
-			var el = channelRowEls[value];
-			if (!el) return;
-			var r = channelResults[value];
-			el.textContent = channelStatusSuffix(value);
-			el.title = (r && r.ok === false && r.reason) ? r.reason : '';
-			applyChanResultClass(el, r);
-			refreshUpdateControls();
-		}
-
-		// 「检查更新」/「立即更新」能不能点,取决于还有没有走得通的渠道。
-		// 只有"四个渠道全测过、且全都不可用"才拦死:一次都没测、或只测挂了一两个,
-		// 都不足以替用户断定没路可走——他完全可以不测就直接点检查更新。
-		function refreshUpdateControls() {
-			var tested = 0, reachable = 0;
-			CHANNELS.forEach(function (c) {
-				var r = channelResults[c.value];
-				if (r && r !== 'pending') { tested++; if (r.ok === true) reachable++; }
-			});
-			var noRoute = (tested === CHANNELS.length && reachable === 0);
-			checkBtn.disabled = noRoute;
-		}
-
-		function probeOneChannel(value) {
-			channelResults[value] = 'pending';
-			updateChannelRow(value);
-			return probeChannel(value).then(function (result) {
-				channelResults[value] = result;
-				updateChannelRow(value);
-			});
-		}
-
-		function setProbingDisabled(disabled) {
-			probeAllBtn.disabled = disabled;
-			CHANNELS.forEach(function (c) {
-				var btn = channelBtnEls[c.value];
-				if (btn) btn.disabled = disabled;
-			});
-		}
-
-		function selectChannel(value) {
-			selectedChannel = value;
-			var radio = channelRadioEls[value];
-			if (radio) radio.checked = true;
-		}
-
-		// 四个都测完后自动改选延迟最低的那个可用渠道。全都不可用时不动选择——
-		// 保留用户原本选中的那个,反正此时「检查更新」「立即更新」已经被
-		// refreshUpdateControls() 一起置灰,选谁都无从下手。
-		function selectFastestChannel() {
-			var best = null;
-			CHANNELS.forEach(function (c) {
-				var r = channelResults[c.value];
-				if (!r || r === 'pending' || r.ok !== true || r.ms == null) return;
-				if (best === null || r.ms < best.ms) best = { value: c.value, ms: r.ms };
-			});
-			if (best) selectChannel(best.value);
-		}
-
-		var probeAllBtn = E('button', { 'class': 'cbi-button cbi-button-neutral',
-			'click': ui.createHandlerFn(self, function () {
-				setProbingDisabled(true);
-				var chain = Promise.resolve();
-				CHANNELS.forEach(function (c) {
-					chain = chain.then(function () { return probeOneChannel(c.value); });
-				});
-				return chain.then(function () {
-					selectFastestChannel();
-					setProbingDisabled(false);
-				});
-			}) }, tr('Test all update channels'));
-
-		var selectedChannel = CHANNELS[0].value;
-
-		// 每行开头一个单选框(.ob-chan-radio,见 STYLE_CSS 定义处):四选一,选中
-		// 的渠道就是"立即更新"要用的那个(取代旧版页面顶部单独一个下拉框的做法)。
-		// 单选框和渠道名包进同一个 <label> 里,点文字本身也能选中——同时满足
-		// 键盘/屏幕阅读器的可达性,不需要另外接 for/id。radio 的 name 相同
-		// (ob-channel)让四个输入互斥;默认选中项与旧版下拉框的默认值一致,
-		// 都是 CHANNELS[0](GitHub 直连)。
-		var channelStatusList = E('div', { 'class': 'ob-chan' },
-			CHANNELS.map(function (c, i) {
-				var radio = E('input', { 'type': 'radio', 'name': 'ob-channel', 'id': 'ob-chan-radio-' + i });
-				radio.checked = (c.value === selectedChannel);
-				radio.addEventListener('change', function () {
-					selectedChannel = c.value;
-				});
-				channelRadioEls[c.value] = radio;
-				var nameEl = E('span', { 'class': 'ob-chan-name' }, c.label);
-				var radioLabel = E('label', { 'class': 'ob-chan-radio', 'for': 'ob-chan-radio-' + i }, [ radio, nameEl ]);
-				var statEl = E('span', { 'class': 'ob-chan-stat' }, channelStatusSuffix(c.value));
-				channelRowEls[c.value] = statEl;
-				var btn = E('button', { 'class': 'cbi-button cbi-button-neutral',
-					'click': ui.createHandlerFn(self, function () {
-						setProbingDisabled(true);
-						return probeOneChannel(c.value).then(function () { setProbingDisabled(false); });
-					}) }, tr('Test'));
-				channelBtnEls[c.value] = btn;
-				return E('div', { 'class': 'ob-chan-row' }, [ radioLabel, statEl, btn ]);
-			}));
 
 		return E('div', {}, [
 			// 注入的命名空间样式表必须是渲染树的第一个子节点:render() 每次都返回一棵
@@ -2078,8 +1866,7 @@ return view.extend({
 					]),
 
 					// 「Open-Box 面板」卡片同理是一个自成一体的功能块:标题行是标题 + 状态
-					// 徽标 + 版本号,下面是启停控制。渠道选择、探测与升级操作篇幅大、也不是
-					// "这张卡片自己的版本信息",单独成一张紧跟在后面的「Open-Box 升级」卡片
+					// 徽标 + 版本号,下面是启停控制。升级操作单独成一张紧跟在后面的「Open-Box 升级」卡片
 					// (见下方),不再像旧版那样挤进面板卡片里。面板地址也不在这里了——它
 					// 挪到了页面副标题(见上方 .ob-descr)。
 					E('div', { 'class': 'ob-card ob-service-card' }, [
@@ -2090,26 +1877,16 @@ return view.extend({
 						])
 					]),
 
-					// 「Open-Box 升级」独立成一张卡片(负责人手绘草图的要求):标题行右侧是
-					// 整张卡片就两部分:一行标题(左边标题 + 检查结果副标题,右边
-					// 「一键检测可用升级渠道 / 检查更新 / 立即更新」三个按钮),下面 4 个
-					// 渠道各自成块、并排一行。每块里是单选钮 + 渠道名 + 探测状态 + 单独的
-					// 「检测」按钮——选中的那个就是"立即更新"要用的渠道(取代旧版页面顶部
-					// 那个下拉框)。原先卡片底部还有一行"选中渠道的实时状态",那是渠道行
-					// 挤在窄列里、状态不好读时的补丁;渠道拆成横排大块之后每块自己就写着
-					// 状态,那一行纯属重复,连同它上面的分隔线一起撤掉。
+					// 「Open-Box 升级」独立成一张卡片:标题行左侧是标题与检查结果副标题,
+					// 右侧保留「检查更新」按钮,升级时自动按直连优先与内置镜像回退选源。
 					E('div', { 'class': 'ob-card ob-card-wide' }, [
-						// 三个按钮必须裹进 .ob-h3-right:h3 是 justify-content:space-between,
-						// 平铺进来的多个子元素会被逐个摊开,变成"标题…按钮…按钮…按钮",而不是
-						// "三个按钮挨在一起靠右"。左侧的标题 + 结果副标题同理裹进 .ob-h3-left。
 						E('h3', {}, [
 							E('div', { 'class': 'ob-h3-left' }, [
 								E('span', {}, tr('Open-Box upgrade')),
 								versionResult
 							]),
-							E('div', { 'class': 'ob-h3-right' }, [ probeAllBtn, checkBtn ])
-						]),
-						channelStatusList
+							E('div', { 'class': 'ob-h3-right' }, [ checkBtn ])
+						])
 					])
 				])
 			])

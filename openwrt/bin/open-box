@@ -7,7 +7,7 @@
 #   open-box start        生成配置并启动内核(和面板里点「启动」同一条流程;--detach 后台跑、--status 看结果,LuCI 页面用)
 #   open-box kernel-info  读取已选内核和本机两个内核的版本(LuCI 页面用)
 #   open-box check        只检查有没有新版本,不升级。输出三行:current=… latest=… status=latest|update|unknown
-#   open-box update       直接升级(等同于 sh /opt/open-box/update.sh,沿用安装时选的下载通道)
+#   open-box update       直接升级(等同于 sh /opt/open-box/update.sh,全自动探测直连与镜像)
 #   open-box uninstall    卸载(等同于 sh /opt/open-box/uninstall.sh;默认保留 data/,脚本会当场问)
 #   open-box port         打印面板当前端口
 #   open-box port <端口>   改面板端口:先查冲突,过了才写;面板在跑就自动重启(LuCI 页面的「修改端口」调的就是它)
@@ -125,28 +125,137 @@ read_password() {
   run_node "$ROOT/panel/server/system/access-password-cli.mjs" "$DB"
 }
 
-fetch() {
-  # $1 = URL;正文打到 stdout。curl 优先,没有就用 wget(OpenWrt 自带的是 uclient-fetch)
+_ob_proxy_ready() {
+  awk '$2 == "0100007F:1ED3" && $4 == "0A" { found = 1 } END { exit !found }' /proc/net/tcp 2>/dev/null
+}
+
+_ob_is_direct_url() {
+  case "$1" in
+    https://github.com/*|https://raw.githubusercontent.com/*|https://api.github.com/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+_ob_fetch_once() {
+  _ofo_url="$1"
+  _ofo_to="${2:-10}"
+  _ofo_px="${3:-}"
+  _ofo_np="${4:-}"
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL --connect-timeout 8 --max-time 15 "$1" 2>/dev/null
+    env http_proxy="$_ofo_px" https_proxy="$_ofo_px" HTTP_PROXY="$_ofo_px" HTTPS_PROXY="$_ofo_px" all_proxy="" ALL_PROXY="" no_proxy="$_ofo_np" curl -fsSL --noproxy "$_ofo_np" --connect-timeout 5 --max-time "$_ofo_to" "$_ofo_url" 2>/dev/null
   elif command -v wget >/dev/null 2>&1; then
-    wget -q -O - --timeout=15 "$1" 2>/dev/null
+    env http_proxy="$_ofo_px" https_proxy="$_ofo_px" HTTP_PROXY="$_ofo_px" HTTPS_PROXY="$_ofo_px" all_proxy="" ALL_PROXY="" no_proxy="$_ofo_np" wget -q -O - --timeout="$_ofo_to" "$_ofo_url" 2>/dev/null
   else
     return 1
   fi
 }
 
-# 最新版本号:读 Release 里那份不带版本号的组件清单(一两 KB),直连不通就依次换内置镜像
+fetch() {
+  _ft_to="${2:-10}"
+  if _ob_is_direct_url "$1"; then
+    if _ob_proxy_ready; then
+      _ob_fetch_once "$1" "$_ft_to" "http://127.0.0.1:7891" "localhost,127.0.0.1,::1" && return 0
+      _ob_fetch_once "$1" "$_ft_to" "" "*"
+      return $?
+    fi
+    _ob_fetch_once "$1" "$_ft_to" "${http_proxy:-}" "${no_proxy:-}"
+    return $?
+  fi
+  _ob_fetch_once "$1" "$_ft_to" "" "*"
+}
+
+_ob_head_tag_once() {
+  _hto_url="$1"
+  _hto_px="${2:-}"
+  _hto_np="${3:-}"
+  if command -v curl >/dev/null 2>&1; then
+    env http_proxy="$_hto_px" https_proxy="$_hto_px" HTTP_PROXY="$_hto_px" HTTPS_PROXY="$_hto_px" all_proxy="" ALL_PROXY="" no_proxy="$_hto_np" curl -sI --noproxy "$_hto_np" --connect-timeout 5 --max-time 10 "$_hto_url" 2>/dev/null \
+      | sed -n 's/^[Ll]ocation: .*\/releases\/tag\/\(v[0-9][0-9A-Za-z._-]*\).*/\1/p' | head -n 1
+  elif command -v wget >/dev/null 2>&1; then
+    env http_proxy="$_hto_px" https_proxy="$_hto_px" HTTP_PROXY="$_hto_px" HTTPS_PROXY="$_hto_px" all_proxy="" ALL_PROXY="" no_proxy="$_hto_np" wget -q -O - --timeout=10 "$_hto_url" 2>/dev/null \
+      | sed -n 's|.*/releases/tag/\(v[0-9][0-9A-Za-z._-]*\).*|\1|p' | head -n 1
+  else
+    return 1
+  fi
+}
+
+_ob_head_tag() {
+  if _ob_is_direct_url "$1"; then
+    if _ob_proxy_ready; then
+      _ht_tag=$(_ob_head_tag_once "$1" "http://127.0.0.1:7891" "localhost,127.0.0.1,::1")
+      [ -n "$_ht_tag" ] && { printf '%s\n' "$_ht_tag"; return 0; }
+      _ob_head_tag_once "$1" "" "*"
+      return $?
+    fi
+    _ob_head_tag_once "$1" "${http_proxy:-}" "${no_proxy:-}"
+    return $?
+  fi
+  _ob_head_tag_once "$1" "" "*"
+}
+
+_ob_router_release_ok() {
+  printf '%s\n' "$2" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || return 1
+  _oro_sha=$(fetch "$1/releases/download/$2/update.sh.sha256" 10) || return 1
+  printf '%s\n' "$_oro_sha" | awk '
+    NR == 1 { name = $2; sub(/^\*/, "", name); ok = NF == 2 && length($1) == 64 && $1 !~ /[^0-9a-fA-F]/ && name == "update.sh" }
+    NR > 1 && NF { ok = 0 }
+    END { exit !ok }'
+}
+
+# 最新版本号:直连优先,不通或超时自动轮询内置镜像;校验 update.sh.sha256 过滤纯客户端 Release,
+# 镜像返回 <= 当前版本时继续查 releases.atom 与后续源
 latest_version() {
-  _arch=$(meta_field arch)
-  [ -n "$_arch" ] || _arch=x64
-  _url="https://github.com/$REPO/releases/latest/download/open-box-linux-$_arch-components.json"
+  _cur=$(meta_field version)
+  _best_stale=""
   for _prefix in "" $MIRRORS; do
-    if [ -n "$_prefix" ]; then _u="$_prefix/$_url"; else _u="$_url"; fi
-    _v=$(fetch "$_u" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\(v[0-9][0-9A-Za-z._-]*\)".*/\1/p' | head -n 1)
-    if [ -n "$_v" ]; then printf '%s\n' "$_v"; return 0; fi
+    if [ -n "$_prefix" ]; then
+      _base="${_prefix%/}/https://github.com/$REPO"
+    else
+      _base="https://github.com/$REPO"
+    fi
+    _cand=""
+    _latest=$(_ob_head_tag "$_base/releases/latest")
+    if [ -n "$_latest" ] && _ob_router_release_ok "$_base" "$_latest"; then
+      _cand="$_latest"
+    fi
+    _need_atom=0
+    if [ -z "$_cand" ]; then
+      _need_atom=1
+    elif [ -n "$_cur" ] && ! version_less_than "$_cur" "$_cand"; then
+      _need_atom=1
+    fi
+    if [ "$_need_atom" = "1" ]; then
+      _feed=$(fetch "$_base/releases.atom" 12) || _feed=""
+      if [ -n "$_feed" ]; then
+        _tags=$(printf '%s\n' "$_feed" | tr '"' '\n' \
+          | sed -n 's|.*/releases/tag/\(v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$|\1|p' \
+          | awk '!seen[$0]++' \
+          | awk -F. '{ printf "%010d.%010d.%010d %s\n", substr($1, 2), $2, $3, $0 }' \
+          | sort -r | awk '{ print $2 }')
+        for _tag in $_tags; do
+          [ "$_tag" != "$_latest" ] || continue
+          if [ -n "$_cand" ] && ! version_less_than "$_cand" "$_tag"; then
+            break
+          fi
+          if _ob_router_release_ok "$_base" "$_tag"; then
+            _cand="$_tag"
+            break
+          fi
+        done
+      fi
+    fi
+    if [ -n "$_cand" ]; then
+      if [ -z "$_cur" ] || version_less_than "$_cur" "$_cand"; then
+        printf '%s\n' "$_cand"
+        return 0
+      fi
+      if [ -z "$_best_stale" ] || version_less_than "$_best_stale" "$_cand"; then
+        _best_stale="$_cand"
+      fi
+    fi
   done
-  return 1
+  [ -n "$_best_stale" ] || return 1
+  printf '%s\n' "$_best_stale"
 }
 
 # $1 比 $2 旧则成功(和 update.sh 的 version_less_than 同一个写法,不依赖 sort -V)
