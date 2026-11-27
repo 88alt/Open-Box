@@ -744,3 +744,9 @@
   `ProxyNodeCard` 从共享表查分数传给标签;`ProxiesPage` 在 `onMounted` 调 `loadNodeScores()`。
   验证:`vue-tsc` 与 `npm run build` 通过。
   **未做(下一批)**:按评分升序/降序排序、右上角「刷新评分」按钮与七条状态提示。
+- **第 6 批:补 5 个漏掉的键 + 接入评分排序**(对应 release notes「新增按评分升序/降序排序」)
+  **补漏**:第 1 批比对时我只看了 `nodeScore*`,漏掉了 494 同时新增的 **`scoreasc` / `scoredesc`**与 **`groupType_{selector,urltest,loadbalance}_short`** 五个键。现已补齐三语(逐字取自 494 语言包)。
+  **排序**:`PROXY_SORT_TYPE` 加 `SCORE_ASC` / `SCORE_DESC`;`composables/renderProxies.ts` 的 `sortFuncMap` 加两项,比较时**没有评分的节点一律排最后**(升序看最差的,但不把没测过的混到前面)。
+  验证:三语 2325 → **2330**,「多出」0、「值不同」0;`vue-tsc` 与 `npm run build` 通过。
+  **未做(仍缺)**:① 排序选项的下拉 UI —— main 的 `proxySortType`(设置页「代理排序方式」的键)目前**没有任何界面在用**,上游 494 的排序 UI 位置在 dist 里被混淆包住、取不到确切结构,本轮没有凭空造一个;② 右上角「刷新评分」按钮与七条状态提示(`nodeScoreRefresh*` 已补键,但按钮与请求链路未接)。
+  **推断点 / 待维护者复核**:排序与刷新这两个入口的**位置**需要维护者确认(是放在代理页顶部工具条,还是设置页),我不希望按猜测造一个跟上游不一样的入口。

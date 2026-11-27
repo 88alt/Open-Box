@@ -216,6 +216,8 @@ const en = {
   chains: 'Chains',
   outbound: 'Outbound',
   sortBy: 'Sort by',
+  scoreasc: 'Score ascending',
+  scoredesc: 'Score descending',
   proxyNodeSortBy: 'Node sort order',
   rule: 'Rule',
   sourceIP: 'Source IP',
@@ -1085,6 +1087,9 @@ const en = {
   groupType_failover: 'Failover',
   groupType_failover_short: 'Fallback',
   groupType_loadbalance: 'Load balance',
+  groupType_selector_short: 'Selector',
+  groupType_urltest_short: 'URL-Test',
+  groupType_loadbalance_short: 'LoadBalance',
   loadBalanceHint:
     'Distribute new connections across available nodes, preferring fewer active connections and rotating ties. Parallel connections can combine throughput; established connections keep their outbound.',
   loadBalanceNodesOnly:

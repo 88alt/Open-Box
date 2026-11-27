@@ -1,6 +1,7 @@
 import { NOT_CONNECTED, PROXY_SORT_TYPE } from '@/constant'
 import { isProxyGroup } from '@/helper'
 import { getLatencyByName, proxiesFilter } from '@/store/proxies'
+import { nodeScore } from '@/store/nodeScore'
 import { hideUnavailableProxies, proxySortType, useSmartGroupSort } from '@/store/settings'
 import { smartOrderMap } from '@/store/smart'
 import { computed, type ComputedRef } from 'vue'
@@ -79,6 +80,20 @@ const getRenderProxies = (proxies: string[], groupName?: string) => {
     const latency = latencyMap.get(name)!
     return latency === 0 ? Infinity : latency
   }
+  // 上游 v0.1.494:按节点评分排序。没有分数的节点排在最后(两种方向都是),
+  // 这样「升序」看的是最差的、但不会把没测过的混在最前面
+  const getScoreForSort = (name: string) => {
+    const s = nodeScore(name)?.score
+    return s == null || !Number.isFinite(s) ? null : s
+  }
+  const cmpScore = (prev: string, next: string, desc: boolean) => {
+    const a = getScoreForSort(prev)
+    const b = getScoreForSort(next)
+    if (a == null && b == null) return 0
+    if (a == null) return 1
+    if (b == null) return -1
+    return desc ? b - a : a - b
+  }
   const sortFuncMap = {
     [PROXY_SORT_TYPE.NAME_ASC]: (prev: string, next: string) => prev.localeCompare(next),
     [PROXY_SORT_TYPE.NAME_DESC]: (prev: string, next: string) => next.localeCompare(prev),
@@ -86,6 +101,8 @@ const getRenderProxies = (proxies: string[], groupName?: string) => {
       getLatencyForSort(prev) - getLatencyForSort(next),
     [PROXY_SORT_TYPE.LATENCY_DESC]: (prev: string, next: string) =>
       getLatencyForSort(next) - getLatencyForSort(prev),
+    [PROXY_SORT_TYPE.SCORE_ASC]: (prev: string, next: string) => cmpScore(prev, next, false),
+    [PROXY_SORT_TYPE.SCORE_DESC]: (prev: string, next: string) => cmpScore(prev, next, true),
   }
   const sortFunc = sortFuncMap[proxySortType.value]
 

@@ -72,6 +72,9 @@ export enum PROXY_SORT_TYPE {
   NAME_DESC = 'namedesc',
   LATENCY_ASC = 'latencyasc',
   LATENCY_DESC = 'latencydesc',
+  // 上游 v0.1.494:按节点评分排序(高分为好)
+  SCORE_ASC = 'scoreasc',
+  SCORE_DESC = 'scoredesc',
 }
 
 export enum PROXY_PREVIEW_TYPE {

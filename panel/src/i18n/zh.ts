@@ -213,6 +213,8 @@ const zh: LANG_MESSAGE = {
   chains: '代理链',
   outbound: '出站节点',
   sortBy: '排序方式',
+  scoreasc: '按评分升序',
+  scoredesc: '按评分降序',
   proxyNodeSortBy: '节点排序方式',
   rule: '规则',
   sourceIP: '源IP',
@@ -1048,6 +1050,9 @@ const zh: LANG_MESSAGE = {
   groupType_failover: '故障转移（failover）',
   groupType_failover_short: '故障转移',
   groupType_loadbalance: '负载均衡（load balance）',
+  groupType_selector_short: '手动选择',
+  groupType_urltest_short: '自动优选',
+  groupType_loadbalance_short: '负载均衡',
   loadBalanceHint:
     '按连接分配到可用节点，优先选择连接较少的节点，同等负载时轮换。多个并发连接可叠加总带宽；已建立的连接保持原出口。',
   loadBalanceNodesOnly: '负载均衡只能选择真实节点，请移除节点组或失效成员。',

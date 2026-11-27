@@ -213,6 +213,8 @@ const zhTW: LANG_MESSAGE = {
   chains: '代理鏈',
   outbound: '出站節點',
   sortBy: '排序方式',
+  scoreasc: '按評分升序',
+  scoredesc: '按評分降序',
   proxyNodeSortBy: '節點排序方式',
   rule: '規則',
   sourceIP: '源IP',
@@ -1049,6 +1051,9 @@ const zhTW: LANG_MESSAGE = {
   groupType_failover: '故障轉移（failover）',
   groupType_failover_short: '故障轉移',
   groupType_loadbalance: '負載均衡（load balance）',
+  groupType_selector_short: '手動選擇',
+  groupType_urltest_short: '自動優選',
+  groupType_loadbalance_short: '負載均衡',
   loadBalanceHint:
     '按連線分配至可用節點，優先選擇連線較少的節點，同等負載時輪替。多條並行連線可疊加總頻寬；已建立的連線維持原出口。',
   loadBalanceNodesOnly: '負載均衡只能選擇真實節點，請移除節點群組或失效成員。',
