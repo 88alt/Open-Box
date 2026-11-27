@@ -649,6 +649,10 @@ const zhTW: LANG_MESSAGE = {
   latencyReasonUnstable: '時通時斷',
   latencyReasonError: '連線失敗',
   latencyReasonStatus: '狀態碼不符',
+  latencyReasonForbidden: '測速站拒絕存取 (403)',
+  latencyReasonRateLimited: '測速站限流 (429)',
+  latencyReasonPenalized: '歷史失敗降權',
+  latencyReasonUnsupported: '核心版本不支援此測速站點',
   policyOutboundSwitching: '正在將「{group}」切換至「{outbound}」…',
   urlTestManualSelectTip:
     '「{name}」是自動優選組,走哪個節點由核心按測速自己定,不能手動指定。想換線路就點它的閃電重測一次。',

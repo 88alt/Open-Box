@@ -676,6 +676,10 @@ const en = {
   latencyReasonUnstable: 'intermittent',
   latencyReasonError: 'connection failed',
   latencyReasonStatus: 'unexpected status',
+  latencyReasonForbidden: 'blocked by test endpoint (403)',
+  latencyReasonRateLimited: 'rate limited by test endpoint (429)',
+  latencyReasonPenalized: 'penalized by recent failures',
+  latencyReasonUnsupported: 'test endpoint requires an updated core',
   policyOutboundSwitching: 'Switching {group} to {outbound}…',
   urlTestManualSelectTip:
     '"{name}" is an auto-select group: the kernel picks the node by latency, so it cannot be set manually. Tap its lightning icon to retest and pick again.',

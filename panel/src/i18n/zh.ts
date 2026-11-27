@@ -648,6 +648,10 @@ const zh: LANG_MESSAGE = {
   latencyReasonUnstable: '时通时断',
   latencyReasonError: '连接失败',
   latencyReasonStatus: '状态码不符',
+  latencyReasonForbidden: '测速站拒绝访问 (403)',
+  latencyReasonRateLimited: '测速站限流 (429)',
+  latencyReasonPenalized: '历史失败降权',
+  latencyReasonUnsupported: '内核版本不支持该测速站点',
   policyOutboundSwitching: '正在将「{group}」切换到「{outbound}」…',
   urlTestManualSelectTip:
     '「{name}」是自动优选组,走哪个节点由内核按测速自己定,不能手动指定。想换线路就点它的闪电重测一次。',

@@ -15,6 +15,10 @@ const LATENCY_REASON_KEYS: Record<string, string> = {
   'mihomo-only': 'latencyReasonMihomoOnly',
   unstable: 'latencyReasonUnstable',
   status: 'latencyReasonStatus',
+  forbidden: 'latencyReasonForbidden',
+  rate_limited: 'latencyReasonRateLimited',
+  penalized: 'latencyReasonPenalized',
+  unsupported: 'latencyReasonUnsupported',
   error: 'latencyReasonError',
 }
 

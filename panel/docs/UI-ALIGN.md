@@ -677,3 +677,13 @@
   **样式差异仅 2 项且都可解释**:`card.radius` 19px vs 18px(差 1px);`tab.color` 一边 `rgb(36, 50, 71)` 一边 `oklch(0.35519 0.032 262.988)`——
   同一种颜色换了记法(浏览器对 `oklch()` 的计算值表述),不是配色不一致。
   **结论:代理页内容层已对齐,无待修项**;剩余差异全部可解释并已记录。
+
+## 键集对齐：上游 v0.1.493(2026-11-27)
+
+上游 `v0.1.493`(2026-11-27T06:59Z,`catch-up-upstream` = `057e237a`)三语各 **2355** 键,main 对齐前 **2301** 键。
+按 release notes 拆成五批:**测速站点预设**、**状态码原因**、**移除下载通道选择**、**升级源标签**、**v0.5 评分文案**。
+
+- **第 1 批(本批):`latencyReason*` 4 个键** — 上游在 `latencyReasonStatus` 之后新增
+  `forbidden` / `rate_limited` / `penalized` / `unsupported` 四条 reason→文案映射(对应 release notes「双内核透传测速响应状态码与内容类型,Cloudflare 限流时自动降级」)。
+  改动:`panel/src/helper/latencyReason.ts` 的 `LATENCY_REASON_KEYS` 补 4 条映射;三语各补 4 条文案(逐字取自 493 语言包)。
+  验证:`vue-tsc --noEmit` 通过;三语键数 2301 → **2305**,与上游差值从 54 收窄到 **50**。
