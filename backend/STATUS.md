@@ -154,6 +154,25 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 
 ## 全局记录(跨区事项:开工 tag、上游版本、陌生提交对账、工作流恢复、停止条件)
 
+- 2026-11-27 backend(**设备已升级到官方 v0.1.493,自研后端在官方布局下部署受阻:规则库格式不同**):
+  **设备现状**:`/opt/open-box/meta.json` 显示 `version: v0.1.493`、`singboxVersion: 1.4.4-openbox-62`、`mihomoVersion: v1.19.34-openbox.24`、
+  `panelRuntime: go-static`,`builtAt: 2026-11-27T05:29:31Z` —— 维护者在 13:29 用官方 update 升到了 v0.1.493,`bin/` 被整目录替换
+  (我先前放的 `openbox-backend-run` 与 `openbox-core` 被覆盖),官方面板重新 enable 并占住 3036。已重装启动脚本与 core、停用官方面板、
+  启回自研后端(3036 `panel=200`,`pendingRestart` 已清零,详见同日「接管时对齐已应用基线」那条)。
+  **新发现的阻塞**:自研后端 `POST /deploy` 在官方布局下失败——
+  `{"ok":false,"stage":"validate","message":"生成配置失败:mihomo 规则集 geosite-cn 转换失败:无法读取现有规则集文件"}`。
+  **根因**:官方 v0.1.493 把内置规则集落成 **`.mrs` + 文件名带 64 位哈希**,放在 `<数据目录>/mihomo/rules/`(实测 28 个,
+  如 `geosite-cn-e7cbf0ab….mrs`、`geoip-cn-444a5659….mrs`),`mihomo.yaml` 的 `rule-providers` 用 `./rules/<tag>-<hash>.mrs` 引用;
+  而自研后端 `mihomo.RuleSetPathFunc` 按 `<geoDir>/<tag>.srs` 找(`geosite-*` / `geoip-*` 归 geoDir,其余归 rulesetDir),
+  **要求 `.srs`、文件名不带哈希**。设备上 `<安装根>/geodata/` 是**空的**(`INCLUDE_GEODATA=0`,规则库不随包),
+  `data/rules/` 里那两个 `.srs` 是 11-26 21:50 的旧自研远端产物,不是 v0.1.493 的。
+  **结论**:自研后端要与官方安装共存,`-geo-dir` 必须指向一份**自有 `.srs` 规则库**(打包时 `--geodata` 带入,或运行前自行落盘);
+  官方那份 `.mrs` 不能直接给自研后端用(`sing-box rule-set decompile` 认 `.mrs`,但自研的路径约定是按 `<tag>.srs` 找,对不上)。
+  **这一条不阻塞主线**(面板其它功能都正常,只有「部署」会因缺规则库失败),但**真机部署类验证(DNS 接管 BeforeApply/AfterRunning、
+  failover 落盘)在补齐规则库之前做不了**。补齐办法:把 `.mrs` 批量解成 `<tag>.srs` 放进某个目录,再用 `-geo-dir` 指过去;
+  或按 `INCLUDE_GEODATA=1` 打包一份带规则库的安装。**推断点 / 待维护者复核**:是否要支持直接读官方的 `.mrs`(改 `RuleSetPathFunc` 与转换层),
+  这样自研后端就能直接用官方规则库、不必额外落一份 `.srs`。
+
 - 2026-11-27 backend(**按维护者建议落地「密码相关问题在发布前暴露」的三条**):
   **① 打包不带 `auth.json`(已核实满足)**:仓库里没有任何 `auth.json`(全仓 `git ls-files | grep auth.json` 为空),
   `packaging/build-package.sh` 只往包里放 `bin/` / `panel/` / `geodata/` / 服务脚本 / 清单,**不碰 `data/`**;
