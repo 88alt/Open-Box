@@ -40,6 +40,19 @@ CHECKPOINT: 99aefc73216aef0e277d5db5b3bbe7c6a0f94b9e | 上游版本: v0.1.492 | 
 7. `[~]` `factory-reset` — 已预演,按维护者要求不做真机。
 8. `[~]` `update*` 第二部分 — **卡在发布包**:需维护者手动触发 `release-backend.yml`(已核对不会动上游备份 release)。
 
+### 剩余 [~] 条目的阻塞原因汇总(2026-11-27 收尾核对)
+
+| # | 条目 | 阻塞原因 | 解除条件 |
+| --- | --- | --- | --- |
+| 1 | DNS 接管接进部署流程前三项 | `DNSTakeover` 的 conf-dir 从 dnsmasq 主配置解析、无可覆盖注入点;`dns.mode=dnsmasq` 时部署必然写线上接管文件并重启线上 dnsmasq,会打断维护者正在用的网络 | 维护者在场 + 同意短暂中断局域网 DNS(已备好备份与 `arm` 定时回滚脚本) |
+| 2 | `terminal-test` 第十一步 `kernelDns` | **已定案为「无法验证」**:mihomo 的 `log-level` 是 `warning`(与官方一致),`kerneldns` 订阅 debug,在 warning 下 DNS 查询日志不会产生。**不为勾条目改日志级别** | 把内核切到 sing-box(该路径已用真实内核验过) |
+| 3 | `penetration` 的 `matched.viaIp` | 要算出 `viaIp` 需「sing-box 内核 + 真实部署配置 + 域名解析出地址命中 IP 规则」;设备线上跑 mihomo,切 sing-box 会打断网络。配置来源的修复本身已真机验通(mihomo 明确报不支持 / sing-box 正常推算) | sing-box 内核的设备,或维护者同意切内核 |
+| 4 | `failover` 第一部分 | 计划产出与 `SavePlan`/`LoadPlan` 往返已用真实 core 验通;真机部署在隔离实例里跑到 `verify` 因 tun 类入站起不来而回滚 | 一台能跑完整 tun 配置的独立设备 |
+| 5 | `factory-reset` | **按维护者要求不在真机执行**;已在临时实例做完预演(删 9 保留 3)并实跑对照,结果逐项一致 | 维护者另行决定是否真机执行 |
+| 6 | `update*` 第二部分 | **卡在发布包**:`release-backend.yml` 只能手动触发,现有 5 个发布都是上游的、无 `openbox-backend` 资产(已核对不会动上游备份 release) | 维护者在 GitHub 页面手动触发一次 |
+
+另外:`core/HANDOFF.md` 第四节第 4、5 条(授权三个方法是否删除、`UPSTREAM_VERSION` 如何处理)属**待维护者决定**,不是可执行项;第 6 条靠真机联调反馈驱动。
+
 ### 环境与已知限制
 - 本机 `bin/` 下已有 sing-box 1.14.4(Windows)、`openbox-core.exe`;涉及 sing-box 的测试**不要只看 SKIP**,先用它实跑。
 - 本机对 `failover` / `urlx` 等包的测试二进制会报 `Access is denied`(执行策略),**CI 上正常**,不算失败。

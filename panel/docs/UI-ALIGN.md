@@ -272,6 +272,23 @@
 
 ---
 
+## 模板字符串与条件分支键核对(2026-11-27)
+
+任务书收尾要求「单独检索 dist 中模板字符串或变量拼接的键、仅在特定分支出现的引用」。做法与结论:
+
+**一、模板字符串(反引号 + `${}`)拼出来的键**:从 53 个 dist js 里抽出 9 个模板前缀,逐个核 main:
+
+| 前缀 | main 引用 | 结论 |
+| --- | --- | --- |
+| `bandwidthExample_` / `bandwidthOff_` / `bandwidthOn_` | 各 10 处 | **已覆盖**(`_{urltest,failover,loadbalance}` 三语都有) |
+| `groupType_` | 25 处 | **已覆盖**(`_{selector,urltest,failover,loadbalance}` 等) |
+| `obUpdateStage_` | 31 处 | **已覆盖**(starting/probing/downloading/…/cancelled 全在) |
+| `businessOverview_` / `businessSettingsHelp_` / `businessOverviewReason_` | 0 | **正确**:属例外 C,不做 |
+
+**二、条件分支(三元)里才出现的键引用**:抽出 18 个(去掉 `bottom` / `button` / `groups` 这类恰好同名的普通单词),
+其余 15 个在 main 里均有引用:`bandwidthHelpCurrentTestDaily`、`bandwidthHelpLoading`、`bandwidthHelpSwitchOn`、`bandwidthHelpTitle`、
+`connectionDeviceRenameByMAC`、`dnsUpstreamDohHost`、`dnsUpstreamDotHost`、`hidePassword`、`nodeScoreWeightValues`、`shareCodeAppHint`、
+`subscriptionRefreshedDone`、`subscriptionRefreshedRestartRequired`、`tagCollapse` 等,**零缺口**。
 ## 最终差异清单(2026-11-26 收尾核对)
 
 **对齐基准**:上游 **v0.1.488**(2026-11-26T06:17Z;`catch-up-upstream` 的纯上游备份停在 v0.1.487 的 `a2368215`,
