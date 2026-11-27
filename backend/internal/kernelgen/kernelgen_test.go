@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,37 +55,6 @@ func (f *memFS) Remove(p string) error {
 	delete(f.files, p)
 	return nil
 }
-
-// ReadDir 按内存里的文件路径模拟目录列举(只列直接子项);目录为空返回 os.ErrNotExist。
-func (f *memFS) ReadDir(dir string) ([]os.DirEntry, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	prefix := strings.TrimSuffix(dir, "/") + "/"
-	seen := map[string]bool{}
-	var out []os.DirEntry
-	for p := range f.files {
-		if !strings.HasPrefix(p, prefix) {
-			continue
-		}
-		rest := strings.TrimPrefix(p, prefix)
-		if strings.Contains(rest, "/") || seen[rest] {
-			continue
-		}
-		seen[rest] = true
-		out = append(out, memDirEntry{name: rest})
-	}
-	if len(out) == 0 {
-		return nil, os.ErrNotExist
-	}
-	return out, nil
-}
-
-type memDirEntry struct{ name string }
-
-func (e memDirEntry) Name() string               { return e.name }
-func (e memDirEntry) IsDir() bool                { return false }
-func (e memDirEntry) Type() fs.FileMode          { return 0 }
-func (e memDirEntry) Info() (fs.FileInfo, error) { return nil, nil }
 
 type stubCall map[string]string
 

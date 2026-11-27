@@ -390,10 +390,6 @@ type FS interface {
 	ReadFile(path string) ([]byte, error)
 	MkdirAll(path string) error
 	Remove(path string) error
-	// ReadDir 列目录(只读)。用于复用官方安装已经落好的 provider 文件:
-	// 官方 v0.1.493 起把内置规则集存成 .mrs(文件名带 64 位哈希),自研后端要按实际文件名拼 provider。
-	// 目录不存在时返回 os.ErrNotExist 包裹的错误,调用方按「没有」处理。
-	ReadDir(path string) ([]os.DirEntry, error)
 }
 
 // OSFS 是真实文件系统:WriteFile 先写同目录临时文件再改名,中途断电不会留下半个文件。
@@ -406,8 +402,6 @@ func (OSFS) ReadFile(path string) ([]byte, error) { return os.ReadFile(path) }
 func (OSFS) MkdirAll(path string) error { return os.MkdirAll(path, 0o700) }
 
 func (OSFS) Remove(path string) error { return os.Remove(path) }
-
-func (OSFS) ReadDir(path string) ([]os.DirEntry, error) { return os.ReadDir(path) }
 
 // FileRevision 给文件一个修订号(大小加修改时间的纳秒数):内容被换掉时它会变。
 // 上游还带 dev / inode / ctime,这里只用大小和 mtime,规则库文件是原子替换(改名),够用。

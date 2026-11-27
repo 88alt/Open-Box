@@ -3,7 +3,6 @@ package mihomo
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"io/fs"
 	"os"
 	"strings"
 	"testing"
@@ -208,40 +207,6 @@ func (m *memFS) ReadFile(p string) ([]byte, error) {
 	return d, nil
 }
 func (m *memFS) MkdirAll(p string) error { m.dirs = append(m.dirs, p); return nil }
-
-// ReadDir 按 memFS 里的文件路径模拟:列出直接子项(不进子目录),目录为空返回 ErrNotExist。
-func (m *memFS) ReadDir(dir string) ([]os.DirEntry, error) {
-	prefix := strings.TrimSuffix(dir, "/") + "/"
-	seen := map[string]bool{}
-	var out []os.DirEntry
-	for p := range m.files {
-		if !strings.HasPrefix(p, prefix) {
-			continue
-		}
-		rest := strings.TrimPrefix(p, prefix)
-		if strings.Contains(rest, "/") {
-			continue // 子目录里的不算
-		}
-		if seen[rest] {
-			continue
-		}
-		seen[rest] = true
-		out = append(out, fakeDirEntry{name: rest})
-	}
-	if len(out) == 0 {
-		return nil, os.ErrNotExist
-	}
-	return out, nil
-}
-
-// fakeDirEntry 只满足 DirEntry 里我们用得到的两项(Name / IsDir)。
-type fakeDirEntry struct{ name string }
-
-func (e fakeDirEntry) Name() string               { return e.name }
-func (e fakeDirEntry) IsDir() bool                { return false }
-func (e fakeDirEntry) Type() fs.FileMode          { return 0 }
-func (e fakeDirEntry) Info() (fs.FileInfo, error) { return nil, nil }
-
 func (m *memFS) Remove(p string) error {
 	if _, ok := m.files[p]; !ok {
 		return os.ErrNotExist

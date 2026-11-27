@@ -154,26 +154,21 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 
 ## 全局记录(跨区事项:开工 tag、上游版本、陌生提交对账、工作流恢复、停止条件)
 
-- 2026-11-27 backend(**打通官方 .mrs 规则集:部署在官方安装上首次成功**):
-  **问题**:官方 v0.1.493 起把内置规则集落成 `.mrs`(文件名带 64 位哈希,放在 `<数据目录>/mihomo/rules/`),
-  而自研后端 `mihomo.RuleSetPathFunc` 按 `<geoDir>/<tag>.srs` 找源文件、再用 `sing-box rule-set decompile` 反编译成 provider。
-  两者对不上,`POST /deploy` 一直报「mihomo 规则集 geosite-cn 转换失败:无法读取现有规则集文件」,
-  这也连带堵住了 DNS 接管真实部署、failover 落盘等一批真机验证。
-  **试过但走不通**:想把 `.mrs` 批量转成 `.srs` —— 实测 `.mrs` **不是 sing-box 的 rule-set 格式**,
-  `sing-box rule-set decompile` 直接报 `invalid sing-box rule-set file`;解开文件头是 `28 b5 2f fd`(Zstandard),
-  再往内是 `MRS` 开头、带位图编码的 mihomo 自有二进制容器(在本机用 zstd 解出 896KB,能看到的是压缩后的
-  位图数据而非明文域名),28 个全部转换失败(0/28)。**要转得写一个完整的 mrs 解码器,代价过大**。
-  **实际采用的解法(更小、更稳)**:`mihomo.Converter` 新增 `reuseDeployed` 快路径 ——
-  **官方那份 `.mrs` 本身就是给 mihomo 用的合法 provider,不需要反编译、可以直接引用**。
-  `convertOne` 先看 `RulesDir` 里有没有这个 tag 的现成 provider(文件名形如 `<tag>-<64 位十六进制>.<ext>`),
-  有就照它的实际扩展名拼 provider 条目(`.mrs`→format `mrs`、`.yaml/.yml`→`yaml`、`.txt`→`text`),
-  不再去找 `.srs`。为此给 `FS` 接口加了 `ReadDir`(`OSFS` 直接转 `os.ReadDir`,测试替身 `memFS` 按内存路径模拟)。
-  **测试**:新增 `internal/mihomo/rulesets_reuse_test.go` 三组 —— 有 `.mrs` 时复用且**不调用反编译**、
-  哈希段不合法(如只有 8 位)时不误认、四种扩展名的 format 映射。三组全过;
-  `internal/mihomo` 全量失败数改动前后都是 **9 个**(本机 Windows 的路径分隔符与 0666 权限位既有问题,与本次无关)。
-  **真机验证(关键)**:部署新二进制后 `POST /deploy` 回 **`{"ok":true,"stage":"running","badTags":[],"kernel":"mihomo"}`** ——
-  **这是「官方安装 + 自研后端」组合下部署第一次成功**;随后 `pendingRestart` 为 `{pending:false,reasons:[],details:[]}`,
-  内核在跑、`panel=200`、`failover.json` 落盘为 `[]`(当前无故障转移组,符合预期)。
+- 2026-11-27 backend(**`.mrs` 复用按规矩回退:真机验证过、但 CI 一直红**):
+  `967375ed` / `e75f39c4` / `f8a226b2` 三个提交已 `git revert`(不改写历史)。
+  **做了什么**:官方 v0.1.493 起把内置规则集落成 `.mrs`(文件名带 64 位哈希)放 `<数据目录>/mihomo/rules/`,
+  而自研后端按 `<geoDir>/<tag>.srs` 找源文件再反编译,两者对不上 → `POST /deploy` 恒报
+  「mihomo 规则集 geosite-cn 转换失败:无法读取现有规则集文件」。解法是给 `mihomo.Converter` 加「复用已部署 provider」快路径
+  (官方 `.mrs` 本身就是合法 mihomo provider,直接引用、不必反编译),并给 `FS` 接口加 `ReadDir`。
+  **回退原因**:CI 的 `go test` 从 `967375ed` 起一直 failure(`go vet` 已修好并通过,红在测试)。
+  本机因 Windows 平台差异**复现不出同样的失败**(`internal/mihomo` 在本机恒有 9 个 Windows 专属失败:
+  路径分隔符 `\` vs `/`、没有 0666 权限位),无法本地定位;按「红了就停在批内、不许带红叉推进」的规矩,宁可回退也不留红。
+  **回退前已在真机确认方案可用**:部署带复用的二进制后 `POST /deploy` 回
+  `{"ok":true,"stage":"running","badTags":[],"kernel":"mihomo"}`,内核在跑、`pendingRestart` 清零、`panel=200`。
+  **交接给下一个 agent**:方案方向是对的,需要在 **Linux 环境**(或能拿到 CI 日志的途径)把失败的测试名扒出来再落地。
+  定位线索:本机 `go vet ./...` 干净、`internal/kernelgen` 与 `internal/mihomo` 其余用例全过,
+  失败只在 CI(Linux + `-race` + 装了 sing-box)出现;**最可能是某个依赖真实文件系统或 sing-box 的用例**
+  与新增的 `ReadDir` 目录枚举相互作用。回退后设备上 `POST /deploy` 会恢复报「无法读取现有规则集文件」,属已知阻塞、非新问题。
 
 - 2026-11-27 版本钉对齐上游 **v0.1.494**(`catch-up-upstream` = `44bf5bd4`,上游 2026-11-27T09:59Z 发布):
   `backend/packaging/versions.env` 全部对齐——`OPENBOX_UPSTREAM=494`、`KERNEL_SOURCE_BASE` 指到 `v0.1.494`、
