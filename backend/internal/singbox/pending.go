@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -393,6 +394,49 @@ func (a *Applied) Record(fp Fingerprint) error {
 		now = a.Now
 	}
 	return a.Store.Save(fileApplied, appliedFile{Fingerprint: fp, At: now().UnixMilli()})
+}
+
+// AdoptBaseline 在进程启动时把当前输入当作「已应用」的基线。
+//
+// 为什么需要它:自研后端与官方面板(以及手动改配置)都会重启内核并把新配置写进
+// mihomo.yaml / config.json,但**只有自研后端的部署器会写 applied-config.json**。
+// 于是「官方面板部署过、之后换成自研后端」这种场景下,记录停留在很久以前,
+// 一接管就报一堆「有改动要重启内核」,而其实内核跑的已经是最新配置(2026-11-27 真机现象:
+// 官方面板时角标 0,换自研后端立刻变 2,对比发现 applied 记录停在 11-26、mihomo.yaml 是 16:15 的)。
+//
+// 判据:已部署配置文件的修改时间比记录时间**新** => 说明中间有别人部署过,接管现状为基线;
+// 记录不存在、或配置文件比记录旧(说明是自研后端自己部署的)时什么都不做。
+// deployedFile 为空或文件读不到时也不做(推不出结论就不猜)。
+func (a *Applied) AdoptBaseline(ctx context.Context, deployedFile string) (bool, error) {
+	if deployedFile == "" {
+		return false, nil
+	}
+	st, err := os.Stat(deployedFile)
+	if err != nil {
+		return false, nil
+	}
+	var rec appliedFile
+	has, err := a.Store.Load(fileApplied, &rec)
+	if err != nil {
+		return false, err
+	}
+	// 没有记录:第一次接管,直接把现状当基线(否则一开始就会报全部改动)
+	if !has {
+		fp, ferr := a.Source.Fingerprint(ctx)
+		if ferr != nil || len(fp) == 0 {
+			return false, ferr
+		}
+		return true, a.Record(fp)
+	}
+	// 配置文件比记录新 = 中间被外部部署过
+	if st.ModTime().UnixMilli() <= rec.At {
+		return false, nil
+	}
+	fp, ferr := a.Source.Fingerprint(ctx)
+	if ferr != nil || len(fp) == 0 {
+		return false, ferr
+	}
+	return true, a.Record(fp)
 }
 
 // Pending 比较存着的记录和当前输入。没有记录就是「没有」,读不到记录或算不出当前指纹返回错误(调用方当作没有)。

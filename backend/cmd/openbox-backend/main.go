@@ -340,6 +340,22 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	configpreviewapi.Register(srv.Mux(), configpreviewapi.Deps{Gen: gen})
 	// 「上次成功部署用的输入指纹」:部署成功时记,服务状态的 pendingRestart 用它判断配置改了、内核还没用上
 	applied := &singbox.Applied{Store: st, Source: gen}
+	// 启动时对一次基线:官方面板(或手动)部署过而自研后端没记过指纹时,接管现状当基线,
+	// 免得一启动就报一堆「有改动要重启内核」(真机现象见 pending.go 的 AdoptBaseline 注释)。
+	// 按当前内核选已部署的配置文件;读不到就不猜,保持原行为。
+	go func() {
+		file := filepath.Join(cfg.ConfigDir, "config.json")
+		if k, err := system.ReadRouterKernel(cfg.RouterKernelFile()); err == nil && k == system.KernelMihomo {
+			file = filepath.Join(cfg.ConfigDir, "mihomo.yaml")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if adopted, err := applied.AdoptBaseline(ctx, file); err != nil {
+			log.Warn("启动时对齐「已应用」基线失败,「待重启」可能多报", "error", err)
+		} else if adopted {
+			log.Info("已把当前已部署的配置记为「已应用」基线(之前是别的实现部署的)", "file", file)
+		}
+	}()
 
 	// 服务控制:只通过系统自带的服务管理器(OpenWrt init.d / systemd)操作 sing-box
 	initKind := system.DetectInitHere()
