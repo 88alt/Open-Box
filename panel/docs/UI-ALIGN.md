@@ -327,3 +327,11 @@
 ---
 
 本次是基于 dist 反推与文档口径的**功能等价对齐**,不保证与闭源上游逐行一致。
+- **第 12 批:把刷新评分的三条提示接完,引用缺口清零**
+  ① `nodeScoreRefreshQueued`(单节点口径):只排上 1 个节点时用「已刷新 {name} 延迟,正在排队检测带宽」,
+  多个节点才用带 `{queued}` 的 `nodeScoreRefreshSubQueued`。
+  ② `nodeScoreRefreshSubDone`:排队后起一个 `watchScoreQueue`,每 5 秒 `fetchBandwidthStatus`,
+  队列空了就重拉评分表并提示「已刷新」;`nodeScoreRefreshUnavailable`:超过 **3 分钟**仍没排完则提示「暂时拿不到」
+  (带宽测速本身可能上百 MB,给足时间但不无限等)。
+  验证:`vue-tsc` 与 `npm run build` 通过;**「上游引用、main 未引用」里非例外键已清零**,剩下全是例外 A
+  (`comingSoon` / `activation*` / `tutorial*`)。
