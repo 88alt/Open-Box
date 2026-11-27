@@ -465,9 +465,15 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			}),
 			probeRunner,
 			func(ctx context.Context) string {
+				// 上游 v0.1.493:带宽测速的下载地址由档案 bandwidth.endpoint 决定
+				// (cloudflare / apple / cachefly / custom),不再借用延迟测速的 testUrl。
 				if p, err := profileSvc.Get(ctx); err == nil {
-					if u, _ := p["testUrl"].(string); strings.TrimSpace(u) != "" {
-						return strings.TrimSpace(u)
+					if raw, ok := p["bandwidth"]; ok {
+						if st, nerr := bandwidth.NormalizeSettings(raw); nerr == nil {
+							if u := st.TestEndpointURL(); u != "" {
+								return u
+							}
+						}
 					}
 				}
 				return ""
