@@ -798,6 +798,20 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		// 与 sing-box 那条同:部署成功后记下输入指纹,pendingRestart 才会清零。
 		// 之前 mihomo 这条漏了这个字段,真机上「改配置 → 部署」后 pendingRestart 一直为真。
 		Track: applied,
+		// 与 sing-box 那条同:部署成功后把故障转移计划存进配置目录。
+		// 之前 mihomo 这条也漏了,真机上配了 failover 组、部署成功,`failover.json` 一直是 `[]`
+		// (2026-11-27 真机再次复现:官方面板日志能认出 1 个组,自研后端这条却写不进去)。
+		SavePlan: func(v any) error {
+			p, err := failover.ParsePlan(v)
+			if err != nil {
+				return err
+			}
+			if err := failover.SavePlan(failoverPlanPath, p); err != nil {
+				return err
+			}
+			failoverMgr.SetPlan(p)
+			return nil
+		},
 	}
 	// 按 <ConfigDir>/router-kernel 选一条:sing-box 写 config.json,mihomo 写 mihomo.yaml
 	kernelDeployer := &deploykernel.Deployer{
