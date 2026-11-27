@@ -483,11 +483,12 @@ func TestChainIP(t *testing.T) {
 		t.Fatalf("正文应原样交回: %v", ip)
 	}
 
-	// 接口失败(回的是 404):ip.ok=false 并带原因,不带 url / body;测速本身照常成功
+	// 接口失败(回的是 404):ip.ok=false 并带原因,不带 url / body;测速本身照常成功。
+	// 只传了一个地址时 runJob 不会加主机名前缀(fails 只有一条),所以错误就是裸的 "HTTP 404"。
 	code, out = call([]string{"https://ip.net.coffee/not-a-trace"})
 	ip, _ = out["ip"].(map[string]any)
 	if code != 200 || out["ok"] != true || ip == nil || ip["ok"] != false || ip["url"] != nil || ip["body"] != nil ||
-		ip["error"] != "ip.net.coffee: HTTP 404" {
+		ip["error"] != "HTTP 404" {
 		t.Fatalf("%d %v", code, out)
 	}
 
