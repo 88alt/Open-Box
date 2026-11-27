@@ -873,6 +873,10 @@ const en = {
   obUpdateAutoAt: 'daily at',
   obUpdateAutoHint:
     "Checks on the chosen top-of-the-hour slot and only upgrades when a newer release exists; runs on the chosen day interval, at most once per day, and takes effect immediately when you change the schedule. Hours use the router's time zone (change it under Time zone below).",
+  obUpdateChannelAuto: 'Installed channel',
+  obUpdateChannelDirect: 'GitHub direct',
+  obUpdateChannelMirror: 'Mirror',
+  obUpdateInstalledChannel: 'Installed via: {channel}',
   timezoneTitle: 'Time zone',
   timezoneDescription:
     "The router's system time zone, the same setting as LuCI System → Timezone. Auto update and scheduled subscription updates run at hours in this time zone.",
