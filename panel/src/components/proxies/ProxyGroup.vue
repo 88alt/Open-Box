@@ -282,8 +282,20 @@ const { t } = useI18n()
 const managedGroup = computed(() => managedOutbounds.value.find((g) => g.name === props.name))
 // 故障转移组:底层是 selector + 内部 urltest 子组,但对用户它是「故障转移」,不显示成手动组
 // 上游 v0.1.494:组类型统一走本地化(手动选择 / 自动优选 / 负载均衡 / 故障转移),
-// 以前只有 failover 翻译、其余直接显示后端的英文 type
-const typeText = computed(() => t(`groupType_${proxyGroup.value.type}`))
+// 以前只有 failover 翻译、其余直接显示后端的英文 type。
+// 映射表照上游:selector/select 同一档、fallback/failover 同一档,且**统一用 _short 那套短名**。
+const GROUP_TYPE_SHORT: Record<string, string> = {
+  selector: 'groupType_selector_short',
+  select: 'groupType_selector_short',
+  urltest: 'groupType_urltest_short',
+  loadbalance: 'groupType_loadbalance_short',
+  fallback: 'groupType_failover_short',
+  failover: 'groupType_failover_short',
+}
+const typeText = computed(() => {
+  const key = GROUP_TYPE_SHORT[String(proxyGroup.value.type ?? '').trim().toLowerCase().replace(/[\s_-]+/g, '')]
+  return key ? t(key) : proxyGroup.value.type
+})
 // 故障转移组展开后上栏选的页签:没点过就是内核此刻在的那个
 const pickedLaneId = ref<string | null>(null)
 const failoverLanes = computed(() => (isFailover.value ? failoverLanesOf(props.name, proxyMap.value) ?? [] : []))

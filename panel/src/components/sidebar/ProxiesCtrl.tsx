@@ -4,6 +4,7 @@ import { PROXY_SORT_TYPE, PROXY_TAB_TYPE } from '@/constant'
 import { getMinCardWidth, isMiddleScreen } from '@/helper/utils'
 import { showNotification } from '@/helper/notification'
 import { loadNodeScores } from '@/store/nodeScore'
+import { queueNodeBandwidth } from '@/api/openbox'
 import {
   openboxSubscriptions,
   refreshAllOpenboxSubscriptions,
@@ -89,10 +90,39 @@ export default defineComponent({
     const handlerClickRefreshScore = async () => {
       if (isScoreRefreshing.value) return
       isScoreRefreshing.value = true
+      const all = t('groupFilterAllNodes')
       try {
+        // 第一步:重测延迟(评分的主项),同时把评分表强制重拉一次
+        showNotification({ content: 'nodeScoreRefreshStarted', params: { name: all }, type: 'alert-info', timeout: 2000 })
         await allProxiesLatencyTest()
+
+        // 第二步:给这一页渲染的节点排队一次带宽复测 —— 带宽是评分里权重最大的一项,
+        // 不重测的话分数只能是「暂估」,与上游「刷新评分会排队带宽」的行为一致
+        const names = (proxiesTabShow.value === PROXY_TAB_TYPE.NODE ? nodeGroups.value : renderGroups.value)
+          .flatMap((g) => (g.all ?? []).map((p) => p.name))
+          .filter((n, i, arr) => n && arr.indexOf(n) === i)
+
+        let queued = 0
+        for (const n of names) {
+          try {
+            const r = await queueNodeBandwidth(n)
+            if ((r.queued ?? 0) > 0) queued += 1
+          } catch {
+            // 单个节点排队失败不影响整体,继续排下一个
+          }
+        }
+
         await loadNodeScores(true)
-        showNotification({ content: 'nodeScoreRefreshDone', params: { name: t('groupFilterAllNodes') }, type: 'alert-success' })
+        if (queued > 0) {
+          // 有排队:告诉用户「延迟已刷新、带宽在排队」,分数稍后自己会更新
+          showNotification({
+            content: 'nodeScoreRefreshSubQueued',
+            params: { name: all, queued: String(queued) },
+            type: 'alert-success',
+          })
+        } else {
+          showNotification({ content: 'nodeScoreRefreshDone', params: { name: all }, type: 'alert-success' })
+        }
       } catch (err) {
         showNotification({
           content: 'nodeScoreRefreshFailed',

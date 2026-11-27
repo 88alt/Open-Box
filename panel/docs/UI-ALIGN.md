@@ -781,3 +781,15 @@
   ② `qualityBandwidthFailedUnweightedTip`(v0.1.490 就引入、一直记着「未接」):`NodeQualityCard` 新增 `downloadWeight`,在 `onMounted` 用 `fetchProfile()` 读一次 `nodeScoreWeights.download`;带宽失败时若权重为 **0** 改用「不参与计分」的措辞,否则沿用 `qualityBandwidthFailedTip`。读不到权重就按参与计分处理(与默认 30% 一致)。
   **顺带更正 STATUS 里一条旧推断**:那里写着「`NodeQualityCard` 拿不到档案权重…属措辞级差异」,本批已用 `fetchProfile()` 解决,不再需要维护者另做决定。
   验证:`vue-tsc` 与 `npm run build` 通过。
+- **第 11 批:按引用核对再收敛 4 项**(`groupType_*_short` / `directBypassNeedsFakeIp` / 刷新评分的排队链路)
+  ① **更正第 4 批的偏差**:上游的组类型映射表用的是**短名**(`groupType_selector_short` / `_urltest_short` / `_loadbalance_short` / `_failover_short`),
+  且明确把 `select` 与 `selector`、`fallback` 与 `failover` 归成同一档;我第 4 批写成了 `groupType_${type}`(短名那套键虽然补了却没用上),也未处理两个别名。
+  现已按上游的映射表重写 `ProxyGroup` 与 `ProxyEmbeddedGroup` 的 `typeText`。
+  ② `directBypassNeedsFakeIp`:`DirectBypassCard` 打开直连旁路后,若 `dns.fakeIpForProxy !== true` 或 `dns.mode === 'off'`,
+  弹黄色提示(`key` 用 `direct-bypass-needs-fakeip` 去重、6 秒)——与上游逻辑一致。
+  ③ **刷新评分接上带宽排队**:后端本来就有 `POST /api/openbox/bandwidth/nodes/{name}`,
+  所以刷新时先弹 `nodeScoreRefreshStarted` → 测延迟 → 给当前页渲染到的节点逐个 `queueNodeBandwidth` → 强制重拉评分表,
+  排上队了就弹 `nodeScoreRefreshSubQueued`(带 `{queued}`),否则弹 `nodeScoreRefreshDone`;失败弹 `nodeScoreRefreshFailed`。
+  验证:`vue-tsc` 与 `npm run build` 通过;**「上游引用、main 未引用」的非例外键从 12 项收敛到 3 项**,
+  剩下 3 项是 `nodeScoreRefreshQueued` / `nodeScoreRefreshUnavailable` / `nodeScoreRefreshSubDone` —— 它们要有「排队结果回调」才会触发,
+  属同一功能的后续细化,本轮先接主链路。

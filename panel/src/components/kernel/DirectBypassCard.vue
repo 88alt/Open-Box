@@ -28,9 +28,16 @@ const props = defineProps<{
 }>()
 
 const onToggle = async (event: Event) => {
+  const on = (event.target as HTMLInputElement).checked
   try {
-    await props.patchProfile({ directBypass: (event.target as HTMLInputElement).checked })
+    await props.patchProfile({ directBypass: on })
     showNotification({ content: 'routingPolicySaved', type: 'alert-success' })
+    // 上游 v0.1.493:打开直连旁路但没开 fake-ip(或 DNS 整个关掉)时,旁路拿不到站点名、
+    // 只能按 IP 走,提示一句让人去 DNS 页把 fake-ip 打开
+    const dns = props.profile.dns
+    if (on && (dns?.fakeIpForProxy !== true || dns?.mode === 'off')) {
+      showNotification({ content: 'directBypassNeedsFakeIp', key: 'direct-bypass-needs-fakeip', type: 'alert-warning', timeout: 6000 })
+    }
   } catch (err) {
     showNotification({ content: 'routingSaveFailed', params: { message: err instanceof Error ? err.message : String(err) }, type: 'alert-error' })
   }

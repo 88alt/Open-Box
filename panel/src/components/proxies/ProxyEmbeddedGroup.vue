@@ -232,9 +232,19 @@ const showCollapse = computed({
 // 折叠态的圆点按页签引用画;展开是上下两栏(页签栏 + 当前页签的节点),见 FailoverLaneCards / FailoverLaneDetail
 const isFailover = computed(() => isFailoverGroup(props.name))
 // 故障转移组在穿透里也叫「故障转移」,不因底层是 selector 就显示成手动组
-// 上游 v0.1.494:组类型统一走本地化(手动选择 / 自动优选 / 负载均衡 / 故障转移),
-// 以前只有 failover 翻译、其余直接显示后端的英文 type
-const typeText = computed(() => t(`groupType_${proxyGroup.value.type}`))
+// 上游 v0.1.494:组类型统一走本地化,映射表照上游(selector/select 同档、fallback/failover 同档,统一用 _short)
+const GROUP_TYPE_SHORT: Record<string, string> = {
+  selector: 'groupType_selector_short',
+  select: 'groupType_selector_short',
+  urltest: 'groupType_urltest_short',
+  loadbalance: 'groupType_loadbalance_short',
+  fallback: 'groupType_failover_short',
+  failover: 'groupType_failover_short',
+}
+const typeText = computed(() => {
+  const key = GROUP_TYPE_SHORT[String(proxyGroup.value.type ?? '').trim().toLowerCase().replace(/[\s_-]+/g, '')]
+  return key ? t(key) : proxyGroup.value.type
+})
 const allProxies = computed(() => failoverMembersOf(props.name, proxyGroup.value.all ?? []))
 const { proxiesCount, renderProxies } = useRenderProxies(allProxies, props.name)
 const isLatencyTesting = ref(false)
