@@ -6,7 +6,7 @@
 
 ## 交接快照(交接 / 续跑从这里开始,不用重读全部文档)
 
-CHECKPOINT: 3228c920f78763188b46f74e467f4e45c05041fb | 上游版本: v0.1.492 | 更新于 2026-11-27
+CHECKPOINT: 6b105b0d0eb9a3fc5aa1a7ff1b9d35cec7b7b0fe | 上游版本: v0.1.492 | 更新于 2026-11-27
 
 **怎么用**:以 CHECKPOINT 为起点做增量对账(`git log <CHECKPOINT>..origin/main`),下面「已确认结论」直接采信、带证据的已打勾条目不重验;
 只有快照缺失或损坏时才通读 HANDOFF / README / DESIGN / STATUS 全文。
@@ -103,15 +103,6 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 - 端到端冒烟(本机 Windows,真实 core 子进程 + 真实后端二进制,`-core` 指向自己编的 `openbox-core`):`/api/auth/setup` → `profile` / `defaults` / `groups` / `policies/entries` / `clients` / `client-app/info` / `deploy/state` / `update/status` / `diagnostics` / `latency-history/version` 全部按契约回 200;`GET /config/preview` 走真实 core 出整份配置;改 `dns.fakeIpRange=198.20.0.0/16` 后预览里 `dns-fakeip` 的 `inet4_range` 跟着变;`dns.domainUpstreams` 加一条后预览出现 `dns-du-1` 与对应 `domain_suffix` 规则;`bandwidth.startHour` 收 23、拒 24;`mihomoTlsSniffPorts` 非法值 400;`kernel/switch/preflight?kernel=mihomo` 回固定 8 项且失败后逐项 `blocked`,NDJSON 逐行到达;`profile/target-routing` 的 GET/POST/DELETE 闭环可用;`POST /deploy` 在 Windows 上按预期拒绝(「没有识别到受支持的服务管理器」)而不是猜。Windows 上 `/api/openbox/system/resources` 回 503(读不到 `/proc/stat`)属预期。
 
 ## 全局记录(跨区事项:开工 tag、上游版本、陌生提交对账、工作流恢复、停止条件)
-### 交接快照(每批提交时在同一个提交里更新;续跑先读这里,快照里已确认、已打勾且带证据的结论直接采信,只做增量对账)
-CHECKPOINT: 3228c920f78763188b46f74e467f4e45c05041fb | 上游版本: v0.1.492 | 更新于 2026-11-26
-- 开工 tag:`pre-sync-20261125`(整体回滚点,已存在,续跑不重复打)。
-- 上游基准:`catch-up-upstream` = v0.1.492;前端三语键集与引用已对齐(见下面 2026-11-27 前端三语对账条:缺的 38 个全是例外 C 的 `business*`,真缺口 0)。
-- 工作流现状:`.github/workflows/` 下 `backend.yml`、`release-backend.yml` 均在 main 上;`concurrency` 已由维护者改好(`ci:` 提交),不要改。
-- 对账口径:增量流程 = `git fetch origin --prune` → `git merge-base --is-ancestor <CHECKPOINT> origin/main`(不是祖先 = 历史被改写,立即停并记入本节)→ `git log --oneline <CHECKPOINT>..origin/main` 逐条归类(本任务的 / 维护者的 / 陌生的)。
-- 剩余条目:以上面各条目的 `[~]` / 未打勾为准(需真机 / 需维护者确认的写在各条里)。
-- 注:CHECKPOINT 填本批开工时的 `origin/main`(即本批提交的父提交);提交的哈希写不进它自己,所以不填本批提交号。
-
 - 2026-11-27 backend(**`penetration` 的配置来源改动真机验证通过**,独立实例 13041,不碰线上): 用 `/tmp/pen` 独立目录 + 线上同一份二进制(11:40 装的,已含 `e9b69d90`),只改 `router-kernel` 文件做对照: ① **`router-kernel` = `mihomo`** → `POST /penetration` 回「分流推算失败: 当前内核是 mihomo,还没有把 mihomo 配置翻译成推算用的形状;请在内核切到 sing-box 后重试」。**这正是这次改动的目的**——以前这里会静默读那份过期的 `config.json` 给出一个错的推算结果。 ② **`router-kernel` = `sing-box`** → 正常推算:`matched:{index:0,rule:{outbound:"direct"},outbound:"direct",action:"route"}`、`chain:["direct"]`、`dns:{skipped:true}`,**行为与以前一致、没有被这次改动破坏**。 ③ 顺带印证:同一个实例换 `router-kernel` 后行为立刻切换,说明 `ReadDeployedConfig` 每次请求都按当前内核选文件,没有缓存串味。 临时实例已停、`/tmp/pen` 已删,线上后端未受影响(`panel=200`)。 **`viaIp` 本身仍未验**:要真算出 `viaIp` 需要「sing-box 内核 + 真实部署配置 + 域名解析出地址命中 IP 规则」,而设备线上跑 mihomo(切 sing-box 会打断网络)。这一条保持 `[~]`,缺口是「mihomo 规则翻译层未做」,已在条目里写明。
 - 2026-11-27 backend(**`client-app/share-codes/{x}/rotate` 真机验证完成**,192.168.2.5,独立实例不碰线上): 在设备上起独立实例(端口 13040、`/tmp/obx-verify` 独立 data/etc/geo,不碰 `/opt/open-box`),建一台 shadowsocks 服务器后跑完整链路: ① rotate 前用旧码取封包 **200**;② rotate 后配对码 `SMMQ`→`EVI1`、`gen` `…0002`→`…0003`、密码换成新的随机串; ③ **旧码立刻 404**(旧代数失效);④ **新码在重新交链接前也是 404**(没有封包);⑤ 重新交链接后沿用新配对码与新代数(`gen3==gen2`、`pair3==pair2`); ⑥ **新码取封包 200**。**结论:旧码失效、新码可用、密码已换,条目要求的三件事全部验通。** ⑦ `applied` 在独立实例里是 **`failed` 并带原因**(「配置引用的规则集还没准备好」),因为独立实例没有规则集产物;这是如实报告而非缺陷——按设计 `failed` 仍是 200、密码和配对码不回滚,前端据此提示。线上实例有规则集时会走 `restarted`。 ⑧ **过程中我自己踩的坑(记下来免得重复)**:第一版验证脚本把完整档案(已含空 `servers`)和 `servers` 一起 `PUT`,写出**重复的 `servers` 键**,JSON 后者覆盖前者,导致 `share-codes` 一直回 `{}`。我当时误以为是产品缺陷,加了临时调试打印才定位;**正确做法是 `PUT` 只带要改的键**(它本来就是补丁合并)。临时调试代码已全部删除,源码与远端**逐字节一致**(`git diff` 为空)。 ⑨ 另外记一笔:取封包在同步开关关闭时回 **403 `disabled`**(默认关),要先 `PUT /client-config/enabled {enabled:true}`;这是设计行为,不是 bug。 临时实例已停、`/tmp/obx-verify` 已删,线上后端未受影响(`panel=200`)。 Backend:`24dc2086` Test / Build (amd64) / Build (arm64) 三项 completed + success。
 - 2026-11-27 前端三语对账(上游 v0.1.492,`catch-up-upstream` = `135b2d40`,与上游最新 release 同版): **键集**:上游三语各 **2339** 键、main **2301** 键;缺 **38** 个**全部是 `business*` 前缀**(例外 C:业务优选整体不做),**多 0、值不同 0**;上游 zh / zh-tw 相对 en 既不缺也不多。→ **键集与文案已对齐,无需改动。** **引用**:「上游引用、main 没引用」**27 个,脚本全部标注 `[例外C]`**,真缺口 **0**。 **一个必须说明的方法学问题**:`cmp-upstream-refs.py` 报「main 引用、上游没引用」**1813 个**,这个数字**不能采信**——我抽查 `systemCpuCoreLoad` 等键:它们**确实在 en 语言包里存在**、上游也在用,但在上游 dist 的 js 里 grep 不到,因为压缩后键名做了短名映射,字面量搜不到。**该方向对压缩产物天然不可靠**(脚本注释里也提到了同类虚警)。所以前端对账以「键集 + 值」为准(可靠),「main 引用多于上游」不作为缺口依据。
