@@ -4,6 +4,48 @@
 标注「需真机」的条目,代码和单元测试做完后打 `[~]`(代码完成,待真机验证),由维护者真机验证后改成 `[x]`。沙盒里无法验证的云端项(例如 Actions 首次运行)同样先打 `[~]`,由维护者确认后改成 `[x]`。
 接口分组名对应 `docs/ENDPOINTS.md` 里的二级标题。
 
+## 交接快照(交接 / 续跑从这里开始,不用重读全部文档)
+
+CHECKPOINT: 3228c920f78763188b46f74e467f4e45c05041fb | 上游版本: v0.1.492 | 更新于 2026-11-27
+
+**怎么用**:以 CHECKPOINT 为起点做增量对账(`git log <CHECKPOINT>..origin/main`),下面「已确认结论」直接采信、带证据的已打勾条目不重验;
+只有快照缺失或损坏时才通读 HANDOFF / README / DESIGN / STATUS 全文。
+
+### 已确认结论(可直接采信,不必重验)
+- **上游基线**:`catch-up-upstream` = `135b2d40`(v0.1.492),与上游最新 release 同版;`.upstream-synced` = `v0.1.492`。
+- **整体回滚点**:tag `pre-sync-20261125`(指向 `0befae5f`,已在远端)。续跑不重复打 tag。
+- **工作流**:`origin/main` 上 `.github/workflows/backend.yml` 与 `release-backend.yml` 都在。**不要改动 concurrency**(维护者已改成 main 排队、PR 取消)。
+- **前端键集(2026-11-27 实跑核对,可信)**:上游三语各 **2339** 键、main **2301** 键;缺 **38** 个全部是 `business*`(例外 C);
+  **多 0、值不同 0**;上游 zh / zh-tw 相对 en 既不缺也不多。→ **键集与三语文案已对齐,无缺口。**
+- **前端引用**:"上游引用、main 未引用" **27 个,全部 `[例外C]`**,真缺口 **0**。
+  ⚠️ 方法学:`cmp-upstream-refs.py` 报的「main 引用、上游未引用 1813 个」**不可采信**——dist 压缩后键名走短名映射,字面量 grep 不到(已抽查 `systemCpuCoreLoad` 证伪)。**该方向不作为缺口依据。**
+- **有意例外 A / B / C 全部照旧不做**,核对键集时把它们从「缺失」里剔除。
+- **DNS 接管真机验证(已过)**:192.168.2.5 已装自研 `openbox-backend`(amd64,3036,`-install-root /opt/open-box`),
+  官方面板已停并 disable;`openbox-dns.conf` = `no-resolv` + `server=127.0.0.1#7853`,mihomo 在 7853/udp 监听;
+  从局域网另一台设备验证 `google → 198.18.0.13`(fake-ip)、`baidu → 真实地址`。**回滚点 `/root/obx-dns-backup/20261127-113721`**,
+  `sh /root/dns-backup-rollback.sh restore` 可整体还原。
+- **`Recover` 语义(已过)**:重启后端后接管文件与 `phase:applied` 都在、时间戳未变,不会误删生效中的接管。
+- **`rotate`(已过)**:独立实例实测——旧码 rotate 后立刻 404、新码重新交链接后 200、密码与 gen 都换。
+- **`penetration` 配置来源(已过)**:`router-kernel=mihomo` → 明确报「不支持」;`=sing-box` → 正常推算,行为未破坏。
+- **`kernelDns` 在 mihomo 下 = 无法验证**(`log-level: warning` 与官方一致,`kerneldns` 订阅 debug)。**不为勾条目改日志级别。**
+- **`factory-reset`**:dry-run 预演 = 删 9 保留 3,实跑结果逐项一致。**按维护者要求不在真机执行。**
+
+### 剩余条目(按顺序做)
+1. `[~]` `ipUrls` 条目 — 代码已对齐 v0.1.396(只查 Net.Coffee),真机未确认真实接口答话(已完成代码与回放样本)。
+2. `[~]` `client-app/share-codes/{x}/rotate` — 逻辑已验,只剩真机「旧链接连不上」这半步。
+3. `[~]` DNS 接管接进部署流程前三项 — `Recover` 与停内核已验;`BeforeApply`/`AfterRunning` 真实部署需面板登录。
+4. `[~]` `terminal-test` 第十一步 `kernelDns` — mihomo 下**无法验证**(已定案)。
+5. `[~]` `penetration` 的 `viaIp` — 需 sing-box 内核 + 真实部署配置。
+6. `[~]` `failover` 第一部分 — 计划存取已验;真实部署会重启 `openbox` 服务、打断网络,未做。
+7. `[~]` `factory-reset` — 已预演,按维护者要求不做真机。
+8. `[~]` `update*` 第二部分 — **卡在发布包**:需维护者手动触发 `release-backend.yml`(已核对不会动上游备份 release)。
+
+### 环境与已知限制
+- 本机 `bin/` 下已有 sing-box 1.14.4(Windows)、`openbox-core.exe`;涉及 sing-box 的测试**不要只看 SKIP**,先用它实跑。
+- 本机对 `failover` / `urlx` 等包的测试二进制会报 `Access is denied`(执行策略),**CI 上正常**,不算失败。
+- 设备 `192.168.2.5` 是 **x86_64**(不是 arm64),交叉编译用 `GOARCH=amd64`;无 `nohup`/`pkill`,用 `setsid`。
+- 设备上 `PUT /profile` 是**补丁合并**,只带要改的键;带整份档案会写出重复 `servers` 键导致后写覆盖前写。
+
 ## 每批必做:CI 门禁(每次开工、续跑先读这里,优先级高于下面所有条目)
 Backend 工作流(`.github/workflows/backend.yml`)是 main 上唯一的自动验收:在 `backend/` 或该文件有改动的推送上跑,任务是 `Test`(gofmt、go vet、go test -race)和 `Build (amd64)` / `Build (arm64)`。`release-backend.yml` 只能手动触发,推送不会跑它。**没有这一步,「绿」就没人看过。**
 
