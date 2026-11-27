@@ -2,6 +2,8 @@ import { nodeGroups, policyGroups, renderGroups } from '@/composables/proxies'
 import { useCtrlsBar } from '@/composables/useCtrlsBar'
 import { PROXY_SORT_TYPE, PROXY_TAB_TYPE } from '@/constant'
 import { getMinCardWidth, isMiddleScreen } from '@/helper/utils'
+import { showNotification } from '@/helper/notification'
+import { loadNodeScores } from '@/store/nodeScore'
 import {
   openboxSubscriptions,
   refreshAllOpenboxSubscriptions,
@@ -26,6 +28,7 @@ import {
 } from '@/store/settings'
 import {
   ArrowPathIcon,
+  ArrowPathRoundedSquareIcon,
   BoltIcon,
   ChevronDownIcon,
   ChevronUpIcon,
@@ -77,6 +80,27 @@ export default defineComponent({
         await fetchProxies()
       } finally {
         isUpgrading.value = false
+      }
+    }
+
+    // 上游 v0.1.494:右上角「刷新评分」。做法 = 先测一轮延迟(评分依赖延时),
+    // 再强制重拉一次评分表(绕过 30 秒 TTL),让标签上的分数立刻跟着更新。
+    const isScoreRefreshing = ref(false)
+    const handlerClickRefreshScore = async () => {
+      if (isScoreRefreshing.value) return
+      isScoreRefreshing.value = true
+      try {
+        await allProxiesLatencyTest()
+        await loadNodeScores(true)
+        showNotification({ content: 'nodeScoreRefreshDone', params: { name: t('groupFilterAllNodes') }, type: 'alert-success' })
+      } catch (err) {
+        showNotification({
+          content: 'nodeScoreRefreshFailed',
+          params: { message: err instanceof Error ? err.message : String(err) },
+          type: 'alert-error',
+        })
+      } finally {
+        isScoreRefreshing.value = false
       }
     }
 
@@ -234,6 +258,22 @@ export default defineComponent({
         </button>
       )
 
+      // 上游 v0.1.494:右上角刷新评分(测一轮延迟 + 强制重拉评分表)
+      const refreshScore = proxiesTabShow.value !== PROXY_TAB_TYPE.PROVIDER && (
+        <button
+          class="btn btn-circle btn-sm"
+          aria-label={t('nodeScoreRefresh')}
+          title={t('nodeScoreRefresh')}
+          onClick={handlerClickRefreshScore}
+        >
+          {isScoreRefreshing.value ? (
+            <span class="loading loading-spinner loading-sm"></span>
+          ) : (
+            <ArrowPathRoundedSquareIcon class="h-4 w-4" />
+          )}
+        </button>
+      )
+
       const toggleCollapseAll = (
         <button
           class={[
@@ -347,6 +387,7 @@ export default defineComponent({
               {settingsModal}
               {toggleCollapseAll}
               {latencyTestAll}
+              {refreshScore}
             </div>
           </div>
         </div>
@@ -358,6 +399,7 @@ export default defineComponent({
           {settingsModal}
           {toggleCollapseAll}
           {latencyTestAll}
+          {refreshScore}
         </div>
       )
 

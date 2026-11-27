@@ -750,3 +750,15 @@
   验证:三语 2325 → **2330**,「多出」0、「值不同」0;`vue-tsc` 与 `npm run build` 通过。
   **未做(仍缺)**:① 排序选项的下拉 UI —— main 的 `proxySortType`(设置页「代理排序方式」的键)目前**没有任何界面在用**,上游 494 的排序 UI 位置在 dist 里被混淆包住、取不到确切结构,本轮没有凭空造一个;② 右上角「刷新评分」按钮与七条状态提示(`nodeScoreRefresh*` 已补键,但按钮与请求链路未接)。
   **推断点 / 待维护者复核**:排序与刷新这两个入口的**位置**需要维护者确认(是放在代理页顶部工具条,还是设置页),我不希望按猜测造一个跟上游不一样的入口。
+- **第 7 批:排序 UI 核实 + 右上角「刷新评分」按钮**(对应 release notes「新增按评分升序/降序排序及右上角刷新评分按钮与交互」)
+  **排序 UI 其实早就有了**:`components/sidebar/ProxiesCtrl.tsx` 的「代理设置」浮层里有 `proxyNodeSortBy` + 一个
+  `<select>` 遍历 `Object.values(PROXY_SORT_TYPE)`,第 6 批加了 `SCORE_ASC`/`SCORE_DESC` 枚举和 `scoreasc`/`scoredesc` 三语键之后
+  **两个新选项自动出现在下拉里**,不需要另造入口。上一批写的「排序 UI 未做」是我没查到位,这里更正。
+  **刷新评分按钮(本批新增)**:`ProxiesCtrl` 加 `refreshScore` 按钮(`ArrowPathRoundedSquareIcon`,`aria-label` / `title` 用 `nodeScoreRefresh`,
+  加载态转圈),放在「全部测速」按钮之后;两处渲染点(宽工具条 / 窄工具条)都挂上。动作 = 先 `allProxiesLatencyTest()` 测一轮延迟,
+  再 `loadNodeScores(true)` 强制重拉评分表(绕过 30 秒 TTL),成功弹 `nodeScoreRefreshDone`(`name` 传 `groupFilterAllNodes`「全部节点」)、
+  失败弹 `nodeScoreRefreshFailed`(带 `message`)。
+  验证:`vue-tsc` 与 `npm run build` 通过。
+  **推断点 / 待维护者复核**:上游的「刷新评分」背后是「重测延迟 + 排队带宽」两条链路(所以才有 `nodeScoreRefreshQueued` /
+  `nodeScoreRefreshSubQueued` 这两条带「排队检测带宽」措辞的提示)。**main 后端没有「按需排队带宽测速」的接口**,  所以现在只做到「重测延迟 + 重拉评分」,不会触发带宽复测;因此只用了 `Done` / `Failed` 两条提示,  `Queued` / `SubQueued` / `SubDone` / `Unavailable` / `Started` 五条暂时没有触发点(键已补,留着)。
+  要让那五条也能出现,需要后端加一个「按需触发带宽复测」的接口 —— 属独立功能,不在本轮。
