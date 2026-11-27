@@ -6,7 +6,7 @@
 
 ## 交接快照(交接 / 续跑从这里开始,不用重读全部文档)
 
-CHECKPOINT: a7401b5f | 上游版本: v0.1.492 | 更新于 2026-11-27
+CHECKPOINT: a4738440ee8e63c0ba5ff3837edd860a857f860e | 上游版本: v0.1.494 | 更新于 2026-11-27
 
 **怎么用**:以 CHECKPOINT 为起点做增量对账(`git log <CHECKPOINT>..origin/main`),下面「已确认结论」直接采信、带证据的已打勾条目不重验;
 只有快照缺失或损坏时才通读 HANDOFF / README / DESIGN / STATUS 全文。
@@ -153,6 +153,13 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 - 端到端冒烟(本机 Windows,真实 core 子进程 + 真实后端二进制,`-core` 指向自己编的 `openbox-core`):`/api/auth/setup` → `profile` / `defaults` / `groups` / `policies/entries` / `clients` / `client-app/info` / `deploy/state` / `update/status` / `diagnostics` / `latency-history/version` 全部按契约回 200;`GET /config/preview` 走真实 core 出整份配置;改 `dns.fakeIpRange=198.20.0.0/16` 后预览里 `dns-fakeip` 的 `inet4_range` 跟着变;`dns.domainUpstreams` 加一条后预览出现 `dns-du-1` 与对应 `domain_suffix` 规则;`bandwidth.startHour` 收 23、拒 24;`mihomoTlsSniffPorts` 非法值 400;`kernel/switch/preflight?kernel=mihomo` 回固定 8 项且失败后逐项 `blocked`,NDJSON 逐行到达;`profile/target-routing` 的 GET/POST/DELETE 闭环可用;`POST /deploy` 在 Windows 上按预期拒绝(「没有识别到受支持的服务管理器」)而不是猜。Windows 上 `/api/openbox/system/resources` 回 503(读不到 `/proc/stat`)属预期。
 
 ## 全局记录(跨区事项:开工 tag、上游版本、陌生提交对账、工作流恢复、停止条件)
+
+- 2026-11-27 版本钉对齐上游 **v0.1.494**(`catch-up-upstream` = `44bf5bd4`,上游 2026-11-27T09:59Z 发布):
+  `backend/packaging/versions.env` 全部对齐——`OPENBOX_UPSTREAM=494`、`KERNEL_SOURCE_BASE` 指到 `v0.1.494`、
+  **`SINGBOX_PATCH` `openbox-62` → `openbox-63`**(摘要 `7b43bdc9…`)、**`MIHOMO_PATCH` `openbox.24` → `openbox.25`**(摘要 `27150bed…`);
+  `GEODATA_REF` 未变(`2f927fd1…`)。两个摘要取自 release 资产自带的 `.sha256`,并与
+  `open-box-v0.1.494-linux-x64-components.json` 的 `kernel = 1.14.4-openbox-63` / `kernel-mihomo = v1.19.34-openbox.25` 交叉核对一致。
+  **维护者指示**:「以后上游有新版本也不更新了,v0.1.494 完整版本先全部完成再看」——本轮之后不再跟进新的上游版本,先把 v0.1.494 做完。
 
 - 2026-11-27 backend(**设备已升级到官方 v0.1.493,自研后端在官方布局下部署受阻:规则库格式不同**):
   **设备现状**:`/opt/open-box/meta.json` 显示 `version: v0.1.493`、`singboxVersion: 1.4.4-openbox-62`、`mihomoVersion: v1.19.34-openbox.24`、
