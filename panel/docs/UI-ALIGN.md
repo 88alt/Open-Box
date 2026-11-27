@@ -736,3 +736,11 @@
   验证:`groupType_selector` / `_urltest` / `_loadbalance` / `_failover` 四组三语键都在;`vue-tsc` 与 `npm run build` 通过。
   说明:`groupType_failover_short`(上游 494 把它英文改成 `Fallback`)现在没有引用,但**键按原样保留**——它属于上游仍存在的键,
   删了会导致键集比对出现「main 有而上游没有」之外的偏差。
+- **第 5 批:节点标签显示「延迟 | 评分」**
+  对应 release notes「代理页节点标签改为显示『延迟 | 节点评分』」。
+  改动:新增 `src/store/nodeScore.ts` —— 整页拉一次 `GET /api/openbox/node-quality?allSubscriptions=1&details=nodes`,
+  把 `subscriptions[].nodes[]` 摊平成「节点名 → {score, stale}」的表,30 秒 TTL;一屏上百张卡各自请求会把后端打爆,所以集中拉。
+  `LatencyTag` 加可选 `score` / `scoreStale` 两个 prop:有分数时在延迟段后插入「| 分数」(按阈值着色、`title` 用 `nodeScoreTipLabel`),并把标签宽度从固定 `w-10` 放开成 `w-auto min-width:max-content`;**没有分数时整段不出现、宽度回退**,所以规则页 / 故障转移页(拿不到单节点评分)行为与以前完全一致。
+  `ProxyNodeCard` 从共享表查分数传给标签;`ProxiesPage` 在 `onMounted` 调 `loadNodeScores()`。
+  验证:`vue-tsc` 与 `npm run build` 通过。
+  **未做(下一批)**:按评分升序/降序排序、右上角「刷新评分」按钮与七条状态提示。

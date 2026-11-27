@@ -146,6 +146,7 @@ import {
 import { proxyGroupColumnsCurrent } from '@/store/settings'
 import { useDocumentVisibility, useIntervalFn, useSessionStorage } from '@vueuse/core'
 import { pollLatencyHistoryVersion } from '@/store/latencyHistory'
+import { loadNodeScores } from '@/store/nodeScore'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const { padding } = usePaddingForViews({
@@ -359,6 +360,8 @@ const scheduleAutoRefresh = () => {
 isProxiesPageMounted.value = false
 
 onMounted(() => {
+  // 上游 v0.1.494:节点标签显示「延迟 | 评分」,进页面时拉一次评分表(30 秒内不重复拉)
+  void loadNodeScores()
   setTimeout(() => {
     isProxiesPageMounted.value = true
     nextTick(() => {

@@ -6,10 +6,10 @@
       twMerge(
         'latency-tag bg-base-100 flex h-5 w-10 cursor-pointer items-center justify-center rounded-xl text-xs select-none',
         color,
-        bandwidthEnabled && 'w-auto whitespace-nowrap',
+        (bandwidthEnabled || hasScore) && 'w-auto shrink-0 whitespace-nowrap',
       )
     "
-    :style="bandwidthEnabled ? { minWidth: 'max-content' } : undefined"
+    :style="bandwidthEnabled || hasScore ? { minWidth: 'max-content' } : undefined"
     @mouseenter="handlerHistoryTip"
   >
     <!-- 开了带宽段:延迟、竖线、带宽三块各自左右留 px-1.5,和上游 v0.1.389 的胶囊一致 -->
@@ -31,6 +31,18 @@
         {{ latency }}
       </span>
     </span>
+    <!-- 上游 v0.1.494:延迟后面接一段节点评分(「延迟 | 评分」),分数按阈值着色。
+         没有评分的场合(规则页 / 故障转移等)传空,这一段整段不出现。 -->
+    <template v-if="hasScore">
+      <span
+        class="text-base-content/40"
+        aria-hidden="true"
+      >|</span>
+      <span
+        :class="['flex h-full items-center justify-center px-1.5 font-semibold', scoreColor]"
+        :title="$t('nodeScoreTipLabel')"
+      >{{ scoreText }}</span>
+    </template>
     <!-- 所属订阅开了带宽定期检查:延迟后面接一段带宽实测(Mbps,点一下重测这个节点) -->
     <!-- 所属订阅开了带宽定期检查:延迟后面接一段带宽实测(Mbps,点一下重测这个节点)。
          分隔竖线只在「这段真有内容」时画(有实测值 / 测速中 / 失败原因),
@@ -67,7 +79,7 @@
 
 <script setup lang="ts">
 import { NOT_CONNECTED } from '@/constant'
-import { getColorForBandwidth, getColorForLatency } from '@/helper'
+import { getColorForBandwidth, getColorForLatency, getColorForNodeScore } from '@/helper'
 import { latencyReasonText } from '@/helper/latencyReason'
 import { useTooltip } from '@/helper/tooltip'
 import { isSingBox } from '@/api'
@@ -268,6 +280,10 @@ const props = defineProps<{
   // 节点名来自内核代理表(可能属于另一条订阅、那边没开带宽检查),
   // 只靠 measurements 判定会导致整段带宽不显示(真机实测:上游显示 81 枚、main 0 枚)。
   bandwidthOnly?: boolean
+  // 上游 v0.1.494:节点标签显示「延迟 | 评分」。score 为空时不显示那一段
+  // (规则页 / 故障转移页拿不到单节点评分,传空即可,行为与以前一样)
+  score?: number | null
+  scoreStale?: boolean
 }>()
 const latencyRef = ref()
 const { bandwidthMeasurements, bandwidthPendingNodes } = useBandwidth()
@@ -279,6 +295,11 @@ const bandwidth = computed(() =>
   infoNode() || (props.bandwidthOnly && isRealNodeName()) ? bandwidthMeasurements.value[props.name ?? ''] : undefined,
 )
 const bandwidthEnabled = computed(() => props.bandwidthOnly || !!bandwidth.value?.enabled)
+// 上游 v0.1.494:标签显示「延迟 | 评分」。没有评分(规则页 / 故障转移等传空)时整段不出现,
+// 标签宽度也回到原来的 w-10,行为与以前一致
+const hasScore = computed(() => props.score != null && Number.isFinite(props.score))
+const scoreText = computed(() => (hasScore.value ? String(Math.round(props.score as number)) : ''))
+const scoreColor = computed(() => getColorForNodeScore(props.score, props.scoreStale === true))
 // 带宽段「有没有内容可显示」:有实测值、正在测、或有失败原因。只有这时才画分隔竖线和这一段,
 // 否则一枚只显示延迟的药丸会多出一条孤立的 `|`(与上游 162 枚全是纯延迟药丸对不上)。
 const bandwidthShown = computed(

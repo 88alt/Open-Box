@@ -49,6 +49,8 @@
         :name="node.name"
         :loading="isLatencyTesting"
         :group-name="groupName"
+        :score="nodeScore(props.name)?.score ?? null"
+        :score-stale="nodeScore(props.name)?.stale === true"
         @click.stop="handlerLatencyTest"
       />
     </div>
@@ -75,6 +77,7 @@ import { smartWeightsMap } from '@/store/smart'
 import { twMerge } from 'tailwind-merge'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { nodeScore } from '@/store/nodeScore'
 import LatencyTag from './LatencyTag.vue'
 import ProxyIcon from './ProxyIcon.vue'
 
