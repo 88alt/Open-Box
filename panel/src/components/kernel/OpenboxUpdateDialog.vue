@@ -24,6 +24,39 @@
         :value="updatePercent ?? undefined"
         max="100"
       />
+      <!-- 上游 v0.1.493:升级时多显示三行(当前下载源 / 下载进度 / 切源记录)。
+           后端没给就不显示那一行,旧后端也能正常跑。 -->
+      <div
+        v-if="progressSource || progressTransfer || progressAttempts"
+        class="flex flex-col gap-0.5"
+      >
+        <div
+          v-if="progressSource"
+          class="flex flex-wrap items-center justify-between gap-2"
+        >
+          <span class="text-base-content/60">{{ $t('obUpdateSourceLabel') }}</span>
+          <span class="font-mono tabular-nums">{{ progressSource }}</span>
+        </div>
+        <div
+          v-if="progressTransfer || progressAttempts"
+          class="flex flex-wrap items-center justify-between gap-2"
+        >
+          <span class="text-base-content/60">{{ $t('obUpdateTransferLabel') }}</span>
+          <span class="font-mono tabular-nums">
+            <template v-if="progressTransfer">{{ progressTransfer }}</template>
+            <template v-if="progressTransfer && updatePercent !== null"> ({{ updatePercent }}%)</template>
+            <template v-if="progressTransfer && progressAttempts"> · </template>
+            <template v-if="progressAttempts">{{ progressAttempts }}</template>
+          </span>
+        </div>
+        <div
+          v-if="progressAttempts"
+          class="flex flex-wrap items-center justify-between gap-2"
+        >
+          <span class="text-base-content/60">{{ $t('obUpdateAttemptsLabel') }}</span>
+          <span class="text-base-content/70 font-mono break-all">{{ progressAttempts }}</span>
+        </div>
+      </div>
       <p class="text-base-content/60 text-xs">{{ $t('obUpdateDialogHint') }}</p>
       <pre
         v-if="updateInfo?.logTail"
@@ -66,6 +99,11 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
+
+// 上游 v0.1.493 的三行:当前下载源 / 下载进度 / 切源记录。后端没给就是空串,模板里整行不显示
+const progressSource = computed(() => updateProgress.value?.source || '')
+const progressTransfer = computed(() => updateProgress.value?.transfer || '')
+const progressAttempts = computed(() => updateProgress.value?.attempts || '')
 
 const stageText = computed(() => {
   const stage = updateProgress.value?.stage || ''

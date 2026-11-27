@@ -2363,6 +2363,9 @@ const en = {
   obUpdateDialogTitle: 'Updating Open-Box',
   obUpdateDialogHint:
     'The panel restarts once during the update and the core restarts after it. Hiding this window does not stop the update.',
+  obUpdateSourceLabel: 'Download source',
+  obUpdateTransferLabel: 'Transfer',
+  obUpdateAttemptsLabel: 'Source attempts',
   obUpdateDialogHide: 'Hide',
   obUpdateViewProgress: 'Progress',
   clientRoutingTab: 'Client routing',

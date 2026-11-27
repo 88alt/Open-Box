@@ -1546,6 +1546,11 @@ export interface OpenboxUpdateProgress {
   total: number | null
   message: string
   running: boolean
+  // 上游 v0.1.493 起:当前下载源(直连 / 某个镜像)、下载速率、切源记录。
+  // 都是可选:后端没给就不显示那一行(旧版本后端也能正常跑)。
+  source?: string
+  transfer?: string
+  attempts?: string
 }
 export interface OpenboxUpdateStatus {
   version: string

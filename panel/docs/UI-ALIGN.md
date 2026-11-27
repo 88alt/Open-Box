@@ -686,4 +686,7 @@
 - **第 1 批(本批):`latencyReason*` 4 个键** — 上游在 `latencyReasonStatus` 之后新增
   `forbidden` / `rate_limited` / `penalized` / `unsupported` 四条 reason→文案映射(对应 release notes「双内核透传测速响应状态码与内容类型,Cloudflare 限流时自动降级」)。
   改动:`panel/src/helper/latencyReason.ts` 的 `LATENCY_REASON_KEYS` 补 4 条映射;三语各补 4 条文案(逐字取自 493 语言包)。
-  验证:`vue-tsc --noEmit` 通过;三语键数 2301 → **2305**,与上游差值从 54 收窄到 **50**。
+  验证:`vue-tsc --noEmit` 通过;三语键数 2301 → **2305**,与上游差值从 54 收窄到 **50**。- **第 2 批:`obUpdate{Source,Transfer,Attempts}Label` 3 个键** — 升级对话框新增「当前下载源 / 下载进度 / 切源记录」三行 (对应 release notes「移除下载通道手动选择,执行时自动探测 GitHub 直连并在不通或过慢时自动轮询内置镜像」,所以要显示当前用的是哪个源以及切了几次)。
+  改动:`api/openbox.ts` 的 `OpenboxUpdateProgress` 加 `source` / `transfer` / `attempts` 三个**可选**字段(后端没给就不显示那一行,旧后端也跑得通);`OpenboxUpdateDialog.vue` 按上游结构加三行(进度条之后、提示文字之前),并补三个 computed。
+  验证:`vue-tsc` 与 `npm run build` 均通过;三语键数 2305 → **2308**,与上游差值收到 **47**。
+  **推断点 / 待维护者复核**:后端 `internal/update` 的 `Progress` 还没有这三个字段(上游闭源不可见),所以**现在这三行不会显示**;要真正显示需要后端在下载阶段填 `source`(当前 URL 的主机名或「直连」)、`transfer`(速率)、`attempts`(切源次数),下一批做。
