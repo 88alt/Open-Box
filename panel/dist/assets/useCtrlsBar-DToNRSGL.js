@@ -1,1 +1,0 @@
-import{ad as c,aj as r,w as i,v as d,d as n,ak as B}from"./vendor-vue-CaulVtFc.js";import{c as a}from"./paddingViews-B6oER_6K.js";function h(o=720){const t=c(),{width:u}=r(t),m=n(()=>{const s=B(t);return s?.closest(".settings-menu")??s}),{bottom:e}=r(m),l=n(()=>u.value>o);return i(e,()=>{a.value=e.value},{immediate:!0}),d(()=>{a.value=0}),{isLargeCtrlsBar:l}}export{h as u};
