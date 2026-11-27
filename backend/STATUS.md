@@ -6,10 +6,24 @@
 
 ## 交接快照(交接 / 续跑从这里开始,不用重读全部文档)
 
-CHECKPOINT: 99aefc73216aef0e277d5db5b3bbe7c6a0f94b9e | 上游版本: v0.1.492 | 更新于 2026-11-27
+CHECKPOINT: a7401b5f | 上游版本: v0.1.492 | 更新于 2026-11-27
 
 **怎么用**:以 CHECKPOINT 为起点做增量对账(`git log <CHECKPOINT>..origin/main`),下面「已确认结论」直接采信、带证据的已打勾条目不重验;
 只有快照缺失或损坏时才通读 HANDOFF / README / DESIGN / STATUS 全文。
+
+### 本轮新增结论(2026-11-27 晚,交接时务必知道)
+
+- **面板整页白屏已修(重要)**:上游 `panel/dist` 里 `index.html` 引用的 5 个入口文件只有 `.gz` 预压缩版,
+  后端 `serveFile` 原先只按精确名找 → 全 404 → 白屏。已在 `internal/server/static.go` 加 gzip 回退
+  (带 `Content-Encoding: gzip` + `Vary`,Content-Type 按原始文件名判),`static_gzip_test.go` 4 个子用例覆盖。
+  真机部署后 5 个入口资源全 200。**这是 11-26 整机替换时引入的缺陷**,旧二进制备份在
+  `/root/obx-switch-backup/openbox-backend.before-gzipfix`。
+- **设备访问密码 = `1111`**。11-26 换后端时我设的密码与 LuCI 记录不一致,已按记录改回 1111 并验证登录通过。
+  当前 auth.json 备份:`/root/obx-switch-backup/auth.json.moved`(改动前那份)。
+- **LuCI 里 `openbox-panel` 显示「已停止」是预期的**:官方面板已停用并 disable,换成自研 `openbox-backend`
+  (`S98openbox-backend` 开机自启),3036 由它监听。不要以为服务挂了又去启动官方那个。
+- **比对工具两个崩点已修**(`panel/docs/ui-align/`):`serve-base.cjs` 反代不接 `ECONNRESET` 会让基准服务整个退出;
+  `compare.mjs` 登录后 SPA 二次跳转会销毁执行上下文。修完后单组比对可跑通、能出真实差异数字。
 
 ### 已确认结论(可直接采信,不必重验)
 - **上游基线**:`catch-up-upstream` = `135b2d40`(v0.1.492),与上游最新 release 同版;`.upstream-synced` = `v0.1.492`。
@@ -52,6 +66,27 @@ CHECKPOINT: 99aefc73216aef0e277d5db5b3bbe7c6a0f94b9e | 上游版本: v0.1.492 | 
 | 6 | `update*` 第二部分 | **卡在发布包**:`release-backend.yml` 只能手动触发,现有 5 个发布都是上游的、无 `openbox-backend` 资产(已核对不会动上游备份 release) | 维护者在 GitHub 页面手动触发一次 |
 
 另外:`core/HANDOFF.md` 第四节第 4、5 条(授权三个方法是否删除、`UPSTREAM_VERSION` 如何处理)属**待维护者决定**,不是可执行项;第 6 条靠真机联调反馈驱动。
+
+### 界面 12 组矩阵的交接状态(下一个 agent 从这里接)
+
+**目标**:任务书要求每页跑「三语(zh/zh-tw/en) × 深浅(light/dark) × 宽窄(1440/420) = 12 组」DOM + 计算样式比对。
+**现状**:工具已修好、单组能跑通,但**完整 12 组还没跑出结果**,页面清单里的「已对齐」目前仍只是 `zh/light/1440` 单组结论。
+
+**怎么跑**(可直接照做):
+```bash
+# 1) 起基准页(上游 dist 静态服务,把 /api 反代到真机后端)
+cd panel && nohup node docs/ui-align/serve-base.cjs <上游dist目录> 8905 http://192.168.2.5:3036 &
+# 2) 起 main dev
+ZASHBOARD_DEV_PROXY_TARGET=http://192.168.2.5:3036 npx vite --port 5180 --host 127.0.0.1 &
+# 3) 跑矩阵(密码是 1111)
+node docs/ui-align/matrix.mjs --main http://127.0.0.1:5180 --base http://127.0.0.1:8905 --route "#/proxies" --login 1111
+```
+上游 dist 可用 `git archive origin/catch-up-upstream panel/dist | tar -x -C <目录>` 取。
+
+**注意**:
+- `-1` 表示该组跑失败(通常是服务没起或中途崩),不是「零差异」。
+- 已知且可解释的固有差异:`card.radius` 19px vs 18px(差 1px)、`tab.color` 一边是 `rgb()` 一边是 `oklch()`(同色不同记法)——这类属「不可消除噪音」,记入 UI-ALIGN 即可,不必改代码。
+- 每页跑完后要把结论(**语言/主题/宽度、差异数、已处理项、白名单忽略项、不可消除噪音**)写进 `panel/docs/UI-ALIGN.md` 的页面清单,只有截图判断的不得标「已对齐」。
 
 ### 环境与已知限制
 - 本机 `bin/` 下已有 sing-box 1.14.4(Windows)、`openbox-core.exe`;涉及 sing-box 的测试**不要只看 SKIP**,先用它实跑。
