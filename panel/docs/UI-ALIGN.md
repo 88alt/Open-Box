@@ -305,9 +305,10 @@
 
 ### 引用(`cmp-upstream-refs.py`)
 
-- 上游引用、main 未引用:扣除例外 A(`activation*` / `comingSoon` / `tutorial*` / `marketPromo` 等)与例外 C 之后,
-  **只剩 3 项**:`nodeScoreRefreshQueued` / `nodeScoreRefreshUnavailable` / `nodeScoreRefreshSubDone` ——
-  它们要有「带宽排队结果回调」才会触发,主链路(测延迟 → 排队带宽 → 重拉评分)已接,这三条属后续细化。
+- 上游引用、main 未引用:扣除例外 A(`activation*` / `comingSoon` / `tutorial*` / `marketPromo` /
+  `clientDownloadFastWith` / `chainProxyEmptyHintSuffix`)与例外 C 之后 —— **真缺口 0**。
+  最后 3 项 `nodeScoreRefreshQueued` / `SubDone` / `Unavailable` 也已在第 12 批接上
+  (单节点排队 / 队列排完 / 3 分钟没排完三种情况)。
 - main 引用、上游未引用:该方向对压缩产物**不可靠**(dist 走短名映射,字面量搜不到,已抽查 `systemCpuCoreLoad` 证伪),
   不作为差异依据。
 - 模板拼接键(9 组:`bandwidthExample_` / `bandwidthOff_` / `bandwidthOn_` / `groupType_` / `obUpdateStage_` 等)
