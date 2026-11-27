@@ -1,0 +1,1 @@
+import{k5 as o}from"./index-DJMJy54W.js";import{r as s}from"./vendor-vue-CQw7IZSK.js";const e=s({port:0,"socks-port":0,"redir-port":0,"tproxy-port":0,"mixed-port":0,"allow-lan":!1,"bind-address":"",mode:"","mode-list":[],modes:[],"log-level":"",ipv6:!1,tun:{enable:!1}}),r=async()=>{e.value=(await o()).data};export{e as c,r as f};

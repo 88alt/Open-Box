@@ -1,0 +1,1 @@
+import{f as a,o as t,c as o,p as s,m as n}from"./vendor-vue-CQw7IZSK.js";const r=a({__name:"StatusBadge",props:{on:{type:Boolean},onText:{},offText:{}},setup(e){return(c,f)=>(t(),o("span",{class:s(["status-badge badge badge-sm whitespace-nowrap",e.on?"status-on":"status-off"])},n(e.on?e.onText:e.offText),3))}});export{r as _};

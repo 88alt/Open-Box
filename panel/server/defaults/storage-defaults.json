@@ -44,7 +44,7 @@
   "config/cpu-load-low-threshold": "50",
   "config/cpu-load-medium-threshold": "90",
   "config/node-score-poor-threshold": "30",
-  "config/node-score-fair-threshold": "80",
+  "config/node-score-fair-threshold": "70",
   "config/manage-hidden-group-mode": "false",
   "config/medium-latency": "1000",
   "config/node-card-min-width": "155",
