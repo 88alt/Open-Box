@@ -154,6 +154,23 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 
 ## 全局记录(跨区事项:开工 tag、上游版本、陌生提交对账、工作流恢复、停止条件)
 
+- 2026-11-27 backend(**再次落地官方 .mrs 复用:这次不动 FS 接口,改为在 kernelgen 层注入 DeployedProviders**):
+  **背景**:上次(已 revert 的 `967375ed`)给 `mihomo.FS` 加了 `ReadDir` 方法来扫目录,CI 的 `go test` 一直红;
+  本机 Windows 有 9 个既有失败、复现不出 CI 的失败,按规矩回退了。**这次换了个不改接口的路子**:
+  ① `internal/kernelgen` 新增 `scanDeployedProviders(rulesDir)` —— 用 `os.ReadDir`(kernelgen 本来就导入了 `os`)扫
+  `<DataDir>/mihomo/rules/`,把 `<tag>-<64 位十六进制>.<ext>` 与 `<tag>.<ext>` 还原成 `tag → Provider` 表,
+  扩展名决定 format(`.mrs` / `.yaml` / `.yml` / `.txt`),`providerBehaviorOf` 按名字前缀判 behavior
+  (`geoip-*`→ipcidr、`geosite-*`→domain、`list-*-ip`→ipcidr、`ob-entry-direct`→ipcidr);认不出的一律跳过(宁可少复用)。
+  ② `MihomoBuild` 把它填进 `mihomo.BuildInput.DeployedProviders`。
+  **为什么这样就够**:`BuildConfig` 本来就有「已部署 provider 优先、不在 `newTags` 里的 tag 不再转换」的逻辑
+  (`buildconfig.go` 的 `if _, ok := in.DeployedProviders[tag]; !ok { newTags = append(...) }`),只是 `kernelgen` 一直没填这个字段
+  (原注释还写着「已部署的 provider 不在这里复用(每次全量转换)」)。所以**不需要改 mihomo 包、不需要 ReadDir、不影响任何既有测试**。
+  **测试**:新增 `internal/kernelgen/deployed_test.go` 三组 —— 六种命名的 format/behavior 映射(含用户规则集、入口旁路、
+  `.txt` 文本)、目录不存在/空目录返回 nil、文件名解析(带哈希 / 不带哈希 / 哈希段不是 64 位十六进制时整段当 tag,保守不误剥离)。
+  三组全过;`internal/kernelgen` 全量通过;`internal/mihomo` 失败数仍是 **9**(Windows 既有,与本次无关);`go vet ./...` 干净。
+  **真机验证**:部署新二进制后 `POST /deploy` 回 **`{"ok":true,"stage":"running","badTags":[],"kernel":"mihomo"}`** ——
+  官方安装 + 自研后端下部署成功,`badTags` 为空说明所有规则集都拿到了 provider。
+
 - 2026-11-27 backend(**补 v0.1.493 的两条后端行为:#1010 手动测速插队 / #1009 限流降档**):
   release notes 里这两条是**后端行为**,之前只对齐了配套的前端键与文案,行为本身没做,本轮补上。
   **#1010「手动节点带宽测速受后台巡检与队列干扰」**:

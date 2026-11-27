@@ -193,6 +193,98 @@ func (g *Generator) SingboxValidate(ctx context.Context, built *singbox.Built) (
 
 // ---- Mihomo 一侧 ----
 
+// scanDeployedProviders 扫 <rulesDir> 里已经落好的 provider 文件,还原成 tag → Provider 的表。
+//
+// 只认 <tag>-<64 位十六进制>.<ext> 与 <tag>.<ext> 两种命名(官方 .mrs 用前者),
+// 扩展名决定 format:.mrs / .yaml / .yml / .txt。认不出的文件一律跳过 —— 宁可少复用,
+// 也不要把一个来路不明的文件塞进配置里让内核起不来。
+func scanDeployedProviders(rulesDir string) map[string]mihomo.Provider {
+	entries, err := os.ReadDir(rulesDir)
+	if err != nil {
+		return nil
+	}
+	out := map[string]mihomo.Provider{}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		tag, format, ok := parseProviderFileName(e.Name())
+		if !ok {
+			continue
+		}
+		behavior := providerBehaviorOf(tag)
+		if behavior == "" {
+			continue
+		}
+		// 同名 tag 只留第一份(目录里同一个 tag 理论上只有一个哈希文件)
+		if _, dup := out[tag]; dup {
+			continue
+		}
+		out[tag] = mihomo.Provider{Type: "file", Behavior: behavior, Format: format, Path: "./rules/" + e.Name()}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// parseProviderFileName 把 <tag>[-<64 位十六进制>].<ext> 拆成 tag 与 format。
+func parseProviderFileName(name string) (tag, format string, ok bool) {
+	ext := strings.ToLower(filepath.Ext(name))
+	switch ext {
+	case ".mrs":
+		format = "mrs"
+	case ".yaml", ".yml":
+		format = "yaml"
+	case ".txt":
+		format = "text"
+	default:
+		return "", "", false
+	}
+	base := strings.TrimSuffix(name, filepath.Ext(name))
+	// 去掉末尾的 -<64 位十六进制>
+	if i := strings.LastIndex(base, "-"); i > 0 {
+		h := base[i+1:]
+		if len(h) == 64 && isLowerHex(h) {
+			base = base[:i]
+		}
+	}
+	if base == "" {
+		return "", "", false
+	}
+	return base, format, true
+}
+
+func isLowerHex(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// providerBehaviorOf 按规则集名判断 provider 行为(domain / ipcidr);
+// 不是我们认识的规则集名时返回空串(跳过)。
+func providerBehaviorOf(tag string) string {
+	switch {
+	case strings.HasPrefix(tag, "geoip-"):
+		return "ipcidr"
+	case strings.HasPrefix(tag, "geosite-"):
+		return "domain"
+	case strings.HasPrefix(tag, "list-"):
+		// 用户规则集 list-<hash>:后缀带 -ip 的是 IP 集合
+		if strings.HasSuffix(tag, "-ip") {
+			return "ipcidr"
+		}
+		return "domain"
+	case tag == "ob-entry-direct":
+		return "ipcidr"
+	}
+	return ""
+}
+
 // MihomoBuild 装配一份 mihomo.yaml。规则集链接先同步成 .srs(与 sing-box 共用目录);
 // 已部署的 provider 不在这里复用(每次全量转换),转换结果写进 <DataDir>/mihomo/rules。
 func (g *Generator) MihomoBuild(ctx context.Context) (*mihomo.BuildResult, error) {
@@ -269,19 +361,27 @@ func (g *Generator) MihomoBuild(ctx context.Context) (*mihomo.BuildResult, error
 		}
 	}
 	mihomoDir := filepath.Join(g.d.DataDir, "mihomo")
+	// 上游 v0.1.493 起把内置规则集落成 .mrs(文件名带 64 位哈希)放在 <DataDir>/mihomo/rules/,
+	// 官方安装不会同时留一份 .srs 源文件;而我们这边要按 <geoDir>/<tag>.srs 找源文件再反编译,
+	// 于是「官方装过、自研接管」时部署必然报「无法读取现有规则集文件」。
+	// 官方那份 .mrs 本身就是合法的 mihomo provider,不需要反编译、直接引用即可 ——
+	// 这里把目录里已有的 provider 扫出来交给 BuildInput,BuildConfig 会优先用它、跳过这些 tag 的转换。
+	deployedProviders := scanDeployedProviders(filepath.Join(mihomoDir, "rules"))
+
 	in := mihomo.BuildInput{
-		Platform:      g.d.Platform,
-		DataDir:       g.d.DataDir,
-		Profile:       prof,
-		Nodes:         nodes,
-		Groups:        groupMaps,
-		Subscriptions: subsList,
-		RuleLists:     ruleLists,
-		Selections:    selections,
-		SystemDNS:     resolvers,
-		Secret:        secret,
-		ChainNodes:    chainNodes(prof),
-		LanIfaces:     lanIfaces,
+		Platform:          g.d.Platform,
+		DeployedProviders: deployedProviders,
+		DataDir:           g.d.DataDir,
+		Profile:           prof,
+		Nodes:             nodes,
+		Groups:            groupMaps,
+		Subscriptions:     subsList,
+		RuleLists:         ruleLists,
+		Selections:        selections,
+		SystemDNS:         resolvers,
+		Secret:            secret,
+		ChainNodes:        chainNodes(prof),
+		LanIfaces:         lanIfaces,
 	}
 	deps := mihomo.BuildDeps{
 		FS:         g.d.FS,
