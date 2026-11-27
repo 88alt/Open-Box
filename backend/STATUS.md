@@ -45,6 +45,8 @@ CHECKPOINT: 99aefc73216aef0e277d5db5b3bbe7c6a0f94b9e | 上游版本: v0.1.492 | 
 - 本机对 `failover` / `urlx` 等包的测试二进制会报 `Access is denied`(执行策略),**CI 上正常**,不算失败。
 - 设备 `192.168.2.5` 是 **x86_64**(不是 arm64),交叉编译用 `GOARCH=amd64`;无 `nohup`/`pkill`,用 `setsid`。
 - 设备上 `PUT /profile` 是**补丁合并**,只带要改的键;带整份档案会写出重复 `servers` 键导致后写覆盖前写。
+- **设备访问密码不可用**:11-27 换自研后端时沿用官方面板的密码,维护者未提供;文档里的 `1111` 已失效(试错会触发 `ACCESS_PASSWORD_LOCKED`)。
+  影响:需要登录的真机验证与面板界面 DOM 比对(12 组矩阵)都跑不了;`auth.json` 有备份(`/root/obx-switch-backup/auth.json.orig`),维护者同意可临时改密再改回。
 
 ## 每批必做:CI 门禁(每次开工、续跑先读这里,优先级高于下面所有条目)
 Backend 工作流(`.github/workflows/backend.yml`)是 main 上唯一的自动验收:在 `backend/` 或该文件有改动的推送上跑,任务是 `Test`(gofmt、go vet、go test -race)和 `Build (amd64)` / `Build (arm64)`。`release-backend.yml` 只能手动触发,推送不会跑它。**没有这一步,「绿」就没人看过。**
