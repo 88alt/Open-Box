@@ -441,6 +441,46 @@ func TestPatchConcurrent(t *testing.T) {
 	}
 }
 
+// 上游 v0.1.493 的测速站点要能存进档案并读回来。
+// 这条盯的是 normalizeBandwidth 重建对象时漏写字段的回归:漏了的话
+// 接口回 200 但值被静默丢掉,真机上表现为「切了站点没生效」。
+func TestPatchBandwidthEndpointPersists(t *testing.T) {
+	svc, _ := newSvc(t, nil)
+	ctx := context.Background()
+
+	got, err := svc.Patch(ctx, j(t, `{"bandwidth":{"endpoint":"apple"}}`))
+	if err != nil {
+		t.Fatalf("切到 apple 应成功: %v", err)
+	}
+	b, _ := got["bandwidth"].(map[string]any)
+	if b["endpoint"] != "apple" {
+		t.Fatalf("endpoint 没存上: %v", b)
+	}
+
+	// custom 必须带地址,且要一起存下来
+	got, err = svc.Patch(ctx, j(t, `{"bandwidth":{"endpoint":"custom","endpointCustomUrl":"https://speed.example.com/x.bin"}}`))
+	if err != nil {
+		t.Fatalf("custom + 合法地址应成功: %v", err)
+	}
+	b, _ = got["bandwidth"].(map[string]any)
+	if b["endpoint"] != "custom" || b["endpointCustomUrl"] != "https://speed.example.com/x.bin" {
+		t.Fatalf("custom 站点没存全: %v", b)
+	}
+
+	// 不认识的站点、custom 却没有地址、地址是内网,都要 400
+	for _, bad := range []string{
+		`{"bandwidth":{"endpoint":"fastly"}}`,
+		`{"bandwidth":{"endpoint":"custom"}}`,
+		`{"bandwidth":{"endpoint":"custom","endpointCustomUrl":"http://speed.example.com/x.bin"}}`,
+		`{"bandwidth":{"endpoint":"custom","endpointCustomUrl":"https://192.168.1.5/x.bin"}}`,
+	} {
+		var ve *ValidationError
+		if _, err := svc.Patch(ctx, j(t, bad)); !errors.As(err, &ve) {
+			t.Fatalf("%s 应返回 *ValidationError,得到 %v", bad, err)
+		}
+	}
+}
+
 func TestPatchNodeScoreWeightsAndIntervalUnit(t *testing.T) {
 	svc, _ := newSvc(t, nil)
 	ctx := context.Background()

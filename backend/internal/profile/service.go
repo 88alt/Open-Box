@@ -362,11 +362,19 @@ func normalizeBandwidth(clean map[string]any) error {
 	if err != nil {
 		return err
 	}
-	clean["bandwidth"] = map[string]any{
+	out := map[string]any{
 		"intervalHours": float64(norm.IntervalHours),
 		"intervalUnit":  norm.IntervalUnit,
 		"maxDownloadMB": float64(norm.MaxDownloadMB),
 		"startHour":     float64(norm.StartHour),
 	}
+	// 上游 v0.1.493 的测速站点:有才写,没写就不落盘(保持老档案形态,也让「没设过」可区分)
+	if norm.Endpoint != "" {
+		out["endpoint"] = norm.Endpoint
+	}
+	if norm.EndpointCustomURL != "" {
+		out["endpointCustomUrl"] = norm.EndpointCustomURL
+	}
+	clean["bandwidth"] = out
 	return nil
 }
