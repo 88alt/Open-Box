@@ -722,3 +722,9 @@
   改动:`OpenboxUpdateCard` 加 `hideCheck` 属性 + `defineExpose({check, checking, latest})`;`KernelServiceCard` 在 `KernelRestartButton` 之后加一条竖分隔线(`bg-base-content/20 h-5 w-px`)与「检查更新」按钮,并把嵌入的更新卡设为 `hide-check`,避免同一个动作出现两个按钮。
   验证:`vue-tsc` 与 `npm run build` 通过。
   **推断点 / 待维护者复核**:分隔线的具体样式(高度 `h-5`、颜色 `base-content/20`)是按现有卡片里另一条分隔线(`h-px` 横线)的风格推的,上游 dist 里这段被混淆包住、取不到确切 class;若维护者觉得粗细不齐可改这一行。
+- **第 3 批:悬浮详情窗加「节点评分」行 + 阈值默认值 80→70**
+  对应 release notes「悬浮详情窗增加节点评分并同步后台配色阈值(默认修改为:30 分以下评分较低,70 分以上评分较高)」。
+  改动:`store/settings.ts` 的 `NODE_SCORE_DEFAULTS` 从 `[30, 80]` 改为 **`[30, 70]`**(与 release notes 一致);`NodeLatencyTip.vue` 在标题栏下方加一行「节点评分:{分数}」,分数按 `getColorForNodeScore` 着色(stale 灰),数据来自 `GET /api/openbox/node-quality?node=<name>&allSubscriptions=1&details=nodes` 里的 `nodes[].score` / `scoreStale`,**第一次打开浮层才拉,失败就不显示那一行**。
+  验证:`vue-tsc` 与 `npm run build` 通过。
+  **未做(下一批)**:① 节点标签本身显示「延迟 | 评分」(要动 `LatencyTag.vue`,那个组件在 `ProxyNodeCard` / `FailoverLaneDetail` 等 4 处复用,要确认每处都能拿到评分);② 按评分升序/降序排序;③ 右上角「刷新评分」按钮与七条状态提示。
+  **推断点 / 待维护者复核**:阈值默认值改 70 后,用户机器上如果**已经存过** `config/node-score-fair-threshold`(老默认 80),读的仍是旧值、不会自动变 70 —— 这与上游「改默认值只影响没存过的人」的行为一致,但维护者可能需要知道这个差别。

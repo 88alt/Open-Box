@@ -144,7 +144,9 @@ import { getBgColorForBandwidth, getColorForBandwidth } from '@/helper'
 import { showNotification } from '@/helper/notification'
 import { testNodeBandwidth, useBandwidth } from '@/store/bandwidth'
 import { getTestUrl, proxyLatencyTest } from '@/store/proxies'
+import { fetchNodeQuality } from '@/api/openbox'
 import type { OpenboxBandwidthSample } from '@/api/openbox'
+import { getColorForNodeScore } from '@/helper'
 import { ArrowPathIcon, BoltIcon, ChartBarIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import dayjs from 'dayjs'
 import { computed, onMounted, ref } from 'vue'
@@ -166,6 +168,29 @@ const { locale } = useI18n()
 const widthClass = computed(() => (locale.value.startsWith('zh') ? 'w-76' : 'w-80'))
 const { bandwidthMeasurements, bandwidthPendingNodes } = useBandwidth()
 const measurement = computed(() => bandwidthMeasurements.value[props.name])
+
+// 上游 v0.1.494:浮层里显示这个节点的评分(分数 + 按阈值着色)。
+// 评分来自 /api/openbox/node-quality?node=<name>,第一次打开浮层才拉,失败就不显示那一行。
+const nodeScore = ref<number | null>(null)
+const scoreStale = ref(false)
+const scoreText = computed(() => (nodeScore.value == null ? '' : String(Math.round(nodeScore.value))))
+const scoreClass = computed(() => getColorForNodeScore(nodeScore.value, scoreStale.value))
+
+const loadScore = async () => {
+  try {
+    const res = await fetchNodeQuality({ node: props.name, allSubscriptions: true, details: 'nodes' })
+    for (const sub of res.subscriptions) {
+      const hit = sub.nodes?.find((n) => n.tag === props.name)
+      if (hit) {
+        nodeScore.value = hit.score
+        scoreStale.value = hit.scoreStale === true
+        return
+      }
+    }
+  } catch {
+    // 拿不到评分就不显示那一行,不打扰
+  }
+}
 // 最近 10 条,新的在上;不足 10 条时空行占位放在上面(和延时时间线一致),让线对齐
 const rows = computed<(OpenboxBandwidthSample | null)[]>(() => {
   const list = (measurement.value?.history || []).slice(-10).reverse()
@@ -226,6 +251,7 @@ const select = (key: TabKey) => {
 }
 
 onMounted(() => {
+  void loadScore()
   if (props.history) historyHost.value?.append(props.history)
 })
 </script>
