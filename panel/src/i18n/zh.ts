@@ -555,6 +555,7 @@ const zh: LANG_MESSAGE = {
   bandwidthManualQueued: '已加入 {queued} 个节点重新检测带宽，{joined} 个节点已在排队或检测中。',
   bandwidthManualFailed: '带宽检测失败：{message}',
   bandwidthManualComplete: '{name}：{value} Mbps',
+  bandwidthManualCompleteRecovering: '{name}：本次 {value} Mbps（仍受近期失败降权影响，继续测速可恢复）',
   subscriptionBandwidthCheck: '启用带宽定期检查',
   subscriptionDirectUrl: '订阅链接直连',
   subscriptionDirectNodes: '节点直连',

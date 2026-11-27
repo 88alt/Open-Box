@@ -762,3 +762,10 @@
   **推断点 / 待维护者复核**:上游的「刷新评分」背后是「重测延迟 + 排队带宽」两条链路(所以才有 `nodeScoreRefreshQueued` /
   `nodeScoreRefreshSubQueued` 这两条带「排队检测带宽」措辞的提示)。**main 后端没有「按需排队带宽测速」的接口**,  所以现在只做到「重测延迟 + 重拉评分」,不会触发带宽复测;因此只用了 `Done` / `Failed` 两条提示,  `Queued` / `SubQueued` / `SubDone` / `Unavailable` / `Started` 五条暂时没有触发点(键已补,留着)。
   要让那五条也能出现,需要后端加一个「按需触发带宽复测」的接口 —— 属独立功能,不在本轮。
+- **第 8 批:补最后一个漏键 `bandwidthManualCompleteRecovering`**
+  收尾核对时用脚本把「缺失键」里非 `business*` 的挑出来复查,发现 **`bandwidthManualCompleteRecovering` 一直漏着** ——
+  它是 v0.1.493 引入的非例外键(手动测速完成但仍受近期失败降权时的提示),不属于例外 C,本该在第 1 批一起补。
+  现已补齐三语(逐字取自 494 语言包):`{name}:{value} Mbps this run (still penalized by recent failures; …)`。
+  **验证后的键集终态**:上游 2369 / main **2331**,「多出」0、「值不同」0;
+  剩余 38 个缺失键**逐个复查过,全部落在例外 C 的前缀里**(`business*` 与 `bandwidthHelpCurrentBusiness`)。
+  `vue-tsc` 与 `npm run build` 通过。

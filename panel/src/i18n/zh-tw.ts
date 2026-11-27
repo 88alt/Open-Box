@@ -556,6 +556,7 @@ const zhTW: LANG_MESSAGE = {
   bandwidthManualQueued: '已加入 {queued} 個節點重新檢測頻寬，{joined} 個節點已在排隊或檢測中。',
   bandwidthManualFailed: '頻寬檢測失敗：{message}',
   bandwidthManualComplete: '{name}：{value} Mbps',
+  bandwidthManualCompleteRecovering: '{name}：本次 {value} Mbps（仍受近期失敗降權影響，繼續測速可恢復）',
   subscriptionBandwidthCheck: '啟用頻寬定期檢查',
   subscriptionDirectUrl: '訂閱連結直連',
   subscriptionDirectNodes: '節點直連',

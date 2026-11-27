@@ -583,6 +583,7 @@ const en = {
   bandwidthManualQueued: 'New bandwidth checks queued: {queued}; already queued or testing: {joined}.',
   bandwidthManualFailed: 'Bandwidth check failed: {message}',
   bandwidthManualComplete: '{name}: {value} Mbps',
+  bandwidthManualCompleteRecovering: '{name}: {value} Mbps this run (still penalized by recent failures; more successful checks will restore it)',
   subscriptionBandwidthCheck: 'Enable periodic bandwidth checks',
   subscriptionDirectUrl: 'Direct subscription URL',
   subscriptionDirectNodes: 'Direct nodes',
