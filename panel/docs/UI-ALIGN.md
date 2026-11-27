@@ -699,3 +699,8 @@
   改动:`api/openbox.ts` 的 `OpenboxBandwidthSettings` 加 `endpoint` / `endpointCustomUrl` 两个可选字段 + 新增 `OpenboxBandwidthEndpoint` 联合类型;`BandwidthSettingsCard.vue` 在「单次下载上限」之后加测速站点下拉(cloudflare / apple / cachefly / custom),选 custom 时露出自定义 URL 输入框,并带 `bandwidthEndpointHint` 说明;`BandwidthSettingsHelpDialog.vue` 的 `bandwidthSettingsTitle` 分支在 `dl` 里加「测速站点」一项。三语各补 12 条(逐字取自 493 语言包)。
   验证:`vue-tsc` 与 `npm run build` 通过;三语键数 2304 → **2316**,「多出」保持 0。
   **推断点 / 待维护者复核**:后端 `internal/bandwidth.Settings` 目前只有 `intervalHours` / `intervalUnit` / `maxDownloadMB` / `startHour`,**没有 `endpoint` 与 `endpointCustomUrl`**;档案校验会忽略未知键(不报错),所以界面能存但后端不会用它去换测速地址 —— **要真正生效需要后端加这两个字段并按站点选下载地址、按站点隔离样本**,那是独立一批,本轮只对齐界面与文案。
+- **第 5 批:10 处评分说明文案更新**(`nodeScoreWeightsHelpIntro` / `bandwidthHealthFirst` / `bandwidthOn_{urltest,failover,loadbalance}` / `bandwidthSharedHelp` / `qualityBandwidthUnmeasuredTip` / `qualityBandwidthFailedTip` / `qualityModelHelp` / `obUpdateStage_probing`)
+  — 对应 release notes「校准 v5 节点质量评分曲线,并区分『未测带宽(按保守系数暂估)』与『带宽测速失败(严格计 0 分)』,同步更新简/繁/英三语说明文案」。
+  改动:三语各 10 条**逐字替换**为上游 493 的值(用脚本按 493 语言包取值后替换,避免手抄出错);含关键语义变化——未测带宽由「按 0 分计入」改为「按已测延时与抖动乘 0.85 保守估算」,而带宽测速失败仍严格计 0 分;`obUpdateStage_probing` 改为「正在自动选择最快下载源…」。
+  验证:`vue-tsc` 与 `npm run build` 通过;**「值不同」从 10 清零**,「多出」保持 0,三语键数 2316。
+  **推断点 / 待维护者复核**:这批只改了文案,后端 `internal/nodequality` 的评分实现没动 —— 如果上游 v5 曲线的算法除了措辞之外还有数值变化(例如 0.85 系数、分层规则),需要另行核对后端实现;本轮无 dist 源码可依据,只对齐了文案层。
