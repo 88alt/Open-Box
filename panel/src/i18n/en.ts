@@ -2616,6 +2616,18 @@ const en = {
     'How often the router schedules a test for each eligible node. Daily intervals can choose the start hour, an unfinished daily batch automatically resumes after restarts, and if a healthy node fails its test during a daily cycle it automatically retries in the background after 30 minutes (at most once per cycle). Never-tested or newly added eligible nodes run their rate-limited initial test in the background without waiting for the next start hour, while other already-tested nodes follow the interval and start hour.',
   bandwidthSettingsHelpCap:
     'The maximum amount of data one test may download. A test can end before reaching the limit.',
+  bandwidthEndpoint: 'Test endpoint',
+  bandwidthEndpointCloudflare: 'Cloudflare (default, auto-downgrades size)',
+  bandwidthEndpointApple: 'Apple CDN',
+  bandwidthEndpointCachefly: 'CacheFly CDN',
+  bandwidthEndpointCustom: 'Custom',
+  bandwidthCustomUrl: 'Custom test URL',
+  bandwidthCustomUrlPlaceholder: 'https://speed.example.com/100mb.bin',
+  bandwidthCustomUrlInvalid: 'Enter a valid public https:// test URL (local or private addresses are not allowed).',
+  bandwidthEndpointSaved: 'Bandwidth test endpoint saved.',
+  bandwidthEndpointHint: 'The default endpoint automatically steps down download size on 403 or rate limiting. Switching endpoints starts a separate sample baseline for nodes. Custom URLs only allow public https:// download links.',
+  bandwidthHelpCurrentEndpoint: 'Test endpoint: {endpoint}',
+  bandwidthSettingsHelpEndpoint: 'Selects the download endpoint used for bandwidth tests. The default Cloudflare endpoint automatically steps down download size on 403 or rate limiting; you can also switch to another built-in CDN or a public https:// custom URL. Samples are isolated per endpoint so switching starts a fresh baseline while switching back keeps prior history.',
   bandwidthSettingsHelpExample:
     'With a 2-hour interval and a 64 MB limit, 99 unique nodes can run 12 tests each per day. If every test reaches the limit, that is about 76.03 GB/day. Initial tests, tests of newly added nodes, protocol overhead and provider multipliers are additional.',
   nodeScoreWeightsHelpIntro:

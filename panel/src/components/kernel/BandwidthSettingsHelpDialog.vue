@@ -59,6 +59,11 @@
             <dt class="font-medium">{{ $t('bandwidthDownloadCap') }}</dt>
             <dd class="text-base-content/75">{{ $t('bandwidthSettingsHelpCap') }}</dd>
           </div>
+          <!-- 上游 v0.1.493:测速站点预设(不同站点的带宽样本彼此隔离) -->
+          <div>
+            <dt class="font-medium">{{ $t('bandwidthEndpoint') }}</dt>
+            <dd class="text-base-content/75">{{ $t('bandwidthSettingsHelpEndpoint') }}</dd>
+          </div>
         </dl>
         <div class="bg-base-200 rounded-lg p-3">
           <h3 class="mb-1 font-semibold">{{ $t('bandwidthSettingsHelpExampleHeading') }}</h3>

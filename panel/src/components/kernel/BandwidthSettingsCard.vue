@@ -87,6 +87,38 @@
             @change="saveBandwidth"
           />
         </div>
+        <!-- 上游 v0.1.493:测速站点预设。不同站点的带宽样本彼此隔离,切换后按新站点重新累计 -->
+        <div class="flex flex-col gap-1">
+          <label
+            for="bandwidth-endpoint"
+            class="text-xs font-medium"
+          >
+            {{ $t('bandwidthEndpoint') }}
+          </label>
+          <select
+            id="bandwidth-endpoint"
+            v-model="endpoint"
+            class="select select-sm w-auto"
+            :disabled="saving"
+            @change="saveBandwidth"
+          >
+            <option value="cloudflare">{{ $t('bandwidthEndpointCloudflare') }}</option>
+            <option value="apple">{{ $t('bandwidthEndpointApple') }}</option>
+            <option value="cachefly">{{ $t('bandwidthEndpointCachefly') }}</option>
+            <option value="custom">{{ $t('bandwidthEndpointCustom') }}</option>
+          </select>
+          <input
+            v-if="endpoint === 'custom'"
+            v-model.trim="customUrl"
+            type="url"
+            class="input input-sm w-full max-w-md"
+            :placeholder="$t('bandwidthCustomUrlPlaceholder')"
+            :aria-label="$t('bandwidthCustomUrl')"
+            :disabled="saving"
+            @change="saveBandwidth"
+          >
+          <p class="text-base-content/60 text-xs">{{ $t('bandwidthEndpointHint') }}</p>
+        </div>
       </div>
 
       <p class="text-base-content/70 text-xs leading-relaxed">
@@ -131,6 +163,7 @@
 <script setup lang="ts">
 import {
   fetchBandwidthStatus,
+  type OpenboxBandwidthEndpoint,
   type OpenboxBandwidthSettings,
   type OpenboxNodeScoreWeights,
   type OpenboxProfile,
@@ -185,6 +218,9 @@ const unit = ref<Unit>(effective.value.intervalUnit ?? 'hours')
 const period = ref<number>(toDisplay(effective.value.intervalHours, unit.value))
 const maxDownloadMB = ref<number>(effective.value.maxDownloadMB)
 const startHour = ref<number>(effective.value.startHour ?? DEFAULT_START_HOUR)
+// 上游 v0.1.493:测速站点(cloudflare / apple / cachefly / custom)与自定义地址
+const endpoint = ref<OpenboxBandwidthEndpoint>(effective.value.endpoint ?? 'cloudflare')
+const customUrl = ref<string>(effective.value.endpointCustomUrl ?? '')
 const saving = ref(false)
 const nodeCount = computed(() => status.value?.nodes ?? 0)
 
@@ -193,6 +229,8 @@ watch(effective, (s) => {
   period.value = toDisplay(s.intervalHours, unit.value)
   maxDownloadMB.value = s.maxDownloadMB
   startHour.value = s.startHour ?? DEFAULT_START_HOUR
+  endpoint.value = s.endpoint ?? 'cloudflare'
+  customUrl.value = s.endpointCustomUrl ?? ''
 })
 
 const hoursNow = () => Math.round(Number(period.value) * (unit.value === 'days' ? 24 : 1))
@@ -242,6 +280,9 @@ const saveBandwidth = async () => {
         intervalUnit: unit.value,
         maxDownloadMB: cappedMB,
         startHour: Math.min(23, Math.max(0, Math.round(Number(startHour.value)) || 0)),
+        // 自定义站点要带地址;非自定义时不带(后端按预设选地址)
+        endpoint: endpoint.value,
+        ...(endpoint.value === 'custom' ? { endpointCustomUrl: customUrl.value } : {}),
       },
     })
   } catch (e) {

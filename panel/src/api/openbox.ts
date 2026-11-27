@@ -952,7 +952,14 @@ export interface OpenboxBandwidthSettings {
   maxDownloadMB: number
   // 按「天」测试时每天几点开始(本地时间 0~23,默认 4);按小时测试时不起作用
   startHour?: number
+  // 上游 v0.1.493:测速站点预设(cloudflare / apple / cachefly / custom)。
+  // 不同站点的带宽样本彼此隔离;custom 时用 endpointCustomUrl。后端没给就按 cloudflare。
+  endpoint?: OpenboxBandwidthEndpoint
+  endpointCustomUrl?: string
 }
+
+// 带宽测速站点预设,取值与上游一致
+export type OpenboxBandwidthEndpoint = 'cloudflare' | 'apple' | 'cachefly' | 'custom'
 
 // GET /api/openbox/bandwidth:后端测速调度的运行情况
 export interface OpenboxBandwidthStatus {

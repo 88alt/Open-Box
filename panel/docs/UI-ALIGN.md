@@ -695,3 +695,7 @@
   改动:`OpenboxUpdateCard.vue` 移除三处(手动通道下拉、自动更新里的通道下拉、圆括号里的「安装时通道」显示),并把 `channel` 固定为常量 `UPDATE_CHANNEL = 'auto'`(后端 `routesFor("auto")` 本来就是「先直连再镜像」,与 release notes 一致);`savePlan` 的 `channel` 参数一并收窄。三语各删 4 条。
   验证:`vue-tsc` 与 `npm run build` 通过;三语键数 2308 → **2304**,**「多出」从 4 清零**,与上游差值收到 **51**(全是待补的新键)。
   **推断点 / 待维护者复核**:删掉手动通道后,档案里的 `updates.openbox.checkChannel` 与 `channel` 字段仍保留(不再读也不再写),没有一并清理老数据;命令行 `--direct` / `--mirror` 覆盖参数是安装脚本的事,不受影响。
+- **第 4 批:测速站点预设 12 个键**(`bandwidthEndpoint*` / `bandwidthCustomUrl*` / `bandwidthSettingsHelpEndpoint` / `bandwidthHelpCurrentEndpoint` 等) — 对应 release notes「后台设置与前台面板新增测速站点预设选择,支持按站点隔离历史带宽样本；双内核透传测速响应状态码与内容类型,并在 Cloudflare 限流时自动降级测试体积与退避(#1009)」。
+  改动:`api/openbox.ts` 的 `OpenboxBandwidthSettings` 加 `endpoint` / `endpointCustomUrl` 两个可选字段 + 新增 `OpenboxBandwidthEndpoint` 联合类型;`BandwidthSettingsCard.vue` 在「单次下载上限」之后加测速站点下拉(cloudflare / apple / cachefly / custom),选 custom 时露出自定义 URL 输入框,并带 `bandwidthEndpointHint` 说明;`BandwidthSettingsHelpDialog.vue` 的 `bandwidthSettingsTitle` 分支在 `dl` 里加「测速站点」一项。三语各补 12 条(逐字取自 493 语言包)。
+  验证:`vue-tsc` 与 `npm run build` 通过;三语键数 2304 → **2316**,「多出」保持 0。
+  **推断点 / 待维护者复核**:后端 `internal/bandwidth.Settings` 目前只有 `intervalHours` / `intervalUnit` / `maxDownloadMB` / `startHour`,**没有 `endpoint` 与 `endpointCustomUrl`**;档案校验会忽略未知键(不报错),所以界面能存但后端不会用它去换测速地址 —— **要真正生效需要后端加这两个字段并按站点选下载地址、按站点隔离样本**,那是独立一批,本轮只对齐界面与文案。

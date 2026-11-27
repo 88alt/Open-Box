@@ -2481,6 +2481,18 @@ const zhTW: LANG_MESSAGE = {
     '路由器透過節點下載測試資料，估算節點的下載速度。啟用定期頻寬檢查的訂閱和啟用節點評分的群組會將符合條件的節點納入測速。同一個實際節點出現在多個訂閱或群組裡，也共用一次測試。',
   bandwidthSettingsHelpInterval: '決定每個符合條件的節點隔多久安排一次測速；按天測試時可指定每天幾點開始，面板重新啟動後當天未測完的批次會自動續跑，且健康節點若在當期測速失敗，會在 30 分鐘後在背景自動補測最多 1 次（每週期至多補測 1 次）。從未測過的新增或剛納入計畫的節點會在背景限速補齊首次測速，無須等到隔日開始時間；其餘已測節點仍按週期和開始時間排程。',
   bandwidthSettingsHelpCap: '限制一次測速最多下載多少測試資料。測速可能提前結束。',
+  bandwidthEndpoint: '測速站點',
+  bandwidthEndpointCloudflare: 'Cloudflare（預設，自動降級體積）',
+  bandwidthEndpointApple: 'Apple CDN',
+  bandwidthEndpointCachefly: 'CacheFly CDN',
+  bandwidthEndpointCustom: '自訂',
+  bandwidthCustomUrl: '自訂測速位址',
+  bandwidthCustomUrlPlaceholder: 'https://speed.example.com/100mb.bin',
+  bandwidthCustomUrlInvalid: '請輸入有效的公開 https:// 測速位址（不支援本機或內網位址）。',
+  bandwidthEndpointSaved: '測速站點設定已儲存。',
+  bandwidthEndpointHint: '預設來源遇 403 或限流時會自動降級單次下載體積重試；切換測速站點後將按新基準重新累計節點頻寬樣本；自訂位址僅支援公開 https:// 下載測速連結。',
+  bandwidthHelpCurrentEndpoint: '測速站點：{endpoint}',
+  bandwidthSettingsHelpEndpoint: '選擇頻寬測速使用的下載測速站點。預設 Cloudflare 來源遇到 403 或限流時會自動降級下載體積重試；也可切換為其他內建 CDN 或公開 https:// 自訂位址。不同測速站點的頻寬樣本彼此隔離，切換後會按新站點重新累計；切回原站點可繼續沿用先前樣本。',
   bandwidthSettingsHelpExample:
     '週期設為 2 小時，單次上限設為 64 MB。若有 99 個去重後的節點，每個節點每天安排 12 次。每次都用滿上限時，99 × 12 × 64 MB 約為 76.03 GB/天。首次或新增節點測速、協定開銷和機場流量倍率另計。',
   nodeScoreWeightsHelpIntro:
