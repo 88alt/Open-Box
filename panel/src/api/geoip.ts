@@ -23,13 +23,13 @@ export const getIPFromIpipnetAPI = async () => {
 
 // 全局 IP 信息只用 Net.Coffee(对齐上游 v0.1.396,不再提供 ip.sb / ipwho.is / ipapi.is 可选)。
 // 不带 IP 时先问 cdn-cgi/trace 拿到本机出口 IP,再用 ipv2/lookup 查详情。
-const NET_COFFEE_TRACE_URL = 'https://ip.net.coffee/cdn-cgi/trace'
+export const NET_COFFEE_TRACE_URL = 'https://ip.net.coffee/cdn-cgi/trace'
 const netCoffeeLookupUrl = (ip: string) => `https://ip.net.coffee/api/ipv2/lookup/${encodeURIComponent(ip)}`
 
 const isIPLike = (value: unknown): value is string =>
   typeof value === 'string' && (/^\d{1,3}(\.\d{1,3}){3}$/.test(value) || (value.includes(':') && /^[0-9a-f:.]+$/i.test(value)))
 
-const parseTraceIP = (text: string) => {
+export const parseTraceIP = (text: string) => {
   const trace = Object.fromEntries(
     text
       .trim()
@@ -58,7 +58,7 @@ const localizedCountry = (countryCode: string, fallback: string) => {
   }
 }
 
-type NetCoffeeLookup = {
+export type NetCoffeeLookup = {
   ip?: string
   country?: string
   countryCode?: string
@@ -70,6 +70,22 @@ type NetCoffeeLookup = {
   company_name?: string
   error?: unknown
   is_bogon?: boolean
+}
+
+// 把 Net.Coffee 的 ipv2/lookup 答话解析成 IPInfo;链式测速拿到 trace 后也用它,与全局 IP 信息同一套规则。
+export const parseLookup = (data: NetCoffeeLookup): IPInfo => {
+  if (!data || typeof data !== 'object' || !isIPLike(data.ip) || data.error || data.is_bogon) {
+    throw new Error('Net.Coffee 返回的不是有效 IP 信息')
+  }
+
+  return {
+    ip: data.ip,
+    country: localizedCountry(String(data.countryCode || ''), String(data.country || '')),
+    region: String(data.region || ''),
+    city: String(data.city || ''),
+    asn: String(data.asn || '').replace(/^AS/i, ''),
+    organization: String(data.asOrganization || data.isp || data.company_name || ''),
+  }
 }
 
 export const getIPInfo = async (ip = ''): Promise<IPInfo> => {
@@ -87,20 +103,9 @@ export const getIPInfo = async (ip = ''): Promise<IPInfo> => {
   if (!response.ok) throw new Error('Net.Coffee IP 查询失败')
 
   const data = (await response.json()) as NetCoffeeLookup
+  const info = parseLookup(data)
 
-  if (!data || typeof data !== 'object' || !isIPLike(data.ip) || data.error || data.is_bogon) {
-    throw new Error('Net.Coffee 返回的不是有效 IP 信息')
-  }
-  if (data.ip !== target) throw new Error('Net.Coffee 返回的 IP 不匹配')
+  if (info.ip !== target) throw new Error('Net.Coffee 返回的 IP 不匹配')
 
-  const countryCode = String(data.countryCode || '')
-
-  return {
-    ip: data.ip,
-    country: localizedCountry(countryCode, String(data.country || '')),
-    region: String(data.region || ''),
-    city: String(data.city || ''),
-    asn: String(data.asn || '').replace(/^AS/i, ''),
-    organization: String(data.asOrganization || data.isp || data.company_name || ''),
-  }
+  return info
 }

@@ -320,7 +320,7 @@ type chainReq struct {
 
 // IP 信息接口的白名单:前端设置里能选的三家。后端只放行这几个主机,免得「出口 IP」功能变成能让路由器
 // 经任意线路去请求任意地址的入口。正文最多交回 16 KiB,和前端类型 OpenboxChainLatencyResult.ip 的约定一致。
-var ipHosts = map[string]bool{"api.ip.sb": true, "ipwho.is": true, "api.ipapi.is": true}
+var ipHosts = map[string]bool{"ip.net.coffee": true}
 
 const (
 	maxIPURLs = 5
@@ -336,7 +336,7 @@ func normalizeIPURLs(list []string) ([]string, error) {
 		raw = strings.TrimSpace(raw)
 		u, err := url.Parse(raw)
 		if err != nil || u.Scheme != "https" || u.User != nil || !ipHosts[strings.ToLower(u.Hostname())] || (u.Port() != "" && u.Port() != "443") {
-			return nil, errors.New("ipUrls 里有不支持的地址:只认 https 的 api.ip.sb、ipwho.is、api.ipapi.is")
+			return nil, errors.New("ipUrls 里有不支持的地址:只认 https 的 ip.net.coffee")
 		}
 		u.Fragment = ""
 		u.Host = strings.ToLower(u.Hostname()) // 主机名不分大小写、默认端口 443 省掉,「同一个地址」才能去重

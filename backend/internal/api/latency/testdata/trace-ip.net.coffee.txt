@@ -1,0 +1,16 @@
+fl=12f884
+h=ip.net.coffee
+ip=39.190.55.52
+ts=1795729552.000
+visit_scheme=https
+uag=curl/8.9.0
+colo=LAX
+sliver=050-tier1
+http=http/1.1
+loc=CN
+tls=TLSv1.3
+sni=plaintext
+warp=off
+gateway=off
+rbi=off
+kex=X25519

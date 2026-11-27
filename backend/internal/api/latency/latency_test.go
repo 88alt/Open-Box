@@ -438,24 +438,23 @@ func ipProxy(t *testing.T, tlsAddr string) (port int) {
 	return srv.Listener.Addr().(*net.TCPAddr).Port
 }
 
-// fakeIPServices 按 Host 扮演三家 IP 接口:api.ip.sb 限流 429,ipwho.is 正常,api.ipapi.is 回空。
+// fakeIPServices 扮演 Net.Coffee 的 cdn-cgi/trace(上游链式测速用的就是它)。
+// 对齐上游 v0.1.396:出口 IP 只查 Net.Coffee 一家,不再有 ip.sb / ipwho.is / ipapi.is。
 func fakeIPServices(t *testing.T) string {
 	t.Helper()
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch strings.Split(r.Host, ":")[0] {
-		case "api.ip.sb":
-			http.Error(w, "limited", http.StatusTooManyRequests)
-		case "ipwho.is":
-			_, _ = w.Write([]byte(`{"ip":"203.0.113.9","country":"Testland","connection":{"org":"Test Net"}}`))
-		case "api.ipapi.is":
-			w.WriteHeader(200)
-		default:
-			http.NotFound(w, r)
+		if r.URL.Path == "/cdn-cgi/trace" {
+			_, _ = w.Write([]byte(traceSampleIP))
+			return
 		}
+		http.NotFound(w, r)
 	}))
 	t.Cleanup(srv.Close)
 	return srv.Listener.Addr().String()
 }
+
+// traceSampleIP 是 Net.Coffee cdn-cgi/trace 的形状(h= 必须是 ip.net.coffee,否则前端认不出来)。
+const traceSampleIP = "fl=1\nh=ip.net.coffee\nip=203.0.113.9\nts=1\nloc=TL\n"
 
 func TestChainIP(t *testing.T) {
 	bin := needSingBox(t)
@@ -474,22 +473,21 @@ func TestChainIP(t *testing.T) {
 		return w.Code, out
 	}
 
-	// 第一家被限流,回退到第二家;正文原样交回,测速结果不受影响
-	code, out := call([]string{"https://api.ip.sb/geoip", "https://ipwho.is", "https://api.ipapi.is"})
+	// 上游 v0.1.396 起出口 IP 只查 Net.Coffee 的 cdn-cgi/trace;正文原样交回,测速结果不受影响
+	code, out := call([]string{"https://ip.net.coffee/cdn-cgi/trace"})
 	ip, _ := out["ip"].(map[string]any)
-	if code != 200 || out["ok"] != true || out["via"] != "PX 01" || ip == nil || ip["ok"] != true || ip["url"] != "https://ipwho.is" {
+	if code != 200 || out["ok"] != true || out["via"] != "PX 01" || ip == nil || ip["ok"] != true || ip["url"] != "https://ip.net.coffee/cdn-cgi/trace" {
 		t.Fatalf("%d %v", code, out)
 	}
-	var data struct{ IP, Country string }
-	if err := json.Unmarshal([]byte(ip["body"].(string)), &data); err != nil || data.IP != "203.0.113.9" || data.Country != "Testland" {
+	if body, _ := ip["body"].(string); !strings.Contains(body, "h=ip.net.coffee") || !strings.Contains(body, "ip=203.0.113.9") {
 		t.Fatalf("正文应原样交回: %v", ip)
 	}
 
-	// 全部失败:ip.ok=false 并逐家列原因,不带 url / body;测速本身照常成功
-	code, out = call([]string{"https://api.ip.sb/geoip", "https://api.ipapi.is"})
+	// 接口失败(回的是 404):ip.ok=false 并带原因,不带 url / body;测速本身照常成功
+	code, out = call([]string{"https://ip.net.coffee/not-a-trace"})
 	ip, _ = out["ip"].(map[string]any)
 	if code != 200 || out["ok"] != true || ip == nil || ip["ok"] != false || ip["url"] != nil || ip["body"] != nil ||
-		ip["error"] != "api.ip.sb: HTTP 429;api.ipapi.is: 响应是空的" {
+		ip["error"] != "ip.net.coffee: HTTP 404" {
 		t.Fatalf("%d %v", code, out)
 	}
 
@@ -502,8 +500,10 @@ func TestChainIP(t *testing.T) {
 
 	// 不在白名单里的地址一律 400,文案带「ipUrls」(前端靠它降级重测),而且一个请求都不会发出去
 	for _, bad := range [][]string{
-		{"http://ipwho.is"}, {"https://example.com/ip"}, {"https://u:p@ipwho.is"}, {"https://ipwho.is:8443"},
-		{""}, {"ipwho.is"}, {"https://ipwho.is", "https://evil.test"}, {"https://ipwho.is.evil.test"},
+		{"http://ip.net.coffee/cdn-cgi/trace"}, {"https://example.com/ip"}, {"https://u:p@ip.net.coffee"}, {"https://ip.net.coffee:8443"},
+		{""}, {"ip.net.coffee"}, {"https://ip.net.coffee", "https://evil.test"}, {"https://ip.net.coffee.evil.test"},
+		// 旧的三家已不再放行(对齐上游 v0.1.396)
+		{"https://api.ip.sb/geoip"}, {"https://ipwho.is"}, {"https://api.ipapi.is"},
 	} {
 		code, out = call(bad)
 		if msg, _ := out["error"].(string); code != 400 || !strings.Contains(msg, "ipUrls") {
@@ -523,7 +523,7 @@ func TestChainIPLineDown(t *testing.T) {
 	e.addSub(t, "A", fmt.Sprintf("http://u:p@127.0.0.1:%d#PX 01\n", dead))
 	w := e.post(t, "/api/openbox/chain-proxies/latency", map[string]any{
 		"link": fmt.Sprintf("http://u:p@127.0.0.1:%d#CH", port), "upstream": "PX 01", "testUrl": target, "timeoutMs": 2000,
-		"ipUrls": []string{"https://ipwho.is"},
+		"ipUrls": []string{"https://ip.net.coffee/cdn-cgi/trace"},
 	})
 	var out map[string]any
 	_ = json.Unmarshal(w.Body.Bytes(), &out)
@@ -534,15 +534,15 @@ func TestChainIPLineDown(t *testing.T) {
 }
 
 func TestNormalizeIPURLs(t *testing.T) {
-	got, err := normalizeIPURLs([]string{" https://API.ip.sb/geoip ", "https://api.ip.sb/geoip", "https://ipwho.is#x", "https://api.ipapi.is:443"})
-	want := []string{"https://api.ip.sb/geoip", "https://ipwho.is", "https://api.ipapi.is"}
+	got, err := normalizeIPURLs([]string{" https://IP.net.coffee/cdn-cgi/trace ", "https://ip.net.coffee/cdn-cgi/trace", "https://ip.net.coffee/#x", "https://ip.net.coffee:443"})
+	want := []string{"https://ip.net.coffee/cdn-cgi/trace", "https://ip.net.coffee/", "https://ip.net.coffee"}
 	if err != nil || strings.Join(got, "|") != strings.Join(want, "|") {
 		// 主机名转小写、去掉默认端口 443、去掉片段,再按完整地址去重,保持原顺序
 		t.Fatalf("%v %v", got, err)
 	}
 	var many []string
 	for i := 0; i < 6; i++ {
-		many = append(many, fmt.Sprintf("https://ipwho.is/%d", i))
+		many = append(many, fmt.Sprintf("https://ip.net.coffee/%d", i))
 	}
 	if _, err := normalizeIPURLs(many); err == nil || !strings.Contains(err.Error(), "ipUrls") {
 		t.Fatalf("超过 5 个应拒绝: %v", err)

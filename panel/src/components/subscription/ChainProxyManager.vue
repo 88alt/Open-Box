@@ -380,6 +380,7 @@
 </template>
 
 <script setup lang="ts">
+import { NET_COFFEE_TRACE_URL, parseTraceIP } from '@/api/geoip'
 import { fetchNodeGroups, fetchProfile, saveProfile, testChainLatency } from '@/api/openbox'
 import type { OpenboxChainLatencyResult, OpenboxChainProxy } from '@/api/openbox'
 import CustomDnsFields from '@/components/common/CustomDnsFields.vue'
@@ -689,8 +690,8 @@ const confirmDelete = async () => {
 }
 
 // ---------- 测速 / IP 地区 ----------
-// 后端只认这几家的主机名,顺序即兜底顺序
-const ipUrls = () => ['https://api.ip.sb/geoip', 'https://ipwho.is', 'https://api.ipapi.is']
+// 对齐上游 v0.1.396:出口 IP 只查 Net.Coffee(后端的白名单也只放行这一个主机)
+const ipUrls = () => [NET_COFFEE_TRACE_URL]
 
 // 延迟的颜色:越慢越偏红
 const latencyClass = (ms: number) => (ms < 300 ? 'text-success' : ms < 800 ? 'text-warning' : 'text-error')
@@ -728,19 +729,12 @@ const runTest = async () => {
   }
 }
 
-// 后端把 IP 信息接口的正文原样交回,这里按答话那一家的格式取出 IP、国家、运营商
+// 后端把 Net.Coffee 的 cdn-cgi/trace 正文原样交回,这里取出出口 IP 与国家。
+// trace 只有 h / ip / loc,没有运营商;需要详情时由「IP 详情」链接去站点看(与节点信息面板同一个站点)。
 const parseExitIp = (ip: NonNullable<OpenboxChainLatencyResult['ip']>) => {
   try {
-    const data = JSON.parse(ip.body || '{}')
-    const host = new URL(ip.url || '').hostname
-    const [country, org] =
-      host === 'api.ipapi.is'
-        ? [data.location?.country, data.asn?.org]
-        : host === 'ipwho.is'
-          ? [data.country, data.connection?.org]
-          : [data.country, data.organization]
-    const address = String(data.ip ?? '')
-    return address ? { ip: address, place: [country, org].filter(Boolean).join(' ') } : null
+    const address = parseTraceIP(ip.body || '')
+    return address ? { ip: address, place: '' } : null
   } catch {
     return null
   }
