@@ -5,15 +5,6 @@
       <!-- 一行:[通道] [检查更新] 最新版本 vX [已是最新] 安装时通道。检查更新探到新版就弹确认框
            (带更新日志),点「确定更新」才真正升级;升级进行中按钮变成「查看进度」。 -->
       <div class="flex flex-wrap items-center gap-2">
-        <select
-          v-model="channel"
-          class="select select-sm w-auto"
-          :disabled="updateRunning"
-        >
-          <option value="auto">{{ $t('obUpdateChannelAuto') }}</option>
-          <option value="direct">{{ $t('obUpdateChannelDirect') }}</option>
-          <option value="mirror">{{ $t('obUpdateChannelMirror') }}</option>
-        </select>
         <button
           v-if="updateRunning"
           type="button"
@@ -49,10 +40,6 @@
             :off-text="$t('obUpdateAvailable')"
           />
         </template>
-        <span
-          v-if="updateInfo?.channel"
-          class="text-base-content/50 text-xs"
-        >{{ $t('obUpdateInstalledChannel', { channel: updateInfo!.channel.mode === 'mirror' ? $t('obUpdateChannelMirror') : $t('obUpdateChannelDirect') }) }}</span>
       </div>
 
       <OpenboxUpdateConfirmDialog
@@ -102,15 +89,6 @@
               :value="h - 1"
             >{{ String(h - 1).padStart(2, '0') }}:00</option>
           </select>
-          <select
-            class="select select-sm"
-            :value="plan.channel"
-            @change="savePlan({ channel: ($event.target as HTMLSelectElement).value as 'auto' | 'direct' | 'mirror' })"
-          >
-            <option value="auto">{{ $t('obUpdateChannelAuto') }}</option>
-            <option value="direct">{{ $t('obUpdateChannelDirect') }}</option>
-            <option value="mirror">{{ $t('obUpdateChannelMirror') }}</option>
-          </select>
         </template>
         <span class="text-base-content/50 text-xs">{{ $t('obUpdateAutoHint') }}</span>
       </div>
@@ -153,21 +131,9 @@ const plan = computed(() => ({
   channel: props.profile.updates?.openbox?.channel ?? 'auto',
   checkChannel: props.profile.updates?.openbox?.checkChannel ?? 'auto',
 }))
-// 手动检查 / 更新用的通道:记在档案里,下次进页面还是上次选的;改了就静默存一次
-const channel = ref<OpenboxUpdateChannel>(plan.value.checkChannel)
-watch(() => plan.value.checkChannel, (v) => { channel.value = v })
-watch(channel, async (v) => {
-  if (v === plan.value.checkChannel) return
-  try {
-    await props.patchProfile({ updates: { openbox: { ...plan.value, checkChannel: v } } })
-  } catch (err) {
-    showNotification({
-      content: 'routingSaveFailed',
-      params: { message: err instanceof Error ? err.message : String(err) },
-      type: 'alert-error',
-    })
-  }
-})
+// 上游 v0.1.493 起不再让用户手选下载通道:一律 auto(先直连 GitHub,不通或过慢时自动轮询内置镜像)。
+// 命令行覆盖参数 --direct / --mirror 仍在安装脚本里,那是安装期的事,与面板无关。
+const UPDATE_CHANNEL: OpenboxUpdateChannel = 'auto'
 
 // 确认弹窗:探到新版就打开,更新日志按版本只取一次(取失败下次再试)
 const confirmOpen = ref(false)
@@ -196,7 +162,7 @@ const openConfirm = async () => {
 }
 
 const confirmUpdate = async () => {
-  if (await startUpdate(channel.value)) confirmOpen.value = false
+  if (await startUpdate(UPDATE_CHANNEL)) confirmOpen.value = false
 }
 
 const check = async () => {
@@ -217,7 +183,8 @@ const check = async () => {
   }
 }
 
-const savePlan = async (patch: Partial<{ auto: boolean; hour: number; days: number; channel: OpenboxUpdateChannel }>) => {
+// channel 不再由面板改(固定 auto),所以这里只保存自动更新的开关 / 天间隔 / 小时
+const savePlan = async (patch: Partial<{ auto: boolean; hour: number; days: number }>) => {
   try {
     await props.patchProfile({ updates: { openbox: { ...plan.value, ...patch } } })
     showNotification({ content: 'obUpdatePlanSaved', type: 'alert-success' })

@@ -690,3 +690,8 @@
   改动:`api/openbox.ts` 的 `OpenboxUpdateProgress` 加 `source` / `transfer` / `attempts` 三个**可选**字段(后端没给就不显示那一行,旧后端也跑得通);`OpenboxUpdateDialog.vue` 按上游结构加三行(进度条之后、提示文字之前),并补三个 computed。
   验证:`vue-tsc` 与 `npm run build` 均通过;三语键数 2305 → **2308**,与上游差值收到 **47**。
   **推断点 / 待维护者复核**:后端 `internal/update` 的 `Progress` 还没有这三个字段(上游闭源不可见),所以**现在这三行不会显示**;要真正显示需要后端在下载阶段填 `source`(当前 URL 的主机名或「直连」)、`transfer`(速率)、`attempts`(切源次数),下一批做。
+- **第 3 批:删除 main 多出的 4 个键**(`obUpdateChannelAuto` / `obUpdateChannelDirect` / `obUpdateChannelMirror` / `obUpdateInstalledChannel`) — 上游 v0.1.493「移除下载通道手动选择,合并为单条命令,执行时自动探测 GitHub 直连并在不通或过慢时自动轮询内置镜像」。
+  核实:上游 493 语言包里**完全没有**这 4 个键,dist 的 js 里也不再引用 → 按核心原则第 1 条「main 有而上游没有的键,连同配套代码一并删除」处理。
+  改动:`OpenboxUpdateCard.vue` 移除三处(手动通道下拉、自动更新里的通道下拉、圆括号里的「安装时通道」显示),并把 `channel` 固定为常量 `UPDATE_CHANNEL = 'auto'`(后端 `routesFor("auto")` 本来就是「先直连再镜像」,与 release notes 一致);`savePlan` 的 `channel` 参数一并收窄。三语各删 4 条。
+  验证:`vue-tsc` 与 `npm run build` 通过;三语键数 2308 → **2304**,**「多出」从 4 清零**,与上游差值收到 **51**(全是待补的新键)。
+  **推断点 / 待维护者复核**:删掉手动通道后,档案里的 `updates.openbox.checkChannel` 与 `channel` 字段仍保留(不再读也不再写),没有一并清理老数据;命令行 `--direct` / `--mirror` 覆盖参数是安装脚本的事,不受影响。

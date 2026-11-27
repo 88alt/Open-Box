@@ -825,10 +825,6 @@ const zhTW: LANG_MESSAGE = {
   obUpdateAvailable: '有新版本',
   obUpdateCheck: '檢查更新',
   obUpdateNow: '立即更新',
-  obUpdateChannelAuto: '沿用安裝通道',
-  obUpdateChannelDirect: 'GitHub 直連',
-  obUpdateChannelMirror: '鏡像加速',
-  obUpdateInstalledChannel: '安裝時通道:{channel}',
   obUpdateAuto: '自動更新',
   obUpdateAutoAt: '每天',
   obUpdateAutoHint:

@@ -857,10 +857,6 @@ const en = {
   obUpdateAvailable: 'Update available',
   obUpdateCheck: 'Check for updates',
   obUpdateNow: 'Update now',
-  obUpdateChannelAuto: 'Installed channel',
-  obUpdateChannelDirect: 'GitHub direct',
-  obUpdateChannelMirror: 'Mirror',
-  obUpdateInstalledChannel: 'Installed via: {channel}',
   obUpdateAuto: 'Auto update',
   obUpdateAutoAt: 'daily at',
   obUpdateAutoHint:
