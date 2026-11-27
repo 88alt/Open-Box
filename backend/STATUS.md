@@ -154,6 +154,27 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 
 ## 全局记录(跨区事项:开工 tag、上游版本、陌生提交对账、工作流恢复、停止条件)
 
+- 2026-11-27 backend(**打通官方 .mrs 规则集:部署在官方安装上首次成功**):
+  **问题**:官方 v0.1.493 起把内置规则集落成 `.mrs`(文件名带 64 位哈希,放在 `<数据目录>/mihomo/rules/`),
+  而自研后端 `mihomo.RuleSetPathFunc` 按 `<geoDir>/<tag>.srs` 找源文件、再用 `sing-box rule-set decompile` 反编译成 provider。
+  两者对不上,`POST /deploy` 一直报「mihomo 规则集 geosite-cn 转换失败:无法读取现有规则集文件」,
+  这也连带堵住了 DNS 接管真实部署、failover 落盘等一批真机验证。
+  **试过但走不通**:想把 `.mrs` 批量转成 `.srs` —— 实测 `.mrs` **不是 sing-box 的 rule-set 格式**,
+  `sing-box rule-set decompile` 直接报 `invalid sing-box rule-set file`;解开文件头是 `28 b5 2f fd`(Zstandard),
+  再往内是 `MRS` 开头、带位图编码的 mihomo 自有二进制容器(在本机用 zstd 解出 896KB,能看到的是压缩后的
+  位图数据而非明文域名),28 个全部转换失败(0/28)。**要转得写一个完整的 mrs 解码器,代价过大**。
+  **实际采用的解法(更小、更稳)**:`mihomo.Converter` 新增 `reuseDeployed` 快路径 ——
+  **官方那份 `.mrs` 本身就是给 mihomo 用的合法 provider,不需要反编译、可以直接引用**。
+  `convertOne` 先看 `RulesDir` 里有没有这个 tag 的现成 provider(文件名形如 `<tag>-<64 位十六进制>.<ext>`),
+  有就照它的实际扩展名拼 provider 条目(`.mrs`→format `mrs`、`.yaml/.yml`→`yaml`、`.txt`→`text`),
+  不再去找 `.srs`。为此给 `FS` 接口加了 `ReadDir`(`OSFS` 直接转 `os.ReadDir`,测试替身 `memFS` 按内存路径模拟)。
+  **测试**:新增 `internal/mihomo/rulesets_reuse_test.go` 三组 —— 有 `.mrs` 时复用且**不调用反编译**、
+  哈希段不合法(如只有 8 位)时不误认、四种扩展名的 format 映射。三组全过;
+  `internal/mihomo` 全量失败数改动前后都是 **9 个**(本机 Windows 的路径分隔符与 0666 权限位既有问题,与本次无关)。
+  **真机验证(关键)**:部署新二进制后 `POST /deploy` 回 **`{"ok":true,"stage":"running","badTags":[],"kernel":"mihomo"}`** ——
+  **这是「官方安装 + 自研后端」组合下部署第一次成功**;随后 `pendingRestart` 为 `{pending:false,reasons:[],details:[]}`,
+  内核在跑、`panel=200`、`failover.json` 落盘为 `[]`(当前无故障转移组,符合预期)。
+
 - 2026-11-27 版本钉对齐上游 **v0.1.494**(`catch-up-upstream` = `44bf5bd4`,上游 2026-11-27T09:59Z 发布):
   `backend/packaging/versions.env` 全部对齐——`OPENBOX_UPSTREAM=494`、`KERNEL_SOURCE_BASE` 指到 `v0.1.494`、
   **`SINGBOX_PATCH` `openbox-62` → `openbox-63`**(摘要 `7b43bdc9…`)、**`MIHOMO_PATCH` `openbox.24` → `openbox.25`**(摘要 `27150bed…`);

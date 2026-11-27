@@ -139,7 +139,85 @@ func (c *Converter) Convert(ctx context.Context, tags []string) (*Converted, err
 	return out, nil
 }
 
+// reuseDeployed 找 rulesDir 里已经存在的「这个 tag 的 provider 文件」,有就直接复用。
+//
+// 为什么需要它:官方安装(v0.1.493 起)把内置规则集落成 .mrs(文件名带 64 位哈希,是 mihomo 自有的
+// 二进制容器,不是 sing-box 的 .srs),而自研后端按 <geoDir>/<tag>.srs 找源文件、再用 sing-box
+// 反编译成 provider。两者对不上,于是「官方装过、自研接管」时部署必然报「无法读取现有规则集文件」。
+// 官方的 .mrs 本身就是给 mihomo 用的 provider,格式合法、可直接引用,不需要反编译;
+// 所以这里先看目录里有没有现成的,有就照它的实际扩展名(.yaml/.yml/.mrs/.txt)拼出 provider 条目。
+func (c *Converter) reuseDeployed(tag, kind string) (Provider, bool) {
+	if c.FS == nil || c.RulesDir == "" {
+		return Provider{}, false
+	}
+	entries, err := c.FS.ReadDir(c.RulesDir)
+	if err != nil {
+		return Provider{}, false
+	}
+	behavior := kind // "domain" / "ipcidr"
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		// 只认 <tag>-<64 位十六进制>.<ext> 或 <tag>.<ext>,避免把别的 tag 认进来
+		rest, ok := strings.CutPrefix(name, tag+"-")
+		if !ok {
+			if name == tag+filepath.Ext(name) && filepath.Ext(name) != "" {
+				return providerForFile(tag, name, behavior, "")
+			}
+			continue
+		}
+		hash, ext := splitHashExt(rest)
+		if !hash || ext == "" {
+			continue
+		}
+		return providerForFile(tag, name, behavior, "")
+	}
+	return Provider{}, false
+}
+
+// splitHashExt 判断 rest 是不是「64 位十六进制 + 扩展名」。
+func splitHashExt(rest string) (bool, string) {
+	ext := filepath.Ext(rest)
+	if ext == "" {
+		return false, ""
+	}
+	h := strings.TrimSuffix(rest, ext)
+	if len(h) != 64 {
+		return false, ""
+	}
+	for i := 0; i < len(h); i++ {
+		c := h[i]
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false, ""
+		}
+	}
+	return true, ext
+}
+
+// providerForFile 按实际文件拼 provider 条目:格式由扩展名决定(.mrs/.yaml/.yml/.txt)。
+func providerForFile(tag, name, behavior, _ string) (Provider, bool) {
+	ext := strings.ToLower(filepath.Ext(name))
+	format := "yaml"
+	switch ext {
+	case ".mrs":
+		format = "mrs"
+	case ".yaml", ".yml":
+		format = "yaml"
+	case ".txt":
+		format = "text"
+	default:
+		return Provider{}, false
+	}
+	return Provider{Type: "file", Behavior: behavior, Format: format, Path: "./rules/" + name}, true
+}
+
 func (c *Converter) convertOne(ctx context.Context, tag, kind string) (Provider, error) {
+	// 先看有没有已经部署好的 provider(官方 .mrs 或上一次生成的 yaml),有就复用,不去找 .srs
+	if p, ok := c.reuseDeployed(tag, kind); ok {
+		return p, nil
+	}
 	srs, err := c.SrsPath(tag)
 	if err != nil {
 		return Provider{}, err
