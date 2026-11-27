@@ -232,7 +232,9 @@ const showCollapse = computed({
 // 折叠态的圆点按页签引用画;展开是上下两栏(页签栏 + 当前页签的节点),见 FailoverLaneCards / FailoverLaneDetail
 const isFailover = computed(() => isFailoverGroup(props.name))
 // 故障转移组在穿透里也叫「故障转移」,不因底层是 selector 就显示成手动组
-const typeText = computed(() => (isFailover.value ? t('groupType_failover_short') : proxyGroup.value.type))
+// 上游 v0.1.494:组类型统一走本地化(手动选择 / 自动优选 / 负载均衡 / 故障转移),
+// 以前只有 failover 翻译、其余直接显示后端的英文 type
+const typeText = computed(() => t(`groupType_${proxyGroup.value.type}`))
 const allProxies = computed(() => failoverMembersOf(props.name, proxyGroup.value.all ?? []))
 const { proxiesCount, renderProxies } = useRenderProxies(allProxies, props.name)
 const isLatencyTesting = ref(false)

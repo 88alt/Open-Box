@@ -728,3 +728,11 @@
   验证:`vue-tsc` 与 `npm run build` 通过。
   **未做(下一批)**:① 节点标签本身显示「延迟 | 评分」(要动 `LatencyTag.vue`,那个组件在 `ProxyNodeCard` / `FailoverLaneDetail` 等 4 处复用,要确认每处都能拿到评分);② 按评分升序/降序排序;③ 右上角「刷新评分」按钮与七条状态提示。
   **推断点 / 待维护者复核**:阈值默认值改 70 后,用户机器上如果**已经存过** `config/node-score-fair-threshold`(老默认 80),读的仍是旧值、不会自动变 70 —— 这与上游「改默认值只影响没存过的人」的行为一致,但维护者可能需要知道这个差别。
+- **第 4 批:组类型统一本地化**
+  对应 release notes「统一代理组类型(手动选择 / 自动优选 / 负载均衡 / 故障转移)在简中、繁中及英文(Selector / URL-Test / LoadBalance / Fallback)下的本地化显示」。
+  **修掉一个真实缺陷**:`ProxyGroup.vue` 与 `ProxyEmbeddedGroup.vue` 的 `typeText` 原先写成
+  `isFailover ? t('groupType_failover_short') : proxyGroup.value.type` —— **只有故障转移做了本地化,其余三种直接把后端的英文 type
+  (`selector` / `urltest` / `loadbalance`)显示出来**。改成统一走 `t(`groupType_${type}`)`。
+  验证:`groupType_selector` / `_urltest` / `_loadbalance` / `_failover` 四组三语键都在;`vue-tsc` 与 `npm run build` 通过。
+  说明:`groupType_failover_short`(上游 494 把它英文改成 `Fallback`)现在没有引用,但**键按原样保留**——它属于上游仍存在的键,
+  删了会导致键集比对出现「main 有而上游没有」之外的偏差。

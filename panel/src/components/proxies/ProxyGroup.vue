@@ -281,7 +281,9 @@ const { t } = useI18n()
 // 节点管理里的这个组(有就是 Open-Box 自己生成的组,没有就是内核配置里别的出站)
 const managedGroup = computed(() => managedOutbounds.value.find((g) => g.name === props.name))
 // 故障转移组:底层是 selector + 内部 urltest 子组,但对用户它是「故障转移」,不显示成手动组
-const typeText = computed(() => (isFailover.value ? t('groupType_failover_short') : proxyGroup.value.type))
+// 上游 v0.1.494:组类型统一走本地化(手动选择 / 自动优选 / 负载均衡 / 故障转移),
+// 以前只有 failover 翻译、其余直接显示后端的英文 type
+const typeText = computed(() => t(`groupType_${proxyGroup.value.type}`))
 // 故障转移组展开后上栏选的页签:没点过就是内核此刻在的那个
 const pickedLaneId = ref<string | null>(null)
 const failoverLanes = computed(() => (isFailover.value ? failoverLanesOf(props.name, proxyMap.value) ?? [] : []))
