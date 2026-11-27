@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/timeflysoon/Open-Box/backend/internal/probe"
 )
 
 // MeasureResult 一次测速结果。
@@ -56,6 +58,35 @@ func DefaultHTTPMeasurer(url string) Measurer {
 	}
 }
 
+// pickNextLocked 挑下一个该测的节点:手动优先,同类里先到先测。调用方必须已持有 s.mu。
+// 返回的 name 为空表示队列空了。
+//
+// 为什么手动优先:上游 v0.1.493 #1010 明确「支持手动测速优先插队」——
+// 用户点了某台节点的重测,期望它马上出结果,而不是排在几十个后台巡检项后面。
+func (s *Service) pickNextLocked() (string, queueItem) {
+	var name string
+	var item queueItem
+	found := false
+	for n, q := range s.pending {
+		if !found {
+			name, item, found = n, q, true
+			continue
+		}
+		// 手动项排在所有后台项前面
+		if q.Manual != item.Manual {
+			if q.Manual {
+				name, item = n, q
+			}
+			continue
+		}
+		// 同级按请求时间先到先测
+		if q.RequestedAt < item.RequestedAt {
+			name, item = n, q
+		}
+	}
+	return name, item
+}
+
 // RunOnce 处理队列里一个节点;没有排队则 noop。
 func (s *Service) RunOnce(ctx context.Context) {
 	s.mu.Lock()
@@ -63,12 +94,10 @@ func (s *Service) RunOnce(ctx context.Context) {
 		s.mu.Unlock()
 		return
 	}
-	var name string
-	var item queueItem
-	for n, q := range s.pending {
-		name, item = n, q
-		break
-	}
+	// 上游 v0.1.493 #1010:手动测速优先插队。
+	// 以前这里是直接 range 取第一个,Go 的 map 遍历顺序随机,手动点的那台可能排在几十个
+	// 后台巡检项后面。现在先挑 Manual(同类里取最早请求的),没有手动项才取后台项。
+	name, item := s.pickNextLocked()
 	delete(s.pending, name)
 	s.running = true
 	s.mu.Unlock()
@@ -96,13 +125,48 @@ func (s *Service) RunOnce(ctx context.Context) {
 		return
 	}
 	res := measurer(ctx, name, maxBytes)
+
+	// 上游 v0.1.493 #1009:Cloudflare 那类测速站在 403 / 429 时会拒绝大盘下载,
+	// 但小体积往往能过。这里按 1/4、再按 1/16 各降一档重试,能拿到数就按「下限」记 ——
+	// 宁可给一个偏保守的真实值,也比直接判失败有用。
+	if res.Failed && isRateLimitReason(res.Reason) {
+		for _, div := range []int64{4, 16} {
+			smaller := maxBytes / div
+			if smaller < minDowngradeBytes {
+				break
+			}
+			if ctx.Err() != nil {
+				break
+			}
+			if retry := measurer(ctx, name, smaller); !retry.Failed {
+				// 降档测出来的数只保证「至少这么快」,标成 LowerBound 以免被当成精确值
+				retry.LowerBound = true
+				res = retry
+				break
+			}
+		}
+	}
 	s.record(name, item, res)
 }
+
+// isRateLimitReason 判断这次失败是不是「站点拒绝 / 限流」这一类(值得降档重试)。
+func isRateLimitReason(reason string) bool {
+	return reason == probe.ReasonForbidden || reason == probe.ReasonRateLimited
+}
+
+// minDowngradeBytes 降档重试的最小体积:再小测出来的数已经没参考意义。
+const minDowngradeBytes = 2 << 20 // 2 MiB
 
 func (s *Service) record(name string, item queueItem, res MeasureResult) {
 	ts := s.now().UnixMilli()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// 上游 v0.1.493 #1010:测到一半时这个节点又被重新排了(用户手动点重测,或后台又排了一次),
+	// 这次的结果就已经是旧的 —— 丢弃,别把新请求的 pending 清掉、也别覆盖它的时间戳,
+	// 否则界面上会出现「刚点重测,结果却立刻变成上一次的数」。
+	if q, again := s.pending[name]; again && q.RequestedAt > item.RequestedAt {
+		return
+	}
 	if s.measures == nil {
 		s.measures = map[string]Measurement{}
 	}

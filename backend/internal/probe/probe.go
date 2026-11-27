@@ -581,6 +581,27 @@ func msOf(d time.Duration) int {
 	return 1
 }
 
+// reasonForStatus 把测速站点的拒绝细化成前端能显示的原因(对齐上游 v0.1.493 #1009:
+// 「双内核透传测速响应状态码与内容类型,并在 Cloudflare 限流时自动降级测试体积与退避」)。
+// 403 = 站点拒绝访问(常见于 Cloudflare 对某些出口的封禁)、429 = 被限流,这两类要能被用户看懂,
+// 其余非 2xx 仍是通用的 failed。
+func reasonForStatus(code int) string {
+	switch code {
+	case http.StatusForbidden:
+		return ReasonForbidden
+	case http.StatusTooManyRequests:
+		return ReasonRateLimited
+	}
+	return "failed"
+}
+
+const (
+	// ReasonForbidden 测速站拒绝访问(403)。
+	ReasonForbidden = "forbidden"
+	// ReasonRateLimited 测速站限流(429)。
+	ReasonRateLimited = "rate_limited"
+)
+
 func classify(err error, ctx context.Context) Result {
 	msg := err.Error()
 	switch {

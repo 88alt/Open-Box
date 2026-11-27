@@ -154,6 +154,29 @@ M0 完成;M1–M5 代码和单元测试基本完成,标 [~] 的待真机或云�
 
 ## 全局记录(跨区事项:开工 tag、上游版本、陌生提交对账、工作流恢复、停止条件)
 
+- 2026-11-27 backend(**补 v0.1.493 的两条后端行为:#1010 手动测速插队 / #1009 限流降档**):
+  release notes 里这两条是**后端行为**,之前只对齐了配套的前端键与文案,行为本身没做,本轮补上。
+  **#1010「手动节点带宽测速受后台巡检与队列干扰」**:
+  ① `internal/bandwidth/worker.go` 新增 `pickNextLocked()` —— 以前 `RunOnce` 是 `for n, q := range s.pending { ...; break }`,
+  **Go 的 map 遍历顺序随机**,手动点的那台可能排在几十个后台巡检项后面;现在先挑 `Manual`,同类里取 `RequestedAt` 最早的,
+  没有手动项才取后台项。
+  ② `record()` 增加「旧结果丢弃」保护:测到一半时同名节点又被重新排了(`s.pending[name].RequestedAt > item.RequestedAt`),
+  这次的结果直接 return,**不清新请求的 pending、也不覆盖它的时间戳** —— 否则界面上会出现「刚点重测就蹦出上一次的数」。
+  **#1009「Cloudflare 限流时自动降级测试体积与退避」+ 状态码透传**:
+  ① `internal/probe/probe.go` 新增 `reasonForStatus()` 与两个常量 `ReasonForbidden = "forbidden"` / `ReasonRateLimited = "rate_limited"`,
+  `fetch` / `fetchDiscard` 两处「非 2xx」不再一律 `failed`,403 / 429 分别带上这两个原因
+  (前端 `LATENCY_REASON_KEYS` 里本来就有这两个键,对应 `latencyReasonForbidden` / `latencyReasonRateLimited`,这下班才真正能显示出来)。
+  ② `worker.go` 的 `RunOnce` 在测速失败且原因是这两类时,**按 1/4、再按 1/16 各降一档体积重试**(下限 `minDowngradeBytes = 2 MiB`),
+  拿到数就采用并标 `LowerBound`(只保证「至少这么快」,不当成精确值);非限流类失败(超时等)不降档,避免白打流量。
+  **测试**:新增 `internal/bandwidth/priority_test.go` 七组(手动优先 / 手动间取最早 / 后台间取最早 / 空队列 /
+  端到端 RunOnce 先测手动 / 旧结果丢弃 / 无新请求时正常写入 / 限流降档成功 / 非限流不降档)与
+  `internal/probe/reason_test.go` 两组(403→forbidden、429→rate_limited、其余 failed;常量值与前端键一致)。全部通过。
+  `internal/bandwidth` 与 `internal/probe` 全量测试通过,`go vet ./...` 干净,gofmt 对改动文件无输出。
+  **推断点 / 待维护者复核**:① 降档的两档比例(1/4、1/16)与 2 MiB 下限是**按「小体积通常能过、再小就没参考意义」推的**,
+  上游闭源看不到确切参数;② 退避(backoff)只做了「同一次测速内降档重试」,**没有做跨轮的后台巡检退避**
+  (例如连续 N 次 429 就把该节点的巡检间隔拉长)——那要改调度器 `NextDue` 的口径,属另一批;
+  ③ `probe` 只把 403/429 区分出来,其它 4xx/5xx 仍是 `failed`(前端没有对应文案,新增键会破坏键集对齐)。
+
 - 2026-11-27 backend(**`.mrs` 复用按规矩回退:真机验证过、但 CI 一直红**):
   `967375ed` / `e75f39c4` / `f8a226b2` 三个提交已 `git revert`(不改写历史)。
   **做了什么**:官方 v0.1.493 起把内置规则集落成 `.mrs`(文件名带 64 位哈希)放 `<数据目录>/mihomo/rules/`,
