@@ -296,6 +296,17 @@
 `subscriptionRefreshedDone`、`subscriptionRefreshedRestartRequired`、`tagCollapse` 等,**零缺口**。
 ## 最终差异清单(2026-11-27 更新至上游 v0.1.494)
 
+**2026-11-28 复跑(按 `origin/catch-up-upstream` = `44bf5bd4` 的真实 dist,`en-BeGnJsso.js`)**:
+- **缺失**:扣除例外 C 后 **0**。
+- **多出**:上一轮误加的 4 个键(`obUpdateChannelAuto` / `Direct` / `Mirror`、`obUpdateInstalledChannel`)
+  在 v0.1.494 的 en 语言包里**根本不存在**,已连同配套代码删除(下拉框、「安装时通道」提示、
+  `checkChannel` 字段、后端 enum 校验);删除后**多出 0**。
+- **三语一致**:en / zh / zh-tw 各 **2315** 键,无重复,三语互比零差异。
+- **接口**:上游 dist 里的 `/api/...` 字面量 42 条,main 未覆盖的 8 条全是例外 B(`overview-links`)、
+  构建随机占位(`/api/v3/enclave/quorum-*`)或模板字符串误判(`update/notes` 实际有)。
+- **页面清单**:24 处「已对齐」,无「有差异待做」。
+
+
 **对齐基准**:上游 **v0.1.494**(2026-11-27T09:59Z;`catch-up-upstream` = `44bf5bd4`)。
 键集与引用以上游语言包与 `panel/dist` 为准(上游自 v0.1.463 起 `panel/` 不入 git,只能按 dist 对)。
 
