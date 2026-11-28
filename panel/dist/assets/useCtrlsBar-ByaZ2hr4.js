@@ -1,0 +1,1 @@
+import{ad as c,aj as r,w as i,x as d,d as n,ak as B}from"./vendor-vue-BK1-YUkO.js";import{c as a}from"./paddingViews-UNOAKjyJ.js";function p(o=720){const t=c(),{width:u}=r(t),m=n(()=>{const s=B(t);return s?.closest(".settings-menu")??s}),{bottom:e}=r(m),l=n(()=>u.value>o);return i(e,()=>{a.value=e.value},{immediate:!0}),d(()=>{a.value=0}),{isLargeCtrlsBar:l}}export{p as u};
