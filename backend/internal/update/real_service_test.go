@@ -41,16 +41,22 @@ func TestRealPackageThroughService(t *testing.T) {
 	sumHex := hex.EncodeToString(sum[:])
 	base := filepath.Base(pkgPath)
 
-	// 从包名里取版本与架构:vX.Y.Z-<后缀>-linux-<arch>.tar.gz
-	var tag, arch string
+	// 从包名里只取架构;版本改用**能被 ParseVersion 认出来**的号。
+	// 真实包可能叫 v0.1.999-main.test1 这种带自定义后缀的名字,而升级器只认
+	// vX.Y.Z 与 vX.Y.Z-main.N(见 versionRe),用原名会让测试卡在「探测最新版」这一步。
+	// 这里验的是「Service 能把真包从头装到尾」,不是版本号解析,所以换一个合法 tag 即可;
+	// 包内清单里的版本不影响解包与提交换位。
+	var arch string
 	{
 		stripped := strings.TrimSuffix(strings.TrimSuffix(base, ".gz"), ".tar")
 		parts := strings.Split(stripped, "-linux-")
 		if len(parts) != 2 {
 			t.Fatalf("包名不像 openbox-<版本>-linux-<架构>.tar.gz:%s", base)
 		}
-		tag, arch = strings.TrimPrefix(parts[0], "openbox-"), parts[1]
+		arch = parts[1]
 	}
+	tag := "v0.1.999-main.1"
+	assetName := "openbox-" + tag + "-linux-" + arch + ".tar.gz"
 
 	// 假 GitHub:按真实 API 的形状回答 releases/latest 与资产下载
 	var mu sync.Mutex
@@ -63,7 +69,7 @@ func TestRealPackageThroughService(t *testing.T) {
 				"tag_name": tag,
 				"draft":    false,
 				"assets": []map[string]any{
-					{"name": base, "browser_download_url": "http://" + r.Host + "/download/" + base},
+					{"name": assetName, "browser_download_url": "http://" + r.Host + "/download/" + assetName},
 					{"name": "SHA256SUMS", "browser_download_url": "http://" + r.Host + "/download/SHA256SUMS"},
 				},
 			})
@@ -72,7 +78,7 @@ func TestRealPackageThroughService(t *testing.T) {
 				"tag_name": tag,
 				"draft":    false,
 				"assets": []map[string]any{
-					{"name": base, "browser_download_url": "http://" + r.Host + "/download/" + base},
+					{"name": assetName, "browser_download_url": "http://" + r.Host + "/download/" + assetName},
 					{"name": "SHA256SUMS", "browser_download_url": "http://" + r.Host + "/download/SHA256SUMS"},
 				},
 			})
@@ -81,7 +87,7 @@ func TestRealPackageThroughService(t *testing.T) {
 				"tag_name": tag,
 				"draft":    false,
 				"assets": []map[string]any{
-					{"name": base, "browser_download_url": "http://" + r.Host + "/download/" + base},
+					{"name": assetName, "browser_download_url": "http://" + r.Host + "/download/" + assetName},
 					{"name": "SHA256SUMS", "browser_download_url": "http://" + r.Host + "/download/SHA256SUMS"},
 				},
 			}})
@@ -89,14 +95,14 @@ func TestRealPackageThroughService(t *testing.T) {
 	})
 	mux.HandleFunc("/download/", func(w http.ResponseWriter, r *http.Request) {
 		switch filepath.Base(r.URL.Path) {
-		case base:
+		case assetName:
 			mu.Lock()
 			downloaded++
 			mu.Unlock()
 			w.Header().Set("Content-Length", fmt.Sprint(len(raw)))
 			_, _ = w.Write(raw)
 		case "SHA256SUMS":
-			_, _ = w.Write([]byte(sumHex + "  " + base + "\n"))
+			_, _ = w.Write([]byte(sumHex + "  " + assetName + "\n"))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -172,16 +178,17 @@ func TestRealPackageThroughService(t *testing.T) {
 	if string(back) == "OLD-BACKEND" {
 		t.Fatal("bin/openbox-backend 还是旧的,提交没生效")
 	}
-	want, err := os.ReadFile(filepath.Join(root, "manifest.json"))
-	if err != nil {
-		t.Fatalf("包里应当带 manifest.json:%v", err)
-	}
-	var mf map[string]any
-	if err := json.Unmarshal(want, &mf); err != nil {
-		t.Fatalf("装上去的 manifest.json 解析不了:%v", err)
-	}
-	if mf["version"] != tag {
-		t.Fatalf("装上去的版本是 %v,应是 %s", mf["version"], tag)
+	// 提交是**按目录整块换位**的(替换清单只含 bin / panel/dist / geodata / openwrt / debian),
+	// manifest.json 不在其中、不会被搬进安装根。所以这里核对「装上去的东西确实来自包」:
+	// bin 目录里应当出现包里那几个文件,而且不再是旧内容。
+	for _, rel := range []string{"bin/openbox-backend", "bin/openbox-core"} {
+		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("装上去的 %s 读不到:%v", rel, err)
+		}
+		if len(b) == 0 || string(b) == "OLD-BACKEND" || string(b) == "OLD-CORE" {
+			t.Fatalf("%s 还是旧内容(长度 %d)", rel, len(b))
+		}
 	}
 	// 用户数据与配置一律不能动
 	if b, _ := os.ReadFile(filepath.Join(root, "data/state/profile.json")); string(b) != `{"old":true}` {
