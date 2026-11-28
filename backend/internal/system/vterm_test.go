@@ -814,3 +814,35 @@ func TestVTermRealRefusesNonBridge(t *testing.T) {
 		t.Fatal("拒绝后不该留下命名空间")
 	}
 }
+
+// CurrentMAC:建好虚拟终端后能读到它的 MAC(小写);没建时回空串。
+// sysres 用它把「路由测试 / 终端测试临时建的那台假终端」从活跃终端里排掉。
+func TestVTermCurrentMAC(t *testing.T) {
+	n, _, _ := newVTerm(t)
+	ctx := context.Background()
+
+	// 还没建:回空串,不报错
+	if mac := n.CurrentMAC(ctx); mac != "" {
+		t.Fatalf("没有虚拟终端时应回空串,实际 %q", mac)
+	}
+
+	v, err := n.Ensure(ctx, "br-lan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := n.CurrentMAC(ctx)
+	if got == "" {
+		t.Fatal("建好之后应能读到 MAC")
+	}
+	if got != strings.ToLower(v.MAC) {
+		t.Fatalf("读到的 MAC 应是命名空间里那张网卡的:%q,想要 %q", got, strings.ToLower(v.MAC))
+	}
+
+	// 拆掉之后又回空串
+	if err := n.Teardown(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if mac := n.CurrentMAC(ctx); mac != "" {
+		t.Fatalf("拆掉之后应回空串,实际 %q", mac)
+	}
+}

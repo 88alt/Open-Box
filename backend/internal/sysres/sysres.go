@@ -69,6 +69,11 @@ type Service struct {
 	Neighbors func(ctx context.Context) map[string]string
 	// LocalAddrs 返回本机所有接口地址(要从终端里排除);nil = 不排除。
 	LocalAddrs func() []netip.Addr
+	// VirtualIfMACs 返回虚拟终端网卡的 MAC(小写),这些不是真终端。
+	// 路由测试 / 终端测试会临时建一个命名空间接进 LAN,DHCP 会给它一个地址,
+	// 内核连接表里也会看到它 —— 但它只是测试用的假设备,不该算进活跃终端。
+	// nil = 不排除。
+	VirtualIfMACs func() []string
 	// KernelComm 内核进程的 comm,默认 sing-box;用来算 Open-Box 常驻内存。
 	KernelComm string
 
@@ -328,6 +333,14 @@ func (s *Service) countTerminals(ctx context.Context, sources []string) int {
 	if s.Neighbors != nil {
 		neigh = s.Neighbors(ctx)
 	}
+	virtual := map[string]bool{}
+	if s.VirtualIfMACs != nil {
+		for _, mac := range s.VirtualIfMACs() {
+			if mac != "" {
+				virtual[strings.ToLower(mac)] = true
+			}
+		}
+	}
 	seen := map[string]bool{}
 	for _, raw := range sources {
 		a, ok := parseAddr(raw)
@@ -336,6 +349,10 @@ func (s *Service) countTerminals(ctx context.Context, sources []string) int {
 		}
 		key := a.String()
 		if mac := neigh[key]; mac != "" {
+			// 邻居表认出来的 MAC 是虚拟终端的:这是测试建的假设备,不算活跃终端
+			if virtual[strings.ToLower(mac)] {
+				continue
+			}
 			key = "mac:" + mac
 		}
 		seen[key] = true

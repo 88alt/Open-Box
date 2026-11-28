@@ -161,3 +161,47 @@ func TestParseARPAndNeigh(t *testing.T) {
 		t.Fatal("fixture")
 	}
 }
+
+// 虚拟终端(路由测试 / 终端测试临时建的那台)不算活跃终端:
+// 它会从 LAN 网桥拿一个 DHCP 地址、也会在内核连接表里出现,但那是测试用的假设备。
+func TestActiveTerminalsSkipsVirtualIf(t *testing.T) {
+	s, _, _ := fixture(t)
+	s.Sources = func(context.Context) ([]string, error) {
+		return []string{
+			"192.168.1.20", // 虚拟终端(测试设备)
+			"192.168.1.21", // 真终端
+			"192.168.1.22", // 邻居表里没有,当未知 MAC,照常算
+		}, nil
+	}
+	s.Neighbors = func(context.Context) map[string]string {
+		return map[string]string{"192.168.1.20": "e2:3d:a6:8e:da:5d", "192.168.1.21": "aa:bb:cc:dd:ee:01"}
+	}
+	s.LocalAddrs = func() []netip.Addr { return nil }
+	s.VirtualIfMACs = func() []string { return []string{"E2:3D:A6:8E:DA:5D"} } // 大小写不敏感
+	snap, err := s.Snapshot(context.Background())
+	if err != nil || snap.ActiveTerminals == nil {
+		t.Fatalf("%+v %v", snap, err)
+	}
+	if *snap.ActiveTerminals != 2 {
+		t.Fatalf("虚拟终端应被排掉,只剩 2 台,实际 %d", *snap.ActiveTerminals)
+	}
+}
+
+// 没有虚拟终端(CurrentMAC 读不到)时,行为与以前完全一致。
+func TestActiveTerminalsWithoutVirtualIf(t *testing.T) {
+	s, _, _ := fixture(t)
+	s.Sources = func(context.Context) ([]string, error) { return []string{"192.168.1.20"}, nil }
+	s.Neighbors = func(context.Context) map[string]string { return map[string]string{"192.168.1.20": "e2:3d:a6:8e:da:5d"} }
+	s.LocalAddrs = func() []netip.Addr { return nil }
+	// 不接 VirtualIfMACs
+	snap, err := s.Snapshot(context.Background())
+	if err != nil || snap.ActiveTerminals == nil || *snap.ActiveTerminals != 1 {
+		t.Fatalf("不接依赖时应照常算 1 台:%+v %v", snap.ActiveTerminals, err)
+	}
+	// 接了但回空串,也一样
+	s.VirtualIfMACs = func() []string { return nil }
+	snap, err = s.Snapshot(context.Background())
+	if err != nil || snap.ActiveTerminals == nil || *snap.ActiveTerminals != 1 {
+		t.Fatalf("回空时也照常算:%+v %v", snap.ActiveTerminals, err)
+	}
+}

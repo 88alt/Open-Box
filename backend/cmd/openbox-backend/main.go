@@ -891,6 +891,9 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 系统资源(概览页「硬件负载」、侧边栏卡片、概览的「活跃终端」):CPU / 内存读 /proc,活跃终端取内核连接的来源 IP 并按邻居表的 MAC 合并
 	// 邻居表也给 route-test 用:请求带 sourceIp 时按那台终端的 MAC 判断 source_mac_address
 	neighbors := sysres.Neighbors("/proc", system.ExecRunner)
+	// 虚拟终端的实例(sysres 要按它的 MAC 把测试用的假终端排掉,terminal-test 也用它)
+	vterm := &system.VTermNet{Run: system.ExecRunner, StateFile: filepath.Join(cfg.StateDir(), "terminal-net.json")}
+
 	sysresapi.Register(srv.Mux(), sysresapi.Deps{Service: &sysres.Service{
 		Sources: func(ctx context.Context) ([]string, error) {
 			snap, err := singbox.KernelConnections(ctx, filepath.Join(cfg.ConfigDir, "config.json"))
@@ -905,6 +908,13 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 		},
 		Neighbors:  neighbors,
 		LocalAddrs: sysres.LocalAddrs,
+		// 虚拟终端(路由测试 / 终端测试临时建的那台)不是真终端:按它的 MAC 排掉。
+		VirtualIfMACs: func() []string {
+			if mac := vterm.CurrentMAC(context.Background()); mac != "" {
+				return []string{mac}
+			}
+			return nil
+		},
 	}})
 
 	// route-test 判断「DNS 规则是不是旧的」要按档案的站点集认归属(core normalizeRouting 的 activePolicies / fallback)
@@ -996,7 +1006,6 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 当前内核:推算类接口(terminal-test 的 firstLayer、penetration)按它选已部署的配置文件
 	kernelOf := func() (string, error) { return system.ReadRouterKernel(cfg.RouterKernelFile()) }
 	terminalProbe := system.RealTerminalProbe()
-	vterm := &system.VTermNet{Run: system.ExecRunner, StateFile: filepath.Join(cfg.StateDir(), "terminal-net.json")}
 	dnsFwd := &dnsforward.Service{
 		Mode:       dnssync.ModeFromProfile(profileSvc.Get),
 		Applied:    func(ctx context.Context) bool { return takeover.Status(ctx).Applied },

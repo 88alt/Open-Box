@@ -554,3 +554,19 @@ func (n *VTermNet) killNamespaceProcs(ctx context.Context, ns string) error {
 	}
 	return nil
 }
+
+// CurrentMAC 返回当前虚拟终端(命名空间里的对端网卡)的 MAC,小写。
+// 没有虚拟终端、ip 不可用、读不到时返回空串 —— 调用方据此决定要不要排除。
+// 只读,不建也不拆任何东西:进程刚起、命名空间还没建时它就该回空串。
+func (n *VTermNet) CurrentMAC(ctx context.Context) string {
+	ns, _, peer := n.names()
+	r, err := n.run(ctx, "ip", "-n", ns, "-o", "link", "show", "dev", peer)
+	if err != nil || r.Code != 0 {
+		return ""
+	}
+	m := macRe.FindStringSubmatch(strings.ToLower(r.Stdout))
+	if m == nil {
+		return ""
+	}
+	return m[1]
+}
