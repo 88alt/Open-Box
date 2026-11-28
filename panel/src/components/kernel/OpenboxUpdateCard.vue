@@ -2,21 +2,9 @@
   <!-- embedded:嵌在顶部总卡片里时不带外框、标题和「当前版本」(版本号在标题行) -->
   <div :class="embedded ? undefined : 'card bg-base-100 border-base-300/60 border'">
     <div :class="embedded ? 'flex flex-col gap-3 text-sm' : 'card-body gap-3 p-4 text-sm'">
-      <!-- 一行:[通道] [检查更新] 最新版本 vX [已是最新] 安装时通道。检查更新探到新版就弹确认框
+      <!-- 一行:[检查更新] 最新版本 vX [已是最新]。检查更新探到新版就弹确认框
            (带更新日志),点「确定更新」才真正升级;升级进行中按钮变成「查看进度」。 -->
       <div class="flex flex-wrap items-center gap-2">
-        <!-- 手动升级走的通道:auto 沿用安装时通道,其余强制直连 / 走镜像。
-             与「自动更新」的 channel 是两个字段,这个只影响本卡片的检查与更新。 -->
-        <select
-          class="select select-sm w-auto"
-          :value="plan.checkChannel"
-          :disabled="updateRunning || checking"
-          @change="saveCheckChannel(($event.target as HTMLSelectElement).value as OpenboxUpdateChannel)"
-        >
-          <option value="auto">{{ $t('obUpdateChannelAuto') }}</option>
-          <option value="direct">{{ $t('obUpdateChannelDirect') }}</option>
-          <option value="mirror">{{ $t('obUpdateChannelMirror') }}</option>
-        </select>
         <button
           v-if="updateRunning"
           type="button"
@@ -52,16 +40,6 @@
             :off-text="$t('obUpdateAvailable')"
           />
         </template>
-        <!-- 安装时通道:取 update/status 里实际生效的那个(直连 / 镜像) -->
-        <span
-          v-if="updateInfo?.channel?.mode"
-          class="text-base-content/50 text-xs"
-        >
-          {{ $t('obUpdateInstalledChannel', {
-            channel: updateInfo.channel.mode === 'mirror'
-              ? $t('obUpdateChannelMirror') : $t('obUpdateChannelDirect'),
-          }) }}
-        </span>
       </div>
 
       <OpenboxUpdateConfirmDialog
@@ -156,25 +134,10 @@ const plan = computed(() => ({
   hour: props.profile.updates?.openbox?.hour ?? 4,
   days: props.profile.updates?.openbox?.days ?? 1,
   channel: props.profile.updates?.openbox?.channel ?? 'auto',
-  checkChannel: props.profile.updates?.openbox?.checkChannel ?? 'auto',
 }))
-// 上游 v0.1.493 起不再让用户手选「自动更新」的下载通道:一律 auto(先直连 GitHub,不通或过慢时自动轮询内置镜像)。
+// 上游 v0.1.493 起不再让用户手选下载通道:一律 auto(先直连 GitHub,不通或过慢时自动轮询内置镜像)。
 // 命令行覆盖参数 --direct / --mirror 仍在安装脚本里,那是安装期的事,与面板无关。
-// 面板上那个下拉框管的是另一件事:checkChannel,即本卡片「检查更新 / 立即更新」时走哪条路。
 const UPDATE_CHANNEL: OpenboxUpdateChannel = 'auto'
-
-// 手动检查 / 更新的通道:存进档案 updates.openbox.checkChannel,下次进来还是这个选择。
-const saveCheckChannel = async (v: OpenboxUpdateChannel) => {
-  try {
-    await props.patchProfile({ updates: { openbox: { ...props.profile.updates?.openbox, checkChannel: v } } })
-  } catch (err) {
-    showNotification({
-      content: 'routingSaveFailed',
-      params: { message: err instanceof Error ? err.message : String(err) },
-      type: 'alert-error',
-    })
-  }
-}
 
 // 确认弹窗:探到新版就打开,更新日志按版本只取一次(取失败下次再试)
 const confirmOpen = ref(false)
@@ -202,14 +165,8 @@ const openConfirm = async () => {
   }
 }
 
-// 真要升级时按用户在下拉框里选的通道走;auto 交给后端(先直连、不通再镜像)。
-const resolveChannel = (): OpenboxUpdateChannel => {
-  const c = plan.value.checkChannel
-  return c === 'direct' || c === 'mirror' ? c : UPDATE_CHANNEL
-}
-
 const confirmUpdate = async () => {
-  if (await startUpdate(resolveChannel())) confirmOpen.value = false
+  if (await startUpdate(UPDATE_CHANNEL)) confirmOpen.value = false
 }
 
 const check = async () => {

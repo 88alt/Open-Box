@@ -565,7 +565,7 @@ func checkUpdates(p map[string]any) error {
 	if err := wantBool(ob, "auto", "updates.openbox.auto"); err != nil {
 		return err
 	}
-	for _, k := range []string{"channel", "checkChannel"} {
+	for _, k := range []string{"channel"} {
 		if err := wantEnum(ob, k, "updates.openbox."+k, updateChannels); err != nil {
 			return err
 		}

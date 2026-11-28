@@ -840,10 +840,6 @@ const zh: LANG_MESSAGE = {
   obUpdateAutoAt: '每天',
   obUpdateAutoHint:
     '按所选整点先探最新版，有新版才升级；按设定间隔执行，一天最多一次，修改计划后立即按新时间生效。钟点按路由器时区（下面「时区」里可改）。',
-  obUpdateChannelAuto: '沿用安装通道',
-  obUpdateChannelDirect: 'GitHub 直连',
-  obUpdateChannelMirror: '镜像加速',
-  obUpdateInstalledChannel: '安装时通道：{channel}',
   timezoneTitle: '时区',
   timezoneDescription:
     '路由器的系统时区,和 LuCI「系统 → 时区」是同一个设置。自动更新、订阅定时更新都按这个时区的钟点执行。',
