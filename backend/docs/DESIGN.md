@@ -7,7 +7,7 @@
 ## 2. 已定的决定(接手者不用再问)
 | # | 决定 | 理由 |
 |---|---|---|
-| D1 | 语言:**Go**,`backend/go.mod` 现为 `go 1.25.4`(`core/go.mod` 是 1.25.12;统一版本要同时改 go.mod 和 CI,由维护者定),`CGO_ENABLED=0` 静态编译 | 与 `core/` 同语言;路由器上不需要 Node 运行时;单文件易部署 |
+| D1 | 语言:**Go**,`backend/go.mod` 现为 `go 1.25.4`(`core/go.mod` 是 1.25.12;两处各自以自己 go.mod 为准,升级时同时改 go.mod 与 CI 里固定的版本),`CGO_ENABLED=0` 静态编译 | 与 `core/` 同语言;路由器上不需要 Node 运行时;单文件易部署 |
 | D2 | 模块:`backend/` 自带 `go.mod`,模块名 `github.com/timeflysoon/Open-Box/backend` | 与 `core/` 分开发布 |
 | D3 | 接口契约 = `docs/ENDPOINTS.md` + `panel/src/api/*.ts` 里的 TypeScript 类型;JSON,同源,不开 CORS | 前端就是规格 |
 | D4 | 与 `openbox-core` 的集成:**第一阶段用子进程**,走 `core/README.md` 描述的 stdin/stdout JSON 协议(`protocol:1`,20 个方法 + `hello`,其中 4 个是 Mihomo 方法,见 `core/README.md`) | `core/` 的金标准测试保持有效、零改动;`core/internal` 不能被别的模块直接 import |
@@ -29,7 +29,7 @@
 2. **可回滚的应用**:替换前保留上一份配置;重启 sing-box 后做健康检查(进程在、监听端口通、控制接口响应);失败自动回滚并重启旧配置,接口返回明确错误。
 3. **DNS 接管 / 防火墙规则 / 路由**:每一项操作都要有对应的撤销函数;进程收到退出信号、或应用失败时执行撤销;启动时先检测并清理上次异常退出遗留的规则。
 4. **不确定就不动**:无法确认当前系统状态(例如读不到防火墙规则)时,返回错误,不要「猜一个」去改。
-5. 所有会改系统的代码放在 `internal/system/`,通过接口抽象,单元测试用假实现;**真机验证由维护者做**,在 `STATUS.md` 里单独标注「需真机」。
+5. 所有会改系统的代码放在 `internal/system/`,通过接口抽象,单元测试用假实现;**真机验证一律用隔离安装根 + 独立端口 + 独立服务名**(`/tmp/<名字>/root`),不碰 `/opt/open-box`;结果与备份位置记在 `STATUS.md`。
 
 ## 5. 分阶段计划
 每个阶段结束都应该能被前端联调验证。条目的细分和勾选在 `STATUS.md`。
@@ -49,7 +49,7 @@
 
 **M5 系统运维**:`backup`(导出/导入,含 query 参数)、`deploy*`、`factory-reset`、`system*`、`update*`(组件更新:自己的二进制、sing-box 内核、规则集)、时区、`tutorial-videos`(默认返回空列表)。
 
-**M6 打包与发布**:GitHub Actions 里编译 amd64 / arm64 的 `openbox-backend`,打包 `panel/dist`、`openbox-core`、sing-box 内核、安装与卸载脚本;与 `main` 的发布流程对接(见 `.github/workflows/`);版本号规则 `v0.1.<上游号>-main.<n>` 仅用于过渡,正式发布前由维护者重定。
+**M6 打包与发布**:GitHub Actions 里编译 amd64 / arm64 的 `openbox-backend`,打包 `panel/dist`、`openbox-core`、sing-box 内核、安装与卸载脚本;与 `main` 的发布流程对接(见 `.github/workflows/`);版本号规则 `v0.1.<上游号>-main.<n>` 仅用于过渡。
 
 ## 6. 工程约定
 - 每个接口分组一个包:`internal/api/<分组>`,导出 `Register(mux, deps)`;处理函数只做参数解析、校验、调用服务层、写响应。业务逻辑放服务层,系统副作用放 `internal/system`。
@@ -91,7 +91,7 @@
 | 带宽择优(3414adff) | 整体回退(`git revert`,不改写历史),按前端 `BandwidthSettingsCard` 和 sing-box 公开文档重写;core 层 e5f8d5ab 保留。重写已完成(见 STATUS 的带宽择优条目),`GET /api/openbox/bandwidth` 已恢复 |
 | `route-test` 的 `dns.stale` / `debug`、`penetration` 的 `firstLayer` / `preMatch` | 不做:前端没规定含义,或依据的是上游部署产物。`route-test` 的 `context` 留到 `terminal-test` 做探测时一起做 |
 | Docker 平台 | 不在范围(目标平台只有 OpenWrt 和 Debian);`docker/` 是上游同步目录,会被覆盖 |
-| M6 发布包设计 | 设计在 `docs/M6.md`,已按其第十二节的答复与默认推进完 M6-1~M6-7(代码与单测),只剩 M6-8 真机联调。发布签名 v1 不做(只做 SHA256 加 HTTPS),需要签名时由维护者生成密钥并放进 Actions secrets |
+| M6 发布包设计 | 设计在 `docs/M6.md`,已按其第十二节的答复与默认推进完 M6-1~M6-7(代码与单测),只剩 M6-8 真机联调。发布签名 v1 不做(只做 SHA256 加 HTTPS),需要签名时生成密钥并放进 Actions secrets |
 
 ## 9. 双内核(sing-box / Mihomo)与内核切换
 
