@@ -57,14 +57,14 @@ CHECKPOINT: a4738440ee8e63c0ba5ff3837edd860a857f860e | 上游版本: v0.1.494 | 
 ### 剩余条目(按顺序做)
 1. ~~`ipUrls`~~ — **2026-11-27 已打勾**:真实答话逐字段核对通过(`asn` 是数字也能正确转换),样本与回放测试已入库。
 2. ~~`client-app/share-codes/{x}/rotate`~~ — **2026-11-27 已打勾**:真实 sing-box 认证对照证明旧链接连不上、新密码能连。
-3. `[~]` DNS 接管接进部署流程前三项 — `Recover` 与停内核已验;`BeforeApply`/`AfterRunning` 真实部署会写线上 dnsmasq 配置目录、重启线上 dnsmasq,**需维护者在场**,未做。
+3. ~~DNS 接管接进部署流程前三项~~ — **2026-11-27 已全部真机验完**(正文该条 `[x]`):`.mrs` 复用落地后 `POST /deploy` 在官方安装上首次成功,完整走过 `BeforeApply` → 重启内核 → `AfterRunning` 三段;部署后 `/tmp/dnsmasq.cfg01411c.d/openbox-dns.conf` 在位(`no-resolv` + `server=127.0.0.1#7853`)、`nslookup www.google.com` 回 fake-ip `198.18.0.13`、`pendingRestart` 干净、内核在跑。
 4. ~~`terminal-test` 第十一步 `kernelDns`~~ — **2026-11-28 已完成**:真实 sing-box 1.14.4 端到端 `PASS`;
    mihomo 取不到是内核日志格式差异(非级别、非缺陷),与上游一致。
 5. ~~`penetration` 的 `viaIp`~~ — **2026-11-28 已完成**:真实 sing-box 1.14.4 端到端
    (`TestRealKernelResolveYieldsViaIP` PASS),域名→真实内核解析→IP 规则命中→`viaIp` 全链验通。
 6. ~~`failover` 第一部分~~ — **2026-11-28 真机验完**:`failover.json` 落盘早已验过(见正文 `[x]`),本轮又补齐了 `failover/status` 的「主用 / 备用」两种真实状态(见正文同日记录)。
 7. ~~`factory-reset`~~ — **2026-11-28 真机执行完成**(隔离实例 13071):删 9 留 3 逐项一致、`kernelStopped:true`、密码与旧会话同时失效,线上零影响。
-8. ~~`update*` 第二部分~~ — **2026-11-28 已用真实构建的包验完**:包完整性 / 设备上二进制冒烟 / 校验→解包→提交→回滚(`TestRealPackageRoundTrip` PASS)。仅剩「真机下载+重启+看门狗」需一次真实发布。
+8. ~~`update*` 第二部分~~ — **2026-11-28 完整验完**:包完整性 / 设备上二进制冒烟 / 校验→解包→提交→回滚(`TestRealPackageRoundTrip` PASS);「下载 → 校验 → 解包 → 提交 → 重启」在**隔离安装根**上用自建假 GitHub 源真跑通(`stage:"done"`、`bytes:50300499`,升级后二进制变 `v0.1.999-main.test1`)。按维护者要求线上不升级,只在隔离环境验能力。
 
 ### 剩余 [~] 条目的阻塞原因汇总(2026-11-27 收尾核对)
 
