@@ -1245,6 +1245,14 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 
 	clientsapi.Register(srv.Mux(), clientsapi.Deps{
 		List: func() []system.Client { return system.ReadDHCPLeases(system.DHCPLeaseFiles, time.Now()) },
+		// 租约里没有的(静态 IP / 旁路由转发来的)也算已知终端:取最近 7 天流量里出现过的来源
+		Sources: func() []string {
+			if trafficStore == nil {
+				return nil
+			}
+			return trafficStore.RecentSources(7)
+		},
+		Self: system.SelfKind,
 	})
 
 	// 客户端 App 页的信息:路由器标识、局域网地址与网段、地区分流、路由器名称。只读网卡和档案,

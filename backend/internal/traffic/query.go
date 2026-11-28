@@ -1,6 +1,7 @@
 package traffic
 
 import (
+	"net/netip"
 	"regexp"
 	"sort"
 )
@@ -415,4 +416,53 @@ func avgTail(v []int64, n int) int64 {
 		s += x
 	}
 	return s / int64(len(v))
+}
+
+// RecentSources 返回最近 days 天里出现过的来源地址(终端维度),按天从新到旧、去重。
+// 「已知终端」列表用它把「没有 DHCP 租约、但确实在上网」的设备也带上(静态 IP、旁路由转发来的)。
+// 读不到某一天就跳过那一天,不报错:
+// 这个列表是给用户挑来源用的,缺一天比整个接口失败要好。
+func (s *Store) RecentSources(days int) []string {
+	if days <= 0 {
+		days = 1
+	}
+	now := s.now()
+	seen := map[string]bool{}
+	var out []string
+	for i := 0; i < days; i++ {
+		day := now.AddDate(0, 0, -i).Format(dayLayout)
+		s.mu.Lock()
+		v, err := s.viewLocked(day, nil, true)
+		if err != nil {
+			s.mu.Unlock()
+			continue
+		}
+		clients := map[string]bool{}
+		s.each(v, true, func(client, _, _ string, _ *Counter) { clients[client] = true })
+		s.mu.Unlock()
+		for c := range clients {
+			if !usableSource(c) || seen[c] {
+				continue
+			}
+			seen[c] = true
+			out = append(out, c)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// usableSource 判断这个来源地址值不值得当成「已知终端」:
+// 空、「未知」、回环、未指定、链路本地地址都不是局域网里的设备。
+// 路由器自己的 LAN / WAN 地址由调用方再滤一层(那一层要看网卡,本包不做)。
+func usableSource(s string) bool {
+	if s == "" || s == unknown {
+		return false
+	}
+	a, err := netip.ParseAddr(s)
+	if err != nil {
+		return false
+	}
+	a = a.Unmap()
+	return !a.IsLoopback() && !a.IsUnspecified() && !a.IsLinkLocalUnicast()
 }
