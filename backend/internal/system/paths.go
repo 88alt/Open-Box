@@ -38,6 +38,10 @@ const (
 	// EnvInstallRoot 是安装根(如 /opt/open-box)。给了才允许在线升级去换文件;不给就只检查、只下载。
 	EnvInstallRoot = "OPENBOX_INSTALL_ROOT"
 
+	// EnvUpdateAPI 是发布信息的 API 根地址,默认 GitHub 的 https://api.github.com。
+	// 只在自建镜像 / 局域网验收时用:把它指到自己的源,就能在没有外网的机器上走完整的检查与升级。
+	EnvUpdateAPI = "OPENBOX_UPDATE_API"
+
 	// 服务名:交给系统服务管理器(OpenWrt init.d / systemd)的名字
 	EnvCoreService  = "OPENBOX_CORE_SERVICE"
 	EnvPanelService = "OPENBOX_PANEL_SERVICE"
@@ -70,6 +74,8 @@ type Paths struct {
 	DNSQueryLog string
 	// UpdateMirror 是在线更新的镜像加速前缀(请求 <前缀><原地址>);空 = 不用镜像。
 	UpdateMirror string
+	// UpdateAPI 是发布信息的 API 根地址;空 = 用 GitHub 默认值。
+	UpdateAPI string
 }
 
 // DefaultPaths 返回通用位置的默认值。
@@ -134,6 +140,7 @@ func LoadConfig(args []string, getenv func(string) string, out io.Writer) (Confi
 	core := fs.String("core", env(EnvCore, def.Core), "openbox-core 可执行文件(环境变量 "+EnvCore+")")
 	dnsQueryLog := fs.String("dns-query-log", env(EnvDNSQueryLog, def.DNSQueryLog), "dnsmasq 查询日志文件:DNS 接管时让 dnsmasq 写到这里,后端跟读;off = 不开不读(环境变量 "+EnvDNSQueryLog+")")
 	updateMirror := fs.String("update-mirror", env(EnvUpdateMirror, ""), "在线更新的镜像加速前缀(空 = 只走 GitHub 直连)(环境变量 "+EnvUpdateMirror+")")
+	updateAPI := fs.String("update-api", env(EnvUpdateAPI, ""), "发布信息的 API 根地址(空 = GitHub 的 api.github.com);自建镜像或局域网验收时用(环境变量 "+EnvUpdateAPI+")")
 	installRoot := fs.String("install-root", env(EnvInstallRoot, ""), "安装根,如 /opt/open-box;空 = 不做在线升级的提交(环境变量 "+EnvInstallRoot+")")
 	coreSvc := fs.String("core-service", env(EnvCoreService, DefaultCoreService), "内核服务的服务名,OpenWrt / Debian 上都是 openbox(环境变量 "+EnvCoreService+")")
 	panelSvc := fs.String("panel-service", env(EnvPanelService, DefaultPanelService), "后端自己的服务名(环境变量 "+EnvPanelService+")")
@@ -176,6 +183,12 @@ func LoadConfig(args []string, getenv func(string) string, out io.Writer) (Confi
 			return Config{}, fmt.Errorf("-update-mirror 要是 http(s) 地址: %q", v)
 		}
 		cfg.UpdateMirror = v
+	}
+	if v := strings.TrimSpace(*updateAPI); v != "" {
+		if u, err := url.Parse(v); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return Config{}, fmt.Errorf("-update-api 要是 http(s) 地址: %q", v)
+		}
+		cfg.UpdateAPI = strings.TrimRight(v, "/")
 	}
 	if v := strings.TrimSpace(*dnsQueryLog); v != "" && !strings.EqualFold(v, "off") {
 		cfg.DNSQueryLog = filepath.Clean(v)

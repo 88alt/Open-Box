@@ -870,7 +870,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 组件更新:status / check / notes 读发布信息;run 走「探测 → 下载并解压到暂存 → 校验 → 冒烟」,
 	// 提交(替换文件并重启)是 M6-6,还没接上,所以跑完会明确回一句「本次没有改动系统」
 	updateSvc := &update.Service{
-		Checker: &update.Checker{MirrorPrefix: cfg.UpdateMirror},
+		Checker: &update.Checker{MirrorPrefix: cfg.UpdateMirror, APIBase: cfg.UpdateAPI},
 		Version: version, BuiltAt: builtAt,
 		KernelVersion:  func(ctx context.Context) string { return singbox.ReadKernelVersion(ctx, cfg.SingBox).Version },
 		DataDir:        cfg.DataDir,
@@ -1218,7 +1218,7 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 	// 概览顶栏「Open-Box Latest」后面的版本号:按预设决策取 main 上最新的 release tag。
 	// 这里挂一个 10 分钟缓存 + 5 秒超时:面板会频繁轮询这个接口,不能每次都去问 GitHub;
 	// 查不到(离网、限流、仓库没发布)返回空串,由 activation 退回构建时注入的版本。
-	latestTag := latestReleaseTagCached(&update.Checker{MirrorPrefix: cfg.UpdateMirror}, 10*time.Minute)
+	latestTag := latestReleaseTagCached(&update.Checker{MirrorPrefix: cfg.UpdateMirror, APIBase: cfg.UpdateAPI}, 10*time.Minute)
 	activationapi.Register(srv.Mux(), activationapi.Deps{
 		Version: version,
 		KernelVersion: func(ctx context.Context) string {

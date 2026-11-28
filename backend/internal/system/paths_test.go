@@ -197,3 +197,33 @@ func TestLoadConfigUpdateMirror(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadConfigUpdateAPI(t *testing.T) {
+	// 不设就走 GitHub 默认值(空串由 Checker 自己回落到 DefaultAPIBase)
+	cfg, err := LoadConfig(nil, noEnv, io.Discard)
+	if err != nil || cfg.UpdateAPI != "" {
+		t.Fatalf("默认应是空(走 GitHub): %q %v", cfg.UpdateAPI, err)
+	}
+	// 设了就规范化:去掉结尾的斜杠,方便后面直接拼 /repos/...
+	cfg, err = LoadConfig([]string{"-update-api", " https://mirror.example/api/ "}, noEnv, io.Discard)
+	if err != nil || cfg.UpdateAPI != "https://mirror.example/api" {
+		t.Fatalf("%q %v", cfg.UpdateAPI, err)
+	}
+	// 环境变量与参数等价
+	withEnv := func(k string) string {
+		if k == EnvUpdateAPI {
+			return "http://192.168.1.9:8080"
+		}
+		return ""
+	}
+	cfg, err = LoadConfig(nil, withEnv, io.Discard)
+	if err != nil || cfg.UpdateAPI != "http://192.168.1.9:8080" {
+		t.Fatalf("环境变量应生效: %q %v", cfg.UpdateAPI, err)
+	}
+	// 不是 http(s) 地址要报错,别让一个写错的地址把检查整条弄挂
+	for _, bad := range []string{"mirror.example", "ftp://m.example/", "https://"} {
+		if _, err := LoadConfig([]string{"-update-api", bad}, noEnv, io.Discard); err == nil {
+			t.Errorf("%q 应报错", bad)
+		}
+	}
+}
