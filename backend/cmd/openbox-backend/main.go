@@ -1151,6 +1151,8 @@ func newApp(cfg system.Config, log *slog.Logger) (*server.Server, func(ctx conte
 			}
 			return names
 		},
+		// 路由器自己发起的连接(来源是本机 LAN / WAN 地址)要标出来,不当成局域网里的终端
+		Self: system.SelfKind,
 	})
 
 	// 内核控制接口(Clash API)的转发:/api/controller/ 是 REST,/api/controller-ws/ 是 WebSocket;

@@ -5,13 +5,22 @@ import (
 	"sort"
 )
 
-// Row 对应前端 OpenboxTrafficRow(Name、self 由接口层补)。
+// Row 对应前端 OpenboxTrafficRow(Name、Self 由接口层补)。
 type Row struct {
 	Key   string `json:"key"`
 	Up    int64  `json:"up"`
 	Down  int64  `json:"down"`
 	Conns int64  `json:"conns"`
 	Name  string `json:"name,omitempty"`
+	// Self 非空表示这一行的来源是路由器自己的地址(不是局域网里的终端)。
+	// 前端据此显示「本机 · WAN pppoe-wan」这类标注,并且不允许改名。
+	Self *SelfRef `json:"self,omitempty"`
+}
+
+// SelfRef 说明这个本机地址属于哪类网卡。Kind 取 lan / wan / other。
+type SelfRef struct {
+	Kind  string `json:"kind"`
+	Iface string `json:"iface,omitempty"`
 }
 
 // Sum 是 up / down 两个数。

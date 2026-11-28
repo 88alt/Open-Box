@@ -23,6 +23,8 @@ type Source interface {
 type Deps struct {
 	Source Source
 	Names  func() map[string]string
+	// Self 判断来源地址是不是路由器自己的;为空时不做这个判断(不带 self 字段)。
+	Self func(addr string) (kind, iface string, ok bool)
 }
 
 // Register 挂载 /api/openbox/traffic/*。
@@ -99,13 +101,26 @@ func dayParams(w http.ResponseWriter, r *http.Request) (day string, limit int, h
 	return day, limit, hour, true
 }
 
+// name 给「终端」那一维补两样东西:DHCP 主机名,以及「这个地址是路由器自己的」。
+// 两样都缺时原样返回,不往响应里塞空字段。
 func (d Deps) name(rows []traffic.Row) {
-	if d.Names == nil || len(rows) == 0 {
+	if len(rows) == 0 {
 		return
 	}
-	names := d.Names()
+	var names map[string]string
+	if d.Names != nil {
+		names = d.Names()
+	}
 	for i := range rows {
-		rows[i].Name = names[rows[i].Key]
+		if names != nil {
+			rows[i].Name = names[rows[i].Key]
+		}
+		// 本机地址不当终端显示:交给前端标注成「本机 · WAN/LAN 网卡名」
+		if d.Self != nil {
+			if kind, iface, ok := d.Self(rows[i].Key); ok {
+				rows[i].Self = &traffic.SelfRef{Kind: kind, Iface: iface}
+			}
+		}
 	}
 }
 
