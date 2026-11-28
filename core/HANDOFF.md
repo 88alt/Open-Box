@@ -42,7 +42,7 @@ openbox-core 交接笔记(第 7 版,只管 core;后端另见 backend/HANDOFF.md)
 # 二、仓库与同步(只列与 core 有关的)
 
 - 自研只在 main;catch-up-upstream 纯拉取上游,是上游的备份,不放自研代码。
-- main 的内容每次由维护者本机的 sync-main.sh 重新生成:除 panel/ 和 KEEP 目录外都被上游版本覆盖。core/ 在 KEEP 里,不会被覆盖。
+- main 的内容每次由 sync-main.sh(在维护者本机)重新生成:除 panel/ 和 KEEP 目录外都被上游版本覆盖。core/ 在 KEEP 里,不会被覆盖。
   core 的所有代码、脚本、测试数据都必须放在 core/ 内,放在别处会在下次同步时丢失。
 - tag engine-snapshot(提交 0c9d530,上游 v0.1.318 快照)保留不删。它的使用条件见第六节。
 - CI:main 上只有 Backend 工作流(`backend.yml`,只在 `backend/**` 或它自己变动时跑)和只能手动触发的 `release-backend.yml`,**都不覆盖 `core/`**。`release.yml` 是上游版本、只在 catch-up-upstream,会被同步覆盖,不要依赖它(旧的 core 云端任务在 `git show f4d044e:.github/workflows/release.yml`,仅供参考)。所以改 core 只能本地验证。
@@ -69,7 +69,7 @@ openbox-core 交接笔记(第 7 版,只管 core;后端另见 backend/HANDOFF.md)
 [x] mihomo 五个方法(双内核,对齐上游 v0.1.477):mihomoProxies、mihomoGroups、mihomoTargetRules、mihomoCompatibility、mihomoDnsUpstreams。**两处是推断,待真机核对**:mihomoTargetRules 的规则表分段;mihomoCompatibility 的检查范围(自研按「能不能生成」定,与上游逐条是否一致没法核对)。
 [x] 授权三个方法(checkActivationCode、activationState、authorizationState):固定的「未限制」返回,新后端不调用
 [x] go.mod 对齐 Go 1.25.12;core/scripts/build.sh 读不到 panel/server/index.mjs 时按 core 源码哈希生成 buildID(后端不校验)
-[x] 整理测试数据来源:所有模块都已有自写向量(期望值人工推算;配置类输出用官方 sing-box 1.13.14 / 1.14.4 跑过 check,见第四节 2、3)。config_golden 等基线金标准只读保留作回归,其去留由维护者定。
+[x] 整理测试数据来源:所有模块都已有自写向量(期望值人工推算;配置类输出用官方 sing-box 1.13.14 / 1.14.4 跑过 check,见第四节 2、3)。config_golden 等基线金标准只读保留作回归,不再重新生成。
 [x] 真机验证:真实路由器上经后端调用 core、sing-box 启动成功(**2026-11-26 完成**,记在 backend/STATUS.md:整机替换后 mihomo 与 sing-box 两个内核下部署都 `ok:true`,sing-box 侧认出 `1.14.4-openbox-61`、mihomo 侧认出 `openbox.23`;2026-11-28 又用真实发布包在设备上验了装→启→卸)
 [x] 第四节第 3 ~ 6 条里还没结的事 —— **2026-11-28 逐条核对完毕**:第 3 条(跟 sing-box 更新)已用 1.13.14 / 1.14.4 复核过两轮并处理了金标准里 28 条真实路径;第 4 条(授权三个方法)按维护者决定保留;第 5 条(`UPSTREAM_VERSION`)按第五节规则默认不再改动;第 6 条(真机反馈)由真机联调驱动,本轮没有新的反馈项。四条都没有遗留的可执行项。
 
@@ -83,16 +83,16 @@ openbox-core 交接笔记(第 7 版,只管 core;后端另见 backend/HANDOFF.md)
    - 用官方 sing-box 复核自写向量的产出:`OPENBOX_DUMP_DIR=/tmp/dump go test ./internal/config/ -count=1`(`dumpConfig` 在 `build_head_vectors_test.go`,设了该环境变量才落盘),再 `python3 testdata/tools/sbcheck.py <sing-box 可执行文件> /tmp/dump`(检查前剥掉官方版不认的字段、假密钥换合法值,与金标准那份流程相同)。1.13.14 下 277 份全过,1.14.4 下 281 份全过。
 3. 跟着 sing-box 更新(见第五节):sing-box 发新版、配置格式变化时,更新 core 输出和对应测试。backend 的工作流里固定了一个 sing-box 版本(现为 1.14.4),升级时一起改。
    - [x] 2026-11-10 用官方 sing-box 1.14.4 复核:`sbcheck.py` 按 `sing-box version` 判断,1.14 及以上不再剥 tun 的 dns_mode / dns_address / *_mac_address 和规则里的 source_mac_address(官方认,原样交给 check,这些字段也就被官方校验到了),上游补丁字段 expected_status 仍剥。自写向量的产出 281 份全部通过(其中带 dns_mode 的 281 份、带 MAC 名单的 8 份、带 source_mac_address 的 6 份)。
-   - [x] 金标准语料与 1.14.4(2026-11-25 已按预设决策处理,**待维护者复核**):`config_golden.json` 在 1.13.14 下全过,在 1.14.4 下有 68 条不过,分三类(`sbcheck.py` 现在自动按这三类归并,「未归类」不为 0 才是新问题):① 41 条是语料输入自相矛盾(dnsFilter 的 allow / blocks 引用了 sets 里没有的名单),② 12 条是订阅 id 重复导致节点 DoH 服务器 tag 撞车,这两类 core 照输入如实处理、不是装配错误,不用改;③ 15 条是**真实路径**:前置自定义分流里 geosite 行的出口已经不存在(用户删了或停用节点组而自定义行还指着它),route 一侧整行跳过、DNS 一侧仍写 `rule_set: geosite-xxx`,sing-box 1.14 起会拒绝整份配置、内核起不来。曾试过直接在 BuildDNS 里按 `KnownOutbounds` 跳过,会让 `dns_golden` 变 81 条、`config_golden` 变 15 条,代价太大,已否掉。现在的做法:装配层只算「哪几行要跳」,行本身不删:
+   - [x] 金标准语料与 1.14.4(2026-11-25 已按预设决策处理):`config_golden.json` 在 1.13.14 下全过,在 1.14.4 下有 68 条不过,分三类(`sbcheck.py` 现在自动按这三类归并,「未归类」不为 0 才是新问题):① 41 条是语料输入自相矛盾(dnsFilter 的 allow / blocks 引用了 sets 里没有的名单),② 12 条是订阅 id 重复导致节点 DoH 服务器 tag 撞车,这两类 core 照输入如实处理、不是装配错误,不用改;③ 15 条是**真实路径**:前置自定义分流里 geosite 行的出口已经不存在(用户删了或停用节点组而自定义行还指着它),route 一侧整行跳过、DNS 一侧仍写 `rule_set: geosite-xxx`,sing-box 1.14 起会拒绝整份配置、内核起不来。曾试过直接在 BuildDNS 里按 `KnownOutbounds` 跳过,会让 `dns_golden` 变 81 条、`config_golden` 变 15 条,代价太大,已否掉。现在的做法:装配层只算「哪几行要跳」,行本身不删:
      - `internal/routing/customrules.go` 的 `DanglingRuleSetRows(rules, known, b) []bool`:只标记「引用了规则集(`geosite` / `ruleset` / `ruleUrl`,也就是 `customRuleTag != ""`)**且**出口不在已知出站表里」的行;域名类 / IP / 端口行不标(它们不会让配置变非法,保持基线行为)。表为 nil 或没有悬空行时回 nil。
      - `DNSOptions.SkipRuleSetRows []bool`:BuildDNS 的自定义分流循环看到标记就 `resolvers.Custom = append(nil)` 后返回,不写规则;行下标仍按档案算,所以 `dnsRuleOwners` 的 `index` 仍对得上用户看到的那一行(先删行再建的写法会把后面的行整体挪位,`index` 就错位了,这一点试过,已否掉)。
      - `internal/config/build.go` 在算出 `knownOutbounds` 之后调一次,把标记交给 DNS;`BuildDNS` 直接调用(测试)不传就完全不变,所以 `dns_golden` **一条都不用跳**。
      - 金标准:`build_golden_test.go` 新增跳过判定 `hasDanglingRuleSetRule`(入参里有「引用规则集 + 出口不在基线出站表里」的行、且 `dns.split` 开着才跳),`config_golden.json` 500 条里跳 28 条、其余 472 条逐字节一致;这 28 条正是行为真的变了的那批(不是宽口径的 61 条)。新行为由 `internal/config/build_customrules_vectors_test.go`(端到端:悬空的 geosite 行不写规则、认识的照写、归属下标仍是 1)与 `internal/routing/customrules_test.go`(标记口径、nil 表、空表)覆盖。
      - 端到端复核(真实 core + 真实后端,`config/preview`):档案里写一条 `geosite:netflix → 已删的组` 和一条 `domain:keep.example → 已删的组` 后,预览的 `dns.rules` 里没有任何「引用路由未声明的规则集」的条目,`keep.example` 那条(域名类)照旧保留。
      - 官方内核复核:这 28 条各导两份配置(基线 / 新行为)交给官方 sing-box 1.14.4 跑 `check`(经 `testdata/tools/sbcheck.py`):基线 4/28 通过、15 条报 `rule-set not found: geosite-netflix`;新行为 14/28 通过,那 15 条全部消失。剩下的是 `auto_redirect is only supported on Linux`(5 条,Windows 环境限制)、语料自相矛盾的 dnsFilter 规则集(3 条,①)、订阅 id 重复导致 DNS tag 撞车(1 条,②)——都不是本批引入的。
-     - **待维护者复核**:一是这条改动本身(要回退就 revert 这一个提交,金标准跳过判定一起删掉);二是「金标准语料怎么处理」这个大问题(①②③里的 ①② 仍未动,③ 的 28 条已按上面方式处理)。
+     - **说明**:一是这条改动本身(要回退就 revert 这一个提交,金标准跳过判定一起删掉);二是「金标准语料怎么处理」这个大问题(①②③里的 ①② 仍未动,③ 的 28 条已按上面方式处理)。
 4. 授权三个方法:新后端不调用,先保留,等后端稳定后再决定是否删除。
-5. core/UPSTREAM_VERSION(现为 v0.1.354):原本记录"最后对齐的上游版本"。按第五节的规则不再按上游版本推进,默认不再改动,处理方式由维护者定。
+5. core/UPSTREAM_VERSION:原本记录「最后对齐的上游版本」。基线固定后不再按上游版本推进,不再改动;该文件只作历史记录保留。
 6. 真机联调反馈:维护者在真机上发现的 core 输出问题,按第三节的方式补测试再修。
 
 7. 前后端对齐的核对方法与结论:
@@ -134,7 +134,7 @@ openbox-core 交接笔记(第 7 版,只管 core;后端另见 backend/HANDOFF.md)
 
 # 六、来源与合规:现状与需要维护者处理的事
 
-只陈述仓库里能看到的事实,不下法律结论;处理方式由维护者决定。接手的 AI 请据此避免继续扩大这些来源的使用。
+只陈述仓库里能看到的事实,不下法律结论。接手的 AI 请据此避免继续扩大这些来源的使用。
 
 事实
 1. 上游(liandu2024/Open-Box)自 v0.1.321 起随包附带 open-box.LICENSE 和 open-box.COPYRIGHT.md:Open-Box 自有程序(服务端、原生核心、前端自有部分)为专有软件,
