@@ -127,7 +127,7 @@
 
 实现约定(M2,前三条):状态存在 `client-app.json`(与路由器 ID 同一文件)。`GET` 第一次读时生成配对码(8 个字符,取自去掉 I / O / 0 / 1 的 32 字符表,大写)和 nonce(16 位小写十六进制)并保存,**同步开关默认关**;其余字段 `routerId` / `routerName` / `lanAddresses` / `panelPort` 与 `client-app/info` 同源。`PUT enabled` 请求体必须是 `{"enabled": true|false}`(其它一律 400,上限 1 KiB),返回 `{enabled}`,不动配对码。`POST rotate` 换配对码和 nonce、`lastSyncAt` 清零、开关保持,返回换完的整份。三条响应都带 `Cache-Control: no-store`,配对码不写日志、错误响应里不出现。`lastSyncAt` 要等 App 用的公开同步接口(未做)来更新,现在恒为 0。App 用的公开同步接口见下面 `/client/v1/config`。
 
-`POST /client-config/file`(M2):请求体 `{lan, publicBase}`,两项都可以不传或为空,前后空白去掉;`lan` 只收空、IP 或主机名(字母数字 . - _,最长 253),`publicBase` 只收空或 http(s) 地址(要有主机名、不带账号密码、最长 2048),不合格 400(中文原因)且什么都不写,请求体上限 8 KiB。返回导出文件(前端当 `Record<string, unknown>` 原样存成 .json):`{format:"open-box-client-sealed", version:1, router:{id,name}, kdf:{alg:"pbkdf2-sha256",iterations,salt}, data, exportedAt?}`。**对齐上游 v0.1.402**:密钥 = PBKDF2-HMAC-SHA256(配对码, salt, iterations, 32 字节),`iterations` 默认 20 万次;`salt` 每个封包随机 16 字节(base64url);`data` = base64url(iv(12) || ciphertext || tag(16)),AES-256-GCM,无 AAD。明文含 `{v, kind:"client-config", generatedAt, router, shareRegions, contentFilter?, importCode?}` 等,见实现;`importCode` 是 `openbox://import?v=2&r=&n=&lan=&port=[&pub=]&p=nonce`,与前端 `buildClientImportCode` 一致。内容过滤快照口径与下列公开同步相同。导出不看同步开关。响应 no-store。**与上游 App 互通**。
+`POST /client-config/file`(M2):请求体 `{lan, publicBase}`,两项都可以不传或为空,前后空白去掉;`lan` 只收空、IP 或主机名(字母数字 . - _,最长 253),`publicBase` 只收空或 http(s) 地址(要有主机名、不带账号密码、最长 2048),不合格 400(中文原因)且什么都不写,请求体上限 8 KiB。返回导出文件(前端当 `Record<string, unknown>` 原样存成 .json):`{format:"open-box-client-sealed", version:1, router:{id,name}, kdf:{alg:"pbkdf2-sha256",iterations,salt}, data, exportedAt?}`。**对齐上游**:密钥 = PBKDF2-HMAC-SHA256(配对码, salt, iterations, 32 字节),`iterations` 默认 20 万次;`salt` 每个封包随机 16 字节(base64url);`data` = base64url(iv(12) || ciphertext || tag(16)),AES-256-GCM,无 AAD。明文含 `{v, kind:"client-config", generatedAt, router, shareRegions, contentFilter?, importCode?}` 等,见实现;`importCode` 是 `openbox://import?v=2&r=&n=&lan=&port=[&pub=]&p=nonce`,与前端 `buildClientImportCode` 一致。内容过滤快照口径与下列公开同步相同。导出不看同步开关。响应 no-store。**与上游 App 互通**。
 
 ## `/client/v1/config`(App 用的公开同步接口,不在 `/api/` 下)
 
@@ -184,7 +184,7 @@
 - Stash(YAML 覆写文件,不做完整 YAML 解析,只按缩进逐行认):顶层 `rules:` 的每个 `- 规则` 认得出的算规则;`http:` 下 `url-rewrite` / `header-rewrite` / `body-rewrite` 是字符串列表,口径同 Surge;`map-local` 每个条目算一条规则,`script` 每个条目算一个脚本(条目是多行映射,只数 `- key:` 开头的那一行,条目里嵌套的列表不数);`cron:` 下 `script` 的每个条目算一个脚本。`mitm`、`script-providers`、`name` / `desc` 等其它键整段忽略。
 - 五种格式都已支持;格式字符串不是这五种之一回 400。
 - 同步给 App:启用的集合连文本一起并进本地分流的同步明文(`client-config/file` 和 `/client/v1/config` 共用,字段、上限与 409 见上面 `client-config` 一节);实现是 `contentfilter.Service.Snapshot`,持着服务的锁一次读出记录、文本和摘要,所以拿到的是同一时刻的内容。
-- 恢复默认:随包默认放在内嵌的 `internal/contentfilter/defaults.json`(对齐上游 v0.1.402 三份:综合省流 / Youtube-Surge / Youtube-补丁)。每份默认回到随包内容和启用状态、被删的补回、自己加的保留;若将来 defaults 为空则 = 列表清空(按钮不报错)。
+- 恢复默认:随包默认放在内嵌的 `internal/contentfilter/defaults.json`(对齐上游 三份:综合省流 / Youtube-Surge / Youtube-补丁)。每份默认回到随包内容和启用状态、被删的补回、自己加的保留;若将来 defaults 为空则 = 列表清空(按钮不报错)。
 - 错误:400 参数 / 内容不合法,404 没有这份规则集,502 抓取失败,500 其它;`{error}` 为中文信息。
 
 ## `/api/openbox/defaults`
@@ -276,11 +276,11 @@
 - 排队只是记在内存里,真正测速由后台循环做:`Loop` 每 15 秒一轮,先按周期入队、再取队里一个节点测一次(同一时刻只测一个)。进程启动时先读回上次保存的测量。
 - **按周期入队**(`EnqueueDue`):只排「订阅启用 + 订阅开了 `bandwidthCheck`」的节点,且已到下一次测速时刻(从没测过的直接排;已在队里的跳过):`intervalUnit` 是 `hours` 时是距上次完成满 `intervalHours`;是 `days` 时是上次完成那天(本地时区的日历日)往后数 `round(intervalHours / 24)` 天(至少 1 天)、当天 `startHour` 点整(`Settings.NextDue`,按日历日期推算,夏令时切换日也还是当地整点)。
 - **怎么测**:临时起一个 sing-box 出站,经被测节点下载,读满 `maxDownloadMB` 就停;下载地址取档案 `testUrl`,没有就用默认的 Cloudflare 测速地址。超时按上限估算,最少 30 秒、最多 3 分钟。读满上限时 `lowerBound` 为 true,表示真实速度不低于 `mbps`。节点找不到、配置生成失败、探测失败都记成一次失败样本(`failed`,带 `error` 和 `reason`),并写进 `lastError`;下一次成功会清掉 `lastError`。没有装配测速器时一律记失败(`measurer not configured`),不会悄悄直连外网。
-- **历史**:每个节点最多保留 48 条样本,落盘到状态目录的 `bandwidth-history.json`。保留时长跟随档案 `traffic.keepMonths`(按每月 30 天,取 1~24 个月,最少 24 小时),不写死 24 小时(对齐上游 v0.1.405 的口径)。
+- **历史**:每个节点最多保留 48 条样本,落盘到状态目录的 `bandwidth-history.json`。保留时长跟随档案 `traffic.keepMonths`(按每月 30 天,取 1~24 个月,最少 24 小时),不写死 24 小时(对齐上游的口径)。
 
 相关的校验和字段(不在这三个接口里,但配套):
 
-- **档案 `bandwidth`**:`{intervalHours, intervalUnit, maxDownloadMB, startHour}`,`intervalHours` 是 1~720 的整数(最长 30 天;面板可按「天」输入,折成小时存)、`intervalUnit` 是 `hours` / `days`(只决定面板怎么显示,默认 `hours`)、`maxDownloadMB` 是 1~1024 的整数,`startHour`(对齐上游 v0.1.481)是 0~23 的整数、按天测试时每天几点开始(本地时间,默认 4,按小时测试时不起作用);默认 12 小时、64 MB、4 点(对齐上游 v0.1.488 面板的缺省显示);缺哪个键就补默认;不是对象、单位不认得、`startHour` 不是 0~23 的整数或其它项超出范围回 400。保存时会规整成这四个键。上限 720 小时是按「面板有天单位」推断的,上游 v0.1.472 的实际上限未核实。这个键是测速参数,不进 sing-box 配置,已列入 `profileKeyIgnored`,改它不会让服务状态误报「需要重启」。
+- **档案 `bandwidth`**:`{intervalHours, intervalUnit, maxDownloadMB, startHour}`,`intervalHours` 是 1~720 的整数(最长 30 天;面板可按「天」输入,折成小时存)、`intervalUnit` 是 `hours` / `days`(只决定面板怎么显示,默认 `hours`)、`maxDownloadMB` 是 1~1024 的整数,`startHour`(对齐上游)是 0~23 的整数、按天测试时每天几点开始(本地时间,默认 4,按小时测试时不起作用);默认 12 小时、64 MB、4 点(取上游面板的缺省显示);缺哪个键就补默认;不是对象、单位不认得、`startHour` 不是 0~23 的整数或其它项超出范围回 400。保存时会规整成这四个键。上限 720 小时是按「面板有天单位」推断的,上游的实际上限未核实。这个键是测速参数,不进 sing-box 配置,已列入 `profileKeyIgnored`,改它不会让服务状态误报「需要重启」。
 - **档案 `nodeScoreWeights`**:`{latency, download, jitter}`,节点评分三项权重(百分点)。三项必须齐全,每项 0~100 的数(可以是 0、可以有小数,按 10 位小数规整),合计 100(容许 1e-6 的浮点误差);没设就是 40 / 30 / 30;缺项、越界、合计不是 100 或不是对象回 400。`/api/openbox/node-quality` 的节点与订阅分数按它算:某项权重为 0 就不计入,测到的项权重全是 0 时按等权重算。同时它也写进内核配置:档案整份交给 core,core 把它写成开着带宽择优的 urltest / loadbalance(含故障转移多节点自动页签的内部 urltest)的 `node_score_weights`(补丁版 sing-box 的字段,`{latency, download, jitter}`);没开带宽、`disableBandwidth` 的客户端配置、权重不合法时不写,内核用固定的 40 / 30 / 30。所以改它会在 `pendingRestart` 里记「节点」(`bandwidth` 档案键仍不进配置、不提示重启)。
 - **节点组 `bandwidth`**:必须是布尔(启用带宽择优),可以不带;其他类型回 400「节点组 … 的 bandwidth 必须是布尔」。组上为真时由 core 把 `bandwidth: true` 写进 urltest / loadbalance 出站(和故障转移多节点自动页签里的内部 urltest),内核自己择优,**后端不改组成员顺序**。客户端配置的 `disableBandwidth` 选项不写。
 - **订阅 `bandwidthCheck`**:创建和修改订阅时落盘,只决定自动入队,不进 sing-box 配置。
@@ -342,9 +342,9 @@
 | GET | `/api/openbox/node-info/{x}/entry-country` | `fetchNodeEntryCountry` (api/openbox.ts) | { ip: string; country: string } | (tag: string) |
 | POST | `/api/openbox/node-info/{x}/exit` | `fetchNodeExit` (api/openbox.ts) | OpenboxNodeExit | (tag: string, refresh = false) |
 
-实现约定(M3,`POST node-info/{x}/exit`,**2026-11-10 起对齐上游 v0.1.423,来源全部改为 ip.net.coffee**,原 proxycheck.io / RDAP 已去掉):请求体可以没有,`{"refresh":true}` 跳过缓存重查,但 15 秒内刚查过的仍按缓存答;缓存 6 小时(按节点 tag,最多 256 个),响应带 `cached:true` 表示来自缓存。一、经这个节点(起临时 sing-box,和节点测速同一套)取 `https://ip.net.coffee/cdn-cgi/trace`(`key=value` 行,`h` 必须是 `ip.net.coffee`、`ip` 必须是公网地址,`loc` 是两位大写国家码),得到出口 IP 和国家;二、由本进程直接(不经节点)取 `ipv2/lookup/<ip>`(IP 必须对得上、不能有 `error` / `is_bogon`):`countryCode` → `country`,`country` / `region` / `city` 去重后用「 · 」连接 → `location`,`asn`(数字或 `AS…`)→ `asn`,`asOrganization` / `isp` / `company_name` → `asnOwner`,`is_mobile` / `isResidential` / `is_datacenter` / `company_type` / `asn_kind` → `ipType`(mobile / residential / hosting / business),`is_vpn` / `is_proxy` / `is_tor` → `proxyType`(「 · 」连接),`trust_score`(0 到 100)→ `trustScore`,`registered_country_code` → `registeredCountry`,`intelligence` 和顶层标志 → `riskAssessment`(`threats` 最多 20 条且每项要有 `label`、`abuseLevel`、`abuseScore`、`httpBlacklist`、`rpkiReported`、`vpn` / `proxy` / `tor` / `crawler`);三、再取 `ipv2/radar/<asn 数字>`,和 lookup 一起估出 `humanTraffic`(有近 28 天的 ASN 统计就用它,`basis` 为 `asn-28d`;否则按网络类型估,`basis` 为 `network-estimate`;Tor、VPN / 代理、爬虫、滥用者另有折扣,限制在 1 到 99,附带 `bot` 和 `stale`)。同一个出口 IP 的 lookup 和同一个 ASN 的 radar 各缓存 24 小时(各最多 512 个),`refresh` 跳过这层缓存;radar 失败按类型估,不算出错。`source` 固定 `ip.net.coffee`,`risk` / `devices` 固定 null(保留键),`native` = 登记国家和 `country` 一致,任何一边不知道是 null。lookup 没答时仍给出口 IP 和国家,`errors.netcoffee` 写原因,这样的结果不缓存;但这个节点已有缓存结果时改回 502「已保留上一次节点信息和风险评估」。`ipv6` 只在出口本身是 IPv6 时有值。节点在当前配置里没有可探测的出站(没启用、是节点组)404;openbox-core 或 sing-box 不可用 503;经节点连不上、trace 答的不是有效出口信息 502;其余 500。同时最多 2 个经节点的探测,同一个节点的并发请求合并成一次。**与上游的差别**:上游的 lookup / radar 按目标分流走(可能经节点),这里由路由器本机直连去取;答话字段按上游读取逻辑写,没有官方文档,真实答话要真机核对。
+实现约定(M3,`POST node-info/{x}/exit`,**2026-11-10 起对齐上游,来源全部改为 ip.net.coffee**,原 proxycheck.io / RDAP 已去掉):请求体可以没有,`{"refresh":true}` 跳过缓存重查,但 15 秒内刚查过的仍按缓存答;缓存 6 小时(按节点 tag,最多 256 个),响应带 `cached:true` 表示来自缓存。一、经这个节点(起临时 sing-box,和节点测速同一套)取 `https://ip.net.coffee/cdn-cgi/trace`(`key=value` 行,`h` 必须是 `ip.net.coffee`、`ip` 必须是公网地址,`loc` 是两位大写国家码),得到出口 IP 和国家;二、由本进程直接(不经节点)取 `ipv2/lookup/<ip>`(IP 必须对得上、不能有 `error` / `is_bogon`):`countryCode` → `country`,`country` / `region` / `city` 去重后用「 · 」连接 → `location`,`asn`(数字或 `AS…`)→ `asn`,`asOrganization` / `isp` / `company_name` → `asnOwner`,`is_mobile` / `isResidential` / `is_datacenter` / `company_type` / `asn_kind` → `ipType`(mobile / residential / hosting / business),`is_vpn` / `is_proxy` / `is_tor` → `proxyType`(「 · 」连接),`trust_score`(0 到 100)→ `trustScore`,`registered_country_code` → `registeredCountry`,`intelligence` 和顶层标志 → `riskAssessment`(`threats` 最多 20 条且每项要有 `label`、`abuseLevel`、`abuseScore`、`httpBlacklist`、`rpkiReported`、`vpn` / `proxy` / `tor` / `crawler`);三、再取 `ipv2/radar/<asn 数字>`,和 lookup 一起估出 `humanTraffic`(有近 28 天的 ASN 统计就用它,`basis` 为 `asn-28d`;否则按网络类型估,`basis` 为 `network-estimate`;Tor、VPN / 代理、爬虫、滥用者另有折扣,限制在 1 到 99,附带 `bot` 和 `stale`)。同一个出口 IP 的 lookup 和同一个 ASN 的 radar 各缓存 24 小时(各最多 512 个),`refresh` 跳过这层缓存;radar 失败按类型估,不算出错。`source` 固定 `ip.net.coffee`,`risk` / `devices` 固定 null(保留键),`native` = 登记国家和 `country` 一致,任何一边不知道是 null。lookup 没答时仍给出口 IP 和国家,`errors.netcoffee` 写原因,这样的结果不缓存;但这个节点已有缓存结果时改回 502「已保留上一次节点信息和风险评估」。`ipv6` 只在出口本身是 IPv6 时有值。节点在当前配置里没有可探测的出站(没启用、是节点组)404;openbox-core 或 sing-box 不可用 503;经节点连不上、trace 答的不是有效出口信息 502;其余 500。同时最多 2 个经节点的探测,同一个节点的并发请求合并成一次。**与上游的差别**:上游的 lookup / radar 按目标分流走(可能经节点),这里由路由器本机直连去取;答话字段按上游读取逻辑写,没有官方文档,真实答话要真机核对。
 
-`GET /api/openbox/node-info/sharing/{ip}`(`?refresh=1` 跳过缓存重查;`fetchNodeSharing`,响应 `OpenboxNodeSharing`;面板在出口 IP 查到后才调,压缩版不调;已实现,对齐上游 v0.1.462 的明文实现与 v0.1.478 面板的调用):查 Ping0.cc 对这个出口 IP 的共享人数区间、风控值和 IP 类型。路由器本机直接访问 `https://ping0.cc/ip/<ip>`(不经节点;6 秒、页面上限 512 KiB、不跟随重定向、必须是 `text/html`),从页面里取:`range`(共享人数,只会是 `1-10` / `10-100` / `100-1000` / `1000-10000` / `10000+`,认不出是 `null`)、`risk`(`{ tier, percent }`,百分比 ≤ 100 才算,`tier` 为 `veryClean` / `clean` / `neutral` / `slight` / `elevated` / `extreme`,档位认不出是 `null`)、`ipTypes`(标签文字数组,没有是 `[]`)。页面标题里的 IP 必须就是请求的 IP,否则按没查到。IP 写法不合法 `400 { error: "无效的 IP 地址" }`;其余一律 `200`:内网 / 回环等非公网地址不联网、ping0.cc 没答 / 不是 200 / 太大 / 页面不对,都回 `{ range: null, risk: null, ipTypes: [] }`;页面要求人工验证(Turnstile)回 `{ range: null, risk: null, ipTypes: [], error: "challenge" }`,前端据此显示验证链接。缓存:有数据的存 24 小时,什么都没查到(含 `challenge`)只存 5 分钟;`refresh=1` 跳过缓存,同一个 IP 同时来的请求合并成一次联网。路由上 `sharing/{ip}` 和节点的 `{tag}/exit`、`{tag}/entry-country` 共用 `/node-info/{a}/{b}` 一条,按名字分发(Go 的路由器不允许这两种写法并存);IP 不会叫 `exit` / `entry-country`,所以不会互相抢。
+`GET /api/openbox/node-info/sharing/{ip}`(`?refresh=1` 跳过缓存重查;`fetchNodeSharing`,响应 `OpenboxNodeSharing`;面板在出口 IP 查到后才调,压缩版不调;已实现,对齐上游的明文实现与 面板的调用):查 Ping0.cc 对这个出口 IP 的共享人数区间、风控值和 IP 类型。路由器本机直接访问 `https://ping0.cc/ip/<ip>`(不经节点;6 秒、页面上限 512 KiB、不跟随重定向、必须是 `text/html`),从页面里取:`range`(共享人数,只会是 `1-10` / `10-100` / `100-1000` / `1000-10000` / `10000+`,认不出是 `null`)、`risk`(`{ tier, percent }`,百分比 ≤ 100 才算,`tier` 为 `veryClean` / `clean` / `neutral` / `slight` / `elevated` / `extreme`,档位认不出是 `null`)、`ipTypes`(标签文字数组,没有是 `[]`)。页面标题里的 IP 必须就是请求的 IP,否则按没查到。IP 写法不合法 `400 { error: "无效的 IP 地址" }`;其余一律 `200`:内网 / 回环等非公网地址不联网、ping0.cc 没答 / 不是 200 / 太大 / 页面不对,都回 `{ range: null, risk: null, ipTypes: [] }`;页面要求人工验证(Turnstile)回 `{ range: null, risk: null, ipTypes: [], error: "challenge" }`,前端据此显示验证链接。缓存:有数据的存 24 小时,什么都没查到(含 `challenge`)只存 5 分钟;`refresh=1` 跳过缓存,同一个 IP 同时来的请求合并成一次联网。路由上 `sharing/{ip}` 和节点的 `{tag}/exit`、`{tag}/entry-country` 共用 `/node-info/{a}/{b}` 一条,按名字分发(Go 的路由器不允许这两种写法并存);IP 不会叫 `exit` / `entry-country`,所以不会互相抢。
 
 ## `/api/openbox/node-quality`
 
@@ -352,7 +352,7 @@
 |---|---|---|---|---|
 | GET | `/api/openbox/node-quality` | `fetchNodeQuality` (api/openbox.ts) | OpenboxNodeQuality | (query: { allSubscriptions?: boolean; search?: string; details?: string; nodePageSize?: number; allNodes?: boolean; node?: string };后端另认 page / pageSize / nodePage) |
 
-实现约定(M3,概览页「节点质量」卡,**2026-11-10 起对齐上游 v0.1.423**,原先依据 `zh.ts` 说明文字自己定的刻度和分档已换成上游的):
+实现约定(M3,概览页「节点质量」卡,**2026-11-10 起对齐上游**,原先依据 `zh.ts` 说明文字自己定的刻度和分档已换成上游的):
 - **参数**:`page`(默认 1)、`pageSize`(默认 20,1 – 100)、`allSubscriptions`(一页给全部订阅)、`search`(不分大小写,**只按订阅名**,不看节点)、`details`(要展开节点的订阅 id,只有它带 `nodes` / `nodePage` / `nodePageSize`)、`nodePage`(默认 1)、`nodePageSize`(默认 20,1 – 100)、`allNodes`(一页给全部节点)、`node`(要带 `charts` 的节点 tag,要和 `details` 一起给、且在这一页里)。数字参数不认得当没传,越界夹取(页码夹到 1 – 总页数),不报 400;布尔只认 `true` / `1`。订阅和节点都按可用率从高到低排(没有可用率排最后,同分保持原顺序)。
 - **响应**:`{at, windowHours:24, periodHours, total, page, pageSize, subscriptions}`(`periodHours` 是档案 `bandwidth.intervalHours`,取不到 12)。订阅含全部订阅(**停用的也在**,`enabled:false`,节点只有启用的订阅才有、停用的订阅 `total` 为 0):`id` / `name` / `mode` / `enabled` / `bandwidthCheck` / `total` / `usable` / `failed` / `unknown` / `assessed` / `coverage` / `score` / `grade` / `checks` / `provisional` / `availability` / `latency` / `jitter` / `download` / `upload` / `bandwidthCount` / `up` / `down` / `activeMs`,展开时再加 `nodes` / `nodePage` / `nodePageSize`;**订阅没有 `lastAt`**(和上游一致)。节点:`availability` / `latency` / `jitter` / `download` / `upload` / `state` / `score` / `provisional` / `checks` / `firstAt` / `lastAt`(没检测过是 0)/ `downloadAt` / `lowerBound` / `downloadStale` / `activeMs` / `up` / `down` / `tag` / `protocol` / `region` / `inactive`。可空的数值给 `null` 不省略键,数值不取整(上游同样)。`charts` = `{latency: [{at, value, failed?}], bandwidthEnabled, bandwidth?: [{at, value, failed?, lowerBound?}]}`:延时图是本地攒的最近 60 条探测并上延迟历史里同一节点自己的样本(同一时刻以本地攒的为准);订阅启用时才有数据,`bandwidthEnabled` = 订阅开了「定期带宽检查」或这个节点已有测速历史,为真时才带 `bandwidth`。
 - **统计(24 小时,按整点存)**:每个整点记成功 / 失败次数、第一次和最近一次检测的时刻、最近一次是否成功、最多 60 条探测 `[时刻, 延时]`、上 / 下行字节、活跃槽位。探测只收「时刻在最近 24 小时内且不晚于现在 1 分钟、延时不为负、比这个整点里最近一次更晚」的,延时 0 记失败。可用率 = 成功 / 检测;延时 = 最近最多 10 次成功探测的**中位数**;抖动 = 最近最多 10 个「连续两次成功探测(相隔不到 10 分钟)的延时差」的平均;下载 = 最近最多 10 次成功测速(`mbps>0`)的**平均**,最近一次要晚于现在往前两个周期才算,超过一个周期标 `downloadStale`,`lowerBound` 是这 10 次里有任一次是下限;**上传没有测速来源,恒为 `null`**。
@@ -373,7 +373,7 @@
 实现约定(M3,延迟历史):已保存节点的测速(请求体带 `jobs`,含 `progress` 的 NDJSON)测完后按每个 job 的 `record`(不传按默认记,`false` 只测不记)写进延迟历史,响应(NDJSON 是最后一行)带回**整份** `history`;全都不记时不带 `history`。通了记耗时(至少 1),超时 / 被拒 / 失败记 0,`invalid` / `not-found`(根本没测)不记;预览(带 `url` / `urls` / `content` / `loginId`)和链式代理测速不记。记历史失败不影响测速本身。节点组经临时实例测出的样本不带 `node`。
 
 
-另有 `GET /api/openbox/nodes/latency/queue`(前端没有调用,对齐上游 v0.1.423;上游界面在手动测速前用它提示「已排队」):回 `{ busy, running, waiting }`。向内核控制接口的 `GET /openbox/probes`(3 秒时限,带 secret)取 `running` / `interactive` / `background` / `limit`,`waiting` = `interactive` + `background`,`busy` = `waiting > 0` 或(`limit > 0` 且 `running >= limit`)。内核没在跑 / 读不到控制接口 / 超时 / 非 2xx / 回的不是 JSON 对象(老内核没有这个接口)一律回 `{ busy:false, running:0, waiting:0 }`,状态码仍是 200;只有 GET(HEAD 兼容),其它方法 405。
+另有 `GET /api/openbox/nodes/latency/queue`(前端没有调用,对齐上游;上游界面在手动测速前用它提示「已排队」):回 `{ busy, running, waiting }`。向内核控制接口的 `GET /openbox/probes`(3 秒时限,带 secret)取 `running` / `interactive` / `background` / `limit`,`waiting` = `interactive` + `background`,`busy` = `waiting > 0` 或(`limit > 0` 且 `running >= limit`)。内核没在跑 / 读不到控制接口 / 超时 / 非 2xx / 回的不是 JSON 对象(老内核没有这个接口)一律回 `{ busy:false, running:0, waiting:0 }`,状态码仍是 200;只有 GET(HEAD 兼容),其它方法 405。
 
 > 实现约定(M1):请求体有 `url` / `urls` / `content` / `loginId` 之一 = 预览(拉取、解析、改名后按 `tags` 测,不落盘,测速地址取档案 `testUrl`;`loginId` 返回 501),否则按 `jobs` 测已保存节点(`url` 缺省取档案 `testUrl`)。`results` 与 `tags` / `jobs` 一一对应。`reason`:`not-found`(是组或已不在订阅里)、`invalid`(地址不合法或 sing-box 起不来,`error` 带原因)、`timeout`、`failed`。`timeoutMs` 默认 5000,上限 30000;一次最多 500 个,同时测 16 个。`progress:true`(仅 jobs)回 NDJSON:每测完一个 `{"done":[下标]}`,最后 `{"results":[...]}`,出错 `{"error":"..."}`。找不到 sing-box 返回 503。**未做**:延迟历史(`record` 忽略,响应没有 `history`)。
 
@@ -422,7 +422,7 @@
 
 ## `/api/openbox/rollback`
 
-前端没有调用,对齐上游 v0.1.423 的路由(命令行 / 外部脚本用)。
+前端没有调用,对齐上游的路由(命令行 / 外部脚本用)。
 
 | 方法 | 路径 | 前端函数(文件:行) | 响应类型 | 参数 |
 |---|---|---|---|---|
@@ -578,7 +578,7 @@
 | GET | `/api/health` | 健康检查,免登录,返回 `{ "ok": true, "version": "..." }`,给 procd / systemd / 监控用 |
 
 
-### App 在线配对与按 token 拉配置(对齐上游 v0.1.402)
+### App 在线配对与按 token 拉配置(对齐上游)
 
 - `GET /client/v1/:routerId/pair` → `{nonce}`;routerId 不对 `404 {"error":"unpaired"}`;同步关 `403 {"error":"disabled"}`。
 - `POST /client/v1/:routerId/pair` body `{nonce,proof}` → `{sealed}`(base64url(iv||ct||tag),明文 `{token,key}`);proof 错 `403 {"error":"bad_code","remaining"}`;nonce 过期 `410 expired`;限速 `429 locked`。
@@ -589,20 +589,20 @@
 
 
 
-### App token 内容过滤子资源(对齐上游 v0.1.402)
+### App token 内容过滤子资源(对齐上游)
 
 - `GET /client/v1/:routerId/config/:token/content-filter` → `{v,iv,data}`(设备 key 封),明文 `{contentFilter: 元数据}`。
 - `GET /client/v1/:routerId/config/:token/content-filter/:hash` → 同上封包,明文 `{document: 文档}`;hash 不等于当前 sha256 时 `404 {"error":"snapshot changed"}`。
 - 设备不认得 `404 unpaired`;同步关 `403 disabled`。
 
 
-### App 分享配对路径(对齐上游 v0.1.402)
+### App 分享配对路径(对齐上游)
 
 - `GET /client/v1/:routerId/share/:serverId/pair` → `{nonce}`(当前代数 gen)。
 - `POST .../pair` body `{nonce,proof}` → `{sealed}`(base64url,明文 `{link,gen}`);proof 用 `openbox-share:routerId:serverId` 派生密钥。
 - 与 `GET /client/v1/share?sid=&g=` 并存。router/服务器不存在 → `404 unpaired`。
 
-### App 公开路由(对齐上游 v0.1.412,已实现)
+### App 公开路由(对齐上游,已实现)
 
 - `GET /client/v1/home/:routerId` → `{ok:true}`。
 - `GET /client/v1/:routerId/regions` → `{groups, nodes, server, background, testSites}`。
