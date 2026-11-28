@@ -114,8 +114,8 @@
     上游由 `seg-highlight` 单独画,两者视觉结果在同色系内,属于实现方式不同)。
   - 噪音(脚本已忽略或不可消除):上游每次构建随机生成的 canary 标识、哈希 class;dev 模式下 Vite 会把小 SVG 内联成 data URI
     (生产构建与上游一致,产物文件名都相同 `dart-BMDI5Qb5.svg`,已验证)。
-  - **推断点 / 待维护者复核**:`playwright` 只用于本地比对、没有进 `package.json`(避免给面板增加一个几百 MB 的开发依赖);
-    如果希望长期保留这个比对能力,需要维护者确认是否把 `playwright` 加进 devDependencies。
+  - **比对工具的依赖**:`playwright` 只用于本地比对,**不进 `package.json`**(避免给面板增加一个几百 MB 的开发依赖);
+    脚本放 `panel/docs/ui-align/`,需要时本地装一次即可。
 
 - 2026-11-25 **概览页**:DOM 对照。
   - 卡片顺序与标题两边一致:`硬件负载 / 网络状态 / 流量洞察 / 节点评分`(侧栏里的系统资源块也在)。
@@ -125,7 +125,7 @@
     - 上游顶栏是「机场、VPS 安格超市 | 原生住宅 IP TOPIP」这类市场外链 → 例外 B,main 改成两个版本号。
       实测 main 显示「Open-Box v0.1.486」+「sing-box 1.14.4-openbox-60」;
       其中 `v0.1.486` 是**官方面板后端** `/api/openbox/activation` 自己给的 `defaults.left`,不是 main 写死的,所以版本号跟着后端走(当前真机是 v0.1.486 官方包)。
-      按预设决策,这里应取「main 最新 release tag」;main 现在取的是构建时注入的 tag(`dev` 构建只显示「Open-Box Latest」),要改成查线上 release 只在 `internal/api/activation` 一处,已记在 STATUS 的推断点里。
+      口径:取「main 最新 release tag」,取不到退回构建时注入的版本;实现只在 `internal/api/activation` 一处(`LatestTag`,由 `main.go` 注入,10 分钟缓存 + 5 秒超时),不散落到前端。
 
 - 2026-11-26 **代理页:三语 × 深浅主题矩阵**(脚本已能语言无关登录——登录按钮文案随语言变,按文案找会超时):
   | 语言 | 主题 | 结构差异 | 计算样式差异 | 结论 |
